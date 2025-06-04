@@ -121,8 +121,9 @@ void setup() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   pinMode(MOTOR_DIR_PIN, OUTPUT);
 
-  ledcAttach(MOTOR_PWM_PIN, PWM_FREQ, PWM_RESOLUTION);
-  ledcWrite(MOTOR_PWM_PIN, 0);
+  ledcSetup(MOTOR_PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
+  ledcAttachPin(MOTOR_PWM_PIN, MOTOR_PWM_CHANNEL);
+  ledcWrite(MOTOR_PWM_CHANNEL, 0);
 
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   display.clearDisplay();
