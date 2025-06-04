@@ -40,9 +40,9 @@ class _ControlPageState extends State<ControlPage> {
   final kpController = TextEditingController();
   final kiController = TextEditingController();
   final kdController = TextEditingController();
-  final distController = TextEditingController();
   final angleController = TextEditingController();
   double? currentDistance;
+  double distValue = 10.0;
 
   final serviceUuid = Uuid.parse("0000ffe0-0000-1000-8000-00805f9b34fb");
   final txCharUuid = Uuid.parse("0000ffe1-0000-1000-8000-00805f9b34fb");
@@ -86,7 +86,9 @@ class _ControlPageState extends State<ControlPage> {
       if (line.startsWith("Kp:")) kpController.text = line.substring(3);
       else if (line.startsWith("Ki:")) kiController.text = line.substring(3);
       else if (line.startsWith("Kd:")) kdController.text = line.substring(3);
-      else if (line.startsWith("dist:")) distController.text = line.substring(5);
+      else if (line.startsWith("dist:")) {
+        distValue = double.tryParse(line.substring(5)) ?? distValue;
+      }
       else if (line.startsWith("angle:")) angleController.text = line.substring(6);
       else if (line.startsWith("curdist:")) currentDistance = double.tryParse(line.substring(8));
     }
@@ -122,10 +124,27 @@ class _ControlPageState extends State<ControlPage> {
                 decoration: const InputDecoration(labelText: "Kd"),
                 onSubmitted: (val) => sendParam("Kd", val),
               ),
-              TextField(
-                controller: distController,
-                decoration: const InputDecoration(labelText: "Distance Threshold (m)"),
-                onSubmitted: (val) => sendParam("dist", val),
+              const SizedBox(height: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("Distance Threshold (m):"),
+                  Slider(
+                    value: distValue,
+                    min: 1,
+                    max: 50,
+                    divisions: 49,
+                    label: distValue.toStringAsFixed(1),
+                    onChanged: (val) {
+                      setState(() {
+                        distValue = val;
+                      });
+                    },
+                    onChangeEnd: (val) {
+                      sendParam("dist", val.toStringAsFixed(1));
+                    },
+                  ),
+                ],
               ),
               TextField(
                 controller: angleController,
@@ -152,7 +171,6 @@ class _ControlPageState extends State<ControlPage> {
     kpController.dispose();
     kiController.dispose();
     kdController.dispose();
-    distController.dispose();
     angleController.dispose();
     _scanStream?.cancel();
     super.dispose();
