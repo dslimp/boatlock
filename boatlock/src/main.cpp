@@ -14,10 +14,13 @@
 #include <AccelStepper.h>
 
 // --- твои собственные либы ---
+#include "Settings.h"
+Settings settings;
 #include "MPUCompass.h"
 #include "AnchorControl.h"
 #include "EncoderCalib.h"
 #include "MotorControl.h"
+
 
 // --- Дисплей ---
 #define SCREEN_WIDTH 128
@@ -53,6 +56,8 @@ MotorControl motor;
 bool holding = false;
 float targetAngle = 0;
 float encoderAngle = 0;
+unsigned long lastDraw = 0;
+const unsigned long drawInterval = 100;
 
 // --- BLE ---
 BLEServer* pServer = nullptr;
@@ -94,7 +99,7 @@ void updateSteering() {
   float diff = targetAngle - currentAngle;
   if (diff > 180) diff -= 360;
   if (diff < -180) diff += 360;
-  if (abs(diff) > motor.angleTolerance) {
+  if (abs(diff) > settings.data.angleTolerance) {
     int steps = map(abs(diff), 0, 180, 0, STEPS_PER_REV);
     stepper.moveTo(stepper.currentPosition() + (diff > 0 ? steps : -steps));
   }
@@ -126,6 +131,9 @@ void setup() {
     while (1);
   }
 
+  settings.load();
+
+  encoderCalib.setSettings(&settings);    
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   motor.setupPWM(MOTOR_PWM_PIN, PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
   motor.setDirPin(MOTOR_DIR_PIN);
@@ -136,7 +144,7 @@ void setup() {
 
   bno.begin();
   encoder.begin();
-  // encoderCalib.loadOffset();
+//   encoderCalib.loadOffset();
   stepper.setMaxSpeed(1000);
   stepper.setAcceleration(500);
 
@@ -174,12 +182,16 @@ void loop() {
   }
 
   encoderAngle = encoderCalib.readAngle(encoder);
-  drawStatus();
+
+  if (millis() - lastDraw > drawInterval) {
+    drawStatus();
+    lastDraw = millis();
+  }
 
   // --- Управление якорем и мотором ---
   if (holding && gps.location.isValid()) {
     float dist = anchor.distanceToAnchor(gps);
-    if (dist > motor.distanceThreshold) {
+    if (dist > settings.data.distanceThreshold) {
       float bearing = anchor.bearingToAnchor(gps);
       adjustPosition(bearing);
       motor.applyPID(dist);
@@ -190,5 +202,4 @@ void loop() {
     motor.stop();
   }
 
-  delay(100);
 }
