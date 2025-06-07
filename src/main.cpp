@@ -174,7 +174,10 @@ void loop() {
   }
 
   encoderAngle = encoderCalib.readAngle(encoder);
-  drawStatus();
+  if (millis() - lastDraw > drawInterval) {
+    drawStatus();
+    lastDraw = millis();
+  }
 
   // --- Управление якорем и мотором ---
   if (holding && gps.location.isValid()) {
@@ -189,6 +192,4 @@ void loop() {
   } else {
     motor.stop();
   }
-
-  delay(100);
 }

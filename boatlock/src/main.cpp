@@ -7,9 +7,6 @@
 #include <EEPROM.h>
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
-#include <BLEDevice.h>
-#include <BLEServer.h>
-#include <BLEUtils.h>
 #include <AS5600.h>
 #include <AccelStepper.h>
 
@@ -20,12 +17,18 @@ Settings settings;
 #include "AnchorControl.h"
 #include "EncoderCalib.h"
 #include "MotorControl.h"
+#include "UltrasonicAlert.h"
+#include "RemoteControl.h"
+RemoteControlServer remote;
 
+#define US_TRIG  13
+#define US_ECHO  12
 
 // --- Дисплей ---
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET    -1
+
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // --- Пины и константы ---
@@ -46,6 +49,7 @@ TinyGPSPlus gps;
 Adafruit_BNO055 bno = Adafruit_BNO055(55);
 AS5600 encoder;
 AccelStepper stepper(AccelStepper::DRIVER, STEP_PIN, DIR_PIN);
+UltrasonicAlert noseAlert;
 
 // --- Логика ---
 MPUCompass compass;
@@ -58,18 +62,6 @@ float targetAngle = 0;
 float encoderAngle = 0;
 unsigned long lastDraw = 0;
 const unsigned long drawInterval = 100;
-
-// --- BLE ---
-BLEServer* pServer = nullptr;
-BLECharacteristic* pCharacteristic = nullptr;
-bool deviceConnected = false;
-#define SERVICE_UUID "12345678-1234-1234-1234-1234567890ab"
-#define CHAR_UUID    "abcd1234-1234-1234-1234-abcdefabcdef"
-
-class MyServerCallbacks: public BLEServerCallbacks {
-  void onConnect(BLEServer* pServer) override { deviceConnected = true; }
-  void onDisconnect(BLEServer* pServer) override { deviceConnected = false; }
-};
 
 // --- Рисуем статус ---
 void drawStatus() {
@@ -85,6 +77,13 @@ void drawStatus() {
   display.print("Mode: "); display.println(holding ? "HOLDING" : "IDLE");
   display.setCursor(0, 56);
   display.print("Encoder: "); display.print(encoderAngle, 1); display.print(" deg");
+
+  // --- Выводим ультразвук ---
+  display.print("US: ");
+  display.print(noseAlert.lastDistance(), 2);
+  display.print(" m");
+  if (noseAlert.isAlert()) display.print(" ALERT!");
+
   display.display();
 }
 
@@ -99,24 +98,9 @@ void updateSteering() {
   float diff = targetAngle - currentAngle;
   if (diff > 180) diff -= 360;
   if (diff < -180) diff += 360;
-  if (abs(diff) > settings.data.angleTolerance) {
+  if (abs(diff) > settings.get("angleTolerance")) {
     int steps = map(abs(diff), 0, 180, 0, STEPS_PER_REV);
     stepper.moveTo(stepper.currentPosition() + (diff > 0 ? steps : -steps));
-  }
-}
-
-void handleBLE() {
-  if (deviceConnected) {
-    String rxValue = String(pCharacteristic->getValue().c_str());
-    if (rxValue.length() > 0) {
-      String input = String(rxValue.c_str());
-      if (input.startsWith("Kp:")) settings.data.Kp = input.substring(3).toFloat();
-      else if (input.startsWith("Ki:")) settings.data.Ki = input.substring(3).toFloat();
-      else if (input.startsWith("Kd:")) settings.data.Kd = input.substring(3).toFloat();
-      else if (input.startsWith("dist:")) settings.data.distanceThreshold = input.substring(5).toFloat();
-      else if (input.startsWith("angle:")) settings.data.angleTolerance = input.substring(6).toFloat();
-      pCharacteristic->setValue("Settings updated");
-    }
   }
 }
 
@@ -132,6 +116,7 @@ void setup() {
   }
 
   settings.load();
+  remote.begin();
 
   encoderCalib.setSettings(&settings);    
   pinMode(BUTTON_PIN, INPUT_PULLUP);
@@ -144,21 +129,12 @@ void setup() {
 
   bno.begin();
   encoder.begin();
+  noseAlert.setPins(US_TRIG, US_ECHO);
+  noseAlert.setSettings(&settings);
+  noseAlert.begin();
 //   encoderCalib.loadOffset();
   stepper.setMaxSpeed(1000);
   stepper.setAcceleration(500);
-
-  // --- BLE ---
-  BLEDevice::init("VirtualAnchor");
-  pServer = BLEDevice::createServer();
-  pServer->setCallbacks(new MyServerCallbacks());
-  BLEService *pService = pServer->createService(SERVICE_UUID);
-  pCharacteristic = pService->createCharacteristic(
-      CHAR_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE
-  );
-  pCharacteristic->setValue("Ready");
-  pService->start();
-  pServer->getAdvertising()->start();
 
   // --- Anchor ---
   anchor.loadAnchor();
@@ -170,7 +146,6 @@ void loop() {
   }
 
   compass.update();
-  handleBLE();
   updateSteering();
   stepper.run();
 
@@ -191,7 +166,7 @@ void loop() {
   // --- Управление якорем и мотором ---
   if (holding && gps.location.isValid()) {
     float dist = anchor.distanceToAnchor(gps);
-    if (dist > settings.data.distanceThreshold) {
+    if (dist > settings.get("distanceThreshold")) {
       float bearing = anchor.bearingToAnchor(gps);
       adjustPosition(bearing);
       motor.applyPID(dist);

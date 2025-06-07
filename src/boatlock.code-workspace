@@ -1,0 +1,18 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"name": "boatlock",
+			"path": "../boatlock"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"stdexcept": "cpp",
+			"string": "cpp",
+			"filesystem": "cpp"
+		}
+	}
+}
