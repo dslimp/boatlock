@@ -82,7 +82,6 @@ float targetAngle = 0;
 float encoderAngle = 0;
 unsigned long lastDraw = 0;
 const unsigned long drawInterval = 100;
-// float anchorLat, anchorLon = 0;
 float dist = 0, bearing = 0;
 
 const int windowSize = 10;
@@ -90,7 +89,7 @@ float latBuffer[windowSize];
 float lonBuffer[windowSize];
 int idx = 0;
 
-float distanceAnchor=0;
+// float distanceAnchor=0;
 
 #define CX 64
 #define CY 54    // ниже, чтобы не мешать тексту
@@ -211,6 +210,11 @@ void setup() {
   if (!compass.begin(0x68, 100.0f)) {
     drawDebug("MPU-9250 not found!");
     // while (1);
+
+
+  //  if(settings.get("distanceThreshold")==1) {
+  //   anchorSet = true;
+  //  };
   }
 
   settings.load();
@@ -234,6 +238,10 @@ void setup() {
 
   // --- Anchor ---
   anchor.loadAnchor();
+
+  if(settings.get("distanceThreshold")==1) {
+    anchorSet = true;
+  }
 }
 
 void loop() {
@@ -241,23 +249,22 @@ void loop() {
   static bool lastButton = HIGH;
   bool nowButton = digitalRead(BOOT_PIN);
 
+  float lat = gps.location.lat();
+  float lon = gps.location.lng();
+
   if (lastButton == HIGH && nowButton == LOW) {
     if (gps.location.isValid()) {
-      anchorLat = gps.location.lat();
-      anchorLon = gps.location.lng();
+      anchor.saveAnchor(lat, lon);
       anchorSet = true;
       Serial.println("Anchor point set!");
+      settings.set("AnchorEnabled", 1);
     }
   }
   lastButton = nowButton;
 
-  float lat = gps.location.lat();
-  float lon = gps.location.lng();
-
-  
   if (anchorSet && gps.location.isValid()) {
-    dist = TinyGPSPlus::distanceBetween(lat, lon, anchorLat, anchorLon); // в метрах
-    bearing = TinyGPSPlus::courseTo(lat, lon, anchorLat, anchorLon);    // в градусах
+    dist = anchor.distanceToAnchor(gps);
+    bearing = anchor.bearingToAnchor(gps);
   }
 
   // compass.update();
@@ -279,11 +286,7 @@ void loop() {
   // } else {
   //   motor.stop();
   // }
-  //   while (gpsSerial.available()) {
-  //   char c = gpsSerial.read();
-  //   Serial.write(c); // просто пересылаем данные с GPS в монитор порта
-  // }
-  // delay(10);
+
     while (gpsSerial.available()) {
       char c = gpsSerial.read();
       gps.encode(c);
@@ -300,8 +303,7 @@ void loop() {
                 anchorLat, anchorLon, anchorSet,
                 dist, bearing,
                 compass.getHeading(),
-                holding,
-                gps.speed.kmph()
+                holding
             );
     }
 

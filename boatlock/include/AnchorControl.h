@@ -29,5 +29,4 @@ public:
         return TinyGPSPlus::courseTo(
             gps.location.lat(), gps.location.lng(), anchorLat, anchorLng);
     }
-
 };

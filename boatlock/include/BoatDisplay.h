@@ -12,7 +12,7 @@ public:
                    float anchorLat, float anchorLon,
                    bool anchorSet, float dist, float bearing,
                    float heading, bool holding,
-                   float encoderAngle = 0, float speedKm=0) 
+                   float encoderAngle = 0) 
     {
         _display->clearDisplay();
         _display->setTextSize(1);
@@ -25,7 +25,7 @@ public:
 
         _display->setCursor(50, 30);
 
-        _display->printf("V:%.1f km/h", speedKm);
+        _display->printf("V:%.1f km/h", gps.speed.kmph());
 
         _display->setCursor(0, 30);
         if (anchorSet) {
