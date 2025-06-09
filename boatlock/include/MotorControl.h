@@ -1,14 +1,24 @@
 #pragma once
-#include <AccelStepper.h>
 #include <Arduino.h>
+#include <EEPROM.h>
+#include "Settings.h"
 
 class MotorControl {
 public:
     int pwmChannel;
     int dirPin;
-    float Kp, Ki, Kd, previous_error = 0, integral = 0;
-    float angleTolerance = 3.0;
-    float distanceThreshold = 2.0;
+
+    // Ссылки на PID в Settings (инициализируются в setup())
+    float Kp, Ki, Kd;
+    float previous_error = 0, integral = 0;
+
+    // Параметры адаптации PID
+    float angleTolerance;
+    float distanceThreshold;
+
+    // Таймер для автосохранения коэффициентов
+    unsigned long lastSaveTime = 0;
+    const unsigned long saveInterval = 120000;
 
     void setupPWM(int pin, int channel, int freq, int res) {
         pwmChannel = channel;
@@ -22,14 +32,64 @@ public:
         pinMode(pin, OUTPUT);
     }
 
+    void loadPIDfromSettings() {
+        Kp = settings.get("Kp");
+        Ki = settings.get("Ki");
+        Kd = settings.get("Kd");
+        angleTolerance    = settings.get("AngTol");
+        distanceThreshold = settings.get("DistTh");
+    }
+
+    void savePIDtoSettings(bool force = false) {
+        // Сохраняем только если значения реально поменялись, либо по таймеру (force=true)
+        static float lastKp = -1, lastKi = -1, lastKd = -1;
+        if (force || fabs(Kp - lastKp) > 0.0005 || fabs(Ki - lastKi) > 0.0001 || fabs(Kd - lastKd) > 0.0005) {
+            settings.set("Kp", Kp);
+            settings.set("Ki", Ki);
+            settings.set("Kd", Kd);
+            settings.save();
+            lastKp = Kp; lastKi = Ki; lastKd = Kd;
+        }
+    }
+
+    // --- Self-adaptive PID внутри applyPID ---
     void applyPID(float dist) {
         float error = dist;
         integral += error;
         float derivative = error - previous_error;
         float output = Kp * error + Ki * integral + Kd * derivative;
         previous_error = error;
-        int pwmValue = constrain((int)output, 0, 255);
-        digitalWrite(dirPin, HIGH);
+
+        // --- Self-adaptive tuning ---
+        float error_threshold = 5.0;
+        float derivative_threshold = 2.0;
+        float dKp = 0.01;
+        float dKd = 0.005;
+        float dKi = 0.0005;
+
+        // Корректировка Kp
+        if (fabs(error) > error_threshold)        Kp = min(Kp + dKp,  settings.get("Kp") * 4.0f); // лимит вверх
+        else if (fabs(error) < angleTolerance)    Kp = max(Kp - dKp,  0.01f); // лимит вниз
+
+        // Корректировка Kd (чтобы не “колбасило”)
+        if (fabs(derivative) > derivative_threshold)  Kd = min(Kd + dKd,  settings.get("Kd") * 4.0f);
+        else                                         Kd = max(Kd - dKd,  0.01f);
+
+        // Корректировка Ki для долгих ошибок
+        if (fabs(integral) > 50.0)  Ki = min(Ki + dKi, 0.2f);
+        else                        Ki = max(Ki - dKi, 0.0f);
+
+        // Автосохранение коэффициентов раз в saveInterval или при сильном изменении
+        if (millis() - lastSaveTime > saveInterval) {
+            savePIDtoSettings(true);
+            lastSaveTime = millis();
+        } else {
+            savePIDtoSettings();
+        }
+
+        // Управление мотором
+        int pwmValue = constrain((int)fabs(output), 0, 255);
+        digitalWrite(dirPin, (output >= 0) ? HIGH : LOW);
         ledcWrite(pwmChannel, pwmValue);
     }
 
