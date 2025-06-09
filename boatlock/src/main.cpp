@@ -17,7 +17,8 @@ Settings settings;
 #include "AnchorControl.h"
 #include "EncoderCalib.h"
 #include "MotorControl.h"
-#include "UltrasonicAlert.h"
+
+#include "BoatDisplay.h"
 // #include "RemoteControl.h"
 // RemoteControlServer remote;
 
@@ -41,6 +42,7 @@ std::string fakeStatus = "HOLD";
 #define OLED_RESET    -1
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+BoatDisplay boatDisplay(&display);
 
 // --- Пины и константы ---
 #define BUTTON_PIN 0
@@ -60,7 +62,6 @@ TinyGPSPlus gps;
 Adafruit_BNO055 bno = Adafruit_BNO055(55);
 AS5600 encoder;
 AccelStepper stepper(AccelStepper::DRIVER, STEP_PIN, DIR_PIN);
-UltrasonicAlert noseAlert;
 
 // --- Логика ---
 MPUCompass compass;
@@ -111,40 +112,6 @@ void drawArrow(float bearing) {
   display.drawLine(x2, y2, x_head2, y_head2, SSD1306_WHITE);
 }
 
-String getBoatData() {
-  String payload = String("Lat:") + String(gps.location.lat(), 6) +
-                  ",Lon:" + String(gps.location.lng(), 6) +
-                  ",Spd:" + String(gps.speed.kmph()) +
-                  ",Sat:" + String(gps.satellites.value());
-  return payload;
-}
-
-void handleBoatCmd(const String &cmd) {
-  Serial.print("BLE command: "); Serial.println(cmd);
-  if (cmd == "HOLD") holding = true;
-  if (cmd == "STOP") holding = false;
-  // и т.д.
-}
-
-
-void updateAvg(float lat, float lon) {
-  latBuffer[idx] = lat;
-  lonBuffer[idx] = lon;
-  idx = (idx + 1) % windowSize;
-}
-
-
-float avgLat() {
-  float sum = 0;
-  for (int i = 0; i < windowSize; i++) sum += latBuffer[i];
-  return sum / windowSize;
-}
-
-float avgLon() {
-  float sum = 0;
-  for (int i = 0; i < windowSize; i++) sum += lonBuffer[i];
-  return sum / windowSize;
-}
 
 void setMotorRaw(int power, bool dir) {
     digitalWrite(MOTOR_DIR_PIN, dir ? HIGH : LOW);
@@ -158,30 +125,6 @@ void drawDebug(const String &msg, int y = 48) {
   display.setCursor(0,  48);
   display.print("[D]");
   display.print(msg);
-  delay(100);
-  display.display();
-}
-
-
-void drawStatus() {
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0, 0);
-  display.print("Lat: "); display.println(gps.location.lat(), 6);
-  display.print("Lng: "); display.println(gps.location.lng(), 6);
-  display.print("Dist: "); display.println(anchor.distanceToAnchor(gps), 1);
-  display.print("Bear: "); display.println(anchor.bearingToAnchor(gps), 1);
-  display.print("Head: "); display.println(compass.getHeading(), 1);
-  display.print("Mode: "); display.println(holding ? "HOLDING" : "IDLE");
-  display.setCursor(0, 56);
-  display.print("Encoder: "); display.print(encoderAngle, 1); display.print(" deg");
-
-  display.print("US: ");
-  display.print(noseAlert.lastDistance(), 2);
-  display.print(" m");
-  if (noseAlert.isAlert()) display.print(" ALERT!");
-
   display.display();
 }
 
@@ -208,48 +151,8 @@ void setup() {
 
   pinMode(BOOT_PIN, INPUT_PULLUP);
 
-  // byte error, address;
-  // int nDevices = 0;
-
-  // for(address = 1; address < 127; address++ ) {
-  //   Wire.beginTransmission(address);
-  //   error = Wire.endTransmission();
-  //   if (error == 0) {
-  //     Serial.print("I2C device found at address 0x");
-  //     if (address<16)
-  //       Serial.print("0");
-  //     Serial.print(address,HEX);
-  //     Serial.println(" !");
-  //     nDevices++;
-  //   } else if (error==4) {
-  //     Serial.print("Unknown error at address 0x");
-  //     if (address<16)
-  //       Serial.print("0");
-  //     Serial.println(address,HEX);
-  //   }    
-  // }
-  // if (nDevices == 0)
-  //   Serial.println("No I2C devices found\n");
-  // else
-  //   Serial.println("done\n");
-// }
-
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-    Serial.println("SSD1306 allocation failed!");
-    while (1);
-  }
-  display.clearDisplay();
-  display.setTextSize(2);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0,0);
-  display.println("Hello!");
 
-  // drawDebug("ESP32 started");
-
-  // display.display();
-
- 
   gpsSerial.begin(9600, SERIAL_8N1, 17, 18);
 
   // // ble.begin(getBoatData, handleBoatCmd);
@@ -323,18 +226,14 @@ void setup() {
   display.display();
 
   // bno.begin();
-  // drawDebug("bno begin");
   // encoder.begin();
   drawDebug("encoder begin");
-  // noseAlert.setPins(US_TRIG, US_ECHO);
-  // noseAlert.setSettings(&settings);
-  // noseAlert.begin();
 //   encoderCalib.loadOffset();
   // stepper.setMaxSpeed(1000);
   // stepper.setAcceleration(500);
 
   // --- Anchor ---
-  // anchor.loadAnchor();
+  anchor.loadAnchor();
 }
 
 void loop() {
@@ -342,7 +241,7 @@ void loop() {
   static bool lastButton = HIGH;
   bool nowButton = digitalRead(BOOT_PIN);
 
-  if (lastButton == HIGH && nowButton == LOW) { // Только на нажатие
+  if (lastButton == HIGH && nowButton == LOW) {
     if (gps.location.isValid()) {
       anchorLat = gps.location.lat();
       anchorLon = gps.location.lng();
@@ -352,7 +251,7 @@ void loop() {
   }
   lastButton = nowButton;
 
-    float lat = gps.location.lat();
+  float lat = gps.location.lat();
   float lon = gps.location.lng();
 
   
@@ -361,46 +260,11 @@ void loop() {
     bearing = TinyGPSPlus::courseTo(lat, lon, anchorLat, anchorLon);    // в градусах
   }
 
-  // --- ОТРИСОВКА ---
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setCursor(0, 0);
-  display.printf("L:%.5f\nN:%.5f\n", lat, lon);
-  display.printf("Sat:%d", gps.satellites.value());
-  display.print(" HDOP: ");
-  display.print(gps.hdop.value() * 0.01);
-
-
-  display.setCursor(0, 30);
-  if (anchorSet) {
-    display.printf("Dst:%.1fm\n", dist);
-    display.printf("Brg:%.0f%c\n", bearing, 176);
-    drawArrow(bearing); // Функция рисует стрелку на дисплее (см. ваш drawArrow)
-  } else {
-    display.println("Press BOOT to anchor");
-  }
-
-  display.display();
-  // while (gpsSerial.available()) {
-  //   gps.encode(gpsSerial.read());
-  // }
-
   // compass.update();
   // updateSteering();
   // stepper.run();
 
-  // if (digitalRead(BUTTON_PIN) == LOW) {
-  //   delay(300);
-  //   encoderCalib.calibrate(encoder);
-  //   while (digitalRead(BUTTON_PIN) == LOW) delay(10);
-  // }
-
   // encoderAngle = encoderCalib.readAngle(encoder);
-
-  // if (millis() - lastDraw > drawInterval) {
-  //   drawStatus();
-  //   lastDraw = millis();
-  // }
 
   // if (holding && gps.location.isValid()) {
   //   float dist = anchor.distanceToAnchor(gps);
@@ -420,95 +284,26 @@ void loop() {
   //   Serial.write(c); // просто пересылаем данные с GPS в монитор порта
   // }
   // delay(10);
-  while (gpsSerial.available()) {
-    char c = gpsSerial.read();
-    gps.encode(c);
-  }
-
-
-  // fakeDistance += 0.02;
-  // if (fakeDistance > 20.0) fakeDistance = 10.0;
-  // bleBoatLock.setDistance(fakeDistance);
-
-  // fakeBattery -= 1;
-  // if (fakeBattery < 80) fakeBattery = 99;
-  // bleBoatLock.setBattery(fakeBattery);
-
-  // // fakeStatus = ... (обновляй как хочешь)
-  // bleBoatLock.setStatus(fakeStatus);
+    while (gpsSerial.available()) {
+      char c = gpsSerial.read();
+      gps.encode(c);
+    }
 
     static unsigned long lastNotify = 0;
     unsigned long now = millis();
     if (now - lastNotify > 5000) {
         bleBoatLock.notifyAll();
         lastNotify = now;
+
+        boatDisplay.showStatus(
+                gps,
+                anchorLat, anchorLon, anchorSet,
+                dist, bearing,
+                compass.getHeading(),
+                holding,
+                gps.speed.kmph()
+            );
     }
 
   bleBoatLock.loop();
-
-  // if (gps.location.isValid()) {
-
-  // display.clearDisplay();
-  // display.setTextSize(1);
-  // display.setCursor(0, 0);
-
-  //  float lat = gps.location.lat();
-  //   float lon = gps.location.lng();
-  //   display.printf("L:%.5f\nN:%.5f\n", lat, lon);
-
-  //   display.printf("S:%d", gps.satellites.value());
-  //   display.setCursor(60, 0);
-  //   display.printf("H:%.2f", gps.hdop.value() * 0.01);
-
-  //   display.setCursor(0, 16);
-  //   display.printf("V:%.1f km/h", gps.speed.kmph());
-
-  //   display.setCursor(70, 16);
-  //   display.printf("sat:%.1i", gps.satellites.value());
-
-  //   // display.setCursor(0, 30);
-
-  //   float dist = 0;
-  //   float bearing = 0;
-  //   if (lastLat != 0 && lastLon != 0) {
-  //     dist = TinyGPSPlus::distanceBetween(lastLat, lastLon, lat, lon);
-  //     bearing = TinyGPSPlus::courseTo(lastLat, lastLon, lat, lon);
-  //     prevBearing = bearing; // для отрисовки стрелки даже если dist=0
-  //   }
-  //   display.setCursor(0, 28);
-  //   display.printf("d:%.1fm", dist);
-
-  //   display.setCursor(40, 28);
-  //   // display.printf("hdop:%i", gps.hdop.value() * 0.01);
-  //   // display.setCursor(0, 50);
-  //   display.print("HDOP: ");
-  //   display.println(gps.hdop.value() * 0.01);
-
-  //   display.setCursor(0, 50);
-  //   display.print("BLE: ");
-  //   display.print(bleBoatLock.statusString());
-
-  //   // Сохраняем предыдущую точку для следующего шага
-  //   lastLat = lat;
-  //   lastLon = lon;
-
-  //   // Нарисовать стрелку только если есть валидное расстояние
-  //   if (dist > 1) drawArrow(bearing);
-  //   else if (prevBearing != 0) drawArrow(prevBearing);
-
-  //   display.display();
-
-  // } else {
-  //   display.println("Waiting for GPS...");
-  // }
-
-  // display.display();
-
-  // delay(1000);
-
-//   static BLEBoatLock::Status last = BLEBoatLock::ADVERTISING;
-//   if (bleBoatLock.getStatus() != last) {
-//     last = bleBoatLock.getStatus();
-//     Serial.printf("[BLE] Status changed: %s\n", bleBoatLock.statusString());
-// }
 }
