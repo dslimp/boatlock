@@ -42,6 +42,7 @@ class BleBoatLock {
       for (var r in results) {
         print("[BLE] found device: mac=${r.device.remoteId}, name='${r.device.platformName}', advName='${r.advertisementData.advName}'");
         if (r.advertisementData.advName == "BoatLock") {
+          print("[BLE] BoatLock found, connecting...");
           _device = r.device;
           await FlutterBluePlus.stopScan();
           await _connectToDevice();
@@ -58,17 +59,33 @@ class BleBoatLock {
   }
 
   Future<void> _connectToDevice() async {
-    if (_device == null || _isConnecting) return;
+    print("[BLE] _connectToDevice() called");
+    if (_device == null) {
+      print("[BLE] _device is null!");
+      return;
+    }
     _isConnecting = true;
 
     try {
       await _device!.connect(timeout: Duration(seconds: 10));
+      print("[BLE] Connected to device!");
       _connectionSub?.cancel();
       _connectionSub = _device!.connectionState.listen((state) {
         if (state == BluetoothConnectionState.disconnected) {
           _scheduleReconnect();
         }
       });
+
+      // Подписка на disconnect
+      _device!.connectionState.listen((state) {
+        print("[BLE] BLE state: $state");
+        if (state == BluetoothConnectionState.disconnected) {
+          print("[BLE] BLE disconnected! Scheduling reconnect...");
+          // _scheduleReconnect(); // если используешь авто-реконнект
+        }
+      });
+
+
 
       List<BluetoothService> services = await _device!.discoverServices();
       for (var s in services) {
