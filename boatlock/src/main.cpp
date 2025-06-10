@@ -6,19 +6,24 @@
 #include <HardwareSerial.h>
 #include <EEPROM.h>
 #include <Adafruit_BNO055.h>
-#include <utility/imumaths.h>
-#include <AS5600.h>
+// #include <utility/imumaths.h>
+// #include <AS5600.h>
 #include <AccelStepper.h>
 #include <math.h>
 
 #include "Settings.h"
 Settings settings;
-#include "MPUCompass.h"
+// #include "MPUCompass.h"
 #include "AnchorControl.h"
 #include "EncoderCalib.h"
 #include "MotorControl.h"
 
 #include "BoatDisplay.h"
+
+#include "BoatIMU.h"
+
+BoatIMU boatIMU;
+
 // #include "RemoteControl.h"
 // RemoteControlServer remote;
 
@@ -26,15 +31,6 @@ unsigned long lastNotifyBle = 0;
 
 #include "BLEBoatLock.h"
 BLEBoatLock bleBoatLock;
-
-
-
-float fakeDistance = 15.0;
-int fakeBattery = 89;
-std::string fakeStatus = "HOLD";
-
-#define US_TRIG  13
-#define US_ECHO  12
 
 // --- Дисплей ---
 #define SCREEN_WIDTH 128
@@ -64,11 +60,10 @@ AS5600 encoder;
 AccelStepper stepper(AccelStepper::DRIVER, STEP_PIN, DIR_PIN);
 
 // --- Логика ---
-MPUCompass compass;
+// MPUCompass compass;
 AnchorControl anchor;
 EncoderCalib encoderCalib;
 MotorControl motor;
-
 
 #define BOOT_PIN 0
 
@@ -84,38 +79,13 @@ unsigned long lastDraw = 0;
 const unsigned long drawInterval = 100;
 float dist = 0, bearing = 0;
 
-const int windowSize = 10;
-float latBuffer[windowSize];
-float lonBuffer[windowSize];
-int idx = 0;
-
-// float distanceAnchor=0;
-
-#define CX 64
-#define CY 54    // ниже, чтобы не мешать тексту
-#define R  10    // длина стрелки
-
 float lastLat = 0, lastLon = 0;
 float prevBearing = 0;
 
-void drawArrow(float bearing) {
-  float rad = (bearing - 90) * DEG_TO_RAD; // -90 чтобы 0° был вверх
-  int x2 = CX + R * cos(rad);
-  int y2 = CY + R * sin(rad);
-  display.drawLine(CX, CY, x2, y2, SSD1306_WHITE);
-  int x_head1 = CX + (R - 3) * cos(rad + 0.3);
-  int y_head1 = CY + (R - 3) * sin(rad + 0.3);
-  int x_head2 = CX + (R - 3) * cos(rad - 0.3);
-  int y_head2 = CY + (R - 3) * sin(rad - 0.3);
-  display.drawLine(x2, y2, x_head1, y_head1, SSD1306_WHITE);
-  display.drawLine(x2, y2, x_head2, y_head2, SSD1306_WHITE);
-}
-
-
-void setMotorRaw(int power, bool dir) {
-    digitalWrite(MOTOR_DIR_PIN, dir ? HIGH : LOW);
-    ledcWrite(PWM_CHANNEL, constrain(power, 0, 255));
-}
+// void setMotorRaw(int power, bool dir) {
+//     digitalWrite(MOTOR_DIR_PIN, dir ? HIGH : LOW);
+//     ledcWrite(PWM_CHANNEL, constrain(power, 0, 255));
+// }
 
 void drawDebug(const String &msg, int y = 48) {
   display.clearDisplay();
@@ -126,6 +96,42 @@ void drawDebug(const String &msg, int y = 48) {
   display.print(msg);
   display.display();
 }
+
+template<typename F>
+std::function<std::string()> makeFloatParam(F valueFunc, const char* fmt) {
+    return [valueFunc, fmt]() {
+        char buf[20];
+        snprintf(buf, sizeof(buf), fmt, valueFunc());
+        return std::string(buf);
+    };
+}
+
+
+void scanI2CAndDisplay() {
+    // Wire.begin(sdaPin, sclPin);
+
+    Serial.println("I2C scan:");
+    drawDebug("I2C scan:");
+
+    uint8_t found = 0;
+    for (uint8_t address = 1; address < 127; address++) {
+        Wire.beginTransmission(address);
+        uint8_t error = Wire.endTransmission();
+
+        if (error == 0) {
+            Serial.print("Found: 0x");
+            Serial.println(address, HEX);
+            // drawDebug("Found",address, HEX);
+            found++;
+
+            if (found % 5 == 0) display.println();
+        }
+    }
+    if (!found) {
+        Serial.println("Nothing found");
+    }
+}
+
 
 void adjustPosition(float bearing) {
   targetAngle = bearing;
@@ -154,68 +160,20 @@ void setup() {
 
   gpsSerial.begin(9600, SERIAL_8N1, 17, 18);
 
-  // // ble.begin(getBoatData, handleBoatCmd);
-  //   auto dataFunc = []() -> std::string {
-  //       return "{\"battery\":89}";
-  //   };
-  //   // Колбэк: обработать команду от клиента
-  //   auto cmdFunc = [](const std::string& cmd) {
-  //       Serial.print("[BLE] Got cmd: ");
-  //       Serial.println(cmd.c_str());
-  //       // Здесь обработка команд
-  //   };
-  //   bleBoatLock.begin(dataFunc, cmdFunc);
   bleBoatLock.begin();
 
-  bleBoatLock.registerParam("distance", [&]() {
-      char buf[16];
-      snprintf(buf, sizeof(buf), "%.2f", dist);
-      return std::string(buf);
-  });
-
-
-  bleBoatLock.registerParam("heading", []() { return "91"; });
-  bleBoatLock.setCommandHandler([](const std::string& cmd) {
+    bleBoatLock.setCommandHandler([](const std::string& cmd) {
       Serial.printf("[BLE] Unhandled command: %s\n", cmd.c_str());
   });
 
-  bleBoatLock.registerParam("lat", [&]() {
-      char buf[16];
-      snprintf(buf, sizeof(buf), "%.6f", gps.location.lat());
-      return std::string(buf);
-  });
-  bleBoatLock.registerParam("lon", [&]() {
-      char buf[16];
-      snprintf(buf, sizeof(buf), "%.6f", gps.location.lng());
-      return std::string(buf);
-  });
-  bleBoatLock.registerParam("heading", [&]() {
-      char buf[8];
-      snprintf(buf, sizeof(buf), "%.1f", compass.getHeading());
-      return std::string(buf);
-  });
-
-  bleBoatLock.registerParam("anchorLat", [&]() {
-      char buf[16];
-      snprintf(buf, sizeof(buf), "%.6f", anchorLat);
-      return std::string(buf);
-  });
-  bleBoatLock.registerParam("anchorLon", [&]() {
-      char buf[16];
-      snprintf(buf, sizeof(buf), "%.6f", anchorLon);
-      return std::string(buf);
-  });
+  bleBoatLock.registerParam("distance", makeFloatParam([&](){ return dist; }, "%.2f"));
+  bleBoatLock.registerParam("lat",      makeFloatParam([&](){ return gps.location.lat(); }, "%.6f"));
+  bleBoatLock.registerParam("lon",      makeFloatParam([&](){ return gps.location.lng(); }, "%.6f"));
+  bleBoatLock.registerParam("heading",  makeFloatParam([&](){ return 17; }, "%.1f"));
+  bleBoatLock.registerParam("anchorLat",makeFloatParam([&](){ return anchorLat; }, "%.6f"));
+  bleBoatLock.registerParam("anchorLon",makeFloatParam([&](){ return anchorLon; }, "%.6f"));
 
   EEPROM.begin(512);
-  if (!compass.begin(0x68, 100.0f)) {
-    drawDebug("MPU-9250 not found!");
-    // while (1);
-
-
-  //  if(settings.get("distanceThreshold")==1) {
-  //   anchorSet = true;
-  //  };
-  }
 
   settings.load();
   drawDebug("settings load");
@@ -226,8 +184,8 @@ void setup() {
   motor.setDirPin(MOTOR_DIR_PIN);
   drawDebug("motor load");
 
-  display.clearDisplay();
-  display.display();
+  // display.clearDisplay();
+  // display.display();
 
   // bno.begin();
   // encoder.begin();
@@ -242,6 +200,12 @@ void setup() {
   if(settings.get("distanceThreshold")==1) {
     anchorSet = true;
   }
+
+  boatIMU.begin();
+
+  scanI2CAndDisplay();
+  // delay(3)
+
 }
 
 void loop() {
@@ -302,10 +266,17 @@ void loop() {
                 gps,
                 anchorLat, anchorLon, anchorSet,
                 dist, bearing,
-                compass.getHeading(),
+                17, // Heading
                 holding
             );
     }
 
   bleBoatLock.loop();
+  boatIMU.update();
+    Serial.printf("A: %.2f %.2f %.2f | G: %.2f %.2f %.2f | M: %.2f %.2f %.2f | Heading: %.1f | Temp: %.1f\n",
+        boatIMU.accelX(), boatIMU.accelY(), boatIMU.accelZ(),
+        boatIMU.gyroX(), boatIMU.gyroY(), boatIMU.gyroZ(),
+        boatIMU.magX(), boatIMU.magY(), boatIMU.magZ());
+        // boatIMU.heading(),));
+  delay(500); // для теста
 }
