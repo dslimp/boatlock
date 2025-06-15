@@ -30,6 +30,13 @@ class BleBoatLock {
     }
   }
 
+  Future<void> sendCustomCommand(String cmd) async {
+    if (_cmdChar != null) {
+      await _cmdChar!.write(utf8.encode(cmd), withoutResponse: false);
+    }
+  }
+
+
   Future<void> _scanAndConnect() async {
     print("[BLE] _scanAndConnect()");
     if (_isConnecting) return;

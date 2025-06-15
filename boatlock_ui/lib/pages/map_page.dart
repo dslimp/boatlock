@@ -5,6 +5,7 @@ import '../ble/ble_boatlock.dart';
 import '../models/boat_data.dart';
 import '../widgets/status_panel.dart';
 
+
 class MapPage extends StatefulWidget {
   const MapPage({super.key});
   @override
@@ -14,6 +15,7 @@ class MapPage extends StatefulWidget {
 class _MapPageState extends State<MapPage> {
   BoatData? boatData;
   late BleBoatLock ble;
+  LatLng? selectedAnchorPos;
 
   @override
   void initState() {
@@ -35,6 +37,7 @@ Widget build(BuildContext context) {
   final boatPos = boatData == null ? null : LatLng(boatData!.lat, boatData!.lon);
   final anchorPos = boatData == null ? null : LatLng(boatData!.anchorLat, boatData!.anchorLon);
 
+
   return Scaffold(
     appBar: AppBar(title: Text('BoatLock OSM Map')),
     body: Stack(
@@ -42,7 +45,15 @@ Widget build(BuildContext context) {
         // Карта только если boatPos валиден
         if (boatPos != null && boatPos.latitude != 0 && boatPos.longitude != 0)
           FlutterMap(
-            options: MapOptions(center: boatPos, zoom: 16),
+            options: MapOptions(
+              center: boatPos,
+              zoom: 16,
+              onLongPress: (_, point) {
+                setState(() {
+                  selectedAnchorPos = point;
+                });
+              },
+            ),
             children: [
               TileLayer(urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
               MarkerLayer(markers: [
@@ -58,6 +69,13 @@ Widget build(BuildContext context) {
                     width: 40,
                     height: 40,
                     child: Icon(Icons.anchor, color: Colors.red, size: 36),
+                  ),
+                if (selectedAnchorPos != null)
+                  Marker(
+                    point: selectedAnchorPos!,
+                    width: 40,
+                    height: 40,
+                    child: Icon(Icons.place, color: Colors.orange, size: 36),
                   ),
               ]),
             ],
@@ -105,6 +123,30 @@ Widget build(BuildContext context) {
                 child: Text(
                   'До якоря: ${boatData!.distance.toStringAsFixed(1)} м',
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ),
+
+    if (selectedAnchorPos != null)
+          Positioned(
+            bottom: 90,
+            left: 0, right: 0,
+            child: Center(
+              child: ElevatedButton.icon(
+                icon: Icon(Icons.check),
+                label: Text("Установить якорь здесь"),
+                onPressed: () {
+                  final cmd = "SET_ANCHOR:${selectedAnchorPos!.latitude},${selectedAnchorPos!.longitude}";
+                  ble.sendCustomCommand(cmd);
+                  setState(() {
+                    selectedAnchorPos = null;
+                  });
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
               ),
             ),

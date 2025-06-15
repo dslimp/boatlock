@@ -22,7 +22,7 @@ Settings settings;
 
 #include "BoatIMU.h"
 
-BoatIMU boatIMU;
+// BoatIMU boatIMU;
 
 // #include "RemoteControl.h"
 // RemoteControlServer remote;
@@ -67,8 +67,8 @@ MotorControl motor;
 
 #define BOOT_PIN 0
 
-float anchorLat = 0;
-float anchorLon = 0;
+// float anchorLat = 0;
+// float anchorLon = 0;
 bool anchorSet = false;
 
 
@@ -163,15 +163,23 @@ void setup() {
   bleBoatLock.begin();
 
     bleBoatLock.setCommandHandler([](const std::string& cmd) {
+    if (cmd.rfind("SET_ANCHOR:", 0) == 0) {
+      float lat = 0, lon = 0;
+      sscanf(cmd.c_str() + 11, "%f,%f", &lat, &lon);
+      anchor.saveAnchor(lat, lon);
+      settings.set("AnchorEnabled", 1);
+      Serial.printf("[BLE] Anchor set via BLE: %.6f, %.6f\n", lat, lon);
+    } else {
       Serial.printf("[BLE] Unhandled command: %s\n", cmd.c_str());
+    }
   });
 
   bleBoatLock.registerParam("distance", makeFloatParam([&](){ return dist; }, "%.2f"));
   bleBoatLock.registerParam("lat",      makeFloatParam([&](){ return gps.location.lat(); }, "%.6f"));
   bleBoatLock.registerParam("lon",      makeFloatParam([&](){ return gps.location.lng(); }, "%.6f"));
   bleBoatLock.registerParam("heading",  makeFloatParam([&](){ return 17; }, "%.1f"));
-  bleBoatLock.registerParam("anchorLat",makeFloatParam([&](){ return anchorLat; }, "%.6f"));
-  bleBoatLock.registerParam("anchorLon",makeFloatParam([&](){ return anchorLon; }, "%.6f"));
+  bleBoatLock.registerParam("anchorLat",makeFloatParam([&](){ return anchor.anchorLat; }, "%.6f"));
+  bleBoatLock.registerParam("anchorLon",makeFloatParam([&](){ return anchor.anchorLng; }, "%.6f"));
 
   EEPROM.begin(512);
 
@@ -201,9 +209,9 @@ void setup() {
     anchorSet = true;
   }
 
-  boatIMU.begin();
+  // boatIMU.begin();
 
-  scanI2CAndDisplay();
+  // scanI2CAndDisplay();
   // delay(3)
 
 }
@@ -264,7 +272,7 @@ void loop() {
 
         boatDisplay.showStatus(
                 gps,
-                anchorLat, anchorLon, anchorSet,
+                anchor.anchorLat, anchor.anchorLng, anchorSet,
                 dist, bearing,
                 17, // Heading
                 holding
@@ -272,11 +280,11 @@ void loop() {
     }
 
   bleBoatLock.loop();
-  boatIMU.update();
-    Serial.printf("A: %.2f %.2f %.2f | G: %.2f %.2f %.2f | M: %.2f %.2f %.2f | Heading: %.1f | Temp: %.1f\n",
-        boatIMU.accelX(), boatIMU.accelY(), boatIMU.accelZ(),
-        boatIMU.gyroX(), boatIMU.gyroY(), boatIMU.gyroZ(),
-        boatIMU.magX(), boatIMU.magY(), boatIMU.magZ());
+  // boatIMU.update();
+  //   Serial.printf("A: %.2f %.2f %.2f | G: %.2f %.2f %.2f | M: %.2f %.2f %.2f | Heading: %.1f | Temp: %.1f\n",
+  //       boatIMU.accelX(), boatIMU.accelY(), boatIMU.accelZ(),
+  //       boatIMU.gyroX(), boatIMU.gyroY(), boatIMU.gyroZ(),
+  //       boatIMU.magX(), boatIMU.magY(), boatIMU.magZ());
         // boatIMU.heading(),));
-  delay(500); // для теста
+  // delay(500); // для теста
 }
