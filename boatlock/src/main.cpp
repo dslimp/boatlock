@@ -13,6 +13,8 @@
 
 #include "Settings.h"
 Settings settings;
+constexpr size_t EEPROM_SIZE =
+    Settings::EEPROM_ADDR + sizeof(entries) + sizeof(uint8_t);
 // #include "MPUCompass.h"
 #include "AnchorControl.h"
 #include "EncoderCalib.h"
@@ -180,7 +182,7 @@ void setup() {
   bleBoatLock.registerParam("anchorLat",makeFloatParam([&](){ return anchor.anchorLat; }, "%.6f"));
   bleBoatLock.registerParam("anchorLon",makeFloatParam([&](){ return anchor.anchorLng; }, "%.6f"));
 
-  EEPROM.begin(512);
+  EEPROM.begin(EEPROM_SIZE);
 
   settings.load();
   anchor.attachSettings(&settings);
