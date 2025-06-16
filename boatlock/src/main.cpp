@@ -168,6 +168,8 @@ void setup() {
       sscanf(cmd.c_str() + 11, "%f,%f", &lat, &lon);
       anchor.saveAnchor(lat, lon);
       settings.set("AnchorEnabled", 1);
+      // anchorSet = true;
+      settings.save();
       Serial.printf("[BLE] Anchor set via BLE: %.6f, %.6f\n", lat, lon);
     } else {
       Serial.printf("[BLE] Unhandled command: %s\n", cmd.c_str());
@@ -205,9 +207,9 @@ void setup() {
   // --- Anchor ---
   anchor.loadAnchor();
 
-  if(settings.get("distanceThreshold")==1) {
-    anchorSet = true;
-  }
+  // if(settings.get("distanceThreshold")==1) {
+  //   anchorSet = true;
+  // }
 
   // boatIMU.begin();
 
@@ -230,11 +232,12 @@ void loop() {
       anchorSet = true;
       Serial.println("Anchor point set!");
       settings.set("AnchorEnabled", 1);
+      settings.save();
     }
   }
   lastButton = nowButton;
 
-  if (anchorSet && gps.location.isValid()) {
+  if (gps.location.isValid() && settings.get("AnchorEnabled")==1) {
     dist = anchor.distanceToAnchor(gps);
     bearing = anchor.bearingToAnchor(gps);
   }
@@ -272,7 +275,7 @@ void loop() {
 
         boatDisplay.showStatus(
                 gps,
-                anchor.anchorLat, anchor.anchorLng, anchorSet,
+                anchor.anchorLat, anchor.anchorLng, settings.get("AnchorEnabled"),
                 dist, bearing,
                 17, // Heading
                 holding

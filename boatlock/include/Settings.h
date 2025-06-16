@@ -27,7 +27,7 @@ SettingEntry entries[] = {
     {"USAngle",   "US angle",           TYPE_FLOAT, 30.0, 30.0,  0.0,  90.0,   1.0, "deg", true},
     {"USThresh",  "US threshold",       TYPE_FLOAT, 1.5,  1.5,   0.1,  6.0,    0.1, "m", true},
     {"GPS_TYPE",   "GPS model",         TYPE_INT,   0, 0, 0, 4, 1, "", true},
-    {"IMU_TYPE",   "IMU model",         TYPE_INT, 1, 1, 0, 4, 1, "", true},
+    {"IMU_TYPE",   "IMU model",         TYPE_INT,   1, 1, 0, 4, 1, "", true},
     {"AnchorEnabled",  "Enable anchor", TYPE_INT,   0,0, 0,    1,    1, "", false},
 
     // Добавляй новые параметры сюда!
