@@ -233,7 +233,7 @@ void loop() {
   }
   lastButton = nowButton;
 
-  if (anchorSet && gps.location.isValid()) {
+  if (gps.location.isValid() && settings.get("AnchorEnabled")==1) {
     dist = anchor.distanceToAnchor(gps);
     bearing = anchor.bearingToAnchor(gps);
   }
@@ -271,7 +271,7 @@ void loop() {
 
         boatDisplay.showStatus(
                 gps,
-                anchor.anchorLat, anchor.anchorLng, anchorSet,
+                anchor.anchorLat, anchor.anchorLng, settings.get("AnchorEnabled"),
                 dist, bearing,
                 17, // Heading
                 holding

@@ -10,7 +10,7 @@ public:
 
     void showStatus(TinyGPSPlus& gps,
                    float anchorLat, float anchorLon,
-                   bool anchorSet, float dist, float bearing,
+                   int AnchorEnabled, float dist, float bearing,
                    float heading, bool holding,
                    float encoderAngle = 0) 
     {
@@ -28,7 +28,7 @@ public:
         _display->printf("V:%.1f km/h", gps.speed.kmph());
 
         _display->setCursor(0, 30);
-        if (anchorSet) {
+        if (AnchorEnabled==1) {
             _display->printf("Dst:%.1fm\n", dist);
             _display->printf("Brg:%.0f%c\n", bearing, 176);
             drawArrow(bearing);
