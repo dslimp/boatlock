@@ -167,9 +167,6 @@ void setup() {
       float lat = 0, lon = 0;
       sscanf(cmd.c_str() + 11, "%f,%f", &lat, &lon);
       anchor.saveAnchor(lat, lon);
-      settings.set("AnchorEnabled", 1);
-      // anchorSet = true;
-      settings.save();
       Serial.printf("[BLE] Anchor set via BLE: %.6f, %.6f\n", lat, lon);
     } else {
       Serial.printf("[BLE] Unhandled command: %s\n", cmd.c_str());
@@ -186,6 +183,8 @@ void setup() {
   EEPROM.begin(512);
 
   settings.load();
+  anchor.attachSettings(&settings);
+  anchor.loadAnchor();
   drawDebug("settings load");
 
   encoderCalib.setSettings(&settings);    
@@ -205,11 +204,10 @@ void setup() {
   // stepper.setAcceleration(500);
 
   // --- Anchor ---
-  anchor.loadAnchor();
 
-  // if(settings.get("distanceThreshold")==1) {
-  //   anchorSet = true;
-  // }
+  if(settings.get("AnchorEnabled") == 1) {
+    anchorSet = true;
+  }
 
   // boatIMU.begin();
 
@@ -231,8 +229,6 @@ void loop() {
       anchor.saveAnchor(lat, lon);
       anchorSet = true;
       Serial.println("Anchor point set!");
-      settings.set("AnchorEnabled", 1);
-      settings.save();
     }
   }
   lastButton = nowButton;
