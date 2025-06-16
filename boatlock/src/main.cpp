@@ -13,8 +13,7 @@
 
 #include "Settings.h"
 Settings settings;
-constexpr size_t EEPROM_SIZE =
-    Settings::EEPROM_ADDR + sizeof(entries) + sizeof(uint8_t);
+constexpr size_t EEPROM_SIZE = Settings::EEPROM_ADDR + sizeof(SettingEntry) * count + sizeof(uint8_t);
 // #include "MPUCompass.h"
 #include "AnchorControl.h"
 #include "EncoderCalib.h"
@@ -162,8 +161,6 @@ void setup() {
 
   gpsSerial.begin(9600, SERIAL_8N1, 17, 18);
 
-  bleBoatLock.begin();
-
     bleBoatLock.setCommandHandler([](const std::string& cmd) {
     if (cmd.rfind("SET_ANCHOR:", 0) == 0) {
       float lat = 0, lon = 0;
@@ -176,18 +173,28 @@ void setup() {
   });
 
   bleBoatLock.registerParam("distance", makeFloatParam([&](){ return dist; }, "%.2f"));
-  bleBoatLock.registerParam("lat",      makeFloatParam([&](){ return gps.location.lat(); }, "%.6f"));
-  bleBoatLock.registerParam("lon",      makeFloatParam([&](){ return gps.location.lng(); }, "%.6f"));
+  // bleBoatLock.registerParam("lat",      makeFloatParam([&](){ return gps.location.lat(); }, "%.6f"));
+  // bleBoatLock.registerParam("lon",      makeFloatParam([&](){ return gps.location.lng(); }, "%.6f"));
+  bleBoatLock.registerParam("lat", makeFloatParam([&](){
+      return gps.location.isValid() ? gps.location.lat() : 0.0;
+  }, "%.6f"));
+
+  bleBoatLock.registerParam("lon", makeFloatParam([&](){
+      return gps.location.isValid() ? gps.location.lng() : 0.0;
+  }, "%.6f"));
+
   bleBoatLock.registerParam("heading",  makeFloatParam([&](){ return 17; }, "%.1f"));
-  bleBoatLock.registerParam("anchorLat",makeFloatParam([&](){ return anchor.anchorLat; }, "%.6f"));
+  bleBoatLock.registerParam("anchorLat", makeFloatParam([&](){ return isnan(anchor.anchorLat) ? 0.0 : anchor.anchorLat;}, "%.6f"));
   bleBoatLock.registerParam("anchorLon",makeFloatParam([&](){ return anchor.anchorLng; }, "%.6f"));
+  bleBoatLock.registerParam("anchorLng", makeFloatParam([&](){ return isnan(anchor.anchorLng) ? 0.0 : anchor.anchorLng;}, "%.6f"));
 
   EEPROM.begin(EEPROM_SIZE);
-
   settings.load();
   anchor.attachSettings(&settings);
   anchor.loadAnchor();
   drawDebug("settings load");
+
+  bleBoatLock.begin();
 
   encoderCalib.setSettings(&settings);    
   pinMode(BUTTON_PIN, INPUT_PULLUP);

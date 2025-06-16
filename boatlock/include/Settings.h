@@ -15,8 +15,8 @@ struct SettingEntry {
     bool visibleInMenu;
 };
 
-    // --- Заполняй параметры тут ---
-SettingEntry entries[] = {
+// 🔒 Константный эталон (не изменяется, хранится в flash)
+const SettingEntry defaultEntries[] = {
     {"Kp",        "Kp for PID",         TYPE_FLOAT, 20.0, 20.0,  0.01, 200.0,  0.1, "", true},
     {"Ki",        "Ki for PID",         TYPE_FLOAT, 0.5,  0.5,   0.0,  10.0,  0.01, "", true},
     {"Kd",        "Kd for PID",         TYPE_FLOAT, 5.0,  5.0,   0.0, 100.0,  0.1, "", true},
@@ -26,16 +26,14 @@ SettingEntry entries[] = {
     {"Encoder0",  "Encoder zero",       TYPE_INT,   0,    0,     0,    4095,   1, "", false},
     {"USAngle",   "US angle",           TYPE_FLOAT, 30.0, 30.0,  0.0,  90.0,   1.0, "deg", true},
     {"USThresh",  "US threshold",       TYPE_FLOAT, 1.5,  1.5,   0.1,  6.0,    0.1, "m", true},
-    {"GPS_TYPE",   "GPS model",         TYPE_INT,   0, 0, 0, 4, 1, "", true},
-    {"IMU_TYPE",   "IMU model",         TYPE_INT,   1, 1, 0, 4, 1, "", true},
-    {"AnchorEnabled",  "Enable anchor", TYPE_INT,   0,0, 0,    1,    1, "", false},
-    {"AnchorLat",  "Anchor latitude",   TYPE_FLOAT, 0.0, 0.0,  -90.0,  90.0,  0.000001, "", false},
-    {"AnchorLon",  "Anchor longitude",  TYPE_FLOAT, 0.0, 0.0, -180.0, 180.0,  0.000001, "", false},
-
-    // Добавляй новые параметры сюда!
+    {"GPS_TYPE",  "GPS model",          TYPE_INT,   0, 0, 0, 4, 1, "", true},
+    {"IMU_TYPE",  "IMU model",          TYPE_INT,   1, 1, 0, 4, 1, "", true},
+    {"AnchorEnabled", "Enable anchor",  TYPE_INT,   0,0, 0,    1,    1, "", false},
+    {"AnchorLat", "Anchor latitude",    TYPE_FLOAT, 0.0, 0.0,  -90.0,  90.0,  0.000001, "", false},
+    {"AnchorLon", "Anchor longitude",   TYPE_FLOAT, 0.0, 0.0, -180.0, 180.0,  0.000001, "", false},
 };
 
-static const int count = sizeof(entries)/sizeof(entries[0]);
+static const int count = sizeof(defaultEntries) / sizeof(defaultEntries[0]);
 
 const char* gpsTypeNames[] = { "TinyGPS", "NEO-M8N", "UBlox", "Sim28", "Other" };
 const char* imuTypeNames[] = { "BNO055", "MPU9250", "BNO085", "LSM9DS1", "None" };
@@ -48,7 +46,8 @@ public:
     struct KeyIdx { const char* key; int idx; };
     KeyIdx keyMap[count];
 
-    // --- Индекс по ключу ---
+    SettingEntry entries[count];  // ⚠️ Копия в RAM (безопасно для EEPROM)
+
     int idxByKey(const char* key) {
         for (int i = 0; i < count; i++)
             if (strcmp(keyMap[i].key, key) == 0)
@@ -56,7 +55,6 @@ public:
         return -1;
     }
 
-    // --- Быстро построить map (после load/reset) ---
     void buildKeyMap() {
         for (int i = 0; i < count; i++) {
             keyMap[i].key = entries[i].key;
@@ -64,12 +62,11 @@ public:
         }
     }
 
-    // --- Получить значение ---
-    float get(const char* key) { 
+    float get(const char* key) {
         int idx = idxByKey(key);
         return (idx >= 0) ? entries[idx].value : 0.0;
     }
-    // --- Задать значение ---
+
     bool set(const char* key, float value) {
         int idx = idxByKey(key);
         if (idx >= 0) {
@@ -81,22 +78,19 @@ public:
         return false;
     }
 
-    // --- Сбросить ко всем дефолтам ---
     void reset() {
         for (int i = 0; i < count; i++)
-            entries[i].value = entries[i].defaultValue;
+            entries[i] = defaultEntries[i];
         save();
         buildKeyMap();
     }
 
-    // --- Сохранить в EEPROM ---
     void save() {
         EEPROM.put(EEPROM_ADDR, VERSION);
         EEPROM.put(EEPROM_ADDR + sizeof(uint8_t), entries);
         EEPROM.commit();
     }
 
-    // --- Загрузить из EEPROM (с автосбросом по версии) ---
     void load() {
         uint8_t v = 0;
         EEPROM.get(EEPROM_ADDR, v);
