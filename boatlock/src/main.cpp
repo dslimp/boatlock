@@ -13,7 +13,7 @@
 
 #include "Settings.h"
 Settings settings;
-constexpr size_t EEPROM_SIZE = Settings::EEPROM_ADDR + sizeof(SettingEntry) * count + sizeof(uint8_t);
+constexpr size_t EEPROM_SIZE = Settings::EEPROM_ADDR + sizeof(float) * count + sizeof(uint8_t);
 // #include "MPUCompass.h"
 #include "AnchorControl.h"
 #include "EncoderCalib.h"
