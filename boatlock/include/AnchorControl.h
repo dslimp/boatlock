@@ -1,23 +1,30 @@
 #pragma once
 #include <TinyGPS++.h>
-#include <EEPROM.h>
+#include "Settings.h"
 
 class AnchorControl {
 public:
     float anchorLat = 0, anchorLng = 0;
-    const int eepromAddr = 0;
+    Settings* settings = nullptr;
+
+    void attachSettings(Settings* s) { settings = s; }
 
     void saveAnchor(float lat, float lng) {
         anchorLat = lat;
         anchorLng = lng;
-        EEPROM.put(eepromAddr, anchorLat);
-        EEPROM.put(eepromAddr + sizeof(float), anchorLng);
-        EEPROM.commit();
+        if (settings) {
+            settings->set("AnchorLat", lat);
+            settings->set("AnchorLon", lng);
+            settings->set("AnchorEnabled", 1);
+            settings->save();
+        }
     }
 
     void loadAnchor() {
-        EEPROM.get(eepromAddr, anchorLat);
-        EEPROM.get(eepromAddr + sizeof(float), anchorLng);
+        if (settings) {
+            anchorLat = settings->get("AnchorLat");
+            anchorLng = settings->get("AnchorLon");
+        }
     }
 
     float distanceToAnchor(TinyGPSPlus &gps) {
