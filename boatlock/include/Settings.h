@@ -87,19 +87,29 @@ public:
 
     void save() {
         EEPROM.put(EEPROM_ADDR, VERSION);
-        EEPROM.put(EEPROM_ADDR + sizeof(uint8_t), entries);
+        float values[count];
+        for (int i = 0; i < count; i++)
+            values[i] = entries[i].value;
+        EEPROM.put(EEPROM_ADDR + sizeof(uint8_t), values);
         EEPROM.commit();
     }
 
     void load() {
+        for (int i = 0; i < count; i++)
+            entries[i] = defaultEntries[i];
+
         uint8_t v = 0;
         EEPROM.get(EEPROM_ADDR, v);
-        if (v != VERSION) {
-            reset();
+        if (v == VERSION) {
+            float values[count];
+            EEPROM.get(EEPROM_ADDR + sizeof(uint8_t), values);
+            for (int i = 0; i < count; i++)
+                entries[i].value = values[i];
         } else {
-            EEPROM.get(EEPROM_ADDR + sizeof(uint8_t), entries);
-            buildKeyMap();
+            save();
         }
+
+        buildKeyMap();
     }
 };
 
