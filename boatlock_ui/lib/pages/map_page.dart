@@ -9,6 +9,7 @@ import '../models/boat_data.dart';
 import '../widgets/status_panel.dart';
 import 'logs_page.dart';
 import 'settings_page.dart';
+import 'route_page.dart';
 
 
 class MapPage extends StatefulWidget {
@@ -100,6 +101,13 @@ Widget build(BuildContext context) {
           tooltip: 'Логи',
           onPressed: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const LogsPage()),
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.route),
+          tooltip: 'Маршруты',
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => RoutePage(ble: ble)),
           ),
         ),
         IconButton(
