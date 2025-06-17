@@ -21,8 +21,6 @@ constexpr size_t EEPROM_SIZE = Settings::EEPROM_ADDR + sizeof(float) * count + s
 
 #include "BoatDisplay.h"
 
-#include "BoatIMU.h"
-
 // BoatIMU boatIMU;
 #include "QMCCompass.h"
 
@@ -161,10 +159,9 @@ void setup() {
   pinMode(BOOT_PIN, INPUT_PULLUP);
 
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-
   gpsSerial.begin(9600, SERIAL_8N1, 17, 18);
 
-    bleBoatLock.setCommandHandler([](const std::string& cmd) {
+  bleBoatLock.setCommandHandler([](const std::string& cmd) {
     if (cmd.rfind("SET_ANCHOR:", 0) == 0) {
       float lat = 0, lon = 0;
       sscanf(cmd.c_str() + 11, "%f,%f", &lat, &lon);
@@ -220,12 +217,6 @@ void setup() {
   if(settings.get("AnchorEnabled") == 1) {
     anchorSet = true;
   }
-
-  // boatIMU.begin();
-
-  // scanI2CAndDisplay();
-  // delay(3)
-
 }
 
 void loop() {
@@ -291,11 +282,4 @@ void loop() {
     }
 
   bleBoatLock.loop();
-  // boatIMU.update();
-  //   Serial.printf("A: %.2f %.2f %.2f | G: %.2f %.2f %.2f | M: %.2f %.2f %.2f | Heading: %.1f | Temp: %.1f\n",
-  //       boatIMU.accelX(), boatIMU.accelY(), boatIMU.accelZ(),
-  //       boatIMU.gyroX(), boatIMU.gyroY(), boatIMU.gyroZ(),
-  //       boatIMU.magX(), boatIMU.magY(), boatIMU.magZ());
-        // boatIMU.heading(),));
-  // delay(500); // для теста
 }
