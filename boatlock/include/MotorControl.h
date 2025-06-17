@@ -11,6 +11,8 @@ public:
     // Ссылки на PID в Settings (инициализируются в setup())
     float Kp, Ki, Kd;
     float previous_error = 0, integral = 0;
+    unsigned long lastPidTime = 0;
+    float integralLimit = 100.0f;
 
     // Параметры адаптации PID
     float angleTolerance;
@@ -54,9 +56,14 @@ public:
 
     // --- Self-adaptive PID внутри applyPID ---
     void applyPID(float dist) {
+        unsigned long now = millis();
+        float dt = (lastPidTime == 0) ? 0.0f : (now - lastPidTime) / 1000.0f;
+        lastPidTime = now;
+
         float error = dist;
-        integral += error;
-        float derivative = error - previous_error;
+        integral += error * dt;
+        integral = constrain(integral, -integralLimit, integralLimit);
+        float derivative = (dt > 0.0f) ? (error - previous_error) / dt : 0.0f;
         float output = Kp * error + Ki * integral + Kd * derivative;
         previous_error = error;
 
