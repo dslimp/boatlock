@@ -112,7 +112,7 @@ void setup() {
     if (cmd.rfind("SET_ANCHOR:", 0) == 0) {
       float lat = 0, lon = 0;
       sscanf(cmd.c_str() + 11, "%f,%f", &lat, &lon);
-      anchor.saveAnchor(lat, lon);
+      anchor.saveAnchor(lat, lon, compass.getHeading());
       Serial.printf("[BLE] Anchor set via BLE: %.6f, %.6f\n", lat, lon);
     } else {
       Serial.printf("[BLE] Unhandled command: %s\n", cmd.c_str());
@@ -134,6 +134,7 @@ void setup() {
   bleBoatLock.registerParam("anchorLat", makeFloatParam([&](){ return isnan(anchor.anchorLat) ? 0.0 : anchor.anchorLat;}, "%.6f"));
   bleBoatLock.registerParam("anchorLon",makeFloatParam([&](){ return anchor.anchorLng; }, "%.6f"));
   bleBoatLock.registerParam("anchorLng", makeFloatParam([&](){ return isnan(anchor.anchorLng) ? 0.0 : anchor.anchorLng;}, "%.6f"));
+  bleBoatLock.registerParam("anchorHead", makeFloatParam([&](){ return anchor.anchorHeading; }, "%.1f"));
 
   EEPROM.begin(EEPROM_SIZE);
   settings.load();
@@ -171,7 +172,7 @@ void loop() {
 
   if (lastButton == HIGH && nowButton == LOW) {
     if (gps.location.isValid()) {
-      anchor.saveAnchor(lat, lon);
+      anchor.saveAnchor(lat, lon, compass.getHeading());
       anchorSet = true;
       Serial.println("Anchor point set!");
     }
@@ -180,9 +181,13 @@ void loop() {
 
   compass.update();
 
-  if (gps.location.isValid() && settings.get("AnchorEnabled")==1) {
+  if (gps.location.isValid() && settings.get("AnchorEnabled") == 1) {
     dist = anchor.distanceToAnchor(gps);
-    bearing = anchor.bearingToAnchor(gps);
+    if (settings.get("HoldHeading") == 1) {
+      bearing = anchor.anchorHeading;
+    } else {
+      bearing = anchor.bearingToAnchor(gps);
+    }
     moveStepperToBearing(bearing, compass.getHeading());
   }
 
