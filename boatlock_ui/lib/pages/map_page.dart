@@ -1,6 +1,9 @@
+import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:geolocator/geolocator.dart';
 import '../ble/ble_boatlock.dart';
 import '../models/boat_data.dart';
 import '../widgets/status_panel.dart';
@@ -18,26 +21,67 @@ class _MapPageState extends State<MapPage> {
   BoatData? boatData;
   late BleBoatLock ble;
   LatLng? selectedAnchorPos;
+  LatLng? phonePos;
+  final List<LatLng> _history = [];
+  StreamSubscription<Position>? _posSub;
 
   @override
   void initState() {
     super.initState();
     ble = BleBoatLock(onData: (data) {
-      setState(() => boatData = data);
+      setState(() {
+        boatData = data;
+        if (data != null && data.lat != 0 && data.lon != 0) {
+          _addToHistory(LatLng(data.lat, data.lon));
+        }
+      });
     });
     ble.connectAndListen();
+    _initLocation();
   }
 
   @override
   void dispose() {
     ble.dispose();
+    _posSub?.cancel();
     super.dispose();
+  }
+
+  Future<void> _initLocation() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+    }
+    _posSub = Geolocator.getPositionStream().listen((pos) {
+      setState(() {
+        phonePos = LatLng(pos.latitude, pos.longitude);
+        _addToHistory(phonePos!);
+      });
+    });
+  }
+
+  void _addToHistory(LatLng p) {
+    _history.add(p);
+    if (_history.length > 500) _history.removeAt(0);
   }
 
 @override
 Widget build(BuildContext context) {
-  final boatPos = boatData == null ? null : LatLng(boatData!.lat, boatData!.lon);
-  final anchorPos = boatData == null ? null : LatLng(boatData!.anchorLat, boatData!.anchorLon);
+  final boatPos =
+      (boatData != null && boatData!.lat != 0 && boatData!.lon != 0)
+          ? LatLng(boatData!.lat, boatData!.lon)
+          : null;
+  final anchorPos =
+      (boatData != null && boatData!.anchorLat != 0 && boatData!.anchorLon != 0)
+          ? LatLng(boatData!.anchorLat, boatData!.anchorLon)
+          : null;
+  final center = boatPos ?? phonePos ?? anchorPos ?? const LatLng(0, 0);
 
 
   return Scaffold(
@@ -67,61 +111,66 @@ Widget build(BuildContext context) {
     ),
     body: Stack(
       children: [
-        // Карта только если boatPos валиден
-        if (boatPos != null && boatPos.latitude != 0 && boatPos.longitude != 0)
-          FlutterMap(
-            options: MapOptions(
-              center: boatPos,
-              zoom: 16,
-              onLongPress: (_, point) {
-                setState(() {
-                  selectedAnchorPos = point;
-                });
-              },
-            ),
-            children: [
-              TileLayer(urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
-              MarkerLayer(markers: [
+        FlutterMap(
+          options: MapOptions(
+            center: center,
+            zoom: 16,
+            onLongPress: (_, point) {
+              setState(() {
+                selectedAnchorPos = point;
+              });
+            },
+          ),
+          children: [
+            TileLayer(urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
+            if (_history.length > 1)
+              PolylineLayer(
+                polylines: [
+                  Polyline(points: _history, color: Colors.blueAccent, strokeWidth: 3),
+                ],
+              ),
+            MarkerLayer(markers: [
+              if (boatPos != null)
                 Marker(
                   point: boatPos,
                   width: 40,
                   height: 40,
-                  child: Icon(Icons.directions_boat, color: Colors.blue, size: 36),
+                  child: Transform.rotate(
+                    angle: (boatData?.heading ?? 0) * math.pi / 180,
+                    child: Icon(Icons.directions_boat, color: Colors.blue, size: 36),
+                  ),
                 ),
-                if (anchorPos != null && anchorPos.latitude != 0 && anchorPos.longitude != 0)
-                  Marker(
-                    point: anchorPos,
-                    width: 40,
-                    height: 40,
-                    child: Icon(Icons.anchor, color: Colors.red, size: 36),
-                  ),
-                if (selectedAnchorPos != null)
-                  Marker(
-                    point: selectedAnchorPos!,
-                    width: 40,
-                    height: 40,
-                    child: Icon(Icons.place, color: Colors.orange, size: 36),
-                  ),
-              ]),
-            ],
-          ),
-        // Если нет координат — показывай заглушку/прогресс
-        if (boatPos == null || boatPos.latitude == 0)
+              if (anchorPos != null)
+                Marker(
+                  point: anchorPos,
+                  width: 40,
+                  height: 40,
+                  child: Icon(Icons.anchor, color: Colors.red, size: 36),
+                ),
+              if (selectedAnchorPos != null)
+                Marker(
+                  point: selectedAnchorPos!,
+                  width: 40,
+                  height: 40,
+                  child: Icon(Icons.place, color: Colors.orange, size: 36),
+                ),
+            ]),
+          ],
+        ),
+        if (boatData == null)
           Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text(
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                const Text(
                   'Поиск устройства BoatLock…',
                   style: TextStyle(fontSize: 18),
                 ),
-                SizedBox(height: 16),
-                Text(
-                  boatData == null
-                      ? "Нет данных с BLE"
-                      : "Ждём координаты от устройства…",
+                const SizedBox(height: 16),
+                const Text(
+                  'Нет данных с BLE',
                   style: TextStyle(fontSize: 14, color: Colors.grey),
                 ),
               ],
@@ -153,16 +202,18 @@ Widget build(BuildContext context) {
             ),
           ),
 
-    if (selectedAnchorPos != null)
+        if (selectedAnchorPos != null)
           Positioned(
             bottom: 90,
-            left: 0, right: 0,
+            left: 0,
+            right: 0,
             child: Center(
               child: ElevatedButton.icon(
-                icon: Icon(Icons.check),
-                label: Text("Установить якорь здесь"),
+                icon: const Icon(Icons.check),
+                label: const Text('Установить якорь здесь'),
                 onPressed: () {
-                  final cmd = "SET_ANCHOR:${selectedAnchorPos!.latitude},${selectedAnchorPos!.longitude}";
+                  final cmd =
+                      'SET_ANCHOR:${selectedAnchorPos!.latitude},${selectedAnchorPos!.longitude}';
                   ble.sendCustomCommand(cmd);
                   setState(() {
                     selectedAnchorPos = null;
@@ -171,7 +222,7 @@ Widget build(BuildContext context) {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
                   foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
               ),
             ),
