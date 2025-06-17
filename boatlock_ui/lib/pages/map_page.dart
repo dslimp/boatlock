@@ -158,22 +158,30 @@ Widget build(BuildContext context) {
           ],
         ),
         if (boatData == null)
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const CircularProgressIndicator(),
-                const SizedBox(height: 16),
-                const Text(
-                  'Поиск устройства BoatLock…',
-                  style: TextStyle(fontSize: 18),
+          Positioned(
+            bottom: 16,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Нет данных с BLE',
-                  style: TextStyle(fontSize: 14, color: Colors.grey),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    SizedBox(width: 8),
+                    Text('Поиск устройства BoatLock…'),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         // Панель статуса — всегда вверху
