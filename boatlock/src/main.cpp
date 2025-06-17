@@ -138,15 +138,13 @@ void adjustPosition(float bearing) {
   targetAngle = bearing;
 }
 
-void updateSteering() {
-  float currentAngle = encoderCalib.readAngle(encoder);
-  float diff = targetAngle - currentAngle;
+void moveStepperToBearing(float bearing, float heading) {
+  float diff = bearing - heading;
   if (diff > 180) diff -= 360;
   if (diff < -180) diff += 360;
-  if (abs(diff) > settings.get("angleTolerance")) {
-    int steps = map(abs(diff), 0, 180, 0, STEPS_PER_REV);
-    stepper.moveTo(stepper.currentPosition() + (diff > 0 ? steps : -steps));
-  }
+  long targetSteps = lround(diff / 360.0f * STEPS_PER_REV);
+  stepper.moveTo(targetSteps);
+  stepper.run();
 }
 
 void setup() {
@@ -209,8 +207,8 @@ void setup() {
   // encoder.begin();
   drawDebug("encoder begin");
 //   encoderCalib.loadOffset();
-  // stepper.setMaxSpeed(1000);
-  // stepper.setAcceleration(500);
+  stepper.setMaxSpeed(1000);
+  stepper.setAcceleration(500);
 
   // --- Anchor ---
 
@@ -242,8 +240,9 @@ void loop() {
   }
 
   compass.update();
-  // updateSteering();
-  // stepper.run();
+  if (anchorSet && gps.location.isValid()) {
+    moveStepperToBearing(bearing, compass.getHeading());
+  }
 
   // encoderAngle = encoderCalib.readAngle(encoder);
 
