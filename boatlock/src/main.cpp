@@ -234,13 +234,11 @@ void loop() {
   }
   lastButton = nowButton;
 
+  compass.update();
+
   if (gps.location.isValid() && settings.get("AnchorEnabled")==1) {
     dist = anchor.distanceToAnchor(gps);
     bearing = anchor.bearingToAnchor(gps);
-  }
-
-  compass.update();
-  if (anchorSet && gps.location.isValid()) {
     moveStepperToBearing(bearing, compass.getHeading());
   }
 
