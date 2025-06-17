@@ -21,6 +21,8 @@ class _MapPageState extends State<MapPage> {
   BoatData? boatData;
   late BleBoatLock ble;
   LatLng? selectedAnchorPos;
+  final MapController _mapController = MapController();
+  double _zoom = 16;
   LatLng? phonePos;
   final List<LatLng> _history = [];
   StreamSubscription<Position>? _posSub;
