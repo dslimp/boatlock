@@ -37,7 +37,7 @@ public:
 
     bool finished() const { return active && currentIndex >= numPoints; }
 
-    void update(const TinyGPSPlus& gps, float threshold = 5.0f) {
+    void update(TinyGPSPlus& gps, float threshold = 5.0f) {
         if (!active || currentIndex >= numPoints) return;
         float d = distanceToCurrent(gps);
         if (d < threshold) {
@@ -48,14 +48,14 @@ public:
         }
     }
 
-    float distanceToCurrent(const TinyGPSPlus& gps) const {
+    float distanceToCurrent(TinyGPSPlus& gps) const {
         if (currentIndex >= numPoints) return 0.0f;
         return TinyGPSPlus::distanceBetween(
             gps.location.lat(), gps.location.lng(),
             points[currentIndex].lat, points[currentIndex].lon);
     }
 
-    float bearingToCurrent(const TinyGPSPlus& gps) const {
+    float bearingToCurrent(TinyGPSPlus& gps) const {
         if (currentIndex >= numPoints) return 0.0f;
         return TinyGPSPlus::courseTo(
             gps.location.lat(), gps.location.lng(),
