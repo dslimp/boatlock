@@ -5,34 +5,24 @@
 #include <TinyGPSPlus.h>
 #include <HardwareSerial.h>
 #include <EEPROM.h>
-#include <Adafruit_BNO055.h>
-// #include <utility/imumaths.h>
-// #include <AS5600.h>
 #include <AccelStepper.h>
 #include <math.h>
 
 #include "Settings.h"
 Settings settings;
 constexpr size_t EEPROM_SIZE = Settings::EEPROM_ADDR + sizeof(float) * count + sizeof(uint8_t);
-// #include "MPUCompass.h"
 #include "AnchorControl.h"
 #include "EncoderCalib.h"
 #include "MotorControl.h"
 
 #include "BoatDisplay.h"
-
-// BoatIMU boatIMU;
 #include "QMCCompass.h"
-
-// #include "RemoteControl.h"
-// RemoteControlServer remote;
 
 unsigned long lastNotifyBle = 0;
 
 #include "BLEBoatLock.h"
 BLEBoatLock bleBoatLock;
 
-// --- Дисплей ---
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET    -1
@@ -40,7 +30,6 @@ BLEBoatLock bleBoatLock;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 BoatDisplay boatDisplay(&display);
 
-// --- Пины и константы ---
 #define BUTTON_PIN 0
 #define STEP_PIN 2
 #define DIR_PIN 3
@@ -52,15 +41,11 @@ const int PWM_FREQ = 5000;
 const int PWM_RESOLUTION = 8;
 const int PWM_CHANNEL = 0;
 
-// --- Глобальные объекты ---
 HardwareSerial gpsSerial(1);
 TinyGPSPlus gps;
-Adafruit_BNO055 bno = Adafruit_BNO055(55);
 AS5600 encoder;
 AccelStepper stepper(AccelStepper::DRIVER, STEP_PIN, DIR_PIN);
 
-// --- Логика ---
-// MPUCompass compass;
 QMCCompass compass;
 AnchorControl anchor;
 EncoderCalib encoderCalib;
@@ -68,11 +53,7 @@ MotorControl motor;
 
 #define BOOT_PIN 0
 
-// float anchorLat = 0;
-// float anchorLon = 0;
 bool anchorSet = false;
-
-
 bool holding = false;
 float targetAngle = 0;
 float encoderAngle = 0;
@@ -82,11 +63,6 @@ float dist = 0, bearing = 0;
 
 float lastLat = 0, lastLon = 0;
 float prevBearing = 0;
-
-// void setMotorRaw(int power, bool dir) {
-//     digitalWrite(MOTOR_DIR_PIN, dir ? HIGH : LOW);
-//     ledcWrite(PWM_CHANNEL, constrain(power, 0, 255));
-// }
 
 void drawDebug(const String &msg, int y = 48) {
   display.clearDisplay();
@@ -106,33 +82,6 @@ std::function<std::string()> makeFloatParam(F valueFunc, const char* fmt) {
         return std::string(buf);
     };
 }
-
-
-void scanI2CAndDisplay() {
-    // Wire.begin(sdaPin, sclPin);
-
-    Serial.println("I2C scan:");
-    drawDebug("I2C scan:");
-
-    uint8_t found = 0;
-    for (uint8_t address = 1; address < 127; address++) {
-        Wire.beginTransmission(address);
-        uint8_t error = Wire.endTransmission();
-
-        if (error == 0) {
-            Serial.print("Found: 0x");
-            Serial.println(address, HEX);
-            // drawDebug("Found",address, HEX);
-            found++;
-
-            if (found % 5 == 0) display.println();
-        }
-    }
-    if (!found) {
-        Serial.println("Nothing found");
-    }
-}
-
 
 void adjustPosition(float bearing) {
   targetAngle = bearing;
@@ -201,17 +150,11 @@ void setup() {
   motor.loadPIDfromSettings();
   drawDebug("motor load");
 
-  // display.clearDisplay();
-  // display.display();
-
-  // bno.begin();
   // encoder.begin();
   drawDebug("encoder begin");
 //   encoderCalib.loadOffset();
   stepper.setMaxSpeed(1000);
   stepper.setAcceleration(500);
-
-  // --- Anchor ---
 
   if(settings.get("AnchorEnabled") == 1) {
     anchorSet = true;
@@ -242,22 +185,6 @@ void loop() {
     bearing = anchor.bearingToAnchor(gps);
     moveStepperToBearing(bearing, compass.getHeading());
   }
-
-  // encoderAngle = encoderCalib.readAngle(encoder);
-
-  // if (holding && gps.location.isValid()) {
-  //   float dist = anchor.distanceToAnchor(gps);
-  //   if (dist > settings.get("distanceThreshold")) {
-  //     float bearing = anchor.bearingToAnchor(gps);
-  //     adjustPosition(bearing);
-  //     // motor.applyPID(dist);
-  //     setMotorRaw(50, 0);
-  //   } else {
-  //     motor.stop();
-  //   }
-  // } else {
-  //   motor.stop();
-  // }
 
     while (gpsSerial.available()) {
       char c = gpsSerial.read();
