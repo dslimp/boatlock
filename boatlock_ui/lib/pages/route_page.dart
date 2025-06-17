@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:geolocator/geolocator.dart';
 import '../ble/ble_boatlock.dart';
 import '../models/route_model.dart';
 import '../services/route_storage.dart';
@@ -24,6 +25,34 @@ class _RoutePageState extends State<RoutePage> {
   void initState() {
     super.initState();
     _load();
+    _setStartPoint();
+  }
+
+  Future<void> _setStartPoint() async {
+    LatLng? start;
+    final data = widget.ble.currentData;
+    if (data != null && data.lat != 0 && data.lon != 0) {
+      start = LatLng(data.lat, data.lon);
+    } else {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (serviceEnabled) {
+        var perm = await Geolocator.checkPermission();
+        if (perm == LocationPermission.denied) {
+          perm = await Geolocator.requestPermission();
+        }
+        if (perm != LocationPermission.denied &&
+            perm != LocationPermission.deniedForever) {
+          final pos = await Geolocator.getCurrentPosition();
+          start = LatLng(pos.latitude, pos.longitude);
+        }
+      }
+    }
+    if (start != null && points.isEmpty) {
+      setState(() {
+        points.add(start!);
+        _mapController.move(start!, _zoom);
+      });
+    }
   }
 
   Future<void> _load() async {

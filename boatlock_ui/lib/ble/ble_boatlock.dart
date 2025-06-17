@@ -10,6 +10,9 @@ class BleBoatLock {
   BluetoothCharacteristic? _dataChar;
   BluetoothCharacteristic? _cmdChar;
   final BoatDataCallback onData;
+  BoatData? _lastData;
+
+  BoatData? get currentData => _lastData;
 
   StreamSubscription<BluetoothConnectionState>? _connectionSub;
   Timer? _reconnectTimer;
@@ -132,7 +135,8 @@ class BleBoatLock {
     if (jsonString.trim().isEmpty) return;
     try {
       final data = jsonDecode(jsonString);
-      onData(BoatData.fromJson(data));
+      _lastData = BoatData.fromJson(data);
+      onData(_lastData);
     } catch (_) {
       // ignore parse errors for noise
     }
