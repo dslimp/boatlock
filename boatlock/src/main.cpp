@@ -198,6 +198,7 @@ void setup() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   motor.setupPWM(MOTOR_PWM_PIN, PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
   motor.setDirPin(MOTOR_DIR_PIN);
+  motor.loadPIDfromSettings();
   drawDebug("motor load");
 
   // display.clearDisplay();
