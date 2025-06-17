@@ -28,9 +28,11 @@ const SettingEntry defaultEntries[] = {
     {"USThresh",  "US threshold",       TYPE_FLOAT, 1.5,  1.5,   0.1,  6.0,    0.1, "m", true},
     {"GPS_TYPE",  "GPS model",          TYPE_INT,   0, 0, 0, 4, 1, "", true},
     {"IMU_TYPE",  "IMU model",          TYPE_INT,   1, 1, 0, 4, 1, "", true},
-    {"AnchorEnabled", "Enable anchor",  TYPE_INT,   0,0, 0,    1,    1, "", false},
-    {"AnchorLat", "Anchor latitude",    TYPE_FLOAT, 0.0, 0.0,  -90.0,  90.0,  0.000001, "", false},
-    {"AnchorLon", "Anchor longitude",   TYPE_FLOAT, 0.0, 0.0, -180.0, 180.0,  0.000001, "", false},
+    {"AnchorEnabled", "Enable anchor",     TYPE_INT,   0, 0, 0, 1, 1, "", false},
+    {"AnchorLat",     "Anchor latitude",   TYPE_FLOAT, 0.0, 0.0, -90.0, 90.0,   0.000001, "", false},
+    {"AnchorLon",     "Anchor longitude",  TYPE_FLOAT, 0.0, 0.0,-180.0, 180.0, 0.000001, "", false},
+    {"AnchorHead",    "Anchor heading",    TYPE_FLOAT, 0.0, 0.0,   0.0, 360.0, 1.0, "deg", false},
+    {"HoldHeading",   "Hold heading",      TYPE_INT,   0, 0, 0, 1, 1, "", true},
 };
 
 static const int count = sizeof(defaultEntries) / sizeof(defaultEntries[0]);
@@ -40,7 +42,7 @@ const char* imuTypeNames[] = { "BNO055", "MPU9250", "BNO085", "LSM9DS1", "None" 
 
 class Settings {
 public:
-    static constexpr int VERSION = 0x04;
+    static constexpr int VERSION = 0x05;
     static const int EEPROM_ADDR = 256;
 
     struct KeyIdx { const char* key; int idx; };
