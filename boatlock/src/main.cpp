@@ -24,6 +24,7 @@ constexpr size_t EEPROM_SIZE = Settings::EEPROM_ADDR + sizeof(float) * count + s
 #include "BoatIMU.h"
 
 // BoatIMU boatIMU;
+#include "QMCCompass.h"
 
 // #include "RemoteControl.h"
 // RemoteControlServer remote;
@@ -62,6 +63,7 @@ AccelStepper stepper(AccelStepper::DRIVER, STEP_PIN, DIR_PIN);
 
 // --- Логика ---
 // MPUCompass compass;
+QMCCompass compass;
 AnchorControl anchor;
 EncoderCalib encoderCalib;
 MotorControl motor;
@@ -154,6 +156,7 @@ void setup() {
   Serial.println("\n[BoatLock] ESP32 стартует! Версия прошивки: 0.1.0");
 
   Wire.begin(8, 9);
+  compass.begin();
 
   pinMode(BOOT_PIN, INPUT_PULLUP);
 
@@ -183,7 +186,7 @@ void setup() {
       return gps.location.isValid() ? gps.location.lng() : 0.0;
   }, "%.6f"));
 
-  bleBoatLock.registerParam("heading",  makeFloatParam([&](){ return 17; }, "%.1f"));
+  bleBoatLock.registerParam("heading",  makeFloatParam([&](){ return compass.getHeading(); }, "%.1f"));
   bleBoatLock.registerParam("anchorLat", makeFloatParam([&](){ return isnan(anchor.anchorLat) ? 0.0 : anchor.anchorLat;}, "%.6f"));
   bleBoatLock.registerParam("anchorLon",makeFloatParam([&](){ return anchor.anchorLng; }, "%.6f"));
   bleBoatLock.registerParam("anchorLng", makeFloatParam([&](){ return isnan(anchor.anchorLng) ? 0.0 : anchor.anchorLng;}, "%.6f"));
@@ -247,7 +250,7 @@ void loop() {
     bearing = anchor.bearingToAnchor(gps);
   }
 
-  // compass.update();
+  compass.update();
   // updateSteering();
   // stepper.run();
 
@@ -282,7 +285,7 @@ void loop() {
                 gps,
                 anchor.anchorLat, anchor.anchorLng, settings.get("AnchorEnabled"),
                 dist, bearing,
-                17, // Heading
+                compass.getHeading(),
                 holding
             );
     }
