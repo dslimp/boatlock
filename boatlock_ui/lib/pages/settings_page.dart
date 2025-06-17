@@ -4,7 +4,8 @@ import '../ble/ble_boatlock.dart';
 class SettingsPage extends StatefulWidget {
   final BleBoatLock ble;
   final bool holdHeading;
-  const SettingsPage({Key? key, required this.ble, required this.holdHeading}) : super(key: key);
+  final bool isConnected;
+  const SettingsPage({Key? key, required this.ble, required this.holdHeading, required this.isConnected}) : super(key: key);
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -12,14 +13,17 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   late bool holdHeading;
+  late bool isConnected;
 
   @override
   void initState() {
     super.initState();
     holdHeading = widget.holdHeading;
+    isConnected = widget.isConnected;
   }
 
   void _toggleHoldHeading(bool v) {
+    if (!isConnected) return;
     setState(() => holdHeading = v);
     widget.ble.sendCustomCommand('SET_HOLD_HEADING:${v ? 1 : 0}');
   }
@@ -33,7 +37,7 @@ class _SettingsPageState extends State<SettingsPage> {
           SwitchListTile(
             title: const Text('Поддерживать курс носа'),
             value: holdHeading,
-            onChanged: _toggleHoldHeading,
+            onChanged: isConnected ? _toggleHoldHeading : null,
           ),
         ],
       ),

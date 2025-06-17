@@ -81,7 +81,7 @@ Widget build(BuildContext context) {
       (boatData != null && boatData!.anchorLat != 0 && boatData!.anchorLon != 0)
           ? LatLng(boatData!.anchorLat, boatData!.anchorLon)
           : null;
-  final center = boatPos ?? phonePos ?? anchorPos ?? const LatLng(0, 0);
+  final center = boatPos ?? anchorPos ?? const LatLng(0, 0);
 
 
   return Scaffold(
@@ -103,6 +103,7 @@ Widget build(BuildContext context) {
               builder: (_) => SettingsPage(
                 ble: ble,
                 holdHeading: boatData?.holdHeading ?? false,
+                isConnected: boatData != null,
               ),
             ),
           ),
@@ -116,9 +117,11 @@ Widget build(BuildContext context) {
             center: center,
             zoom: 16,
             onLongPress: (_, point) {
-              setState(() {
-                selectedAnchorPos = point;
-              });
+              if (boatData != null) {
+                setState(() {
+                  selectedAnchorPos = point;
+                });
+              }
             },
           ),
           children: [
@@ -209,8 +212,7 @@ Widget build(BuildContext context) {
               ),
             ),
           ),
-
-        if (selectedAnchorPos != null)
+        if (selectedAnchorPos != null && boatData != null)
           Positioned(
             bottom: 90,
             left: 0,
@@ -219,14 +221,16 @@ Widget build(BuildContext context) {
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.check),
                 label: const Text('Установить якорь здесь'),
-                onPressed: () {
-                  final cmd =
-                      'SET_ANCHOR:${selectedAnchorPos!.latitude},${selectedAnchorPos!.longitude}';
-                  ble.sendCustomCommand(cmd);
-                  setState(() {
-                    selectedAnchorPos = null;
-                  });
-                },
+                onPressed: boatData == null
+                    ? null
+                    : () {
+                        final cmd =
+                            'SET_ANCHOR:${selectedAnchorPos!.latitude},${selectedAnchorPos!.longitude}';
+                        ble.sendCustomCommand(cmd);
+                        setState(() {
+                          selectedAnchorPos = null;
+                        });
+                      },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
                   foregroundColor: Colors.white,
@@ -251,8 +255,9 @@ Widget build(BuildContext context) {
           heroTag: 'set_anchor',
           child: Icon(Icons.anchor),
           tooltip: "Установить якорь",
-          onPressed: () => ble.setAnchor(),
-          backgroundColor: Colors.red[400],
+          onPressed: boatData == null ? null : () => ble.setAnchor(),
+          backgroundColor:
+              boatData == null ? Colors.grey : Colors.red[400],
         ),
       ],
     ),
