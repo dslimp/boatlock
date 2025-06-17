@@ -4,6 +4,8 @@ import 'package:latlong2/latlong.dart';
 import '../ble/ble_boatlock.dart';
 import '../models/boat_data.dart';
 import '../widgets/status_panel.dart';
+import 'logs_page.dart';
+import 'settings_page.dart';
 
 
 class MapPage extends StatefulWidget {
@@ -39,7 +41,30 @@ Widget build(BuildContext context) {
 
 
   return Scaffold(
-    appBar: AppBar(title: Text('BoatLock OSM Map')),
+    appBar: AppBar(
+      title: const Text('BoatLock OSM Map'),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.list),
+          tooltip: 'Логи',
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const LogsPage()),
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.settings),
+          tooltip: 'Настройки',
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => SettingsPage(
+                ble: ble,
+                holdHeading: boatData?.holdHeading ?? false,
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
     body: Stack(
       children: [
         // Карта только если boatPos валиден

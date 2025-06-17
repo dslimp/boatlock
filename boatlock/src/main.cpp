@@ -114,6 +114,11 @@ void setup() {
       sscanf(cmd.c_str() + 11, "%f,%f", &lat, &lon);
       anchor.saveAnchor(lat, lon, compass.getHeading());
       Serial.printf("[BLE] Anchor set via BLE: %.6f, %.6f\n", lat, lon);
+    } else if (cmd.rfind("SET_HOLD_HEADING:", 0) == 0) {
+      int val = atoi(cmd.c_str() + 17);
+      settings.set("HoldHeading", val);
+      settings.save();
+      Serial.printf("[BLE] HoldHeading set to %d\n", val);
     } else {
       Serial.printf("[BLE] Unhandled command: %s\n", cmd.c_str());
     }
@@ -135,6 +140,7 @@ void setup() {
   bleBoatLock.registerParam("anchorLon",makeFloatParam([&](){ return anchor.anchorLng; }, "%.6f"));
   bleBoatLock.registerParam("anchorLng", makeFloatParam([&](){ return isnan(anchor.anchorLng) ? 0.0 : anchor.anchorLng;}, "%.6f"));
   bleBoatLock.registerParam("anchorHead", makeFloatParam([&](){ return anchor.anchorHeading; }, "%.1f"));
+  bleBoatLock.registerParam("holdHeading", makeFloatParam([&](){ return settings.get("HoldHeading"); }, "%.0f"));
 
   EEPROM.begin(EEPROM_SIZE);
   settings.load();

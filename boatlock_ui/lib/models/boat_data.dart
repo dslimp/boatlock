@@ -7,6 +7,7 @@ class BoatData {
   final double heading;
   final int battery;
   final String status;
+  final bool holdHeading;
 
   BoatData({
     required this.lat,
@@ -17,6 +18,7 @@ class BoatData {
     required this.heading,
     required this.battery,
     required this.status,
+    required this.holdHeading,
   });
 
   factory BoatData.fromJson(Map<String, dynamic> json) {
@@ -29,6 +31,8 @@ class BoatData {
       heading: double.tryParse(json['heading']?.toString() ?? '') ?? 0,
       battery: int.tryParse(json['battery']?.toString() ?? '') ?? 0,
       status: json['status']?.toString() ?? '',
+      holdHeading:
+          int.tryParse(json['holdHeading']?.toString() ?? '') == 1,
     );
   }
 }
