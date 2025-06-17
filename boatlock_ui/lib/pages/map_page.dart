@@ -32,7 +32,9 @@ class _MapPageState extends State<MapPage> {
       setState(() {
         boatData = data;
         if (data != null && data.lat != 0 && data.lon != 0) {
-          _addToHistory(LatLng(data.lat, data.lon));
+          final p = LatLng(data.lat, data.lon);
+          _addToHistory(p);
+          _mapController.move(p, _zoom);
         }
       });
     });
@@ -62,6 +64,9 @@ class _MapPageState extends State<MapPage> {
       setState(() {
         phonePos = LatLng(pos.latitude, pos.longitude);
         _addToHistory(phonePos!);
+        if (boatData == null) {
+          _mapController.move(phonePos!, _zoom);
+        }
       });
     });
   }
@@ -81,7 +86,7 @@ Widget build(BuildContext context) {
       (boatData != null && boatData!.anchorLat != 0 && boatData!.anchorLon != 0)
           ? LatLng(boatData!.anchorLat, boatData!.anchorLon)
           : null;
-  final center = boatPos ?? anchorPos ?? const LatLng(0, 0);
+  final center = boatPos ?? phonePos ?? anchorPos ?? const LatLng(0, 0);
 
 
   return Scaffold(
@@ -113,9 +118,13 @@ Widget build(BuildContext context) {
     body: Stack(
       children: [
         FlutterMap(
+          mapController: _mapController,
           options: MapOptions(
             center: center,
-            zoom: 16,
+            zoom: _zoom,
+            onPositionChanged: (pos, _) {
+              if (pos.zoom != null) _zoom = pos.zoom!;
+            },
             onLongPress: (_, point) {
               if (boatData != null) {
                 setState(() {
