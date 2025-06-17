@@ -17,6 +17,7 @@ constexpr size_t EEPROM_SIZE = Settings::EEPROM_ADDR + sizeof(float) * count + s
 
 #include "BoatDisplay.h"
 #include "QMCCompass.h"
+#include "PathControl.h"
 
 unsigned long lastNotifyBle = 0;
 
@@ -50,6 +51,7 @@ QMCCompass compass;
 AnchorControl anchor;
 EncoderCalib encoderCalib;
 MotorControl motor;
+PathControl pathControl;
 
 #define BOOT_PIN 0
 
@@ -119,6 +121,23 @@ void setup() {
       settings.set("HoldHeading", val);
       settings.save();
       Serial.printf("[BLE] HoldHeading set to %d\n", val);
+    } else if (cmd.rfind("SET_ROUTE:",0) == 0) {
+      pathControl.reset();
+      const char* s = cmd.c_str() + 10;
+      while (*s) {
+        float lat=0, lon=0; int n=0;
+        if (sscanf(s, "%f,%f%n", &lat, &lon, &n) == 2) {
+          pathControl.addPoint(lat, lon);
+          s += n;
+          if (*s == ';') s++;
+        } else break;
+      }
+      Serial.printf("[BLE] Route set with %d points\n", pathControl.numPoints);
+    } else if (cmd == "START_ROUTE") {
+      pathControl.start();
+      settings.set("AnchorEnabled", 0);
+    } else if (cmd == "STOP_ROUTE") {
+      pathControl.stop();
     } else {
       Serial.printf("[BLE] Unhandled command: %s\n", cmd.c_str());
     }
@@ -141,6 +160,7 @@ void setup() {
   bleBoatLock.registerParam("anchorLng", makeFloatParam([&](){ return isnan(anchor.anchorLng) ? 0.0 : anchor.anchorLng;}, "%.6f"));
   bleBoatLock.registerParam("anchorHead", makeFloatParam([&](){ return anchor.anchorHeading; }, "%.1f"));
   bleBoatLock.registerParam("holdHeading", makeFloatParam([&](){ return settings.get("HoldHeading"); }, "%.0f"));
+  bleBoatLock.registerParam("routeIdx", makeFloatParam([&](){ return (float)pathControl.currentIndex; }, "%.0f"));
 
   EEPROM.begin(EEPROM_SIZE);
   settings.load();
@@ -187,7 +207,12 @@ void loop() {
 
   compass.update();
 
-  if (gps.location.isValid() && settings.get("AnchorEnabled") == 1) {
+  if (gps.location.isValid() && pathControl.active) {
+    dist = pathControl.distanceToCurrent(gps);
+    bearing = pathControl.bearingToCurrent(gps);
+    moveStepperToBearing(bearing, compass.getHeading());
+    pathControl.update(gps, settings.get("DistTh"));
+  } else if (gps.location.isValid() && settings.get("AnchorEnabled") == 1) {
     dist = anchor.distanceToAnchor(gps);
     if (settings.get("HoldHeading") == 1) {
       bearing = anchor.anchorHeading;

@@ -144,6 +144,18 @@ class BleBoatLock {
     }
   }
 
+  Future<void> startRoute() async {
+    if (_cmdChar != null) {
+      await _cmdChar!.write(utf8.encode('START_ROUTE'), withoutResponse: false);
+    }
+  }
+
+  Future<void> stopRoute() async {
+    if (_cmdChar != null) {
+      await _cmdChar!.write(utf8.encode('STOP_ROUTE'), withoutResponse: false);
+    }
+  }
+
   void dispose() {
     _connectionSub?.cancel();
     _reconnectTimer?.cancel();
