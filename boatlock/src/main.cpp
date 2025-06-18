@@ -103,7 +103,7 @@ void setup() {
   Serial.println("\n[BoatLock] ESP32 стартует! Версия прошивки: 0.1.0");
 
   Wire.begin(8, 9);
-  compass.begin();
+  compass.init();
 
   pinMode(BOOT_PIN, INPUT_PULLUP);
 
@@ -114,7 +114,7 @@ void setup() {
     if (cmd.rfind("SET_ANCHOR:", 0) == 0) {
       float lat = 0, lon = 0;
       sscanf(cmd.c_str() + 11, "%f,%f", &lat, &lon);
-      anchor.saveAnchor(lat, lon, compass.getHeading());
+      anchor.saveAnchor(lat, lon, compass.getAzimuth());
       Serial.printf("[BLE] Anchor set via BLE: %.6f, %.6f\n", lat, lon);
     } else if (cmd.rfind("SET_HOLD_HEADING:", 0) == 0) {
       int val = atoi(cmd.c_str() + 17);
@@ -154,7 +154,7 @@ void setup() {
       return gps.location.isValid() ? gps.location.lng() : 0.0;
   }, "%.6f"));
 
-  bleBoatLock.registerParam("heading",  makeFloatParam([&](){ return compass.getHeading(); }, "%.1f"));
+  bleBoatLock.registerParam("heading",  makeFloatParam([&](){ return (float)compass.getAzimuth(); }, "%.1f"));
   bleBoatLock.registerParam("anchorLat", makeFloatParam([&](){ return isnan(anchor.anchorLat) ? 0.0 : anchor.anchorLat;}, "%.6f"));
   bleBoatLock.registerParam("anchorLon",makeFloatParam([&](){ return anchor.anchorLng; }, "%.6f"));
   bleBoatLock.registerParam("anchorLng", makeFloatParam([&](){ return isnan(anchor.anchorLng) ? 0.0 : anchor.anchorLng;}, "%.6f"));
@@ -198,19 +198,19 @@ void loop() {
 
   if (lastButton == HIGH && nowButton == LOW) {
     if (gps.location.isValid()) {
-      anchor.saveAnchor(lat, lon, compass.getHeading());
+      anchor.saveAnchor(lat, lon, compass.getAzimuth());
       anchorSet = true;
       Serial.println("Anchor point set!");
     }
   }
   lastButton = nowButton;
 
-  compass.update();
+  compass.read();
 
   if (gps.location.isValid() && pathControl.active) {
     dist = pathControl.distanceToCurrent(gps);
     bearing = pathControl.bearingToCurrent(gps);
-    moveStepperToBearing(bearing, compass.getHeading());
+    moveStepperToBearing(bearing, compass.getAzimuth());
     pathControl.update(gps, settings.get("DistTh"));
   } else if (gps.location.isValid() && settings.get("AnchorEnabled") == 1) {
     dist = anchor.distanceToAnchor(gps);
@@ -219,7 +219,7 @@ void loop() {
     } else {
       bearing = anchor.bearingToAnchor(gps);
     }
-    moveStepperToBearing(bearing, compass.getHeading());
+    moveStepperToBearing(bearing, compass.getAzimuth());
   }
 
     while (gpsSerial.available()) {
@@ -237,7 +237,7 @@ void loop() {
                 gps,
                 anchor.anchorLat, anchor.anchorLng, settings.get("AnchorEnabled"),
                 dist, bearing,
-                compass.getHeading(),
+                compass.getAzimuth(),
                 holding
             );
     }
