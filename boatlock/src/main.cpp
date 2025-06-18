@@ -7,6 +7,8 @@
 #include <EEPROM.h>
 #include <AccelStepper.h>
 #include <math.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 #include "Settings.h"
 Settings settings;
@@ -52,6 +54,10 @@ AnchorControl anchor;
 EncoderCalib encoderCalib;
 MotorControl motor;
 PathControl pathControl;
+
+TaskHandle_t compassCalibTaskHandle = nullptr;
+
+void compassCalibTask(void*);
 
 #define BOOT_PIN 0
 
@@ -100,6 +106,18 @@ void calibrateCompassAndSave() {
   settings.set("MagScaleZ", compass.getCalibrationScale(2));
   settings.save();
   drawDebug("Calib done");
+}
+
+void compassCalibTask(void*) {
+  calibrateCompassAndSave();
+  compassCalibTaskHandle = nullptr;
+  vTaskDelete(nullptr);
+}
+
+void startCompassCalibration() {
+  if (compassCalibTaskHandle == nullptr) {
+    xTaskCreatePinnedToCore(compassCalibTask, "compassCalib", 4096, nullptr, 1, &compassCalibTaskHandle, 1);
+  }
 }
 
 void moveStepperToBearing(float bearing, float heading) {
@@ -152,7 +170,7 @@ void setup() {
     } else if (cmd == "STOP_ROUTE") {
       pathControl.stop();
     } else if (cmd == "CALIB_COMPASS") {
-      calibrateCompassAndSave();
+      startCompassCalibration();
     } else {
       Serial.printf("[BLE] Unhandled command: %s\n", cmd.c_str());
     }
