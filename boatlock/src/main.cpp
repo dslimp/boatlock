@@ -16,7 +16,7 @@ constexpr size_t EEPROM_SIZE = Settings::EEPROM_ADDR + sizeof(float) * count + s
 #include "MotorControl.h"
 
 #include "BoatDisplay.h"
-#include "QMCCompass.h"
+#include "QMC5883LCompass.h"
 #include "PathControl.h"
 
 unsigned long lastNotifyBle = 0;
@@ -47,7 +47,7 @@ TinyGPSPlus gps;
 AS5600 encoder;
 AccelStepper stepper(AccelStepper::DRIVER, STEP_PIN, DIR_PIN);
 
-QMCCompass compass;
+QMC5883LCompass compass;
 AnchorControl anchor;
 EncoderCalib encoderCalib;
 MotorControl motor;
