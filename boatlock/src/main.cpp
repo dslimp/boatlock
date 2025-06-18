@@ -89,6 +89,19 @@ void adjustPosition(float bearing) {
   targetAngle = bearing;
 }
 
+void calibrateCompassAndSave() {
+  drawDebug("Calibrating compass");
+  compass.calibrate();
+  settings.set("MagOffX", compass.getCalibrationOffset(0));
+  settings.set("MagOffY", compass.getCalibrationOffset(1));
+  settings.set("MagOffZ", compass.getCalibrationOffset(2));
+  settings.set("MagScaleX", compass.getCalibrationScale(0));
+  settings.set("MagScaleY", compass.getCalibrationScale(1));
+  settings.set("MagScaleZ", compass.getCalibrationScale(2));
+  settings.save();
+  drawDebug("Calib done");
+}
+
 void moveStepperToBearing(float bearing, float heading) {
   float diff = bearing - heading;
   if (diff > 180) diff -= 360;
@@ -138,6 +151,8 @@ void setup() {
       settings.set("AnchorEnabled", 0);
     } else if (cmd == "STOP_ROUTE") {
       pathControl.stop();
+    } else if (cmd == "CALIB_COMPASS") {
+      calibrateCompassAndSave();
     } else {
       Serial.printf("[BLE] Unhandled command: %s\n", cmd.c_str());
     }
@@ -164,6 +179,14 @@ void setup() {
 
   EEPROM.begin(EEPROM_SIZE);
   settings.load();
+  compass.setCalibrationOffsets(
+      settings.get("MagOffX"),
+      settings.get("MagOffY"),
+      settings.get("MagOffZ"));
+  compass.setCalibrationScales(
+      settings.get("MagScaleX"),
+      settings.get("MagScaleY"),
+      settings.get("MagScaleZ"));
   anchor.attachSettings(&settings);
   anchor.loadAnchor();
   drawDebug("settings load");
