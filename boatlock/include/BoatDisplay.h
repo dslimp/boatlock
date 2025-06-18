@@ -12,7 +12,7 @@ public:
                    float anchorLat, float anchorLon,
                    int AnchorEnabled, float dist, float bearing,
                    float heading, bool holding,
-                   float encoderAngle = 0) 
+                   float encoderAngle = 0)
     {
         _display->clearDisplay();
         _display->setTextSize(1);
@@ -31,7 +31,10 @@ public:
         if (AnchorEnabled==1) {
             _display->printf("Dst:%.1fm\n", dist);
             _display->printf("Brg:%.0f%c\n", bearing, 176);
-            drawArrow(bearing);
+            drawArrowAt(bearing, 44, 54);          // direction to anchor
+            float northAngle = 360.0f - heading;
+            if (northAngle < 0) northAngle += 360.0f;
+            drawArrowAt(northAngle, 84, 54); // north arrow
         } else {
             _display->println("Press BOOT to anchor");
         }
@@ -48,20 +51,22 @@ public:
         _display->display();
     }
 
-    void drawArrow(float bearing) {
-        constexpr int CX = 64;
-        constexpr int CY = 54; 
-        constexpr int R  = 10; 
-        float rad = (bearing - 90) * DEG_TO_RAD; 
-        int x2 = CX + R * cos(rad);
-        int y2 = CY + R * sin(rad);
-        _display->drawLine(CX, CY, x2, y2, SSD1306_WHITE);
-        int x_head1 = CX + (R - 3) * cos(rad + 0.3);
-        int y_head1 = CY + (R - 3) * sin(rad + 0.3);
-        int x_head2 = CX + (R - 3) * cos(rad - 0.3);
-        int y_head2 = CY + (R - 3) * sin(rad - 0.3);
+    void drawArrowAt(float bearing, int cx, int cy) {
+        constexpr int R  = 10;
+        float rad = (bearing - 90) * DEG_TO_RAD;
+        int x2 = cx + R * cos(rad);
+        int y2 = cy + R * sin(rad);
+        _display->drawLine(cx, cy, x2, y2, SSD1306_WHITE);
+        int x_head1 = cx + (R - 3) * cos(rad + 0.3);
+        int y_head1 = cy + (R - 3) * sin(rad + 0.3);
+        int x_head2 = cx + (R - 3) * cos(rad - 0.3);
+        int y_head2 = cy + (R - 3) * sin(rad - 0.3);
         _display->drawLine(x2, y2, x_head1, y_head1, SSD1306_WHITE);
         _display->drawLine(x2, y2, x_head2, y_head2, SSD1306_WHITE);
+    }
+
+    void drawArrow(float bearing) {
+        drawArrowAt(bearing, 64, 54);
     }
 
 private:
