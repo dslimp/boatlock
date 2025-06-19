@@ -16,6 +16,7 @@ constexpr size_t EEPROM_SIZE = Settings::EEPROM_ADDR + sizeof(float) * count + s
 #include "AnchorControl.h"
 #include "EncoderCalib.h"
 #include "MotorControl.h"
+#include "StepperControl.h"
 
 #include "BoatDisplay.h"
 #include "QMC5883LCompass.h"
@@ -38,8 +39,6 @@ BoatDisplay boatDisplay(&display);
 #define DIR_PIN 3
 #define MOTOR_PWM_PIN 5
 #define MOTOR_DIR_PIN 6
-
-const int STEPS_PER_REV = 200;
 const int PWM_FREQ = 5000;
 const int PWM_RESOLUTION = 8;
 const int PWM_CHANNEL = 0;
@@ -47,7 +46,7 @@ const int PWM_CHANNEL = 0;
 HardwareSerial gpsSerial(1);
 TinyGPSPlus gps;
 AS5600 encoder;
-AccelStepper stepper(AccelStepper::DRIVER, STEP_PIN, DIR_PIN);
+StepperControl stepperControl(STEP_PIN, DIR_PIN);
 
 QMC5883LCompass compass;
 AnchorControl anchor;
@@ -120,14 +119,6 @@ void startCompassCalibration() {
   }
 }
 
-void moveStepperToBearing(float bearing, float heading) {
-  float diff = bearing - heading;
-  if (diff > 180) diff -= 360;
-  if (diff < -180) diff += 360;
-  long targetSteps = lround(diff / 360.0f * STEPS_PER_REV);
-  stepper.moveTo(targetSteps);
-  stepper.run();
-}
 
 void setup() {
   Serial.begin(115200);
@@ -221,8 +212,8 @@ void setup() {
   // encoder.begin();
   drawDebug("encoder begin");
 //   encoderCalib.loadOffset();
-  stepper.setMaxSpeed(1000);
-  stepper.setAcceleration(500);
+  stepperControl.attachSettings(&settings);
+  stepperControl.loadFromSettings();
 
   if(settings.get("AnchorEnabled") == 1) {
     anchorSet = true;
@@ -251,7 +242,7 @@ void loop() {
   if (gps.location.isValid() && pathControl.active) {
     dist = pathControl.distanceToCurrent(gps);
     bearing = pathControl.bearingToCurrent(gps);
-    moveStepperToBearing(bearing, compass.getAzimuth());
+    stepperControl.moveToBearing(bearing, compass.getAzimuth());
     pathControl.update(gps, settings.get("DistTh"));
   } else if (gps.location.isValid() && settings.get("AnchorEnabled") == 1) {
     dist = anchor.distanceToAnchor(gps);
@@ -260,7 +251,7 @@ void loop() {
     } else {
       bearing = anchor.bearingToAnchor(gps);
     }
-    moveStepperToBearing(bearing, compass.getAzimuth());
+    stepperControl.moveToBearing(bearing, compass.getAzimuth());
   }
 
     while (gpsSerial.available()) {
