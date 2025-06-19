@@ -70,6 +70,7 @@ float dist = 0, bearing = 0;
 
 float lastLat = 0, lastLon = 0;
 float prevBearing = 0;
+bool gpsFix = false;
 
 void drawDebug(const String &msg, int y = 48) {
   display.clearDisplay();
@@ -227,10 +228,15 @@ void loop() {
 
   float lat = gps.location.lat();
   float lon = gps.location.lng();
+  if (gps.location.isValid()) {
+    lastLat = lat;
+    lastLon = lon;
+    gpsFix = true;
+  }
 
   if (lastButton == HIGH && nowButton == LOW) {
-    if (gps.location.isValid()) {
-      anchor.saveAnchor(lat, lon, compass.getAzimuth());
+    if (gps.location.isValid() || gpsFix) {
+      anchor.saveAnchor(lastLat, lastLon, compass.getAzimuth());
       anchorSet = true;
       Serial.println("Anchor point set!");
     }
@@ -239,17 +245,32 @@ void loop() {
 
   compass.read();
 
-  if (gps.location.isValid() && pathControl.active) {
-    dist = pathControl.distanceToCurrent(gps);
-    bearing = pathControl.bearingToCurrent(gps);
+  if (pathControl.active) {
+    if (gps.location.isValid()) {
+      dist = pathControl.distanceToCurrent(gps);
+      bearing = pathControl.bearingToCurrent(gps);
+      pathControl.update(gps, settings.get("DistTh"));
+    } else if (gpsFix && pathControl.currentIndex < pathControl.numPoints) {
+      const Waypoint &wp = pathControl.points[pathControl.currentIndex];
+      dist = TinyGPSPlus::distanceBetween(lastLat, lastLon, wp.lat, wp.lon);
+      bearing = TinyGPSPlus::courseTo(lastLat, lastLon, wp.lat, wp.lon);
+    }
     stepperControl.moveToBearing(bearing, compass.getAzimuth());
-    pathControl.update(gps, settings.get("DistTh"));
-  } else if (gps.location.isValid() && settings.get("AnchorEnabled") == 1) {
-    dist = anchor.distanceToAnchor(gps);
-    if (settings.get("HoldHeading") == 1) {
-      bearing = anchor.anchorHeading;
-    } else {
-      bearing = anchor.bearingToAnchor(gps);
+  } else if (settings.get("AnchorEnabled") == 1) {
+    if (gps.location.isValid()) {
+      dist = anchor.distanceToAnchor(gps);
+      if (settings.get("HoldHeading") == 1) {
+        bearing = anchor.anchorHeading;
+      } else {
+        bearing = anchor.bearingToAnchor(gps);
+      }
+    } else if (gpsFix) {
+      dist = TinyGPSPlus::distanceBetween(lastLat, lastLon, anchor.anchorLat, anchor.anchorLng);
+      if (settings.get("HoldHeading") == 1) {
+        bearing = anchor.anchorHeading;
+      } else {
+        bearing = TinyGPSPlus::courseTo(lastLat, lastLon, anchor.anchorLat, anchor.anchorLng);
+      }
     }
     stepperControl.moveToBearing(bearing, compass.getAzimuth());
   }
@@ -257,6 +278,11 @@ void loop() {
     while (gpsSerial.available()) {
       char c = gpsSerial.read();
       gps.encode(c);
+    }
+    if (gps.location.isValid()) {
+      lastLat = gps.location.lat();
+      lastLon = gps.location.lng();
+      gpsFix = true;
     }
 
     static unsigned long lastNotify = 0;
