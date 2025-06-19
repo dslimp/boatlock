@@ -24,6 +24,7 @@ class _MapPageState extends State<MapPage> {
   LatLng? selectedAnchorPos;
   final MapController _mapController = MapController();
   double _zoom = 16;
+  bool _satellite = false;
   LatLng? phonePos;
   final List<LatLng> _history = [];
   StreamSubscription<Position>? _posSub;
@@ -123,6 +124,13 @@ Widget build(BuildContext context) {
             ),
           ),
         ),
+        IconButton(
+          icon: Icon(_satellite ? Icons.map : Icons.satellite),
+          tooltip: 'Переключить карту',
+          onPressed: () => setState(() {
+            _satellite = !_satellite;
+          }),
+        ),
       ],
     ),
     body: Stack(
@@ -144,7 +152,11 @@ Widget build(BuildContext context) {
             },
           ),
           children: [
-            TileLayer(urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
+            TileLayer(
+              urlTemplate: _satellite
+                  ? 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                  : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            ),
             if (_history.length > 1)
               PolylineLayer(
                 polylines: [
@@ -210,6 +222,40 @@ Widget build(BuildContext context) {
         Positioned(
           top: 0, left: 0, right: 0,
           child: StatusPanel(data: boatData),
+        ),
+        Positioned(
+          top: 80,
+          right: 8,
+          child: Column(
+            children: [
+              FloatingActionButton(
+                heroTag: 'zoom_in_btn',
+                mini: true,
+                child: const Icon(Icons.add),
+                onPressed: () {
+                  setState(() => _zoom += 1);
+                  _mapController.move(_mapController.center, _zoom);
+                },
+              ),
+              const SizedBox(height: 8),
+              FloatingActionButton(
+                heroTag: 'zoom_out_btn',
+                mini: true,
+                child: const Icon(Icons.remove),
+                onPressed: () {
+                  setState(() => _zoom -= 1);
+                  _mapController.move(_mapController.center, _zoom);
+                },
+              ),
+              const SizedBox(height: 8),
+              FloatingActionButton(
+                heroTag: 'north_btn',
+                mini: true,
+                child: const Icon(Icons.north),
+                onPressed: () => _mapController.rotate(0),
+              ),
+            ],
+          ),
         ),
         // Панель с дистанцией — только если есть данные
         if (boatData != null && boatData!.distance > 0)
