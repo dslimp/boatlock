@@ -160,6 +160,12 @@ class BleBoatLock {
     }
   }
 
+  Future<void> calibrateCompass() async {
+    if (_cmdChar != null) {
+      await _cmdChar!.write(utf8.encode('CALIB_COMPASS'), withoutResponse: false);
+    }
+  }
+
   void dispose() {
     _connectionSub?.cancel();
     _reconnectTimer?.cancel();

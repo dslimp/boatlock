@@ -28,6 +28,14 @@ class _SettingsPageState extends State<SettingsPage> {
     widget.ble.sendCustomCommand('SET_HOLD_HEADING:${v ? 1 : 0}');
   }
 
+  void _startCalib() {
+    if (!isConnected) return;
+    widget.ble.calibrateCompass();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Калибровка компаса запущена')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -38,6 +46,12 @@ class _SettingsPageState extends State<SettingsPage> {
             title: const Text('Поддерживать курс носа'),
             value: holdHeading,
             onChanged: isConnected ? _toggleHoldHeading : null,
+          ),
+          ListTile(
+            title: const Text('Калибровка компаса'),
+            trailing: const Icon(Icons.compass_calibration),
+            enabled: isConnected,
+            onTap: isConnected ? _startCalib : null,
           ),
         ],
       ),
