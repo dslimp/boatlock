@@ -28,6 +28,16 @@ class _MapPageState extends State<MapPage> {
   LatLng? phonePos;
   final List<LatLng> _history = [];
   StreamSubscription<Position>? _posSub;
+  bool _autoCenter = true;
+
+  void _centerOnCurrent() {
+    final pos = (boatData != null && boatData!.lat != 0 && boatData!.lon != 0)
+        ? LatLng(boatData!.lat, boatData!.lon)
+        : phonePos;
+    if (pos != null) {
+      _mapController.move(pos, _zoom);
+    }
+  }
 
   @override
   void initState() {
@@ -38,7 +48,9 @@ class _MapPageState extends State<MapPage> {
         if (data != null && data.lat != 0 && data.lon != 0) {
           final p = LatLng(data.lat, data.lon);
           _addToHistory(p);
-          _mapController.move(p, _zoom);
+          if (_autoCenter) {
+            _mapController.move(p, _zoom);
+          }
         }
       });
     });
@@ -68,7 +80,7 @@ class _MapPageState extends State<MapPage> {
       setState(() {
         phonePos = LatLng(pos.latitude, pos.longitude);
         _addToHistory(phonePos!);
-        if (boatData == null) {
+        if (boatData == null && _autoCenter) {
           _mapController.move(phonePos!, _zoom);
         }
       });
@@ -140,8 +152,9 @@ Widget build(BuildContext context) {
           options: MapOptions(
             center: center,
             zoom: _zoom,
-            onPositionChanged: (pos, _) {
+            onPositionChanged: (pos, hasGesture) {
               if (pos.zoom != null) _zoom = pos.zoom!;
+              if (hasGesture) _autoCenter = false;
             },
             onLongPress: (_, point) {
               if (boatData != null) {
@@ -246,6 +259,13 @@ Widget build(BuildContext context) {
                   setState(() => _zoom -= 1);
                   _mapController.move(_mapController.center, _zoom);
                 },
+              ),
+              const SizedBox(height: 8),
+              FloatingActionButton(
+                heroTag: 'center_btn',
+                mini: true,
+                child: const Icon(Icons.my_location),
+                onPressed: _centerOnCurrent,
               ),
               const SizedBox(height: 8),
               FloatingActionButton(
