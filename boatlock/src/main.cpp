@@ -253,6 +253,7 @@ void loop() {
   lastButton = nowButton;
 
   compass.read();
+  stepperControl.run();
 
   if (pathControl.active) {
     if (gps.location.isValid()) {
@@ -264,7 +265,6 @@ void loop() {
       dist = TinyGPSPlus::distanceBetween(lastLat, lastLon, wp.lat, wp.lon);
       bearing = TinyGPSPlus::courseTo(lastLat, lastLon, wp.lat, wp.lon);
     }
-    stepperControl.moveToBearing(bearing, settings.get("EmuCompass") ? emuHeading : compass.getAzimuth());
   } else if (settings.get("AnchorEnabled") == 1) {
     if (gps.location.isValid()) {
       dist = anchor.distanceToAnchor(gps);
@@ -281,7 +281,15 @@ void loop() {
         bearing = TinyGPSPlus::courseTo(lastLat, lastLon, anchor.anchorLat, anchor.anchorLon);
       }
     }
-    stepperControl.moveToBearing(bearing, settings.get("EmuCompass") ? emuHeading : compass.getAzimuth());
+  }
+
+  float heading = settings.get("EmuCompass") ? emuHeading : compass.getAzimuth();
+  float diff = bearing - prevBearing;
+  if (diff > 180) diff -= 360;
+  if (diff < -180) diff += 360;
+  if (!stepperControl.busy && fabs(diff) > 2.0f) {
+    stepperControl.moveToBearing(bearing, heading);
+    prevBearing = bearing;
   }
 
     while (gpsSerial.available()) {
