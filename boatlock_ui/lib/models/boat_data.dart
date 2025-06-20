@@ -8,6 +8,7 @@ class BoatData {
   final int battery;
   final String status;
   final bool holdHeading;
+  final int emuCompass;
   final int routeIdx;
 
   BoatData({
@@ -20,6 +21,7 @@ class BoatData {
     required this.battery,
     required this.status,
     required this.holdHeading,
+    required this.emuCompass,
     required this.routeIdx,
   });
 
@@ -35,6 +37,7 @@ class BoatData {
       status: json['status']?.toString() ?? '',
       holdHeading:
           int.tryParse(json['holdHeading']?.toString() ?? '') == 1,
+      emuCompass: int.tryParse(json['emuCompass']?.toString() ?? '') ?? 0,
       routeIdx: int.tryParse(json['routeIdx']?.toString() ?? '') ?? 0,
     );
   }

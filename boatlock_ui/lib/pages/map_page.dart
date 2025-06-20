@@ -10,6 +10,7 @@ import '../widgets/status_panel.dart';
 import 'logs_page.dart';
 import 'settings_page.dart';
 import 'route_page.dart';
+import 'compass_page.dart';
 
 
 class MapPage extends StatefulWidget {
@@ -124,6 +125,18 @@ Widget build(BuildContext context) {
           ),
         ),
         IconButton(
+          icon: const Icon(Icons.explore),
+          tooltip: 'Компас',
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => CompassPage(
+                ble: ble,
+                emuCompass: boatData?.emuCompass == 1,
+              ),
+            ),
+          ),
+        ),
+        IconButton(
           icon: const Icon(Icons.settings),
           tooltip: 'Настройки',
           onPressed: () => Navigator.of(context).push(
@@ -131,6 +144,7 @@ Widget build(BuildContext context) {
               builder: (_) => SettingsPage(
                 ble: ble,
                 holdHeading: boatData?.holdHeading ?? false,
+                emuCompass: boatData?.emuCompass == 1,
                 isConnected: boatData != null,
               ),
             ),
