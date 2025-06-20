@@ -124,7 +124,7 @@ void startCompassCalibration() {
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("\n[BoatLock] ESP32 стартует! Версия прошивки: 0.1.0");
+  Serial.println("\n[BoatLock] ESP32 стартует! Версия прошивки: 0.1.1");
 
   Wire.begin(8, 9);
   compass.init();

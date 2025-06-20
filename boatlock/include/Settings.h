@@ -52,7 +52,7 @@ const char* imuTypeNames[] = { "BNO055", "MPU9250", "BNO085", "LSM9DS1", "None" 
 
 class Settings {
 public:
-    static constexpr int VERSION = 0x08;
+    static constexpr int VERSION = 0x09;
     static const int EEPROM_ADDR = 256;
 
     struct KeyIdx { const char* key; int idx; };
