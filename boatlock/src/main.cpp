@@ -140,11 +140,26 @@ void setup() {
       sscanf(cmd.c_str() + 11, "%f,%f", &lat, &lon);
       anchor.saveAnchor(lat, lon, settings.get("EmuCompass") ? emuHeading : compass.getAzimuth());
       Serial.printf("[BLE] Anchor set via BLE: %.6f, %.6f\n", lat, lon);
-    } else if (cmd.rfind("SET_HOLD_HEADING:", 0) == 0) {
+   } else if (cmd.rfind("SET_HOLD_HEADING:", 0) == 0) {
       int val = atoi(cmd.c_str() + 17);
       settings.set("HoldHeading", val);
       settings.save();
       Serial.printf("[BLE] HoldHeading set to %d\n", val);
+    } else if (cmd.rfind("SET_STEP_MAXSPD:", 0) == 0) {
+      float v = atof(cmd.c_str() + 16);
+      settings.set("StepMaxSpd", v);
+      settings.save();
+      stepperControl.loadFromSettings();
+    } else if (cmd.rfind("SET_STEP_ACCEL:", 0) == 0) {
+      float v = atof(cmd.c_str() + 15);
+      settings.set("StepAccel", v);
+      settings.save();
+      stepperControl.loadFromSettings();
+    } else if (cmd.rfind("SET_STEP_SPR:", 0) == 0) {
+      int v = atoi(cmd.c_str() + 13);
+      settings.set("StepSpr", v);
+      settings.save();
+      stepperControl.loadFromSettings();
     } else if (cmd.rfind("SET_ROUTE:",0) == 0) {
       pathControl.reset();
       const char* s = cmd.c_str() + 10;
@@ -196,6 +211,9 @@ void setup() {
   bleBoatLock.registerParam("holdHeading", makeFloatParam([&](){ return settings.get("HoldHeading"); }, "%.0f"));
   bleBoatLock.registerParam("emuCompass", makeFloatParam([&](){ return settings.get("EmuCompass"); }, "%.0f"));
   bleBoatLock.registerParam("routeIdx", makeFloatParam([&](){ return (float)pathControl.currentIndex; }, "%.0f"));
+  bleBoatLock.registerParam("stepMaxSpd", makeFloatParam([&](){ return settings.get("StepMaxSpd"); }, "%.0f"));
+  bleBoatLock.registerParam("stepAccel",  makeFloatParam([&](){ return settings.get("StepAccel"); }, "%.0f"));
+  bleBoatLock.registerParam("stepSpr",    makeFloatParam([&](){ return settings.get("StepSpr"); }, "%.0f"));
 
   EEPROM.begin(EEPROM_SIZE);
   settings.load();

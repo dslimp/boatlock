@@ -10,6 +10,9 @@ class BoatData {
   final bool holdHeading;
   final int emuCompass;
   final int routeIdx;
+  final double stepMaxSpd;
+  final double stepAccel;
+  final int stepSpr;
 
   BoatData({
     required this.lat,
@@ -23,6 +26,9 @@ class BoatData {
     required this.holdHeading,
     required this.emuCompass,
     required this.routeIdx,
+    required this.stepMaxSpd,
+    required this.stepAccel,
+    required this.stepSpr,
   });
 
   factory BoatData.fromJson(Map<String, dynamic> json) {
@@ -39,6 +45,9 @@ class BoatData {
           int.tryParse(json['holdHeading']?.toString() ?? '') == 1,
       emuCompass: int.tryParse(json['emuCompass']?.toString() ?? '') ?? 0,
       routeIdx: int.tryParse(json['routeIdx']?.toString() ?? '') ?? 0,
+      stepMaxSpd: double.tryParse(json['stepMaxSpd']?.toString() ?? '') ?? 0,
+      stepAccel: double.tryParse(json['stepAccel']?.toString() ?? '') ?? 0,
+      stepSpr: int.tryParse(json['stepSpr']?.toString() ?? '') ?? 0,
     );
   }
 }
