@@ -54,6 +54,7 @@ void BLEBoatLock::begin() {
     pAdvertising->addServiceUUID(pService->getUUID());
     pAdvertising->setName("BoatLock");
     pAdvertising->start();
+    Serial.println("[BLE] Advertising started");
     bleStatus = ADVERTISING;
 
     // Регистрируем базовые параметры (можно добавить свои!)

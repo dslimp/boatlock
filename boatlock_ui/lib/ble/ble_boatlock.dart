@@ -50,8 +50,15 @@ class BleBoatLock {
     FlutterBluePlus.startScan(timeout: const Duration(seconds: 6));
     FlutterBluePlus.scanResults.listen((results) async {
       for (var r in results) {
-        print("[BLE] found device: mac=${r.device.remoteId}, name='${r.device.platformName}', advName='${r.advertisementData.advName}'");
-        if (r.advertisementData.advName == "BoatLock") {
+        final advName = r.advertisementData.advName;
+        final uuids = r.advertisementData.serviceUuids
+            .map((u) => u.toString().toLowerCase())
+            .toList();
+        print(
+            "[BLE] found device: mac=${r.device.remoteId}, name='${r.device.platformName}', advName='$advName', uuids=$uuids");
+        final isBoatLock = advName == "BoatLock" ||
+            uuids.any((u) => u.contains("12ab"));
+        if (isBoatLock) {
           print("[BLE] BoatLock found, connecting...");
           _device = r.device;
           await FlutterBluePlus.stopScan();
