@@ -37,7 +37,7 @@ BoatDisplay boatDisplay(&display);
 #define BUTTON_PIN 0
 #define STEP_PIN 5
 #define DIR_PIN 4
-#define MOTOR_PWM_PIN 5
+#define MOTOR_PWM_PIN 7
 #define MOTOR_DIR_PIN 6
 const int PWM_FREQ = 5000;
 const int PWM_RESOLUTION = 8;
