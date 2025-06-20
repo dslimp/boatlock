@@ -48,6 +48,9 @@ TinyGPSPlus gps;
 AS5600 encoder;
 StepperControl stepperControl(STEP_PIN, DIR_PIN);
 
+TaskHandle_t stepperTaskHandle = nullptr;
+void stepperTask(void*);
+
 QMC5883LCompass compass;
 AnchorControl anchor;
 EncoderCalib encoderCalib;
@@ -118,6 +121,13 @@ void compassCalibTask(void*) {
 void startCompassCalibration() {
   if (compassCalibTaskHandle == nullptr) {
     xTaskCreatePinnedToCore(compassCalibTask, "compassCalib", 4096, nullptr, 1, &compassCalibTaskHandle, 1);
+  }
+}
+
+void stepperTask(void*) {
+  for(;;) {
+    stepperControl.run();
+    vTaskDelay(1);
   }
 }
 
@@ -225,6 +235,8 @@ void setup() {
   stepperControl.attachSettings(&settings);
   stepperControl.loadFromSettings();
 
+  xTaskCreatePinnedToCore(stepperTask, "stepper", 2048, nullptr, 1, &stepperTaskHandle, 1);
+
   if(settings.get("AnchorEnabled") == 1) {
     anchorSet = true;
   }
@@ -264,7 +276,6 @@ void loop() {
       dist = TinyGPSPlus::distanceBetween(lastLat, lastLon, wp.lat, wp.lon);
       bearing = TinyGPSPlus::courseTo(lastLat, lastLon, wp.lat, wp.lon);
     }
-    stepperControl.moveToBearing(bearing, settings.get("EmuCompass") ? emuHeading : compass.getAzimuth());
   } else if (settings.get("AnchorEnabled") == 1) {
     if (gps.location.isValid()) {
       dist = anchor.distanceToAnchor(gps);
@@ -281,7 +292,15 @@ void loop() {
         bearing = TinyGPSPlus::courseTo(lastLat, lastLon, anchor.anchorLat, anchor.anchorLon);
       }
     }
-    stepperControl.moveToBearing(bearing, settings.get("EmuCompass") ? emuHeading : compass.getAzimuth());
+  }
+
+  float heading = settings.get("EmuCompass") ? emuHeading : compass.getAzimuth();
+  float diff = bearing - prevBearing;
+  if (diff > 180) diff -= 360;
+  if (diff < -180) diff += 360;
+  if (!stepperControl.busy && fabs(diff) > 2.0f) {
+    stepperControl.moveToBearing(bearing, heading);
+    prevBearing = bearing;
   }
 
     while (gpsSerial.available()) {
