@@ -190,8 +190,7 @@ void setup() {
       return settings.get("EmuCompass") ? emuHeading : (float)compass.getAzimuth();
   }, "%.1f"));
   bleBoatLock.registerParam("anchorLat", makeFloatParam([&](){ return isnan(anchor.anchorLat) ? 0.0 : anchor.anchorLat;}, "%.6f"));
-  bleBoatLock.registerParam("anchorLon",makeFloatParam([&](){ return anchor.anchorLng; }, "%.6f"));
-  bleBoatLock.registerParam("anchorLng", makeFloatParam([&](){ return isnan(anchor.anchorLng) ? 0.0 : anchor.anchorLng;}, "%.6f"));
+  bleBoatLock.registerParam("anchorLon", makeFloatParam([&](){ return isnan(anchor.anchorLon) ? 0.0 : anchor.anchorLon;}, "%.6f"));
   bleBoatLock.registerParam("anchorHead", makeFloatParam([&](){ return anchor.anchorHeading; }, "%.1f"));
   bleBoatLock.registerParam("holdHeading", makeFloatParam([&](){ return settings.get("HoldHeading"); }, "%.0f"));
   bleBoatLock.registerParam("emuCompass", makeFloatParam([&](){ return settings.get("EmuCompass"); }, "%.0f"));
@@ -275,11 +274,11 @@ void loop() {
         bearing = anchor.bearingToAnchor(gps);
       }
     } else if (gpsFix) {
-      dist = TinyGPSPlus::distanceBetween(lastLat, lastLon, anchor.anchorLat, anchor.anchorLng);
+      dist = TinyGPSPlus::distanceBetween(lastLat, lastLon, anchor.anchorLat, anchor.anchorLon);
       if (settings.get("HoldHeading") == 1) {
         bearing = anchor.anchorHeading;
       } else {
-        bearing = TinyGPSPlus::courseTo(lastLat, lastLon, anchor.anchorLat, anchor.anchorLng);
+        bearing = TinyGPSPlus::courseTo(lastLat, lastLon, anchor.anchorLat, anchor.anchorLon);
       }
     }
     stepperControl.moveToBearing(bearing, settings.get("EmuCompass") ? emuHeading : compass.getAzimuth());
@@ -303,7 +302,7 @@ void loop() {
 
         boatDisplay.showStatus(
                 gps,
-                anchor.anchorLat, anchor.anchorLng, settings.get("AnchorEnabled"),
+                anchor.anchorLat, anchor.anchorLon, settings.get("AnchorEnabled"),
                 dist, bearing,
                 settings.get("EmuCompass") ? emuHeading : compass.getAzimuth(),
                 holding
