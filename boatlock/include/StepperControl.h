@@ -6,12 +6,14 @@
 
 class StepperControl {
 public:
-    static constexpr int STEPS_PER_REV = 200;
+    static constexpr int DEFAULT_STEPS_PER_REV = 200;
     AccelStepper stepper;
     Settings* settings;
+    int stepsPerRev;
 
     StepperControl(int stepPin, int dirPin)
-        : stepper(AccelStepper::DRIVER, stepPin, dirPin), settings(nullptr) {}
+        : stepper(AccelStepper::DRIVER, stepPin, dirPin), settings(nullptr),
+          stepsPerRev(DEFAULT_STEPS_PER_REV) {}
 
     void attachSettings(Settings* s) { settings = s; }
 
@@ -19,13 +21,14 @@ public:
         if (!settings) return;
         stepper.setMaxSpeed(settings->get("StepMaxSpd"));
         stepper.setAcceleration(settings->get("StepAccel"));
+        stepsPerRev = (int)settings->get("StepSpr");
     }
 
     void moveToBearing(float bearing, float heading) {
         float diff = bearing - heading;
         if (diff > 180) diff -= 360;
         if (diff < -180) diff += 360;
-        long targetSteps = lround(diff / 360.0f * STEPS_PER_REV);
+        long targetSteps = lround(diff / 360.0f * stepsPerRev);
         stepper.moveTo(targetSteps);
         stepper.run();
     }

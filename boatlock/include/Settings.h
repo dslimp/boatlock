@@ -42,6 +42,7 @@ const SettingEntry defaultEntries[] = {
     {"MagScaleZ",    "Compass scale Z",   TYPE_FLOAT, 1.0, 1.0, 0.1, 5.0, 0.01, "", false},
     {"StepMaxSpd",   "Stepper max speed", TYPE_FLOAT, 1000.0, 1000.0, 10.0, 5000.0, 10.0, "", true},
     {"StepAccel",    "Stepper accel",     TYPE_FLOAT, 500.0, 500.0, 10.0, 5000.0, 10.0, "", true},
+    {"StepSpr",      "Stepper steps/rev", TYPE_INT,   200,   200,   200,  3200, 200, "", true},
 };
 
 static const int count = sizeof(defaultEntries) / sizeof(defaultEntries[0]);
@@ -51,7 +52,7 @@ const char* imuTypeNames[] = { "BNO055", "MPU9250", "BNO085", "LSM9DS1", "None" 
 
 class Settings {
 public:
-    static constexpr int VERSION = 0x08;
+    static constexpr int VERSION = 0x09;
     static const int EEPROM_ADDR = 256;
 
     struct KeyIdx { const char* key; int idx; };

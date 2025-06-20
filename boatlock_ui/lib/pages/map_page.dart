@@ -146,6 +146,8 @@ Widget build(BuildContext context) {
                 holdHeading: boatData?.holdHeading ?? false,
                 emuCompass: boatData?.emuCompass == 1,
                 stepSpr: boatData?.stepSpr ?? 200,
+                stepMaxSpd: boatData?.stepMaxSpd ?? 1000,
+                stepAccel: boatData?.stepAccel ?? 500,
                 isConnected: boatData != null,
               ),
             ),
