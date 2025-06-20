@@ -265,6 +265,7 @@ void loop() {
   lastButton = nowButton;
 
   compass.read();
+  stepperControl.run();
 
   if (pathControl.active) {
     if (gps.location.isValid()) {

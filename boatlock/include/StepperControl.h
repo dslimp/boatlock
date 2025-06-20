@@ -30,6 +30,9 @@ public:
             long targetSteps = lround(diff / 360.0f * STEPS_PER_REV);
             stepper.move(targetSteps);
             busy = true;
+        };
+        if (stepper.distanceToGo() == 0) {
+            busy = false;
         }
     }
 
