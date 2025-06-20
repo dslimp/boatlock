@@ -9,6 +9,7 @@ public:
     static constexpr int STEPS_PER_REV = 200;
     AccelStepper stepper;
     Settings* settings;
+    bool busy = false;
 
     StepperControl(int stepPin, int dirPin)
         : stepper(AccelStepper::DRIVER, stepPin, dirPin), settings(nullptr) {}
@@ -22,11 +23,23 @@ public:
     }
 
     void moveToBearing(float bearing, float heading) {
-        float diff = bearing - heading;
-        if (diff > 180) diff -= 360;
-        if (diff < -180) diff += 360;
-        long targetSteps = lround(diff / 360.0f * STEPS_PER_REV);
-        stepper.moveTo(targetSteps);
+        if (!busy || stepper.distanceToGo() == 0) {
+            float diff = bearing - heading;
+            if (diff > 180) diff -= 360;
+            if (diff < -180) diff += 360;
+            long targetSteps = lround(diff / 360.0f * STEPS_PER_REV);
+            stepper.move(targetSteps);
+            busy = true;
+        } else {
+            stepper.run();
+        }
+        if (stepper.distanceToGo() == 0) {
+            busy = false;
+        }
+    }
+
+    void run() {
         stepper.run();
+        if (stepper.distanceToGo() == 0) busy = false;
     }
 };
