@@ -31,7 +31,12 @@ public:
         if (AnchorEnabled==1) {
             _display->printf("Dst:%.1fm\n", dist);
             _display->printf("Brg:%.0f%c\n", bearing, 176);
-            drawArrowAt(bearing, 44, 54);          // direction to anchor
+            drawArrowAt(bearing, 44, 54);          // direction to anchor (GPS)
+
+            float relative = bearing - heading;    // anchor relative to heading
+            if (relative < 0) relative += 360.0f;
+            drawArrowAt(relative, 64, 54);
+
             float northAngle = 360.0f - heading;
             if (northAngle < 0) northAngle += 360.0f;
             if (northAngle >= 360.0f) northAngle -= 360.0f;
