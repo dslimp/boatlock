@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_compass/flutter_compass.dart';
+import 'package:sensors_plus/sensors_plus.dart';
+import 'dart:math' as math;
 import '../ble/ble_boatlock.dart';
 
 class CompassPage extends StatefulWidget {
@@ -15,7 +16,7 @@ class CompassPage extends StatefulWidget {
 class _CompassPageState extends State<CompassPage> {
   double _heading = 0;
   bool _usePhone = false;
-  StreamSubscription<CompassEvent>? _sub;
+  StreamSubscription<MagnetometerEvent>? _sub;
 
   @override
   void initState() {
@@ -40,12 +41,11 @@ class _CompassPageState extends State<CompassPage> {
     setState(() => _usePhone = v);
     _sub?.cancel();
     if (_usePhone) {
-      _sub = FlutterCompass.events?.listen((event) {
-        final h = event.heading;
-        if (h != null) {
-          setState(() => _heading = h);
-          if (widget.emuCompass) _sendHeading();
-        }
+      _sub = magnetometerEventStream().listen((event) {
+        final h =
+            (math.atan2(event.y, event.x) * 180 / math.pi + 360) % 360;
+        setState(() => _heading = h);
+        if (widget.emuCompass) _sendHeading();
       });
     }
   }
