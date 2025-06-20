@@ -43,6 +43,11 @@ public:
             drawArrowAt(northAngle, 84, 54); // north arrow
         } else {
             _display->println("Press BOOT to anchor");
+
+            float northAngle = 360.0f - heading;
+            if (northAngle < 0) northAngle += 360.0f;
+            if (northAngle >= 360.0f) northAngle -= 360.0f;
+            drawArrowAt(northAngle, 64, 54); // north arrow when not anchored
         }
         _display->display();
     }
