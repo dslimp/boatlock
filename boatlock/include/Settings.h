@@ -22,12 +22,12 @@ const SettingEntry defaultEntries[] = {
     {"Kd",        "Kd for PID",         TYPE_FLOAT, 5.0,  5.0,   0.0, 100.0,  0.1, "", true},
     {"DistTh",    "Distance threshold", TYPE_FLOAT, 2.0,  2.0,   0.1,  10.0,  0.1, "m", true},
     {"AngTol",    "Angle tolerance",    TYPE_FLOAT, 3.0,  3.0,   0.1,  180.0, 1.0, "deg", true},
-    {"ScreenBr",  "Screen brightness",  TYPE_INT,   128.0,128.0, 0,    255,    1, "", false},
+    {"ScreenBr",  "Screen brightness",  TYPE_INT,   128.0,128.0, 0,    255,    1, "", true},
     {"Encoder0",  "Encoder zero",       TYPE_INT,   0,    0,     0,    4095,   1, "", false},
-    {"USAngle",   "US angle",           TYPE_FLOAT, 30.0, 30.0,  0.0,  90.0,   1.0, "deg", true},
-    {"USThresh",  "US threshold",       TYPE_FLOAT, 1.5,  1.5,   0.1,  6.0,    0.1, "m", true},
-    {"GPS_TYPE",  "GPS model",          TYPE_INT,   0, 0, 0, 4, 1, "", true},
-    {"IMU_TYPE",  "IMU model",          TYPE_INT,   1, 1, 0, 4, 1, "", true},
+    {"USAngle",   "US angle",           TYPE_FLOAT, 30.0, 30.0,  0.0,  90.0,   1.0, "deg", false},
+    {"USThresh",  "US threshold",       TYPE_FLOAT, 1.5,  1.5,   0.1,  6.0,    0.1, "m", false},
+    {"GPS_TYPE",  "GPS model",          TYPE_INT,   0, 0, 0, 4, 1, "", false},
+    {"IMU_TYPE",  "IMU model",          TYPE_INT,   1, 1, 0, 4, 1, "", false},
     {"AnchorEnabled", "Enable anchor",     TYPE_INT,   0, 0, 0, 1, 1, "", false},
     {"AnchorLat",     "Anchor latitude",   TYPE_FLOAT, 0.0, 0.0, -90.0, 90.0,   0.000001, "", false},
     {"AnchorLon",     "Anchor longitude",  TYPE_FLOAT, 0.0, 0.0,-180.0, 180.0, 0.000001, "", false},
@@ -39,8 +39,8 @@ const SettingEntry defaultEntries[] = {
     {"MagScaleX",    "Compass scale X",   TYPE_FLOAT, 1.0, 1.0, 0.1, 5.0, 0.01, "", false},
     {"MagScaleY",    "Compass scale Y",   TYPE_FLOAT, 1.0, 1.0, 0.1, 5.0, 0.01, "", false},
     {"MagScaleZ",    "Compass scale Z",   TYPE_FLOAT, 1.0, 1.0, 0.1, 5.0, 0.01, "", false},
-    {"StepMaxSpd",   "Stepper max speed", TYPE_FLOAT, 1000.0, 1000.0, 10.0, 5000.0, 10.0, "", false},
-    {"StepAccel",    "Stepper accel",     TYPE_FLOAT, 500.0, 500.0, 10.0, 5000.0, 10.0, "", false},
+    {"StepMaxSpd",   "Stepper max speed", TYPE_FLOAT, 1000.0, 1000.0, 10.0, 5000.0, 10.0, "", true},
+    {"StepAccel",    "Stepper accel",     TYPE_FLOAT, 500.0, 500.0, 10.0, 5000.0, 10.0, "", true},
 };
 
 static const int count = sizeof(defaultEntries) / sizeof(defaultEntries[0]);
