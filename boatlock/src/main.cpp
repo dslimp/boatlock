@@ -48,6 +48,9 @@ TinyGPSPlus gps;
 AS5600 encoder;
 StepperControl stepperControl(STEP_PIN, DIR_PIN);
 
+TaskHandle_t stepperTaskHandle = nullptr;
+void stepperTask(void*);
+
 QMC5883LCompass compass;
 AnchorControl anchor;
 EncoderCalib encoderCalib;
@@ -118,6 +121,13 @@ void compassCalibTask(void*) {
 void startCompassCalibration() {
   if (compassCalibTaskHandle == nullptr) {
     xTaskCreatePinnedToCore(compassCalibTask, "compassCalib", 4096, nullptr, 1, &compassCalibTaskHandle, 1);
+  }
+}
+
+void stepperTask(void*) {
+  for(;;) {
+    stepperControl.run();
+    vTaskDelay(1);
   }
 }
 
@@ -224,6 +234,8 @@ void setup() {
 //   encoderCalib.loadOffset();
   stepperControl.attachSettings(&settings);
   stepperControl.loadFromSettings();
+
+  xTaskCreatePinnedToCore(stepperTask, "stepper", 2048, nullptr, 1, &stepperTaskHandle, 1);
 
   if(settings.get("AnchorEnabled") == 1) {
     anchorSet = true;
