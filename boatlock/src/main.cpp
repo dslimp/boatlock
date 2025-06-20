@@ -71,6 +71,7 @@ float dist = 0, bearing = 0;
 float lastLat = 0, lastLon = 0;
 float prevBearing = 0;
 bool gpsFix = false;
+float emuHeading = 0;
 
 void drawDebug(const String &msg, int y = 48) {
   display.clearDisplay();
@@ -137,7 +138,7 @@ void setup() {
     if (cmd.rfind("SET_ANCHOR:", 0) == 0) {
       float lat = 0, lon = 0;
       sscanf(cmd.c_str() + 11, "%f,%f", &lat, &lon);
-      anchor.saveAnchor(lat, lon, compass.getAzimuth());
+      anchor.saveAnchor(lat, lon, settings.get("EmuCompass") ? emuHeading : compass.getAzimuth());
       Serial.printf("[BLE] Anchor set via BLE: %.6f, %.6f\n", lat, lon);
     } else if (cmd.rfind("SET_HOLD_HEADING:", 0) == 0) {
       int val = atoi(cmd.c_str() + 17);
@@ -163,6 +164,12 @@ void setup() {
       pathControl.stop();
     } else if (cmd == "CALIB_COMPASS") {
       startCompassCalibration();
+    } else if (cmd.rfind("SET_HEADING:",0) == 0) {
+      emuHeading = atof(cmd.c_str() + 12);
+    } else if (cmd.rfind("EMU_COMPASS:",0) == 0) {
+      int v = atoi(cmd.c_str() + 12);
+      settings.set("EmuCompass", v);
+      settings.save();
     } else {
       Serial.printf("[BLE] Unhandled command: %s\n", cmd.c_str());
     }
@@ -179,12 +186,15 @@ void setup() {
       return gps.location.isValid() ? gps.location.lng() : 0.0;
   }, "%.6f"));
 
-  bleBoatLock.registerParam("heading",  makeFloatParam([&](){ return (float)compass.getAzimuth(); }, "%.1f"));
+  bleBoatLock.registerParam("heading",  makeFloatParam([&](){
+      return settings.get("EmuCompass") ? emuHeading : (float)compass.getAzimuth();
+  }, "%.1f"));
   bleBoatLock.registerParam("anchorLat", makeFloatParam([&](){ return isnan(anchor.anchorLat) ? 0.0 : anchor.anchorLat;}, "%.6f"));
   bleBoatLock.registerParam("anchorLon",makeFloatParam([&](){ return anchor.anchorLng; }, "%.6f"));
   bleBoatLock.registerParam("anchorLng", makeFloatParam([&](){ return isnan(anchor.anchorLng) ? 0.0 : anchor.anchorLng;}, "%.6f"));
   bleBoatLock.registerParam("anchorHead", makeFloatParam([&](){ return anchor.anchorHeading; }, "%.1f"));
   bleBoatLock.registerParam("holdHeading", makeFloatParam([&](){ return settings.get("HoldHeading"); }, "%.0f"));
+  bleBoatLock.registerParam("emuCompass", makeFloatParam([&](){ return settings.get("EmuCompass"); }, "%.0f"));
   bleBoatLock.registerParam("routeIdx", makeFloatParam([&](){ return (float)pathControl.currentIndex; }, "%.0f"));
 
   EEPROM.begin(EEPROM_SIZE);
@@ -236,7 +246,7 @@ void loop() {
 
   if (lastButton == HIGH && nowButton == LOW) {
     if (gps.location.isValid() || gpsFix) {
-      anchor.saveAnchor(lastLat, lastLon, compass.getAzimuth());
+      anchor.saveAnchor(lastLat, lastLon, settings.get("EmuCompass") ? emuHeading : compass.getAzimuth());
       anchorSet = true;
       Serial.println("Anchor point set!");
     }
@@ -255,7 +265,7 @@ void loop() {
       dist = TinyGPSPlus::distanceBetween(lastLat, lastLon, wp.lat, wp.lon);
       bearing = TinyGPSPlus::courseTo(lastLat, lastLon, wp.lat, wp.lon);
     }
-    stepperControl.moveToBearing(bearing, compass.getAzimuth());
+    stepperControl.moveToBearing(bearing, settings.get("EmuCompass") ? emuHeading : compass.getAzimuth());
   } else if (settings.get("AnchorEnabled") == 1) {
     if (gps.location.isValid()) {
       dist = anchor.distanceToAnchor(gps);
@@ -272,7 +282,7 @@ void loop() {
         bearing = TinyGPSPlus::courseTo(lastLat, lastLon, anchor.anchorLat, anchor.anchorLng);
       }
     }
-    stepperControl.moveToBearing(bearing, compass.getAzimuth());
+    stepperControl.moveToBearing(bearing, settings.get("EmuCompass") ? emuHeading : compass.getAzimuth());
   }
 
     while (gpsSerial.available()) {
@@ -295,7 +305,7 @@ void loop() {
                 gps,
                 anchor.anchorLat, anchor.anchorLng, settings.get("AnchorEnabled"),
                 dist, bearing,
-                compass.getAzimuth(),
+                settings.get("EmuCompass") ? emuHeading : compass.getAzimuth(),
                 holding
             );
     }

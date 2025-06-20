@@ -33,6 +33,7 @@ const SettingEntry defaultEntries[] = {
     {"AnchorLon",     "Anchor longitude",  TYPE_FLOAT, 0.0, 0.0,-180.0, 180.0, 0.000001, "", false},
     {"AnchorHead",    "Anchor heading",    TYPE_FLOAT, 0.0, 0.0,   0.0, 360.0, 1.0, "deg", false},
     {"HoldHeading",   "Hold heading",      TYPE_INT,   0, 0, 0, 1, 1, "", true},
+    {"EmuCompass",   "Use emulated compass", TYPE_INT,   0, 0, 0, 1, 1, "", false},
     {"MagOffX",      "Compass offset X",  TYPE_FLOAT, 0.0, 0.0, -5000.0, 5000.0, 1.0, "", false},
     {"MagOffY",      "Compass offset Y",  TYPE_FLOAT, 0.0, 0.0, -5000.0, 5000.0, 1.0, "", false},
     {"MagOffZ",      "Compass offset Z",  TYPE_FLOAT, 0.0, 0.0, -5000.0, 5000.0, 1.0, "", false},
@@ -50,7 +51,7 @@ const char* imuTypeNames[] = { "BNO055", "MPU9250", "BNO085", "LSM9DS1", "None" 
 
 class Settings {
 public:
-    static constexpr int VERSION = 0x07;
+    static constexpr int VERSION = 0x08;
     static const int EEPROM_ADDR = 256;
 
     struct KeyIdx { const char* key; int idx; };

@@ -4,8 +4,9 @@ import '../ble/ble_boatlock.dart';
 class SettingsPage extends StatefulWidget {
   final BleBoatLock ble;
   final bool holdHeading;
+  final bool emuCompass;
   final bool isConnected;
-  const SettingsPage({Key? key, required this.ble, required this.holdHeading, required this.isConnected}) : super(key: key);
+  const SettingsPage({Key? key, required this.ble, required this.holdHeading, required this.emuCompass, required this.isConnected}) : super(key: key);
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -13,12 +14,14 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   late bool holdHeading;
+  late bool emuCompass;
   late bool isConnected;
 
   @override
   void initState() {
     super.initState();
     holdHeading = widget.holdHeading;
+    emuCompass = widget.emuCompass;
     isConnected = widget.isConnected;
   }
 
@@ -36,6 +39,12 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  void _toggleEmu(bool v) {
+    setState(() => emuCompass = v);
+    widget.ble
+        .sendCustomCommand('EMU_COMPASS:${v ? 1 : 0}');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -46,6 +55,11 @@ class _SettingsPageState extends State<SettingsPage> {
             title: const Text('Поддерживать курс носа'),
             value: holdHeading,
             onChanged: isConnected ? _toggleHoldHeading : null,
+          ),
+          SwitchListTile(
+            title: const Text('Эмулировать компас'),
+            value: emuCompass,
+            onChanged: _toggleEmu,
           ),
           ListTile(
             title: const Text('Калибровка компаса'),
