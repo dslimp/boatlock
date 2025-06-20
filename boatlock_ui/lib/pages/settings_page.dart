@@ -5,8 +5,9 @@ class SettingsPage extends StatefulWidget {
   final BleBoatLock ble;
   final bool holdHeading;
   final bool emuCompass;
+  final int stepSpr;
   final bool isConnected;
-  const SettingsPage({Key? key, required this.ble, required this.holdHeading, required this.emuCompass, required this.isConnected}) : super(key: key);
+  const SettingsPage({Key? key, required this.ble, required this.holdHeading, required this.emuCompass, required this.stepSpr, required this.isConnected}) : super(key: key);
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -15,6 +16,7 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   late bool holdHeading;
   late bool emuCompass;
+  late int stepSpr;
   late bool isConnected;
 
   @override
@@ -22,6 +24,7 @@ class _SettingsPageState extends State<SettingsPage> {
     super.initState();
     holdHeading = widget.holdHeading;
     emuCompass = widget.emuCompass;
+    stepSpr = widget.stepSpr;
     isConnected = widget.isConnected;
   }
 
@@ -45,6 +48,27 @@ class _SettingsPageState extends State<SettingsPage> {
         .sendCustomCommand('EMU_COMPASS:${v ? 1 : 0}');
   }
 
+  Future<void> _editStepSpr() async {
+    if (!isConnected) return;
+    const options = [200, 400, 800, 1600, 3200];
+    final selected = await showDialog<int>(
+      context: context,
+      builder: (_) => SimpleDialog(
+        title: const Text('Шагов за оборот'),
+        children: options
+            .map((v) => SimpleDialogOption(
+                  child: Text(v.toString()),
+                  onPressed: () => Navigator.pop(context, v),
+                ))
+            .toList(),
+      ),
+    );
+    if (selected != null && selected != stepSpr) {
+      setState(() => stepSpr = selected);
+      widget.ble.sendCustomCommand('SET_STEP_SPR:$selected');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -60,6 +84,13 @@ class _SettingsPageState extends State<SettingsPage> {
             title: const Text('Эмулировать компас'),
             value: emuCompass,
             onChanged: _toggleEmu,
+          ),
+          ListTile(
+            title: const Text('Шагов за оборот'),
+            subtitle: Text(stepSpr.toString()),
+            trailing: const Icon(Icons.chevron_right),
+            enabled: isConnected,
+            onTap: isConnected ? _editStepSpr : null,
           ),
           ListTile(
             title: const Text('Калибровка компаса'),
