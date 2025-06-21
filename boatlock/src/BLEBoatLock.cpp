@@ -34,6 +34,8 @@ BLEBoatLock::BLEBoatLock() {}
 
 void BLEBoatLock::begin() {
     NimBLEDevice::init("BoatLock");
+    // allow sending larger JSON blobs
+    NimBLEDevice::setMTU(512);
     pServer = NimBLEDevice::createServer();
     pServer->setCallbacks(new ServerCallbacks(this));
     pService = pServer->createService("12ab");
