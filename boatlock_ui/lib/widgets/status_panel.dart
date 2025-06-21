@@ -20,8 +20,7 @@ class StatusPanel extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _iconText(Icons.gps_fixed, "${data!.lat.toStringAsFixed(5)}, ${data!.lon.toStringAsFixed(5)}"),
-          _iconText(Icons.anchor, "${data!.anchorLat.toStringAsFixed(5)}, ${data!.anchorLon.toStringAsFixed(5)}"),
+          _iconText(Icons.anchor, "${data!.distance.toStringAsFixed(1)} м"),
           _iconText(Icons.navigation, "${data!.heading.toStringAsFixed(0)}°"),
           _iconText(Icons.battery_full, "${data!.battery}%"),
           _iconText(Icons.info_outline, data!.status),

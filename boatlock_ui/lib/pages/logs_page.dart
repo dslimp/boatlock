@@ -1,8 +1,29 @@
 import 'package:flutter/material.dart';
 import '../services/log_service.dart';
 
-class LogsPage extends StatelessWidget {
+class LogsPage extends StatefulWidget {
   const LogsPage({Key? key}) : super(key: key);
+
+  @override
+  State<LogsPage> createState() => _LogsPageState();
+}
+
+class _LogsPageState extends State<LogsPage> {
+  final ScrollController _scrollController = ScrollController();
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -11,7 +32,9 @@ class LogsPage extends StatelessWidget {
       body: AnimatedBuilder(
         animation: logService,
         builder: (context, _) {
+          _scrollToBottom();
           return ListView.builder(
+            controller: _scrollController,
             itemCount: logService.logs.length,
             itemBuilder: (context, index) {
               return Text(
