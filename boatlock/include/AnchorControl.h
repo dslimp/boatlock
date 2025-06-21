@@ -1,6 +1,7 @@
 #pragma once
 #include <TinyGPS++.h>
 #include "Settings.h"
+#include "Logger.h"
 
 class AnchorControl {
 public:
@@ -20,6 +21,7 @@ public:
             settings->set("AnchorEnabled", 1);
             settings->save();
         }
+        logMessage("[ANCHOR] saved lat=%.6f lon=%.6f head=%.1f\n", lat, lon, heading);
     }
 
     void loadAnchor() {
@@ -28,6 +30,7 @@ public:
             anchorLon = settings->get("AnchorLon");
             anchorHeading = settings->get("AnchorHead");
         }
+        logMessage("[ANCHOR] loaded lat=%.6f lon=%.6f head=%.1f\n", anchorLat, anchorLon, anchorHeading);
     }
 
     float distanceToAnchor(TinyGPSPlus &gps) {

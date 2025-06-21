@@ -1,6 +1,7 @@
 #pragma once
 #include <EEPROM.h>
 #include <string.h>
+#include "Logger.h"
 
 enum SettingType { TYPE_INT, TYPE_FLOAT, TYPE_BOOL };
 
@@ -104,6 +105,7 @@ public:
             values[i] = entries[i].value;
         EEPROM.put(EEPROM_ADDR + sizeof(uint8_t), values);
         EEPROM.commit();
+        logMessage("[EEPROM] settings saved\n");
     }
 
     void load() {
@@ -120,6 +122,8 @@ public:
         } else {
             save();
         }
+
+        logMessage("[EEPROM] settings loaded (ver=%d)\n", v);
 
         buildKeyMap();
     }

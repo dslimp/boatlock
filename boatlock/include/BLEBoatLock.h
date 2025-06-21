@@ -24,6 +24,9 @@ public:
     // Быстро отдать notify с JSON-строкой (например, все параметры)
     void notifyAll();
 
+    // Отправить логовую строку клиенту
+    void sendLog(const char* line);
+
     // Получить статус как строку
     const char* statusString() const;
 
@@ -32,6 +35,7 @@ private:
     NimBLEService* pService = nullptr;
     NimBLECharacteristic* pDataChar = nullptr;
     NimBLECharacteristic* pCmdChar = nullptr;
+    NimBLECharacteristic* pLogChar = nullptr;
 
     unsigned long lastNotify = 0;
 
