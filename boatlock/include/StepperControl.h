@@ -30,7 +30,7 @@ public:
             float diff = bearing - heading;
             if (diff > 180) diff -= 360;
             if (diff < -180) diff += 360;
-            long targetSteps = lround(diff / 360.0f * STEPS_PER_REV);
+            long targetSteps = lround(diff / 360.0f * stepsPerRev);
             stepper.move(targetSteps);
             busy = true;
         };
