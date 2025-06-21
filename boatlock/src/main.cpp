@@ -14,7 +14,7 @@
 Settings settings;
 constexpr size_t EEPROM_SIZE = Settings::EEPROM_ADDR + sizeof(float) * count + sizeof(uint8_t);
 #include "AnchorControl.h"
-#include "EncoderCalib.h"
+// #include "EncoderCalib.h"
 #include "MotorControl.h"
 #include "StepperControl.h"
 
@@ -45,7 +45,7 @@ const int PWM_CHANNEL = 0;
 
 HardwareSerial gpsSerial(1);
 TinyGPSPlus gps;
-AS5600 encoder;
+// AS5600 encoder;
 StepperControl stepperControl(STEP_PIN, DIR_PIN);
 
 TaskHandle_t stepperTaskHandle = nullptr;
@@ -53,7 +53,7 @@ void stepperTask(void*);
 
 QMC5883LCompass compass;
 AnchorControl anchor;
-EncoderCalib encoderCalib;
+// EncoderCalib encoderCalib;
 MotorControl motor;
 PathControl pathControl;
 
@@ -240,7 +240,7 @@ void setup() {
 
   bleBoatLock.begin();
 
-  encoderCalib.setSettings(&settings);    
+  // encoderCalib.setSettings(&settings);    
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   motor.setupPWM(MOTOR_PWM_PIN, PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
   motor.setDirPin(MOTOR_DIR_PIN);
