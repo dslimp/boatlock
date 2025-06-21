@@ -37,7 +37,7 @@ BoatDisplay boatDisplay(&display);
 #define BUTTON_PIN 0
 #define STEP_PIN 5
 #define DIR_PIN 4
-#define MOTOR_PWM_PIN 5
+#define MOTOR_PWM_PIN 7
 #define MOTOR_DIR_PIN 6
 const int PWM_FREQ = 5000;
 const int PWM_RESOLUTION = 8;
@@ -47,6 +47,9 @@ HardwareSerial gpsSerial(1);
 TinyGPSPlus gps;
 AS5600 encoder;
 StepperControl stepperControl(STEP_PIN, DIR_PIN);
+
+TaskHandle_t stepperTaskHandle = nullptr;
+void stepperTask(void*);
 
 QMC5883LCompass compass;
 AnchorControl anchor;
@@ -121,6 +124,13 @@ void startCompassCalibration() {
   }
 }
 
+void stepperTask(void*) {
+  for(;;) {
+    stepperControl.run();
+    vTaskDelay(1);
+  }
+}
+
 
 void setup() {
   Serial.begin(115200);
@@ -170,6 +180,21 @@ void setup() {
       int v = atoi(cmd.c_str() + 12);
       settings.set("EmuCompass", v);
       settings.save();
+    } else if (cmd.rfind("SET_STEP_SPR:",0) == 0) {
+      int v = atoi(cmd.c_str() + 13);
+      settings.set("StepSpr", v);
+      settings.save();
+      stepperControl.loadFromSettings();
+    } else if (cmd.rfind("SET_STEP_MAXSPD:",0) == 0) {
+      float v = atof(cmd.c_str() + 15);
+      settings.set("StepMaxSpd", v);
+      settings.save();
+      stepperControl.loadFromSettings();
+    } else if (cmd.rfind("SET_STEP_ACCEL:",0) == 0) {
+      float v = atof(cmd.c_str() + 15);
+      settings.set("StepAccel", v);
+      settings.save();
+      stepperControl.loadFromSettings();
     } else {
       Serial.printf("[BLE] Unhandled command: %s\n", cmd.c_str());
     }
@@ -195,6 +220,9 @@ void setup() {
   bleBoatLock.registerParam("holdHeading", makeFloatParam([&](){ return settings.get("HoldHeading"); }, "%.0f"));
   bleBoatLock.registerParam("emuCompass", makeFloatParam([&](){ return settings.get("EmuCompass"); }, "%.0f"));
   bleBoatLock.registerParam("routeIdx", makeFloatParam([&](){ return (float)pathControl.currentIndex; }, "%.0f"));
+  bleBoatLock.registerParam("stepSpr", makeFloatParam([&](){ return settings.get("StepSpr"); }, "%.0f"));
+  bleBoatLock.registerParam("stepMaxSpd", makeFloatParam([&](){ return settings.get("StepMaxSpd"); }, "%.0f"));
+  bleBoatLock.registerParam("stepAccel", makeFloatParam([&](){ return settings.get("StepAccel"); }, "%.0f"));
 
   EEPROM.begin(EEPROM_SIZE);
   settings.load();
@@ -225,6 +253,8 @@ void setup() {
   stepperControl.attachSettings(&settings);
   stepperControl.loadFromSettings();
 
+  xTaskCreatePinnedToCore(stepperTask, "stepper", 2048, nullptr, 1, &stepperTaskHandle, 1);
+
   if(settings.get("AnchorEnabled") == 1) {
     anchorSet = true;
   }
@@ -253,6 +283,7 @@ void loop() {
   lastButton = nowButton;
 
   compass.read();
+  stepperControl.run();
 
   if (pathControl.active) {
     if (gps.location.isValid()) {
@@ -264,7 +295,6 @@ void loop() {
       dist = TinyGPSPlus::distanceBetween(lastLat, lastLon, wp.lat, wp.lon);
       bearing = TinyGPSPlus::courseTo(lastLat, lastLon, wp.lat, wp.lon);
     }
-    stepperControl.moveToBearing(bearing, settings.get("EmuCompass") ? emuHeading : compass.getAzimuth());
   } else if (settings.get("AnchorEnabled") == 1) {
     if (gps.location.isValid()) {
       dist = anchor.distanceToAnchor(gps);
@@ -281,7 +311,15 @@ void loop() {
         bearing = TinyGPSPlus::courseTo(lastLat, lastLon, anchor.anchorLat, anchor.anchorLon);
       }
     }
-    stepperControl.moveToBearing(bearing, settings.get("EmuCompass") ? emuHeading : compass.getAzimuth());
+  }
+
+  float heading = settings.get("EmuCompass") ? emuHeading : compass.getAzimuth();
+  float diff = bearing - prevBearing;
+  if (diff > 180) diff -= 360;
+  if (diff < -180) diff += 360;
+  if (!stepperControl.busy && fabs(diff) > 2.0f) {
+    stepperControl.moveToBearing(bearing, heading);
+    prevBearing = bearing;
   }
 
     while (gpsSerial.available()) {
@@ -296,7 +334,7 @@ void loop() {
 
     static unsigned long lastNotify = 0;
     unsigned long now = millis();
-    if (now - lastNotify > 5000) {
+    if (now - lastNotify > 1000) {
         bleBoatLock.notifyAll();
         lastNotify = now;
 

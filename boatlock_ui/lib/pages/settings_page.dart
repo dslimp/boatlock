@@ -6,8 +6,10 @@ class SettingsPage extends StatefulWidget {
   final bool holdHeading;
   final bool emuCompass;
   final int stepSpr;
+  final double stepMaxSpd;
+  final double stepAccel;
   final bool isConnected;
-  const SettingsPage({Key? key, required this.ble, required this.holdHeading, required this.emuCompass, required this.stepSpr, required this.isConnected}) : super(key: key);
+  const SettingsPage({Key? key, required this.ble, required this.holdHeading, required this.emuCompass, required this.stepSpr, required this.stepMaxSpd, required this.stepAccel, required this.isConnected}) : super(key: key);
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -17,6 +19,8 @@ class _SettingsPageState extends State<SettingsPage> {
   late bool holdHeading;
   late bool emuCompass;
   late int stepSpr;
+  late double stepMaxSpd;
+  late double stepAccel;
   late bool isConnected;
 
   @override
@@ -25,6 +29,8 @@ class _SettingsPageState extends State<SettingsPage> {
     holdHeading = widget.holdHeading;
     emuCompass = widget.emuCompass;
     stepSpr = widget.stepSpr;
+    stepMaxSpd = widget.stepMaxSpd;
+    stepAccel = widget.stepAccel;
     isConnected = widget.isConnected;
   }
 
@@ -69,6 +75,60 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _editStepMaxSpd() async {
+    if (!isConnected) return;
+    final ctrl = TextEditingController(text: stepMaxSpd.round().toString());
+    final val = await showDialog<double>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Макс. скорость'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+          TextButton(
+              onPressed: () {
+                Navigator.pop(context, double.tryParse(ctrl.text));
+              },
+              child: const Text('OK')),
+        ],
+      ),
+    );
+    if (val != null && val != stepMaxSpd) {
+      setState(() => stepMaxSpd = val);
+      widget.ble.sendCustomCommand('SET_STEP_MAXSPD:${val.round()}');
+    }
+  }
+
+  Future<void> _editStepAccel() async {
+    if (!isConnected) return;
+    final ctrl = TextEditingController(text: stepAccel.round().toString());
+    final val = await showDialog<double>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Ускорение'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+          TextButton(
+              onPressed: () {
+                Navigator.pop(context, double.tryParse(ctrl.text));
+              },
+              child: const Text('OK')),
+        ],
+      ),
+    );
+    if (val != null && val != stepAccel) {
+      setState(() => stepAccel = val);
+      widget.ble.sendCustomCommand('SET_STEP_ACCEL:${val.round()}');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -91,6 +151,20 @@ class _SettingsPageState extends State<SettingsPage> {
             trailing: const Icon(Icons.chevron_right),
             enabled: isConnected,
             onTap: isConnected ? _editStepSpr : null,
+          ),
+          ListTile(
+            title: const Text('Макс. скорость'),
+            subtitle: Text(stepMaxSpd.round().toString()),
+            trailing: const Icon(Icons.chevron_right),
+            enabled: isConnected,
+            onTap: isConnected ? _editStepMaxSpd : null,
+          ),
+          ListTile(
+            title: const Text('Ускорение'),
+            subtitle: Text(stepAccel.round().toString()),
+            trailing: const Icon(Icons.chevron_right),
+            enabled: isConnected,
+            onTap: isConnected ? _editStepAccel : null,
           ),
           ListTile(
             title: const Text('Калибровка компаса'),
