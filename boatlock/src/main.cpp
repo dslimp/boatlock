@@ -180,6 +180,21 @@ void setup() {
       int v = atoi(cmd.c_str() + 12);
       settings.set("EmuCompass", v);
       settings.save();
+    } else if (cmd.rfind("SET_STEP_SPR:",0) == 0) {
+      int v = atoi(cmd.c_str() + 13);
+      settings.set("StepSpr", v);
+      settings.save();
+      stepperControl.loadFromSettings();
+    } else if (cmd.rfind("SET_STEP_MAXSPD:",0) == 0) {
+      float v = atof(cmd.c_str() + 15);
+      settings.set("StepMaxSpd", v);
+      settings.save();
+      stepperControl.loadFromSettings();
+    } else if (cmd.rfind("SET_STEP_ACCEL:",0) == 0) {
+      float v = atof(cmd.c_str() + 15);
+      settings.set("StepAccel", v);
+      settings.save();
+      stepperControl.loadFromSettings();
     } else {
       Serial.printf("[BLE] Unhandled command: %s\n", cmd.c_str());
     }
@@ -205,6 +220,9 @@ void setup() {
   bleBoatLock.registerParam("holdHeading", makeFloatParam([&](){ return settings.get("HoldHeading"); }, "%.0f"));
   bleBoatLock.registerParam("emuCompass", makeFloatParam([&](){ return settings.get("EmuCompass"); }, "%.0f"));
   bleBoatLock.registerParam("routeIdx", makeFloatParam([&](){ return (float)pathControl.currentIndex; }, "%.0f"));
+  bleBoatLock.registerParam("stepSpr", makeFloatParam([&](){ return settings.get("StepSpr"); }, "%.0f"));
+  bleBoatLock.registerParam("stepMaxSpd", makeFloatParam([&](){ return settings.get("StepMaxSpd"); }, "%.0f"));
+  bleBoatLock.registerParam("stepAccel", makeFloatParam([&](){ return settings.get("StepAccel"); }, "%.0f"));
 
   EEPROM.begin(EEPROM_SIZE);
   settings.load();
