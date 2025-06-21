@@ -316,7 +316,7 @@ void loop() {
 
     static unsigned long lastNotify = 0;
     unsigned long now = millis();
-    if (now - lastNotify > 5000) {
+    if (now - lastNotify > 1000) {
         bleBoatLock.notifyAll();
         lastNotify = now;
 
