@@ -4,12 +4,15 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../models/boat_data.dart';
 
 typedef BoatDataCallback = void Function(BoatData? data);
+typedef LogCallback = void Function(String line);
 
 class BleBoatLock {
   BluetoothDevice? _device;
   BluetoothCharacteristic? _dataChar;
   BluetoothCharacteristic? _cmdChar;
+  BluetoothCharacteristic? _logChar;
   final BoatDataCallback onData;
+  final LogCallback? onLog;
   BoatData? _lastData;
 
   BoatData? get currentData => _lastData;
@@ -18,7 +21,7 @@ class BleBoatLock {
   Timer? _reconnectTimer;
   bool _isConnecting = false;
 
-  BleBoatLock({required this.onData});
+  BleBoatLock({required this.onData, this.onLog});
 
   Future<void> connectAndListen() async {
     print("[BLE] connectAndListen()");
@@ -108,6 +111,11 @@ class BleBoatLock {
           if (c.uuid.toString().toLowerCase().contains("56ef")) {
             _cmdChar = c;
           }
+          if (c.uuid.toString().toLowerCase().contains("78ab")) {
+            _logChar = c;
+            await _logChar!.setNotifyValue(true);
+            _logChar!.lastValueStream.listen(_onLogNotify);
+          }
         }
       }
       requestAllParams();
@@ -140,6 +148,12 @@ class BleBoatLock {
     } catch (_) {
       // ignore parse errors for noise
     }
+  }
+
+  void _onLogNotify(List<int> value) {
+    final line = utf8.decode(value);
+    if (line.trim().isEmpty) return;
+    onLog?.call(line);
   }
 
   Future<void> setAnchor() async {

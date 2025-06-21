@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import '../ble/ble_boatlock.dart';
 import '../models/boat_data.dart';
 import '../widgets/status_panel.dart';
+import '../services/log_service.dart';
 import 'logs_page.dart';
 import 'settings_page.dart';
 import 'route_page.dart';
@@ -54,7 +55,7 @@ class _MapPageState extends State<MapPage> {
           }
         }
       });
-    });
+    }, onLog: (line) => logService.add(line));
     ble.connectAndListen();
     _initLocation();
   }

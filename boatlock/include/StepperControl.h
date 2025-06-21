@@ -3,6 +3,7 @@
 #include <AccelStepper.h>
 #include <math.h>
 #include "Settings.h"
+#include "Logger.h"
 
 class StepperControl {
 public:
@@ -23,6 +24,10 @@ public:
         stepper.setMaxSpeed(settings->get("StepMaxSpd"));
         stepper.setAcceleration(settings->get("StepAccel"));
         stepsPerRev = (int)settings->get("StepSpr");
+        logMessage("[STEP] cfg maxSpd=%.0f accel=%.0f spr=%d\n",
+                   settings->get("StepMaxSpd"),
+                   settings->get("StepAccel"),
+                   stepsPerRev);
     }
 
     void moveToBearing(float bearing, float heading) {
@@ -32,6 +37,7 @@ public:
             if (diff < -180) diff += 360;
             long targetSteps = lround(diff / 360.0f * stepsPerRev);
             stepper.move(targetSteps);
+            logMessage("[STEP] move diff=%.1f steps=%ld\n", diff, targetSteps);
             busy = true;
         };
         if (stepper.distanceToGo() == 0) {

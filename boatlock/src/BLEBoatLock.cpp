@@ -1,4 +1,5 @@
 #include "BLEBoatLock.h"
+#include "Logger.h"
 
 // --- Server callbacks ---
 class BLEBoatLock::ServerCallbacks : public NimBLEServerCallbacks {
@@ -7,14 +8,14 @@ public:
     ServerCallbacks(BLEBoatLock* p) : parent(p) {}
     void onConnect(NimBLEServer*, NimBLEConnInfo& connInfo) override {
         if (parent) parent->bleStatus = CONNECTED;
-        Serial.printf("[BLE] Client connected! Address: %s\n", connInfo.getAddress().toString().c_str());
+        logMessage("[BLE] Client connected! Address: %s\n", connInfo.getAddress().toString().c_str());
     }
     void onDisconnect(NimBLEServer*, NimBLEConnInfo& connInfo, int reason) override {
         if (parent) parent->bleStatus = ADVERTISING;
-        Serial.printf("[BLE] Client disconnected! Address: %s, Reason: %d\n",
+        logMessage("[BLE] Client disconnected! Address: %s, Reason: %d\n",
             connInfo.getAddress().toString().c_str(), reason);
         NimBLEDevice::getAdvertising()->start();
-        Serial.println("[BLE] Restart advertising");
+        logMessage("[BLE] Restart advertising\n");
     }
 };
 
@@ -25,7 +26,7 @@ public:
     CmdCallbacks(BLEBoatLock* p) : parent(p) {}
     void onWrite(NimBLECharacteristic* pCharacteristic, NimBLEConnInfo&) override {
         std::string param = pCharacteristic->getValue();
-        Serial.printf("[BLE] Param request: %s\n", param.c_str());
+        logMessage("[BLE] Param request: %s\n", param.c_str());
         if (parent) parent->handleParamRequest(param);
     }
 };
@@ -50,6 +51,11 @@ void BLEBoatLock::begin() {
         "56ef", NIMBLE_PROPERTY::WRITE
     );
     pCmdChar->setCallbacks(new CmdCallbacks(this));
+
+    // Log char: отправка строк логов
+    pLogChar = pService->createCharacteristic(
+        "78ab", NIMBLE_PROPERTY::NOTIFY
+    );
 
     pService->start();
     NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
@@ -126,6 +132,13 @@ void BLEBoatLock::notifyAll() {
         std::string all = collectAllParams();
         pDataChar->setValue(all);
         pDataChar->notify();
+    }
+}
+
+void BLEBoatLock::sendLog(const char* line) {
+    if (pLogChar && bleStatus == CONNECTED) {
+        pLogChar->setValue(line);
+        pLogChar->notify();
     }
 }
 
