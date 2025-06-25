@@ -1,5 +1,6 @@
-import 'dart:convert';
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../models/boat_data.dart';
 
@@ -178,6 +179,19 @@ class BleBoatLock {
     if (_cmdChar != null) {
       await _cmdChar!.write(utf8.encode('CALIB_COMPASS'), withoutResponse: false);
     }
+  }
+
+  Future<void> updateFirmware(Uint8List data) async {
+    if (_cmdChar == null) return;
+    await _cmdChar!.write(utf8.encode('OTA_BEGIN:${data.length}'), withoutResponse: false);
+    const chunk = 400;
+    for (var offset = 0; offset < data.length; offset += chunk) {
+      final sub = data.sublist(offset, (offset + chunk).clamp(0, data.length));
+      final b64 = base64Encode(sub);
+      await _cmdChar!.write(utf8.encode('OTA_DATA:$b64'), withoutResponse: false);
+      await Future.delayed(const Duration(milliseconds: 20));
+    }
+    await _cmdChar!.write(utf8.encode('OTA_END'), withoutResponse: false);
   }
 
   void dispose() {

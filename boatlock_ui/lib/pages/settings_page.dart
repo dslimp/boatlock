@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../ble/ble_boatlock.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -45,6 +46,15 @@ class _SettingsPageState extends State<SettingsPage> {
     widget.ble.calibrateCompass();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Калибровка компаса запущена')),
+    );
+  }
+
+  Future<void> _updateFirmware() async {
+    if (!isConnected) return;
+    final data = await rootBundle.load('assets/firmware.bin');
+    await widget.ble.updateFirmware(data.buffer.asUint8List());
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Прошивка отправлена')),
     );
   }
 
@@ -171,6 +181,12 @@ class _SettingsPageState extends State<SettingsPage> {
             trailing: const Icon(Icons.compass_calibration),
             enabled: isConnected,
             onTap: isConnected ? _startCalib : null,
+          ),
+          ListTile(
+            title: const Text('Обновить прошивку'),
+            trailing: const Icon(Icons.system_update),
+            enabled: isConnected,
+            onTap: isConnected ? _updateFirmware : null,
           ),
         ],
       ),

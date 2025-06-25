@@ -6,6 +6,7 @@
 #include "StepperControl.h"
 #include "Logger.h"
 #include "QMC5883LCompass.h"
+#include <mbedtls/base64.h>
 
 extern AnchorControl anchor;
 extern PathControl pathControl;
@@ -13,6 +14,9 @@ extern StepperControl stepperControl;
 extern Settings settings;
 extern QMC5883LCompass compass;
 extern float emuHeading;
+void startOtaUpdate(size_t size);
+void otaWriteChunk(const uint8_t* data, size_t len);
+void finishOtaUpdate();
 void startCompassCalibration();
 
 inline void handleBleCommand(const std::string& cmd) {
@@ -66,6 +70,21 @@ inline void handleBleCommand(const std::string& cmd) {
         settings.set("StepAccel", v);
         settings.save();
         stepperControl.loadFromSettings();
+    } else if (cmd.rfind("OTA_BEGIN:",0) == 0) {
+        size_t total = atoi(cmd.c_str() + 10);
+        startOtaUpdate(total);
+    } else if (cmd.rfind("OTA_DATA:",0) == 0) {
+        const char* b64 = cmd.c_str() + 9;
+        size_t len = strlen(b64);
+        std::string bin;
+        bin.resize(len*3/4 + 4);
+        size_t outLen = 0;
+        if (mbedtls_base64_decode((unsigned char*)bin.data(), bin.size(), &outLen,
+                (const unsigned char*)b64, len) == 0) {
+            otaWriteChunk((const uint8_t*)bin.data(), outLen);
+        }
+    } else if (cmd == "OTA_END") {
+        finishOtaUpdate();
     } else {
         logMessage("[BLE] Unhandled command: %s\n", cmd.c_str());
     }
