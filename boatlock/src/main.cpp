@@ -23,6 +23,7 @@ constexpr size_t EEPROM_SIZE = Settings::EEPROM_ADDR + sizeof(float) * count + s
 #include "QMC5883LCompass.h"
 #include "PathControl.h"
 #include "BleCommandHandler.h"
+#include "FirmwareUpdater.h"
 
 unsigned long lastNotifyBle = 0;
 
