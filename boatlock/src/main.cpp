@@ -20,7 +20,7 @@ constexpr size_t EEPROM_SIZE = Settings::EEPROM_ADDR + sizeof(float) * count + s
 #include "StepperControl.h"
 
 #include "BoatDisplay.h"
-#include "QMC5883LCompass.h"
+#include "BNO085Compass.h"
 #include "PathControl.h"
 #include "BleCommandHandler.h"
 
@@ -53,7 +53,7 @@ StepperControl stepperControl(STEP_PIN, DIR_PIN);
 TaskHandle_t stepperTaskHandle = nullptr;
 void stepperTask(void*);
 
-QMC5883LCompass compass;
+BNO085Compass compass;
 AnchorControl anchor;
 // EncoderCalib encoderCalib;
 MotorControl motor;
