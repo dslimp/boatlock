@@ -58,6 +58,7 @@ AnchorControl anchor;
 // EncoderCalib encoderCalib;
 MotorControl motor;
 PathControl pathControl;
+bool compassReady = false;
 
 TaskHandle_t compassCalibTaskHandle = nullptr;
 
@@ -102,6 +103,7 @@ void adjustPosition(float bearing) {
 }
 
 void calibrateCompassAndSave() {
+  if (!compassReady) return;
   drawDebug("Calibrating compass");
   compass.calibrate();
   settings.set("MagOffX", compass.getCalibrationOffset(0));
@@ -121,7 +123,7 @@ void compassCalibTask(void*) {
 }
 
 void startCompassCalibration() {
-  if (compassCalibTaskHandle == nullptr) {
+  if (compassCalibTaskHandle == nullptr && compassReady) {
     xTaskCreatePinnedToCore(compassCalibTask, "compassCalib", 4096, nullptr, 1, &compassCalibTaskHandle, 1);
   }
 }
@@ -139,7 +141,10 @@ void setup() {
   logMessage("\n[BoatLock] ESP32 стартует! Версия прошивки: 0.1.0\n");
 
   Wire.begin(8, 9);
-  compass.init();
+  compassReady = compass.init();
+  if (!compassReady) {
+    logMessage("[Compass] init failed\n");
+  }
 
   pinMode(BOOT_PIN, INPUT_PULLUP);
 
@@ -160,7 +165,8 @@ void setup() {
   }, "%.6f"));
 
   bleBoatLock.registerParam("heading",  makeFloatParam([&](){
-      return settings.get("EmuCompass") ? emuHeading : (float)compass.getAzimuth();
+      if (settings.get("EmuCompass")) return emuHeading;
+      return compassReady ? (float)compass.getAzimuth() : 0.0f;
   }, "%.1f"));
   bleBoatLock.registerParam("anchorLat", makeFloatParam([&](){ return isnan(anchor.anchorLat) ? 0.0 : anchor.anchorLat;}, "%.6f"));
   bleBoatLock.registerParam("anchorLon", makeFloatParam([&](){ return isnan(anchor.anchorLon) ? 0.0 : anchor.anchorLon;}, "%.6f"));
@@ -174,14 +180,16 @@ void setup() {
 
   EEPROM.begin(EEPROM_SIZE);
   settings.load();
-  compass.setCalibrationOffsets(
-      settings.get("MagOffX"),
-      settings.get("MagOffY"),
-      settings.get("MagOffZ"));
-  compass.setCalibrationScales(
-      settings.get("MagScaleX"),
-      settings.get("MagScaleY"),
-      settings.get("MagScaleZ"));
+  if (compassReady) {
+    compass.setCalibrationOffsets(
+        settings.get("MagOffX"),
+        settings.get("MagOffY"),
+        settings.get("MagOffZ"));
+    compass.setCalibrationScales(
+        settings.get("MagScaleX"),
+        settings.get("MagScaleY"),
+        settings.get("MagScaleZ"));
+  }
   anchor.attachSettings(&settings);
   anchor.loadAnchor();
   drawDebug("settings load");
@@ -223,14 +231,16 @@ void loop() {
 
   if (lastButton == HIGH && nowButton == LOW) {
     if (gps.location.isValid() || gpsFix) {
-      anchor.saveAnchor(lastLat, lastLon, settings.get("EmuCompass") ? emuHeading : compass.getAzimuth());
+      anchor.saveAnchor(lastLat, lastLon, settings.get("EmuCompass") ? emuHeading : (compassReady ? compass.getAzimuth() : 0.0f));
       anchorSet = true;
       logMessage("Anchor point set!\n");
     }
   }
   lastButton = nowButton;
 
-  compass.read();
+  if (compassReady) {
+    compass.read();
+  }
   stepperControl.run();
 
   if (pathControl.active) {
@@ -261,7 +271,7 @@ void loop() {
     }
   }
 
-  float heading = settings.get("EmuCompass") ? emuHeading : compass.getAzimuth();
+  float heading = settings.get("EmuCompass") ? emuHeading : (compassReady ? compass.getAzimuth() : 0.0f);
   float diff = bearing - prevBearing;
   if (diff > 180) diff -= 360;
   if (diff < -180) diff += 360;
@@ -290,7 +300,7 @@ void loop() {
                 gps,
                 anchor.anchorLat, anchor.anchorLon, settings.get("AnchorEnabled"),
                 dist, bearing,
-                settings.get("EmuCompass") ? emuHeading : compass.getAzimuth(),
+                settings.get("EmuCompass") ? emuHeading : (compassReady ? compass.getAzimuth() : 0.0f),
                 holding
             );
     }
