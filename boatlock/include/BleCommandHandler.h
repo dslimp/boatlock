@@ -13,13 +13,14 @@ extern StepperControl stepperControl;
 extern Settings settings;
 extern BNO085Compass compass;
 extern float emuHeading;
+extern bool compassReady;
 void startCompassCalibration();
 
 inline void handleBleCommand(const std::string& cmd) {
     if (cmd.rfind("SET_ANCHOR:", 0) == 0) {
         float lat = 0, lon = 0;
         sscanf(cmd.c_str() + 11, "%f,%f", &lat, &lon);
-        anchor.saveAnchor(lat, lon, settings.get("EmuCompass") ? emuHeading : compass.getAzimuth());
+        anchor.saveAnchor(lat, lon, settings.get("EmuCompass") ? emuHeading : (compassReady ? compass.getAzimuth() : 0.0f));
         logMessage("[BLE] Anchor set via BLE: %.6f, %.6f\n", lat, lon);
     } else if (cmd.rfind("SET_HOLD_HEADING:", 0) == 0) {
         int val = atoi(cmd.c_str() + 17);
