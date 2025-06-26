@@ -5,13 +5,13 @@
 #include "PathControl.h"
 #include "StepperControl.h"
 #include "Logger.h"
-#include "QMC5883LCompass.h"
+#include "BNO085Compass.h"
 
 extern AnchorControl anchor;
 extern PathControl pathControl;
 extern StepperControl stepperControl;
 extern Settings settings;
-extern QMC5883LCompass compass;
+extern BNO085Compass compass;
 extern float emuHeading;
 void startCompassCalibration();
 
