@@ -59,6 +59,11 @@ public:
         manualSpd = 0;
     }
 
+    void cancelMove() {
+        stepper.stop();
+        busy = false;
+    }
+
     void run() {
         if (manual) {
             stepper.runSpeed();
