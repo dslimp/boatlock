@@ -101,13 +101,6 @@ void calibrateCompassAndSave() {
   if (!compassReady) return;
   drawDebug("Calibrating compass");
   compass.calibrate();
-  settings.set("MagOffX", compass.getCalibrationOffset(0));
-  settings.set("MagOffY", compass.getCalibrationOffset(1));
-  settings.set("MagOffZ", compass.getCalibrationOffset(2));
-  settings.set("MagScaleX", compass.getCalibrationScale(0));
-  settings.set("MagScaleY", compass.getCalibrationScale(1));
-  settings.set("MagScaleZ", compass.getCalibrationScale(2));
-  settings.save();
   drawDebug("Calib done");
 }
 
@@ -133,7 +126,7 @@ void stepperTask(void*) {
 
 void setup() {
   Serial.begin(115200);
-  logMessage("\n[BoatLock] ESP32 стартует! Версия прошивки: 0.1.0\n");
+  logMessage("\n[BoatLock] ESP32 стартует! Версия прошивки: 0.1.1\n");
 
   Wire.begin(8, 9);
   compassReady = compass.init();
@@ -175,15 +168,9 @@ void setup() {
 
   EEPROM.begin(EEPROM_SIZE);
   settings.load();
+  compass.attachSettings(&settings);
   if (compassReady) {
-    compass.setCalibrationOffsets(
-        settings.get("MagOffX"),
-        settings.get("MagOffY"),
-        settings.get("MagOffZ"));
-    compass.setCalibrationScales(
-        settings.get("MagScaleX"),
-        settings.get("MagScaleY"),
-        settings.get("MagScaleZ"));
+    compass.loadCalibrationFromSettings();
   }
   anchor.attachSettings(&settings);
   anchor.loadAnchor();

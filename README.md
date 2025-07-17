@@ -68,3 +68,12 @@ platformio run --target upload
 
 Open the serial monitor (`platformio device monitor`) to verify that GPS data is
 being received.
+
+## Compass Calibration
+
+Run the BLE command `CALIB_COMPASS` or press the BOOT button while the device is
+running to start calibration. Slowly rotate the device in all directions for
+about 10 seconds. The calculated offsets and scale factors are saved to EEPROM
+and automatically reloaded on startup.
+
+See [CHANGELOG.md](CHANGELOG.md) for recent changes and firmware versions.
