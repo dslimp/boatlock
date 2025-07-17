@@ -6,7 +6,10 @@
 class MotorControl {
 public:
     int pwmChannel;
-    int dirPin;
+    int dirPin1;
+    int dirPin2;
+
+    MotorControl() : pwmChannel(0), dirPin1(-1), dirPin2(-1) {}
 
     // Ссылки на PID в Settings (инициализируются в setup())
     float Kp, Ki, Kd;
@@ -30,8 +33,16 @@ public:
     }
 
     void setDirPin(int pin) {
-        dirPin = pin;
+        dirPin1 = pin;
+        dirPin2 = -1;
         pinMode(pin, OUTPUT);
+    }
+
+    void setDirPins(int pin1, int pin2) {
+        dirPin1 = pin1;
+        dirPin2 = pin2;
+        pinMode(pin1, OUTPUT);
+        pinMode(pin2, OUTPUT);
     }
 
     void loadPIDfromSettings() {
@@ -96,7 +107,13 @@ public:
 
         // Управление мотором
         int pwmValue = constrain((int)fabs(output), 0, 255);
-        digitalWrite(dirPin, (output >= 0) ? HIGH : LOW);
+        bool forward = output >= 0;
+        if (dirPin2 >= 0) {
+            digitalWrite(dirPin1, forward ? HIGH : LOW);
+            digitalWrite(dirPin2, forward ? LOW : HIGH);
+        } else if (dirPin1 >= 0) {
+            digitalWrite(dirPin1, forward ? HIGH : LOW);
+        }
         ledcWrite(pwmChannel, pwmValue);
     }
 
