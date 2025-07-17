@@ -58,7 +58,7 @@ inline void handleBleCommand(const std::string& cmd) {
         settings.save();
         stepperControl.loadFromSettings();
     } else if (cmd.rfind("SET_STEP_MAXSPD:",0) == 0) {
-        float v = atof(cmd.c_str() + 15);
+        float v = atof(cmd.c_str() + 16);
         settings.set("StepMaxSpd", v);
         settings.save();
         stepperControl.loadFromSettings();
