@@ -126,7 +126,7 @@ void stepperTask(void*) {
 
 void setup() {
   Serial.begin(115200);
-  logMessage("\n[BoatLock] ESP32 стартует! Версия прошивки: 0.1.1\n");
+  logMessage("\n[BoatLock] ESP32 стартует! Версия прошивки: 0.1.2\n");
 
   Wire.begin(8, 9);
   compassReady = compass.init();
@@ -140,8 +140,6 @@ void setup() {
   gpsSerial.begin(9600, SERIAL_8N1, 17, 18);
 
   bleBoatLock.setCommandHandler(handleBleCommand);
-
-  bleBoatLock.registerParam("distance", makeFloatParam([&](){ return dist; }, "%.2f"));
   // bleBoatLock.registerParam("lat",      makeFloatParam([&](){ return gps.location.lat(); }, "%.6f"));
   // bleBoatLock.registerParam("lon",      makeFloatParam([&](){ return gps.location.lng(); }, "%.6f"));
   bleBoatLock.registerParam("lat", makeFloatParam([&](){
@@ -177,6 +175,9 @@ void setup() {
   drawDebug("settings load");
 
   bleBoatLock.begin();
+
+  // Register the distance parameter after BLE init so it overrides the default
+  bleBoatLock.registerParam("distance", makeFloatParam([&](){ return dist; }, "%.2f"));
 
   // encoderCalib.setSettings(&settings);    
   pinMode(BUTTON_PIN, INPUT_PULLUP);
