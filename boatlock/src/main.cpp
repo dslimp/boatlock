@@ -260,13 +260,17 @@ void loop() {
 
   float heading = settings.get("EmuCompass") ? emuHeading : (compassReady ? compass.getAzimuth() : 0.0f);
   if (manualMode) {
-    if (manualDir >= 0 && !stepperControl.busy) {
-      float target = manualDir * 45.0f;
-      stepperControl.moveToBearing(target, heading);
+    if (manualDir == 0) {
+      stepperControl.startManual(-1);
+    } else if (manualDir == 1) {
+      stepperControl.startManual(1);
+    } else {
+      stepperControl.stopManual();
     }
     motor.driveManual(manualSpeed);
     holding = false;
   } else {
+    stepperControl.stopManual();
     float diff = bearing - heading;
     if (diff > 180) diff -= 360;
     if (diff < -180) diff += 360;

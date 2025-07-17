@@ -12,6 +12,8 @@ public:
     Settings* settings;
     int stepsPerRev;
     bool busy = false;
+    bool manual = false;
+    float manualSpd = 0;
 
     StepperControl(int stepPin, int dirPin)
         : stepper(AccelStepper::DRIVER, stepPin, dirPin), settings(nullptr),
@@ -45,8 +47,24 @@ public:
         }
     }
 
+    void startManual(int dir) {
+        manual = true;
+        float spd = settings ? settings->get("StepMaxSpd") : 1000;
+        manualSpd = dir < 0 ? -spd : spd;
+        stepper.setSpeed(manualSpd);
+    }
+
+    void stopManual() {
+        manual = false;
+        manualSpd = 0;
+    }
+
     void run() {
-        stepper.run();
-        if (stepper.distanceToGo() == 0) busy = false;
+        if (manual) {
+            stepper.runSpeed();
+        } else {
+            stepper.run();
+            if (stepper.distanceToGo() == 0) busy = false;
+        }
     }
 };

@@ -57,15 +57,20 @@ class _MapPageState extends State<MapPage> {
     ble.sendManualSpeed(v.round());
   }
 
-  Widget _dirBtn(IconData icon, int dir) => Padding(
+  Widget _holdBtn(IconData icon, int dir) => Padding(
         padding: const EdgeInsets.all(4),
-        child: SizedBox(
-          width: 48,
-          height: 48,
-          child: ElevatedButton(
-            onPressed: () => _sendDirection(dir),
-            style: ElevatedButton.styleFrom(padding: EdgeInsets.zero),
-            child: Icon(icon),
+        child: GestureDetector(
+          onTapDown: (_) => _sendDirection(dir),
+          onTapUp: (_) => _sendDirection(-1),
+          onTapCancel: () => _sendDirection(-1),
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Icon(icon, color: Colors.white),
           ),
         ),
       );
@@ -378,10 +383,14 @@ Widget build(BuildContext context) {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CheckboxListTile(
-                title: const Text('Ручной режим'),
-                value: _manualMode,
-                onChanged: (v) => _toggleManual(v ?? false),
+              ElevatedButton.icon(
+                icon: Icon(_manualMode ? Icons.toggle_on : Icons.toggle_off),
+                label: const Text('Ручной режим'),
+                onPressed: () => _toggleManual(!_manualMode),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                      _manualMode ? Colors.green : Colors.blue,
+                ),
               ),
               if (_manualMode)
                 Column(
@@ -389,25 +398,8 @@ Widget build(BuildContext context) {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _dirBtn(Icons.north_west, 7),
-                        _dirBtn(Icons.north, 0),
-                        _dirBtn(Icons.north_east, 1),
-                      ],
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _dirBtn(Icons.west, 6),
-                        _dirBtn(Icons.stop, -1),
-                        _dirBtn(Icons.east, 2),
-                      ],
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _dirBtn(Icons.south_west, 5),
-                        _dirBtn(Icons.south, 4),
-                        _dirBtn(Icons.south_east, 3),
+                        _holdBtn(Icons.rotate_left, 0),
+                        _holdBtn(Icons.rotate_right, 1),
                       ],
                     ),
                     Slider(
