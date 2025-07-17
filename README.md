@@ -45,3 +45,26 @@ Use `flutter build <platform>` to create release builds.
 | Git              | Cloning and updating this repository    |
 
 Ensure these tools are installed and available in your `PATH` before attempting to build or run the project.
+
+## Quick Start: ReadyToSky NEO‑M8N GPS Module
+
+The firmware is preconfigured for the ReadyToSky GPS+compass board based on the
+NEO‑M8N receiver. Connect the module to the ESP32‑S3 board as follows:
+
+- **GPS TX** → **GPIO17**
+- **GPS RX** → **GPIO18**
+- **SDA** → **GPIO8**
+- **SCL** → **GPIO9**
+- **VCC** → 5 V (or 3.3 V if your module supports it)
+- **GND** → **GND**
+
+After wiring, build and flash the firmware:
+
+```bash
+cd boatlock
+platformio run
+platformio run --target upload
+```
+
+Open the serial monitor (`platformio device monitor`) to verify that GPS data is
+being received.
