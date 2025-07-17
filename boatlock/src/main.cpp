@@ -15,7 +15,6 @@
 Settings settings;
 constexpr size_t EEPROM_SIZE = Settings::EEPROM_ADDR + sizeof(float) * count + sizeof(uint8_t);
 #include "AnchorControl.h"
-// #include "EncoderCalib.h"
 #include "MotorControl.h"
 #include "StepperControl.h"
 
@@ -23,8 +22,6 @@ constexpr size_t EEPROM_SIZE = Settings::EEPROM_ADDR + sizeof(float) * count + s
 #include "HMC5883Compass.h"
 #include "PathControl.h"
 #include "BleCommandHandler.h"
-
-unsigned long lastNotifyBle = 0;
 
 #include "BLEBoatLock.h"
 BLEBoatLock bleBoatLock;
@@ -47,7 +44,6 @@ const int PWM_CHANNEL = 0;
 
 HardwareSerial gpsSerial(1);
 TinyGPSPlus gps;
-// AS5600 encoder;
 StepperControl stepperControl(STEP_PIN, DIR_PIN);
 
 TaskHandle_t stepperTaskHandle = nullptr;
@@ -55,7 +51,6 @@ void stepperTask(void*);
 
 HMC5883Compass compass;
 AnchorControl anchor;
-// EncoderCalib encoderCalib;
 MotorControl motor;
 PathControl pathControl;
 bool compassReady = false;
