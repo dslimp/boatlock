@@ -77,3 +77,23 @@ about 10 seconds. The calculated offsets and scale factors are saved to EEPROM
 and automatically reloaded on startup.
 
 See [CHANGELOG.md](CHANGELOG.md) for recent changes and firmware versions.
+
+## HC 160A S2 Motor Controller
+
+The HC 160A S2 driver requires two direction pins. Define them in
+`boatlock/src/main.cpp`:
+
+```cpp
+#define MOTOR_DIR_PIN1 6   // IN1 on the driver
+#define MOTOR_DIR_PIN2 10  // IN2 on the driver
+```
+
+During setup the firmware calls:
+
+```cpp
+motor.setDirPins(MOTOR_DIR_PIN1, MOTOR_DIR_PIN2);
+```
+
+Pin 1 should be HIGH and Pin 2 LOW for forward rotation. The logic is reversed
+for reverse rotation. Adjust the GPIO numbers if you wire the controller to
+different pins on the ESP32 board.

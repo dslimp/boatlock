@@ -37,7 +37,8 @@ BoatDisplay boatDisplay(&display);
 #define STEP_PIN 5
 #define DIR_PIN 4
 #define MOTOR_PWM_PIN 7
-#define MOTOR_DIR_PIN 6
+#define MOTOR_DIR_PIN1 6
+#define MOTOR_DIR_PIN2 10
 const int PWM_FREQ = 5000;
 const int PWM_RESOLUTION = 8;
 const int PWM_CHANNEL = 0;
@@ -181,7 +182,7 @@ void setup() {
   // encoderCalib.setSettings(&settings);    
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   motor.setupPWM(MOTOR_PWM_PIN, PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
-  motor.setDirPin(MOTOR_DIR_PIN);
+  motor.setDirPins(MOTOR_DIR_PIN1, MOTOR_DIR_PIN2);
   motor.loadPIDfromSettings();
   drawDebug("motor load");
 
