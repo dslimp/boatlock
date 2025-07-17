@@ -120,4 +120,16 @@ public:
     void stop() {
         ledcWrite(pwmChannel, 0);
     }
+
+    void driveManual(int speed) {
+        bool forward = speed >= 0;
+        int pwmValue = constrain(abs(speed), 0, 255);
+        if (dirPin2 >= 0) {
+            digitalWrite(dirPin1, forward ? HIGH : LOW);
+            digitalWrite(dirPin2, forward ? LOW : HIGH);
+        } else if (dirPin1 >= 0) {
+            digitalWrite(dirPin1, forward ? HIGH : LOW);
+        }
+        ledcWrite(pwmChannel, pwmValue);
+    }
 };

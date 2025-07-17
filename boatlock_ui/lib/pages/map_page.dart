@@ -31,6 +31,8 @@ class _MapPageState extends State<MapPage> {
   final List<LatLng> _history = [];
   StreamSubscription<Position>? _posSub;
   bool _autoCenter = true;
+  bool _manualMode = false;
+  double _manualSpeed = 0;
 
   void _centerOnCurrent() {
     final pos = (boatData != null && boatData!.lat != 0 && boatData!.lon != 0)
@@ -40,6 +42,33 @@ class _MapPageState extends State<MapPage> {
       _mapController.move(pos, _zoom);
     }
   }
+
+  void _toggleManual(bool v) {
+    setState(() => _manualMode = v);
+    ble.setManualMode(v);
+  }
+
+  void _sendDirection(int dir) {
+    ble.sendManualDirection(dir);
+  }
+
+  void _setSpeed(double v) {
+    setState(() => _manualSpeed = v);
+    ble.sendManualSpeed(v.round());
+  }
+
+  Widget _dirBtn(IconData icon, int dir) => Padding(
+        padding: const EdgeInsets.all(4),
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: ElevatedButton(
+            onPressed: () => _sendDirection(dir),
+            style: ElevatedButton.styleFrom(padding: EdgeInsets.zero),
+            child: Icon(icon),
+          ),
+        ),
+      );
 
   @override
   void initState() {
@@ -339,9 +368,59 @@ Widget build(BuildContext context) {
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
-              ),
             ),
           ),
+        ),
+        Positioned(
+          bottom: 150,
+          left: 0,
+          right: 0,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CheckboxListTile(
+                title: const Text('Ручной режим'),
+                value: _manualMode,
+                onChanged: (v) => _toggleManual(v ?? false),
+              ),
+              if (_manualMode)
+                Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _dirBtn(Icons.north_west, 7),
+                        _dirBtn(Icons.north, 0),
+                        _dirBtn(Icons.north_east, 1),
+                      ],
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _dirBtn(Icons.west, 6),
+                        _dirBtn(Icons.stop, -1),
+                        _dirBtn(Icons.east, 2),
+                      ],
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _dirBtn(Icons.south_west, 5),
+                        _dirBtn(Icons.south, 4),
+                        _dirBtn(Icons.south_east, 3),
+                      ],
+                    ),
+                    Slider(
+                      min: -255,
+                      max: 255,
+                      value: _manualSpeed,
+                      onChanged: (v) => _setSpeed(v),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
       ],
     ),
     floatingActionButton: Row(

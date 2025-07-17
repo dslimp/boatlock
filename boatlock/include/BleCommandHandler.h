@@ -4,16 +4,21 @@
 #include "AnchorControl.h"
 #include "PathControl.h"
 #include "StepperControl.h"
+#include "MotorControl.h"
 #include "Logger.h"
 #include "HMC5883Compass.h"
 
 extern AnchorControl anchor;
 extern PathControl pathControl;
 extern StepperControl stepperControl;
+extern MotorControl motor;
 extern Settings settings;
 extern HMC5883Compass compass;
 extern float emuHeading;
 extern bool compassReady;
+extern bool manualMode;
+extern int manualDir;
+extern int manualSpeed;
 void startCompassCalibration();
 
 inline void handleBleCommand(const std::string& cmd) {
@@ -67,6 +72,17 @@ inline void handleBleCommand(const std::string& cmd) {
         settings.set("StepAccel", v);
         settings.save();
         stepperControl.loadFromSettings();
+    } else if (cmd.rfind("MANUAL:",0) == 0) {
+        manualMode = atoi(cmd.c_str() + 7) != 0;
+        if (!manualMode) {
+            motor.stop();
+            manualSpeed = 0;
+            manualDir = -1;
+        }
+    } else if (cmd.rfind("MANUAL_DIR:",0) == 0) {
+        manualDir = atoi(cmd.c_str() + 11);
+    } else if (cmd.rfind("MANUAL_SPEED:",0) == 0) {
+        manualSpeed = atoi(cmd.c_str() + 12);
     } else {
         logMessage("[BLE] Unhandled command: %s\n", cmd.c_str());
     }
