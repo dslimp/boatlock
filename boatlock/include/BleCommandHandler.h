@@ -73,12 +73,15 @@ inline void handleBleCommand(const std::string& cmd) {
         settings.save();
         stepperControl.loadFromSettings();
     } else if (cmd.rfind("MANUAL:",0) == 0) {
-        manualMode = atoi(cmd.c_str() + 7) != 0;
-        if (!manualMode) {
+        bool newMode = atoi(cmd.c_str() + 7) != 0;
+        if (newMode) {
+            stepperControl.cancelMove();
+        } else {
             motor.stop();
             manualSpeed = 0;
             manualDir = -1;
         }
+        manualMode = newMode;
     } else if (cmd.rfind("MANUAL_DIR:",0) == 0) {
         manualDir = atoi(cmd.c_str() + 11);
     } else if (cmd.rfind("MANUAL_SPEED:",0) == 0) {
