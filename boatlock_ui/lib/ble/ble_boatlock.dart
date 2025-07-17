@@ -180,6 +180,27 @@ class BleBoatLock {
     }
   }
 
+  Future<void> setManualMode(bool manual) async {
+    if (_cmdChar != null) {
+      await _cmdChar!
+          .write(utf8.encode('MANUAL:${manual ? 1 : 0}'), withoutResponse: false);
+    }
+  }
+
+  Future<void> sendManualDirection(int dir) async {
+    if (_cmdChar != null) {
+      await _cmdChar!
+          .write(utf8.encode('MANUAL_DIR:$dir'), withoutResponse: false);
+    }
+  }
+
+  Future<void> sendManualSpeed(int speed) async {
+    if (_cmdChar != null) {
+      await _cmdChar!
+          .write(utf8.encode('MANUAL_SPEED:$speed'), withoutResponse: false);
+    }
+  }
+
   void dispose() {
     _connectionSub?.cancel();
     _reconnectTimer?.cancel();

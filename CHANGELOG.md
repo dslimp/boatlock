@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.4] - 2025-07-18
+### Added
+- Manual rudder and motor speed control via BLE commands and Flutter UI.
+
 ## [0.1.3] - 2025-07-18
 ### Added
 - Support for the HC 160A S2 motor controller with dual direction pins.

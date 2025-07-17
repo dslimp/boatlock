@@ -97,3 +97,11 @@ motor.setDirPins(MOTOR_DIR_PIN1, MOTOR_DIR_PIN2);
 Pin 1 should be HIGH and Pin 2 LOW for forward rotation. The logic is reversed
 for reverse rotation. Adjust the GPIO numbers if you wire the controller to
 different pins on the ESP32 board.
+
+## Manual Thruster Control
+
+The mobile app can directly control the rudder and motor speed.
+Enable **Ручной режим** on the main screen to override automatic modes.
+Use the arrow buttons to set the rudder direction in 45° steps and move the speed
+slider to drive the motor forward or reverse. See [docs/MANUAL_CONTROL.md](docs/MANUAL_CONTROL.md)
+for a short how-to.

@@ -74,6 +74,10 @@ float lastLat = 0, lastLon = 0;
 bool gpsFix = false;
 float emuHeading = 0;
 
+bool manualMode = false;
+int manualDir = -1;
+int manualSpeed = 0;
+
 void drawDebug(const String &msg, int y = 48) {
   display.clearDisplay();
   display.setTextSize(1);
@@ -226,7 +230,7 @@ void loop() {
   }
   stepperControl.run();
 
-  if (pathControl.active) {
+  if (!manualMode && pathControl.active) {
     if (gps.location.isValid()) {
       dist = pathControl.distanceToCurrent(gps);
       bearing = pathControl.bearingToCurrent(gps);
@@ -236,7 +240,7 @@ void loop() {
       dist = TinyGPSPlus::distanceBetween(lastLat, lastLon, wp.lat, wp.lon);
       bearing = TinyGPSPlus::courseTo(lastLat, lastLon, wp.lat, wp.lon);
     }
-  } else if (settings.get("AnchorEnabled") == 1) {
+  } else if (!manualMode && settings.get("AnchorEnabled") == 1) {
     if (gps.location.isValid()) {
       dist = anchor.distanceToAnchor(gps);
       if (settings.get("HoldHeading") == 1) {
@@ -255,19 +259,28 @@ void loop() {
   }
 
   float heading = settings.get("EmuCompass") ? emuHeading : (compassReady ? compass.getAzimuth() : 0.0f);
-  float diff = bearing - heading;
-  if (diff > 180) diff -= 360;
-  if (diff < -180) diff += 360;
-  if (!stepperControl.busy && fabs(diff) > 2.0f) {
-    stepperControl.moveToBearing(bearing, heading);
-  }
-
-  if (pathControl.active || settings.get("AnchorEnabled") == 1) {
-    motor.applyPID(dist);
-    holding = true;
-  } else {
-    motor.stop();
+  if (manualMode) {
+    if (manualDir >= 0 && !stepperControl.busy) {
+      float target = manualDir * 45.0f;
+      stepperControl.moveToBearing(target, heading);
+    }
+    motor.driveManual(manualSpeed);
     holding = false;
+  } else {
+    float diff = bearing - heading;
+    if (diff > 180) diff -= 360;
+    if (diff < -180) diff += 360;
+    if (!stepperControl.busy && fabs(diff) > 2.0f) {
+      stepperControl.moveToBearing(bearing, heading);
+    }
+
+    if (pathControl.active || settings.get("AnchorEnabled") == 1) {
+      motor.applyPID(dist);
+      holding = true;
+    } else {
+      motor.stop();
+      holding = false;
+    }
   }
 
     while (gpsSerial.available()) {
