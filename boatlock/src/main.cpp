@@ -70,7 +70,6 @@ const unsigned long drawInterval = 100;
 float dist = 0, bearing = 0;
 
 float lastLat = 0, lastLon = 0;
-float prevBearing = 0;
 bool gpsFix = false;
 float emuHeading = 0;
 
@@ -255,12 +254,11 @@ void loop() {
   }
 
   float heading = settings.get("EmuCompass") ? emuHeading : (compassReady ? compass.getAzimuth() : 0.0f);
-  float diff = bearing - prevBearing;
+  float diff = bearing - heading;
   if (diff > 180) diff -= 360;
   if (diff < -180) diff += 360;
   if (!stepperControl.busy && fabs(diff) > 2.0f) {
     stepperControl.moveToBearing(bearing, heading);
-    prevBearing = bearing;
   }
 
     while (gpsSerial.available()) {
