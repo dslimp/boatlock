@@ -262,6 +262,14 @@ void loop() {
     stepperControl.moveToBearing(bearing, heading);
   }
 
+  if (pathControl.active || settings.get("AnchorEnabled") == 1) {
+    motor.applyPID(dist);
+    holding = true;
+  } else {
+    motor.stop();
+    holding = false;
+  }
+
     while (gpsSerial.available()) {
       char c = gpsSerial.read();
       gps.encode(c);
