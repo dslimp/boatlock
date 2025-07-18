@@ -5,7 +5,8 @@ The firmware and Flutter app support steering and throttle control directly from
 ## Enabling Manual Mode
 1. Start the Flutter app and connect to the device via BLE.
 2. On the map screen, tap the **Ручной режим** button to toggle manual mode.
-3. While enabled, automatic path following and anchor holding are paused.
+3. When enabled, any automatic rudder movement is cancelled and automatic path
+   following or anchor holding are paused.
 
 ## Steering the Boat
 - Hold the **left** or **right** rotation buttons to turn the rudder.
