@@ -204,7 +204,11 @@ void loop() {
 
   stepperControl.run();
 
-  if (!manualMode && pathControl.active) {
+  bool gpsLocked = gps.location.isValid() || gpsFix;
+  bool anchorActive = settings.get("AnchorEnabled") == 1;
+  bool autopilotAllowed = gpsLocked && anchorActive;
+
+  if (!manualMode && autopilotAllowed && pathControl.active) {
     if (gps.location.isValid()) {
       dist = pathControl.distanceToCurrent(gps);
       bearing = pathControl.bearingToCurrent(gps);
@@ -214,7 +218,7 @@ void loop() {
       dist = TinyGPSPlus::distanceBetween(lastLat, lastLon, wp.lat, wp.lon);
       bearing = TinyGPSPlus::courseTo(lastLat, lastLon, wp.lat, wp.lon);
     }
-  } else if (!manualMode && settings.get("AnchorEnabled") == 1) {
+  } else if (!manualMode && autopilotAllowed && settings.get("AnchorEnabled") == 1) {
     if (gps.location.isValid()) {
       dist = anchor.distanceToAnchor(gps);
       if (settings.get("HoldHeading") == 1) {
@@ -243,7 +247,7 @@ void loop() {
     }
     motor.driveManual(manualSpeed);
     holding = false;
-  } else {
+  } else if (autopilotAllowed) {
     stepperControl.stopManual();
     float diff = bearing - heading;
     if (diff > 180) diff -= 360;
@@ -259,6 +263,10 @@ void loop() {
       motor.stop();
       holding = false;
     }
+  } else {
+    stepperControl.cancelMove();
+    motor.stop();
+    holding = false;
   }
 
     while (gpsSerial.available()) {

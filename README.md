@@ -105,3 +105,15 @@ Tap **Ручной режим** on the main screen to override automatic modes.
 Hold the left or right rotate buttons to steer and move the speed
 slider to drive the motor forward or reverse. See [docs/MANUAL_CONTROL.md](docs/MANUAL_CONTROL.md)
 for a short how-to.
+
+## Safety Interlocks
+
+The firmware will only power the rudder stepper and the main motor when one of
+the following conditions is met:
+
+1. **Manual mode** is enabled from the mobile app.
+2. A valid GPS fix is available **and** an anchor point has been set and
+   enabled.
+
+This prevents accidental activation of the propulsion system if the device has
+not yet acquired GPS coordinates or no anchor has been configured.
