@@ -62,7 +62,6 @@ void compassCalibTask(void*);
 
 #define BOOT_PIN 0
 
-bool anchorSet = false;
 bool holding = false;
 float targetAngle = 0;
 float encoderAngle = 0;
@@ -97,10 +96,6 @@ std::function<std::string()> makeFloatParam(F valueFunc, const char* fmt) {
     };
 }
 
-void adjustPosition(float bearing) {
-  targetAngle = bearing;
-}
-
 void calibrateCompassAndSave() {
   if (!compassReady) return;
   drawDebug("Calibrating compass");
@@ -127,16 +122,12 @@ void stepperTask(void*) {
   }
 }
 
-
 void setup() {
   Serial.begin(115200);
   logMessage("\n[BoatLock] ESP32 стартует! Версия прошивки: 0.1.2\n");
 
   Wire.begin(8, 9);
   compassReady = compass.init();
-  if (!compassReady) {
-    logMessage("[Compass] init failed\n");
-  }
 
   pinMode(BOOT_PIN, INPUT_PULLUP);
 
@@ -144,16 +135,12 @@ void setup() {
   gpsSerial.begin(9600, SERIAL_8N1, 17, 18);
 
   bleBoatLock.setCommandHandler(handleBleCommand);
-  // bleBoatLock.registerParam("lat",      makeFloatParam([&](){ return gps.location.lat(); }, "%.6f"));
-  // bleBoatLock.registerParam("lon",      makeFloatParam([&](){ return gps.location.lng(); }, "%.6f"));
   bleBoatLock.registerParam("lat", makeFloatParam([&](){
       return gps.location.isValid() ? gps.location.lat() : 0.0;
   }, "%.6f"));
-
   bleBoatLock.registerParam("lon", makeFloatParam([&](){
       return gps.location.isValid() ? gps.location.lng() : 0.0;
   }, "%.6f"));
-
   bleBoatLock.registerParam("heading",  makeFloatParam([&](){
       if (settings.get("EmuCompass")) return emuHeading;
       return compassReady ? (float)compass.getAzimuth() : 0.0f;
@@ -176,35 +163,21 @@ void setup() {
   }
   anchor.attachSettings(&settings);
   anchor.loadAnchor();
-  drawDebug("settings load");
-
   bleBoatLock.begin();
-
-  // Register the distance parameter after BLE init so it overrides the default
+  
   bleBoatLock.registerParam("distance", makeFloatParam([&](){ return dist; }, "%.2f"));
 
-  // encoderCalib.setSettings(&settings);    
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   motor.setupPWM(MOTOR_PWM_PIN, PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
   motor.setDirPins(MOTOR_DIR_PIN1, MOTOR_DIR_PIN2);
   motor.loadPIDfromSettings();
-  drawDebug("motor load");
-
-  // encoder.begin();
-  drawDebug("encoder begin");
-//   encoderCalib.loadOffset();
   stepperControl.attachSettings(&settings);
   stepperControl.loadFromSettings();
 
   xTaskCreatePinnedToCore(stepperTask, "stepper", 2048, nullptr, 1, &stepperTaskHandle, 1);
-
-  if(settings.get("AnchorEnabled") == 1) {
-    anchorSet = true;
-  }
 }
 
 void loop() {
-
   static bool lastButton = HIGH;
   bool nowButton = digitalRead(BOOT_PIN);
 
@@ -219,7 +192,7 @@ void loop() {
   if (lastButton == HIGH && nowButton == LOW) {
     if (gps.location.isValid() || gpsFix) {
       anchor.saveAnchor(lastLat, lastLon, settings.get("EmuCompass") ? emuHeading : (compassReady ? compass.getAzimuth() : 0.0f));
-      anchorSet = true;
+      settings.set("AnchorEnabled", 1);
       logMessage("Anchor point set!\n");
     }
   }
@@ -228,9 +201,14 @@ void loop() {
   if (compassReady) {
     compass.read();
   }
+
   stepperControl.run();
 
-  if (!manualMode && pathControl.active) {
+  bool gpsLocked = gps.location.isValid() || gpsFix;
+  bool anchorActive = settings.get("AnchorEnabled") == 1;
+  bool autopilotAllowed = gpsLocked && anchorActive;
+
+  if (!manualMode && autopilotAllowed && pathControl.active) {
     if (gps.location.isValid()) {
       dist = pathControl.distanceToCurrent(gps);
       bearing = pathControl.bearingToCurrent(gps);
@@ -240,7 +218,7 @@ void loop() {
       dist = TinyGPSPlus::distanceBetween(lastLat, lastLon, wp.lat, wp.lon);
       bearing = TinyGPSPlus::courseTo(lastLat, lastLon, wp.lat, wp.lon);
     }
-  } else if (!manualMode && settings.get("AnchorEnabled") == 1) {
+  } else if (!manualMode && autopilotAllowed && settings.get("AnchorEnabled") == 1) {
     if (gps.location.isValid()) {
       dist = anchor.distanceToAnchor(gps);
       if (settings.get("HoldHeading") == 1) {
@@ -269,7 +247,7 @@ void loop() {
     }
     motor.driveManual(manualSpeed);
     holding = false;
-  } else {
+  } else if (autopilotAllowed) {
     stepperControl.stopManual();
     float diff = bearing - heading;
     if (diff > 180) diff -= 360;
@@ -285,16 +263,15 @@ void loop() {
       motor.stop();
       holding = false;
     }
+  } else {
+    stepperControl.cancelMove();
+    motor.stop();
+    holding = false;
   }
 
     while (gpsSerial.available()) {
       char c = gpsSerial.read();
       gps.encode(c);
-    }
-    if (gps.location.isValid()) {
-      lastLat = gps.location.lat();
-      lastLon = gps.location.lng();
-      gpsFix = true;
     }
 
     static unsigned long lastNotify = 0;
@@ -312,5 +289,4 @@ void loop() {
             );
     }
   bleBoatLock.loop();
-  // stepperControl.moveToBearing(bearing, compass.getAzimuth());
 }
