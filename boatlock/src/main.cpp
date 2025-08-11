@@ -33,7 +33,6 @@ BLEBoatLock bleBoatLock;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 BoatDisplay boatDisplay(&display);
 
-#define BUTTON_PIN 0
 #define STEP_PIN 5
 #define DIR_PIN 4
 #define MOTOR_PWM_PIN 7
@@ -167,7 +166,7 @@ void setup() {
   
   bleBoatLock.registerParam("distance", makeFloatParam([&](){ return dist; }, "%.2f"));
 
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(BOOT_PIN, INPUT_PULLUP);
   motor.setupPWM(MOTOR_PWM_PIN, PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
   motor.setDirPins(MOTOR_DIR_PIN1, MOTOR_DIR_PIN2);
   motor.loadPIDfromSettings();
@@ -201,8 +200,6 @@ void loop() {
   if (compassReady) {
     compass.read();
   }
-
-  stepperControl.run();
 
   if (!manualMode && pathControl.active) {
     if (gps.location.isValid()) {

@@ -77,6 +77,7 @@ inline void handleBleCommand(const std::string& cmd) {
         if (newMode) {
             stepperControl.cancelMove();
         } else {
+            stepperControl.stopManual();
             motor.stop();
             manualSpeed = 0;
             manualDir = -1;
