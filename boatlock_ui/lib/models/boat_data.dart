@@ -7,6 +7,8 @@ class BoatData {
   final double heading;
   final int battery;
   final String status;
+  final String mode;
+  final int rssi;
   final bool holdHeading;
   final int emuCompass;
   final int routeIdx;
@@ -23,6 +25,8 @@ class BoatData {
     required this.heading,
     required this.battery,
     required this.status,
+    required this.mode,
+    required this.rssi,
     required this.holdHeading,
     required this.emuCompass,
     required this.routeIdx,
@@ -31,7 +35,7 @@ class BoatData {
     required this.stepAccel,
   });
 
-  factory BoatData.fromJson(Map<String, dynamic> json) {
+  factory BoatData.fromJson(Map<String, dynamic> json, {int rssi = 0}) {
     return BoatData(
       lat: double.tryParse(json['lat']?.toString() ?? '') ?? 0,
       lon: double.tryParse(json['lon']?.toString() ?? '') ?? 0,
@@ -41,6 +45,8 @@ class BoatData {
       heading: double.tryParse(json['heading']?.toString() ?? '') ?? 0,
       battery: int.tryParse(json['battery']?.toString() ?? '') ?? 0,
       status: json['status']?.toString() ?? '',
+      mode: json['mode']?.toString() ?? '',
+      rssi: rssi,
       holdHeading:
           int.tryParse(json['holdHeading']?.toString() ?? '') == 1,
       emuCompass: int.tryParse(json['emuCompass']?.toString() ?? '') ?? 0,

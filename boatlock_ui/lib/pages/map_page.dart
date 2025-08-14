@@ -81,6 +81,7 @@ class _MapPageState extends State<MapPage> {
     ble = BleBoatLock(onData: (data) {
       setState(() {
         boatData = data;
+        _manualMode = data?.mode == 'MANUAL';
         if (data != null && data.lat != 0 && data.lon != 0) {
           final p = LatLng(data.lat, data.lon);
           _addToHistory(p);
