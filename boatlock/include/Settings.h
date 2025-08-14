@@ -29,6 +29,7 @@ const SettingEntry defaultEntries[] = {
     {"USThresh",  "US threshold",       TYPE_FLOAT, 1.5,  1.5,   0.1,  6.0,    0.1, "m", false},
     {"GPS_TYPE",  "GPS model",          TYPE_INT,   0, 0, 0, 4, 1, "", false},
     {"IMU_TYPE",  "IMU model",          TYPE_INT,   1, 1, 0, 4, 1, "", false},
+    {"GpsFWin",   "GPS filter window",  TYPE_INT,   5,    5,     1,   20,    1, "", false},
     {"AnchorEnabled", "Enable anchor",     TYPE_INT,   0, 0, 0, 1, 1, "", false},
     {"AnchorLat",     "Anchor latitude",   TYPE_FLOAT, 0.0, 0.0, -90.0, 90.0,   0.000001, "", false},
     {"AnchorLon",     "Anchor longitude",  TYPE_FLOAT, 0.0, 0.0,-180.0, 180.0, 0.000001, "", false},
