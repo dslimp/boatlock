@@ -153,8 +153,8 @@ Widget build(BuildContext context) {
           ),
         ),
         IconButton(
-          icon: const Icon(Icons.route),
-          tooltip: 'Маршруты',
+          icon: const Icon(Icons.alt_route),
+          tooltip: 'Трек',
           onPressed: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => RoutePage(ble: ble)),
           ),

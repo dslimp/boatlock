@@ -201,6 +201,18 @@ class BleBoatLock {
     }
   }
 
+  Future<void> exportLog() async {
+    if (_cmdChar != null) {
+      await _cmdChar!.write(utf8.encode('EXPORT_LOG'), withoutResponse: false);
+    }
+  }
+
+  Future<void> clearLog() async {
+    if (_cmdChar != null) {
+      await _cmdChar!.write(utf8.encode('CLEAR_LOG'), withoutResponse: false);
+    }
+  }
+
   void dispose() {
     _connectionSub?.cancel();
     _reconnectTimer?.cancel();

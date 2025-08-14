@@ -9,6 +9,8 @@
 #include <math.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <SPI.h>
+#include <SD.h>
 
 #include "Settings.h"
 #include "Logger.h"
@@ -25,6 +27,10 @@ constexpr size_t EEPROM_SIZE = Settings::EEPROM_ADDR + sizeof(float) * count + s
 
 #include "BLEBoatLock.h"
 BLEBoatLock bleBoatLock;
+
+File routeLog;
+const char* ROUTE_LOG_PATH = "/route.csv";
+bool sdReady = false;
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
@@ -163,6 +169,11 @@ void setup() {
   anchor.attachSettings(&settings);
   anchor.loadAnchor();
   bleBoatLock.begin();
+
+  sdReady = SD.begin();
+  if (sdReady) {
+    routeLog = SD.open(ROUTE_LOG_PATH, FILE_APPEND);
+  }
   
   bleBoatLock.registerParam("distance", makeFloatParam([&](){ return dist; }, "%.2f"));
 
@@ -186,6 +197,20 @@ void loop() {
     lastLat = lat;
     lastLon = lon;
     gpsFix = true;
+  }
+
+  if (sdReady && gps.location.isUpdated() && gps.location.isValid()) {
+    if (routeLog) {
+      if (gps.date.isValid() && gps.time.isValid()) {
+        routeLog.printf("%04d-%02d-%02dT%02d:%02d:%02d,%.6f,%.6f\n",
+            gps.date.year(), gps.date.month(), gps.date.day(),
+            gps.time.hour(), gps.time.minute(), gps.time.second(),
+            gps.location.lat(), gps.location.lng());
+      } else {
+        routeLog.printf("%lu,%.6f,%.6f\n", millis(), gps.location.lat(), gps.location.lng());
+      }
+      routeLog.flush();
+    }
   }
 
   if (lastButton == HIGH && nowButton == LOW) {
@@ -278,4 +303,29 @@ void loop() {
             );
     }
   bleBoatLock.loop();
+}
+
+void exportRouteLog() {
+  if (!sdReady) return;
+  routeLog.flush();
+  routeLog.close();
+  File f = SD.open(ROUTE_LOG_PATH, FILE_READ);
+  if (!f) return;
+  while (f.available()) {
+    String line = f.readStringUntil('\n');
+    if (line.length() > 0) {
+      String out = String("ROUTE:") + line;
+      bleBoatLock.sendLog(out.c_str());
+      delay(5);
+    }
+  }
+  f.close();
+  routeLog = SD.open(ROUTE_LOG_PATH, FILE_APPEND);
+}
+
+void clearRouteLog() {
+  if (!sdReady) return;
+  routeLog.close();
+  SD.remove(ROUTE_LOG_PATH);
+  routeLog = SD.open(ROUTE_LOG_PATH, FILE_APPEND);
 }
