@@ -105,3 +105,7 @@ Tap **Ручной режим** on the main screen to override automatic modes.
 Hold the left or right rotate buttons to steer and move the speed
 slider to drive the motor forward or reverse. See [docs/MANUAL_CONTROL.md](docs/MANUAL_CONTROL.md)
 for a short how-to.
+
+## License
+
+This project is licensed under the terms of the [MIT License](LICENSE).
