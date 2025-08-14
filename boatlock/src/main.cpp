@@ -172,8 +172,14 @@ void setup() {
   anchor.attachSettings(&settings);
   anchor.loadAnchor();
   bleBoatLock.begin();
-  
+
   bleBoatLock.registerParam("distance", makeFloatParam([&](){ return dist; }, "%.2f"));
+  bleBoatLock.registerParam("mode", [ & ](){
+      if (manualMode) return std::string("MANUAL");
+      if (pathControl.active) return std::string("ROUTE");
+      if (settings.get("AnchorEnabled") == 1) return std::string("ANCHOR");
+      return std::string("IDLE");
+  });
 
   pinMode(BOOT_PIN, INPUT_PULLUP);
   motor.setupPWM(MOTOR_PWM_PIN, PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
@@ -291,6 +297,23 @@ void loop() {
     static unsigned long lastNotify = 0;
     unsigned long now = millis();
     if (now - lastNotify > 1000) {
+        std::string modeStr;
+        if (manualMode) modeStr = "MANUAL";
+        else if (pathControl.active) modeStr = "ROUTE";
+        else if (settings.get("AnchorEnabled") == 1) modeStr = "ANCHOR";
+        else modeStr = "IDLE";
+
+        std::string errStr;
+        if (!gps.location.isValid() && !gpsFix) errStr = "NO_GPS";
+        if (!compassReady) {
+            if (!errStr.empty()) errStr += ",";
+            errStr += "NO_COMPASS";
+        }
+        std::string bleStr = bleBoatLock.statusString();
+        std::string status = bleStr + ":" + modeStr;
+        if (!errStr.empty()) status += ":" + errStr;
+        bleBoatLock.setStatus(status);
+
         bleBoatLock.notifyAll();
         lastNotify = now;
 
