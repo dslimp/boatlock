@@ -2,6 +2,45 @@
 
 This repository contains firmware for an ESP32-S3 based lock and a Flutter application used to control it.
 
+## Device Functions
+
+Boatlock combines the ESP32-S3 firmware with a companion mobile app to automate
+anchoring and thruster control. Major capabilities include:
+
+- saving the current location as an anchor point with heading
+- automatically holding position or following an uploaded route
+- manual rudder and motor control from the app
+- compass calibration and heading emulation
+
+The app and firmware communicate through a simple text protocol; see
+[docs/BLE_PROTOCOL.md](docs/BLE_PROTOCOL.md) for the full command list.
+
+## Photos
+
+![Boatlock device](https://via.placeholder.com/400x300?text=Boatlock+device)
+
+*Replace the placeholder above with a photo of the assembled hardware.*
+
+## Connection Diagram
+
+![Connection diagram](https://via.placeholder.com/600x400?text=Wiring+diagram)
+
+*Replace the placeholder above with the actual wiring diagram.*
+
+## Typical Scenarios
+
+### Anchoring
+1. Position the boat and select **Set Anchor** in the app.
+2. The firmware stores the coordinates and current heading.
+
+### Holding Position
+1. Enable heading hold in the app.
+2. The rudder and thruster adjust automatically to keep the boat near the saved point.
+
+### Return to Point
+1. Upload a route containing the desired waypoint and start it.
+2. The boat navigates back to the specified location.
+
 ## Building the Firmware
 
 The `boatlock` directory is a [PlatformIO](https://platformio.org/) project.
