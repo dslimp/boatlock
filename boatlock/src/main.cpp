@@ -78,6 +78,14 @@ float lastLat = 0, lastLon = 0;
 bool gpsFix = false;
 float emuHeading = 0;
 
+const int MAX_GPS_FILTER = 20;
+float latBuf[MAX_GPS_FILTER];
+float lonBuf[MAX_GPS_FILTER];
+int gpsBufCount = 0;
+int gpsBufIndex = 0;
+int gpsWindow = 5;
+float gpsLatSum = 0, gpsLonSum = 0;
+
 bool manualMode = false;
 int manualDir = -1;
 int manualSpeed = 0;
@@ -141,10 +149,10 @@ void setup() {
 
   bleBoatLock.setCommandHandler(handleBleCommand);
   bleBoatLock.registerParam("lat", makeFloatParam([&](){
-      return gps.location.isValid() ? gps.location.lat() : 0.0;
+      return gpsFix ? lastLat : 0.0f;
   }, "%.6f"));
   bleBoatLock.registerParam("lon", makeFloatParam([&](){
-      return gps.location.isValid() ? gps.location.lng() : 0.0;
+      return gpsFix ? lastLon : 0.0f;
   }, "%.6f"));
   bleBoatLock.registerParam("heading",  makeFloatParam([&](){
       if (settings.get("EmuCompass")) return emuHeading;
@@ -162,6 +170,7 @@ void setup() {
 
   EEPROM.begin(EEPROM_SIZE);
   settings.load();
+  gpsWindow = (int)settings.get("GpsFWin");
   compass.attachSettings(&settings);
   if (compassReady) {
     compass.loadCalibrationFromSettings();
@@ -174,8 +183,14 @@ void setup() {
   if (sdReady) {
     routeLog = SD.open(ROUTE_LOG_PATH, FILE_APPEND);
   }
-  
+
   bleBoatLock.registerParam("distance", makeFloatParam([&](){ return dist; }, "%.2f"));
+  bleBoatLock.registerParam("mode", [ & ](){
+      if (manualMode) return std::string("MANUAL");
+      if (pathControl.active) return std::string("ROUTE");
+      if (settings.get("AnchorEnabled") == 1) return std::string("ANCHOR");
+      return std::string("IDLE");
+  });
 
   pinMode(BOOT_PIN, INPUT_PULLUP);
   motor.setupPWM(MOTOR_PWM_PIN, PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
@@ -194,8 +209,33 @@ void loop() {
   float lat = gps.location.lat();
   float lon = gps.location.lng();
   if (gps.location.isValid()) {
-    lastLat = lat;
-    lastLon = lon;
+    int window = (int)settings.get("GpsFWin");
+    if (window < 1) window = 1;
+    if (window > MAX_GPS_FILTER) window = MAX_GPS_FILTER;
+    if (window != gpsWindow) {
+      gpsWindow = window;
+      gpsBufCount = 0;
+      gpsBufIndex = 0;
+      gpsLatSum = 0;
+      gpsLonSum = 0;
+    }
+    if (gpsBufCount < gpsWindow) {
+      latBuf[gpsBufIndex] = lat;
+      lonBuf[gpsBufIndex] = lon;
+      gpsLatSum += lat;
+      gpsLonSum += lon;
+      gpsBufCount++;
+    } else {
+      gpsLatSum -= latBuf[gpsBufIndex];
+      gpsLonSum -= lonBuf[gpsBufIndex];
+      latBuf[gpsBufIndex] = lat;
+      lonBuf[gpsBufIndex] = lon;
+      gpsLatSum += lat;
+      gpsLonSum += lon;
+    }
+    gpsBufIndex = (gpsBufIndex + 1) % gpsWindow;
+    lastLat = gpsLatSum / gpsBufCount;
+    lastLon = gpsLonSum / gpsBufCount;
     gpsFix = true;
   }
 
@@ -226,31 +266,22 @@ void loop() {
     compass.read();
   }
 
-  if (!manualMode && pathControl.active) {
-    if (gps.location.isValid()) {
-      dist = pathControl.distanceToCurrent(gps);
-      bearing = pathControl.bearingToCurrent(gps);
-      pathControl.update(gps, settings.get("DistTh"));
-    } else if (gpsFix && pathControl.currentIndex < pathControl.numPoints) {
-      const Waypoint &wp = pathControl.points[pathControl.currentIndex];
-      dist = TinyGPSPlus::distanceBetween(lastLat, lastLon, wp.lat, wp.lon);
-      bearing = TinyGPSPlus::courseTo(lastLat, lastLon, wp.lat, wp.lon);
+  if (!manualMode && pathControl.active && gpsFix && pathControl.currentIndex < pathControl.numPoints) {
+    const Waypoint &wp = pathControl.points[pathControl.currentIndex];
+    dist = TinyGPSPlus::distanceBetween(lastLat, lastLon, wp.lat, wp.lon);
+    bearing = TinyGPSPlus::courseTo(lastLat, lastLon, wp.lat, wp.lon);
+    if (dist < settings.get("DistTh")) {
+      pathControl.currentIndex++;
+      if (pathControl.currentIndex >= pathControl.numPoints) {
+        pathControl.active = false;
+      }
     }
-  } else if (!manualMode && settings.get("AnchorEnabled") == 1) {
-    if (gps.location.isValid()) {
-      dist = anchor.distanceToAnchor(gps);
-      if (settings.get("HoldHeading") == 1) {
-        bearing = anchor.anchorHeading;
-      } else {
-        bearing = anchor.bearingToAnchor(gps);
-      }
-    } else if (gpsFix) {
-      dist = TinyGPSPlus::distanceBetween(lastLat, lastLon, anchor.anchorLat, anchor.anchorLon);
-      if (settings.get("HoldHeading") == 1) {
-        bearing = anchor.anchorHeading;
-      } else {
-        bearing = TinyGPSPlus::courseTo(lastLat, lastLon, anchor.anchorLat, anchor.anchorLon);
-      }
+  } else if (!manualMode && settings.get("AnchorEnabled") == 1 && gpsFix) {
+    dist = TinyGPSPlus::distanceBetween(lastLat, lastLon, anchor.anchorLat, anchor.anchorLon);
+    if (settings.get("HoldHeading") == 1) {
+      bearing = anchor.anchorHeading;
+    } else {
+      bearing = TinyGPSPlus::courseTo(lastLat, lastLon, anchor.anchorLat, anchor.anchorLon);
     }
   }
 
@@ -291,6 +322,23 @@ void loop() {
     static unsigned long lastNotify = 0;
     unsigned long now = millis();
     if (now - lastNotify > 1000) {
+        std::string modeStr;
+        if (manualMode) modeStr = "MANUAL";
+        else if (pathControl.active) modeStr = "ROUTE";
+        else if (settings.get("AnchorEnabled") == 1) modeStr = "ANCHOR";
+        else modeStr = "IDLE";
+
+        std::string errStr;
+        if (!gps.location.isValid() && !gpsFix) errStr = "NO_GPS";
+        if (!compassReady) {
+            if (!errStr.empty()) errStr += ",";
+            errStr += "NO_COMPASS";
+        }
+        std::string bleStr = bleBoatLock.statusString();
+        std::string status = bleStr + ":" + modeStr;
+        if (!errStr.empty()) status += ":" + errStr;
+        bleBoatLock.setStatus(status);
+
         bleBoatLock.notifyAll();
         lastNotify = now;
 

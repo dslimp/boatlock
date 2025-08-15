@@ -14,6 +14,7 @@ class BleBoatLock {
   final BoatDataCallback onData;
   final LogCallback? onLog;
   BoatData? _lastData;
+  int _lastRssi = 0;
 
   BoatData? get currentData => _lastData;
 
@@ -138,12 +139,15 @@ class BleBoatLock {
     }
   }
 
-  void _onNotify(List<int> value) {
+  void _onNotify(List<int> value) async {
     final jsonString = utf8.decode(value);
     if (jsonString.trim().isEmpty) return;
     try {
       final data = jsonDecode(jsonString);
-      _lastData = BoatData.fromJson(data);
+      try {
+        _lastRssi = await _device?.readRssi() ?? _lastRssi;
+      } catch (_) {}
+      _lastData = BoatData.fromJson(data, rssi: _lastRssi);
       onData(_lastData);
     } catch (_) {
       // ignore parse errors for noise
