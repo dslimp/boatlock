@@ -178,7 +178,7 @@ void setup() {
   anchor.attachSettings(&settings);
   anchor.loadAnchor();
   bleBoatLock.begin();
-
+ 
   sdReady = SD.begin();
   if (sdReady) {
     routeLog = SD.open(ROUTE_LOG_PATH, FILE_APPEND);
