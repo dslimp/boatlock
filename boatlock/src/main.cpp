@@ -94,7 +94,7 @@ void drawDebug(const String &msg, int y = 48) {
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0,  48);
+  display.setCursor(0,  y);
   display.print("[D]");
   display.print(msg);
   display.display();
@@ -206,9 +206,13 @@ void loop() {
   static bool lastButton = HIGH;
   bool nowButton = digitalRead(BOOT_PIN);
 
+  while (gpsSerial.available()) {
+    gps.encode(gpsSerial.read());
+  }
+
   float lat = gps.location.lat();
   float lon = gps.location.lng();
-  if (gps.location.isValid()) {
+  if (gps.location.isValid() && gps.location.age() < 2000) {
     int window = (int)settings.get("GpsFWin");
     if (window < 1) window = 1;
     if (window > MAX_GPS_FILTER) window = MAX_GPS_FILTER;
@@ -237,6 +241,8 @@ void loop() {
     lastLat = gpsLatSum / gpsBufCount;
     lastLon = gpsLonSum / gpsBufCount;
     gpsFix = true;
+  } else {
+    gpsFix = false;
   }
 
   if (sdReady && gps.location.isUpdated() && gps.location.isValid()) {
@@ -314,42 +320,37 @@ void loop() {
     }
   }
 
-    while (gpsSerial.available()) {
-      char c = gpsSerial.read();
-      gps.encode(c);
-    }
+  static unsigned long lastNotify = 0;
+  unsigned long now = millis();
+  if (now - lastNotify > 1000) {
+      std::string modeStr;
+      if (manualMode) modeStr = "MANUAL";
+      else if (pathControl.active) modeStr = "ROUTE";
+      else if (settings.get("AnchorEnabled") == 1) modeStr = "ANCHOR";
+      else modeStr = "IDLE";
 
-    static unsigned long lastNotify = 0;
-    unsigned long now = millis();
-    if (now - lastNotify > 1000) {
-        std::string modeStr;
-        if (manualMode) modeStr = "MANUAL";
-        else if (pathControl.active) modeStr = "ROUTE";
-        else if (settings.get("AnchorEnabled") == 1) modeStr = "ANCHOR";
-        else modeStr = "IDLE";
+      std::string errStr;
+      if (!gps.location.isValid() && !gpsFix) errStr = "NO_GPS";
+      if (!compassReady) {
+          if (!errStr.empty()) errStr += ",";
+          errStr += "NO_COMPASS";
+      }
+      std::string bleStr = bleBoatLock.statusString();
+      std::string status = bleStr + ":" + modeStr;
+      if (!errStr.empty()) status += ":" + errStr;
+      bleBoatLock.setStatus(status);
 
-        std::string errStr;
-        if (!gps.location.isValid() && !gpsFix) errStr = "NO_GPS";
-        if (!compassReady) {
-            if (!errStr.empty()) errStr += ",";
-            errStr += "NO_COMPASS";
-        }
-        std::string bleStr = bleBoatLock.statusString();
-        std::string status = bleStr + ":" + modeStr;
-        if (!errStr.empty()) status += ":" + errStr;
-        bleBoatLock.setStatus(status);
+      bleBoatLock.notifyAll();
+      lastNotify = now;
 
-        bleBoatLock.notifyAll();
-        lastNotify = now;
-
-        boatDisplay.showStatus(
-                gps,
-                anchor.anchorLat, anchor.anchorLon, settings.get("AnchorEnabled"),
-                dist, bearing,
-                settings.get("EmuCompass") ? emuHeading : (compassReady ? compass.getAzimuth() : 0.0f),
-                holding
-            );
-    }
+      boatDisplay.showStatus(
+              gps,
+              anchor.anchorLat, anchor.anchorLon, settings.get("AnchorEnabled"),
+              dist, bearing,
+              settings.get("EmuCompass") ? emuHeading : (compassReady ? compass.getAzimuth() : 0.0f),
+              holding
+          );
+  }
   bleBoatLock.loop();
 }
 
