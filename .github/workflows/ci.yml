@@ -1,55 +1,56 @@
+---
 name: CI
 
-on:
+'on':
   push:
     branches: [main]
   pull_request:
 
-    jobs:
-      platformio:
-        runs-on: ubuntu-latest
-        steps:
-          - uses: actions/checkout@v3
-          - uses: actions/setup-python@v4
-            with:
-              python-version: '3.x'
-          - name: Install PlatformIO
-            run: pip install platformio
-          - name: Build firmware
-            working-directory: boatlock
-            run: platformio run
-          - name: Check format
-            working-directory: boatlock
-            run: |
-              clang-format --version
-              find test -name '*.cpp' | xargs clang-format --dry-run --Werror
-          - name: Run unit tests
-            working-directory: boatlock
-            run: platformio test -e native
-          - name: Lint
-            working-directory: boatlock
-            run: platformio check -e native
+jobs:
+  platformio:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Install PlatformIO
+        run: pip install platformio
+      - name: Build firmware
+        working-directory: boatlock
+        run: platformio run
+      - name: Check format
+        working-directory: boatlock
+        run: |
+          clang-format --version
+          find test -name '*.cpp' | xargs clang-format --dry-run --Werror
+      - name: Run unit tests
+        working-directory: boatlock
+        run: platformio test -e native
+      - name: Lint
+        working-directory: boatlock
+        run: platformio check -e native
 
-      flutter:
-        runs-on: ubuntu-latest
-        steps:
-          - uses: actions/checkout@v3
-          - uses: subosito/flutter-action@v2
-            with:
-              flutter-version: '3.32.4'
-              channel: 'stable'
-          - name: Install dependencies
-            working-directory: boatlock_ui
-            run: flutter pub get
-          - name: Format
-            working-directory: boatlock_ui
-            run: dart format --output=none --set-exit-if-changed lib test
-          - name: Analyze
-            working-directory: boatlock_ui
-            run: flutter analyze
-          - name: Build web
-            working-directory: boatlock_ui
-            run: flutter build web
-          - name: Test
-            working-directory: boatlock_ui
-            run: flutter test
+  flutter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.4'
+          channel: 'stable'
+      - name: Install dependencies
+        working-directory: boatlock_ui
+        run: flutter pub get
+      - name: Format
+        working-directory: boatlock_ui
+        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Analyze
+        working-directory: boatlock_ui
+        run: flutter analyze
+      - name: Build web
+        working-directory: boatlock_ui
+        run: flutter build web
+      - name: Test
+        working-directory: boatlock_ui
+        run: flutter test
