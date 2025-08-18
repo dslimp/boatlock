@@ -259,6 +259,8 @@ void loop() {
     }
   }
 
+  unsigned long now = millis();
+
   if (lastButton == HIGH && nowButton == LOW) {
     if (gps.location.isValid() || gpsFix) {
       anchor.saveAnchor(lastLat, lastLon, settings.get("EmuCompass") ? emuHeading : (compassReady ? compass.getAzimuth() : 0.0f));
@@ -304,11 +306,18 @@ void loop() {
     holding = false;
   } else {
     stepperControl.stopManual();
-    float diff = bearing - heading;
-    if (diff > 180) diff -= 360;
-    if (diff < -180) diff += 360;
-    if (!stepperControl.busy && fabs(diff) > 2.0f) {
-      stepperControl.moveToBearing(bearing, heading);
+    if (gpsFix) {
+      float diff = bearing - heading;
+      if (diff > 180) diff -= 360;
+      if (diff < -180) diff += 360;
+      static unsigned long lastStepCheck = 0;
+      const unsigned long stepInterval = 3000;
+      if (!stepperControl.busy && fabs(diff) > 2.0f && now - lastStepCheck > stepInterval) {
+        stepperControl.moveToBearing(bearing, heading);
+        lastStepCheck = now;
+      }
+    } else {
+      stepperControl.cancelMove();
     }
 
     if (pathControl.active || settings.get("AnchorEnabled") == 1) {
@@ -321,7 +330,6 @@ void loop() {
   }
 
   static unsigned long lastNotify = 0;
-  unsigned long now = millis();
   if (now - lastNotify > 1000) {
       std::string modeStr;
       if (manualMode) modeStr = "MANUAL";
