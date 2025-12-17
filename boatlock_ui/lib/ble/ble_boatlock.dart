@@ -160,9 +160,12 @@ class BleBoatLock {
     onLog?.call(line);
   }
 
-  Future<void> setAnchor() async {
-    if (_cmdChar != null) {
-      await _cmdChar!.write(utf8.encode("SET_ANCHOR"), withoutResponse: false);
+  Future<void> setAnchor({double? lat, double? lon}) async {
+    final a = lat ?? _lastData?.lat;
+    final o = lon ?? _lastData?.lon;
+    if (_cmdChar != null && a != null && o != null) {
+      final cmd = 'SET_ANCHOR:$a,$o';
+      await _cmdChar!.write(utf8.encode(cmd), withoutResponse: false);
     }
   }
 

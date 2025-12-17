@@ -430,7 +430,12 @@ Widget build(BuildContext context) {
           heroTag: 'set_anchor',
           child: Icon(Icons.anchor),
           tooltip: "Установить якорь",
-          onPressed: boatData == null ? null : () => ble.setAnchor(),
+          onPressed: boatData == null
+              ? null
+              : () => ble.setAnchor(
+                  lat: boatData!.lat,
+                  lon: boatData!.lon,
+                ),
           backgroundColor:
               boatData == null ? Colors.grey : Colors.red[400],
         ),
