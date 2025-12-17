@@ -54,14 +54,33 @@ public:
     }
 
     void savePIDtoSettings(bool force = false) {
-        // Сохраняем только если значения реально поменялись, либо по таймеру (force=true)
+        // Сохраняем только если значения реально поменялись и прошло достаточно времени
         static float lastKp = -1, lastKi = -1, lastKd = -1;
-        if (force || fabs(Kp - lastKp) > 0.0005 || fabs(Ki - lastKi) > 0.0001 || fabs(Kd - lastKd) > 0.0005) {
+        static bool initialized = false;
+        unsigned long now = millis();
+
+        if (!initialized) {
+            lastKp = Kp;
+            lastKi = Ki;
+            lastKd = Kd;
+            lastSaveTime = now;
+            initialized = true;
+        }
+
+        bool changed =
+            fabs(Kp - lastKp) > 0.0005 ||
+            fabs(Ki - lastKi) > 0.0001 ||
+            fabs(Kd - lastKd) > 0.0005;
+
+        bool shouldPersist = changed && (force || (now - lastSaveTime >= saveInterval));
+
+        if (shouldPersist) {
             settings.set("Kp", Kp);
             settings.set("Ki", Ki);
             settings.set("Kd", Kd);
             settings.save();
             lastKp = Kp; lastKi = Ki; lastKd = Kd;
+            lastSaveTime = now;
         }
     }
 
@@ -97,13 +116,8 @@ public:
         if (fabs(integral) > 50.0)  Ki = min(Ki + dKi, 0.2f);
         else                        Ki = max(Ki - dKi, 0.0f);
 
-        // Автосохранение коэффициентов раз в saveInterval или при сильном изменении
-        if (millis() - lastSaveTime > saveInterval) {
-            savePIDtoSettings(true);
-            lastSaveTime = millis();
-        } else {
-            savePIDtoSettings();
-        }
+        // Автосохранение коэффициентов раз в saveInterval, даже при частых изменениях
+        savePIDtoSettings(millis() - lastSaveTime > saveInterval);
 
         // Управление мотором
         int pwmValue = constrain((int)fabs(output), 0, 255);
