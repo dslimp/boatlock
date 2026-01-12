@@ -12,6 +12,7 @@
 #include <SPI.h>
 #include <SD.h>
 
+#include "HardwareConfig.h"
 #include "Settings.h"
 #include "Logger.h"
 Settings settings;
@@ -31,6 +32,10 @@ BLEBoatLock bleBoatLock;
 File routeLog;
 const char* ROUTE_LOG_PATH = "/route.csv";
 bool sdReady = false;
+
+#if BOATLOCK_ENABLE_CAMERA
+#include <esp_camera.h>
+#endif
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
@@ -90,7 +95,20 @@ bool manualMode = false;
 int manualDir = -1;
 int manualSpeed = 0;
 
+struct HardwareStatus {
+  bool displayReady = false;
+  bool cameraReady = false;
+  bool imuReady = false;
+  bool sdReady = false;
+};
+
+HardwareStatus hardwareStatus;
+
 void drawDebug(const String &msg, int y = 48) {
+  if (!hardwareStatus.displayReady) {
+    logMessage("[D]%s\n", msg.c_str());
+    return;
+  }
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
@@ -128,6 +146,53 @@ void startCompassCalibration() {
   }
 }
 
+#if BOATLOCK_ENABLE_IMU
+bool probeImu() {
+  Wire.beginTransmission(BOATLOCK_IMU_ADDR_PRIMARY);
+  if (Wire.endTransmission() == 0) {
+    return true;
+  }
+  Wire.beginTransmission(BOATLOCK_IMU_ADDR_SECONDARY);
+  return Wire.endTransmission() == 0;
+}
+#endif
+
+#if BOATLOCK_ENABLE_CAMERA
+bool initCamera() {
+  camera_config_t config = {};
+  config.ledc_channel = LEDC_CHANNEL_0;
+  config.ledc_timer = LEDC_TIMER_0;
+  config.pin_d0 = BOATLOCK_CAM_Y2_PIN;
+  config.pin_d1 = BOATLOCK_CAM_Y3_PIN;
+  config.pin_d2 = BOATLOCK_CAM_Y4_PIN;
+  config.pin_d3 = BOATLOCK_CAM_Y5_PIN;
+  config.pin_d4 = BOATLOCK_CAM_Y6_PIN;
+  config.pin_d5 = BOATLOCK_CAM_Y7_PIN;
+  config.pin_d6 = BOATLOCK_CAM_Y8_PIN;
+  config.pin_d7 = BOATLOCK_CAM_Y9_PIN;
+  config.pin_xclk = BOATLOCK_CAM_XCLK_PIN;
+  config.pin_pclk = BOATLOCK_CAM_PCLK_PIN;
+  config.pin_vsync = BOATLOCK_CAM_VSYNC_PIN;
+  config.pin_href = BOATLOCK_CAM_HREF_PIN;
+  config.pin_sscb_sda = BOATLOCK_CAM_SIOD_PIN;
+  config.pin_sscb_scl = BOATLOCK_CAM_SIOC_PIN;
+  config.pin_pwdn = BOATLOCK_CAM_PWDN_PIN;
+  config.pin_reset = BOATLOCK_CAM_RESET_PIN;
+  config.xclk_freq_hz = 20000000;
+  config.pixel_format = PIXFORMAT_RGB565;
+  config.frame_size = FRAMESIZE_QVGA;
+  config.jpeg_quality = 12;
+  config.fb_count = 1;
+
+  esp_err_t err = esp_camera_init(&config);
+  if (err != ESP_OK) {
+    logMessage("Camera init failed: %d\n", err);
+    return false;
+  }
+  return true;
+}
+#endif
+
 void stepperTask(void*) {
   for(;;) {
     stepperControl.run();
@@ -144,7 +209,10 @@ void setup() {
 
   pinMode(BOOT_PIN, INPUT_PULLUP);
 
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  hardwareStatus.displayReady = display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  if (!hardwareStatus.displayReady) {
+    logMessage("Display init failed\n");
+  }
   gpsSerial.begin(9600, SERIAL_8N1, 17, 18);
 
   bleBoatLock.setCommandHandler(handleBleCommand);
@@ -180,9 +248,23 @@ void setup() {
   bleBoatLock.begin();
  
   sdReady = SD.begin();
-  if (sdReady) {
+  hardwareStatus.sdReady = sdReady;
+  if (hardwareStatus.sdReady) {
     routeLog = SD.open(ROUTE_LOG_PATH, FILE_APPEND);
   }
+
+#if BOATLOCK_ENABLE_IMU
+  hardwareStatus.imuReady = probeImu();
+  if (!hardwareStatus.imuReady) {
+    logMessage("IMU not detected on I2C\n");
+  }
+#else
+  hardwareStatus.imuReady = true;
+#endif
+
+#if BOATLOCK_ENABLE_CAMERA
+  hardwareStatus.cameraReady = initCamera();
+#endif
 
   bleBoatLock.registerParam("distance", makeFloatParam([&](){ return dist; }, "%.2f"));
   bleBoatLock.registerParam("mode", [ & ](){
@@ -343,6 +425,22 @@ void loop() {
           if (!errStr.empty()) errStr += ",";
           errStr += "NO_COMPASS";
       }
+#if BOATLOCK_ENABLE_IMU
+      if (!hardwareStatus.imuReady) {
+          if (!errStr.empty()) errStr += ",";
+          errStr += "NO_IMU";
+      }
+#endif
+      if (!hardwareStatus.displayReady) {
+          if (!errStr.empty()) errStr += ",";
+          errStr += "NO_DISPLAY";
+      }
+#if BOATLOCK_ENABLE_CAMERA
+      if (!hardwareStatus.cameraReady) {
+          if (!errStr.empty()) errStr += ",";
+          errStr += "NO_CAMERA";
+      }
+#endif
       std::string bleStr = bleBoatLock.statusString();
       std::string status = bleStr + ":" + modeStr;
       if (!errStr.empty()) status += ":" + errStr;
@@ -351,13 +449,15 @@ void loop() {
       bleBoatLock.notifyAll();
       lastNotify = now;
 
-      boatDisplay.showStatus(
-              gps,
-              anchor.anchorLat, anchor.anchorLon, settings.get("AnchorEnabled"),
-              dist, bearing,
-              settings.get("EmuCompass") ? emuHeading : (compassReady ? compass.getAzimuth() : 0.0f),
-              holding
-          );
+      if (hardwareStatus.displayReady) {
+        boatDisplay.showStatus(
+                gps,
+                anchor.anchorLat, anchor.anchorLon, settings.get("AnchorEnabled"),
+                dist, bearing,
+                settings.get("EmuCompass") ? emuHeading : (compassReady ? compass.getAzimuth() : 0.0f),
+                holding
+            );
+      }
   }
   bleBoatLock.loop();
 }
