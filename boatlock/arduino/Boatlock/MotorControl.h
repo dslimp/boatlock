@@ -27,8 +27,7 @@ public:
 
     void setupPWM(int pin, int channel, int freq, int res) {
         pwmChannel = channel;
-        ledcSetup(channel, freq, res);
-        ledcAttachPin(pin, channel);
+        ledcAttach(pin, freq, res);
         ledcWrite(channel, 0);
     }
 
