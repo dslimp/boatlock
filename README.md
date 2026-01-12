@@ -41,22 +41,28 @@ The app and firmware communicate through a simple text protocol; see
 1. Upload a route containing the desired waypoint and start it.
 2. The boat navigates back to the specified location.
 
-## Building the Firmware
+## Building the Firmware (Arduino IDE)
 
-The `boatlock` directory is a [PlatformIO](https://platformio.org/) project.
+The firmware is now intended to be built with the Arduino IDE.
 
 ### Requirements
-- PlatformIO CLI (or the PlatformIO extension for VS Code)
-- Python (installed automatically with PlatformIO)
+- Arduino IDE 2.x
+- ESP32 board support package (Espressif Systems)
 - An ESP32‑S3 development board
 
 ### Build and Upload
-```bash
-cd boatlock
-platformio run              # build the firmware
-platformio run --target upload  # flash to the board
-platformio device monitor   # optional: view serial output
-```
+1. Open the Arduino IDE and install the **esp32** board package (Espressif Systems).
+2. Create a new sketch and copy the contents of `boatlock/src/main.cpp` into it.
+3. Add the headers from `boatlock/include` to the sketch folder.
+4. Select your ESP32‑S3 board and the correct serial port.
+5. Build and upload from the Arduino IDE toolbar.
+
+### ESP32-S3-Touch-LCD-2 (Arduino migration)
+
+The firmware now includes Arduino-side hardware checks for camera, IMU, and display
+initialization. The BLE status string will include error tags such as `NO_CAMERA`,
+`NO_IMU`, or `NO_DISPLAY` if any device fails to initialize. Adjust camera pin
+definitions in `boatlock/include/HardwareConfig.h` if your wiring differs.
 
 ## Running the Flutter App
 
@@ -78,8 +84,7 @@ Use `flutter build <platform>` to create release builds.
 
 | Component        | Purpose                                |
 |------------------|----------------------------------------|
-| PlatformIO       | Building and flashing the ESP32 firmware |
-| Python           | Required by PlatformIO                  |
+| Arduino IDE      | Building and flashing the ESP32 firmware |
 | Flutter SDK      | Running the cross‑platform UI           |
 | Git              | Cloning and updating this repository    |
 
@@ -97,16 +102,8 @@ NEO‑M8N receiver. Connect the module to the ESP32‑S3 board as follows:
 - **VCC** → 5 V (or 3.3 V if your module supports it)
 - **GND** → **GND**
 
-After wiring, build and flash the firmware:
-
-```bash
-cd boatlock
-platformio run
-platformio run --target upload
-```
-
-Open the serial monitor (`platformio device monitor`) to verify that GPS data is
-being received.
+After wiring, build and flash the firmware from the Arduino IDE, then open the
+Arduino serial monitor to verify that GPS data is being received.
 
 ## Compass Calibration
 
