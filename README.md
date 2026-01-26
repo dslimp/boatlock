@@ -46,6 +46,15 @@ The app and firmware communicate through a simple text protocol; see
 The `boatlock` directory is an Arduino sketch. Open `boatlock/boatlock.ino`
 in the Arduino IDE or build it with `arduino-cli`.
 
+> **Troubleshooting duplicate symbol errors**
+>
+> The Arduino build system compiles **all** `.ino`, `.cpp`, and `.c` files inside
+> the sketch folder. If you accidentally copy the sketch to another file (for
+> example `gp.cpp` containing `setup()`/`loop()` or duplicate globals), the linker
+> will fail with “multiple definition” errors. Remove any extra files that define
+> `setup()`, `loop()`, or the same global variables so that `boatlock.ino` remains
+> the only entry point.
+
 ### Requirements
 - Arduino IDE 2.x (or `arduino-cli`)
 - An ESP32‑S3 development board
