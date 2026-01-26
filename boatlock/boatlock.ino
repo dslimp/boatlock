@@ -289,6 +289,14 @@ void loop() {
   }
 
   float heading = settings.get("EmuCompass") ? emuHeading : (compassReady ? compass.getAzimuth() : 0.0f);
+  float diff = 0.0f;
+  float errorDeg = 0.0f;
+  if (gpsFix) {
+    diff = bearing - heading;
+    if (diff > 180) diff -= 360;
+    if (diff < -180) diff += 360;
+    errorDeg = fabs(diff);
+  }
   if (manualMode) {
     if (manualDir == 0) {
       stepperControl.startManual(-1);
@@ -302,9 +310,6 @@ void loop() {
   } else {
     stepperControl.stopManual();
     if (gpsFix) {
-      float diff = bearing - heading;
-      if (diff > 180) diff -= 360;
-      if (diff < -180) diff += 360;
       static unsigned long lastStepCheck = 0;
       const unsigned long stepInterval = 3000;
       if (!stepperControl.busy && fabs(diff) > 2.0f && now - lastStepCheck > stepInterval) {
@@ -354,6 +359,7 @@ void loop() {
           heading,
           bearing,
           dist,
+          errorDeg,
           modeStr.c_str(),
           batteryPercent
       );

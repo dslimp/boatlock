@@ -11,6 +11,7 @@ void display_draw_ui(bool gpsFix,
                      float heading,
                      float anchorBearing,
                      float distanceMeters,
+                     float errorDeg,
                      const char* mode,
                      int batteryPercent,
                      bool force = false);
