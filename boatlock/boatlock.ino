@@ -56,6 +56,8 @@ AnchorControl anchor;
 MotorControl motor;
 PathControl pathControl;
 bool compassReady = false;
+float fallbackHeading = 0.0f;
+float fallbackBearing = 0.0f;
 
 TaskHandle_t compassCalibTaskHandle = nullptr;
 
@@ -128,6 +130,9 @@ void setup() {
   if (!display_init()) {
     logMessage("Display init failed\n");
   }
+  randomSeed(micros());
+  fallbackHeading = random(0, 360);
+  fallbackBearing = random(0, 360);
   gpsSerial.begin(9600, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
 
   bleBoatLock.setCommandHandler(handleBleCommand);
@@ -289,9 +294,11 @@ void loop() {
   }
 
   float heading = settings.get("EmuCompass") ? emuHeading : (compassReady ? compass.getAzimuth() : 0.0f);
+  bool hasHeading = settings.get("EmuCompass") || compassReady;
+  bool hasBearing = gpsFix;
   float diff = 0.0f;
   float errorDeg = 0.0f;
-  if (gpsFix) {
+  if (hasHeading && hasBearing) {
     diff = bearing - heading;
     if (diff > 180) diff -= 360;
     if (diff < -180) diff += 360;
@@ -309,7 +316,7 @@ void loop() {
     holding = false;
   } else {
     stepperControl.stopManual();
-    if (gpsFix) {
+    if (hasHeading && hasBearing) {
       static unsigned long lastStepCheck = 0;
       const unsigned long stepInterval = 3000;
       if (!stepperControl.busy && fabs(diff) > 2.0f && now - lastStepCheck > stepInterval) {
@@ -352,12 +359,14 @@ void loop() {
       lastNotify = now;
 
       int batteryPercent = 0;
+      float displayHeading = hasHeading ? heading : fallbackHeading;
+      float displayBearing = hasBearing ? bearing : fallbackBearing;
       display_draw_ui(
           gpsFix,
           gps.satellites.value(),
           gps.speed.kmph(),
-          heading,
-          bearing,
+          displayHeading,
+          displayBearing,
           dist,
           errorDeg,
           modeStr.c_str(),
