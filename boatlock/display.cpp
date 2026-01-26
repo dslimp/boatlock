@@ -156,7 +156,10 @@ void display_draw_ui(bool gpsFix,
 
   Layout layout = display_layout();
 
-  bool fullRedraw = true;
+  bool compassChanged = lastHeading < 0.0f || lastAnchorBearing < 0.0f ||
+                        fabs(heading - lastHeading) > 1.0f ||
+                        fabs(anchorBearing - lastAnchorBearing) > 1.0f;
+  bool fullRedraw = !ui_drawn || force;
 
   if (fullRedraw) {
     gfx->fillScreen(COLOR_BG_LIGHT);
@@ -164,13 +167,6 @@ void display_draw_ui(bool gpsFix,
     gfx->fillRect(0, layout.screenH - layout.bottomBarH,
                   layout.screenW, layout.bottomBarH, COLOR_PANEL);
     gfx->drawRect(0, 0, layout.screenW, layout.screenH, COLOR_SILVER);
-    gfx->fillRect(0, layout.topBarH, layout.screenW,
-                  layout.screenH - layout.topBarH - layout.bottomBarH, COLOR_BG_LIGHT);
-    draw_compass(heading, anchorBearing, layout);
-    gfx->setTextColor(COLOR_TEXT_DARK);
-    gfx->setTextSize(2);
-    gfx->setCursor(layout.compassCx - 24, layout.topBarH + 18);
-    gfx->printf("%03d", static_cast<int>(heading));
     ui_drawn = true;
     lastMode = "";
     lastSatellites = -1;
@@ -181,6 +177,18 @@ void display_draw_ui(bool gpsFix,
     lastDistance = -1.0f;
     lastErrorDeg = -1.0f;
     lastGpsFix = !gpsFix;
+  }
+
+  if (fullRedraw || compassChanged) {
+    gfx->fillRect(0, layout.topBarH, layout.screenW,
+                  layout.screenH - layout.topBarH - layout.bottomBarH, COLOR_BG_LIGHT);
+    draw_compass(heading, anchorBearing, layout);
+    gfx->setTextColor(COLOR_TEXT_DARK);
+    gfx->setTextSize(2);
+    gfx->setCursor(layout.compassCx - 24, layout.topBarH + 18);
+    gfx->printf("%03d", static_cast<int>(heading));
+    lastHeading = heading;
+    lastAnchorBearing = anchorBearing;
   }
 
   if (batteryPercent != lastBattery) {
