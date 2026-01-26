@@ -346,7 +346,17 @@ void loop() {
       bleBoatLock.notifyAll();
       lastNotify = now;
 
-      display_draw_ui(gpsFix);
+      int batteryPercent = 0;
+      display_draw_ui(
+          gpsFix,
+          gps.satellites.value(),
+          gps.speed.kmph(),
+          heading,
+          bearing,
+          dist,
+          modeStr.c_str(),
+          batteryPercent
+      );
   }
   bleBoatLock.loop();
 }

@@ -63,78 +63,138 @@ void display_draw_debug(const String &msg, int y) {
   gfx->print(msg);
 }
 
-void display_draw_ui(bool gpsFix, bool force) {
+namespace {
+constexpr int TOP_BAR_H = 28;
+constexpr int BOTTOM_BAR_H = 28;
+constexpr int COMPASS_CX = 120;
+constexpr int COMPASS_CY = 132;
+constexpr int COMPASS_R = 80;
+} // namespace
+
+static void draw_compass(float heading, float anchorBearing) {
+  gfx->fillCircle(COMPASS_CX, COMPASS_CY, COMPASS_R + 2, COLOR_PANEL);
+  gfx->drawCircle(COMPASS_CX, COMPASS_CY, COMPASS_R, COLOR_TEXT_DARK);
+  gfx->drawCircle(COMPASS_CX, COMPASS_CY, COMPASS_R - 18, COLOR_SILVER);
+  gfx->setTextColor(COLOR_TEXT_DARK);
+  gfx->setTextSize(1);
+  gfx->setCursor(COMPASS_CX - 4, COMPASS_CY - COMPASS_R + 6);
+  gfx->print("N");
+  gfx->setCursor(COMPASS_CX - 4, COMPASS_CY + COMPASS_R - 12);
+  gfx->print("S");
+  gfx->setCursor(COMPASS_CX - COMPASS_R + 6, COMPASS_CY - 4);
+  gfx->print("W");
+  gfx->setCursor(COMPASS_CX + COMPASS_R - 10, COMPASS_CY - 4);
+  gfx->print("E");
+
+  float headRad = (heading - 90.0f) * DEG_TO_RAD;
+  int hx = COMPASS_CX + static_cast<int>((COMPASS_R - 24) * cos(headRad));
+  int hy = COMPASS_CY + static_cast<int>((COMPASS_R - 24) * sin(headRad));
+  gfx->drawLine(COMPASS_CX, COMPASS_CY, hx, hy, COLOR_ACCENT);
+  gfx->fillTriangle(hx, hy, hx - 5, hy + 8, hx + 5, hy + 8, COLOR_ACCENT);
+
+  float anchorRad = (anchorBearing - 90.0f) * DEG_TO_RAD;
+  int ax = COMPASS_CX + static_cast<int>((COMPASS_R - 10) * cos(anchorRad));
+  int ay = COMPASS_CY + static_cast<int>((COMPASS_R - 10) * sin(anchorRad));
+  gfx->drawLine(COMPASS_CX, COMPASS_CY, ax, ay, COLOR_WARNING);
+}
+
+void display_draw_ui(bool gpsFix,
+                     int satellites,
+                     float speedKmh,
+                     float heading,
+                     float anchorBearing,
+                     float distanceMeters,
+                     const char* mode,
+                     int batteryPercent,
+                     bool force) {
   static bool ui_drawn = false;
   static bool lastGpsFix = false;
-  if (ui_drawn && !force) {
-    if (gpsFix != lastGpsFix) {
-      gfx->fillRect(136, 98, 88, 24, COLOR_NAVY);
-      gfx->setTextColor(COLOR_WHITE);
-      gfx->setTextSize(2);
-      gfx->setCursor(140, 104);
-      gfx->println(gpsFix ? "FIX" : "NO");
-      gfx->setTextSize(1);
-      gfx->setCursor(140, 120);
-      gfx->println(gpsFix ? "LOCK" : "GPS");
-      lastGpsFix = gpsFix;
-    }
-    return;
+  static int lastSatellites = -1;
+  static int lastBattery = -1;
+  static float lastSpeed = -1.0f;
+  static float lastHeading = -1.0f;
+  static float lastAnchorBearing = -1.0f;
+  static float lastDistance = -1.0f;
+  static String lastMode;
+
+  if (!ui_drawn || force) {
+    gfx->fillScreen(COLOR_BG_LIGHT);
+    gfx->fillRect(0, 0, 240, TOP_BAR_H, COLOR_PANEL);
+    gfx->fillRect(0, 240 - BOTTOM_BAR_H, 240, BOTTOM_BAR_H, COLOR_PANEL);
+    gfx->drawRect(0, 0, 240, 240, COLOR_SILVER);
+    gfx->setTextColor(COLOR_TEXT_DARK);
+    gfx->setTextSize(1);
+    gfx->setCursor(8, 8);
+    gfx->println("BoatLock");
+    ui_drawn = true;
+    lastMode = "";
+    lastSatellites = -1;
+    lastBattery = -1;
+    lastSpeed = -1.0f;
+    lastHeading = -1.0f;
+    lastAnchorBearing = -1.0f;
+    lastDistance = -1.0f;
+    lastGpsFix = !gpsFix;
   }
-  ui_drawn = true;
-  lastGpsFix = gpsFix;
-  gfx->fillScreen(COLOR_BLACK);
 
-  gfx->fillRect(0, 0, 240, 56, COLOR_NAVY);
-  gfx->setTextColor(COLOR_WHITE);
-  gfx->setTextSize(2);
-  gfx->setCursor(16, 14);
-  gfx->println("BoatLock");
-  gfx->setTextSize(1);
-  gfx->setCursor(16, 36);
-  gfx->println("System ready");
+  if (batteryPercent != lastBattery) {
+    gfx->fillRect(8, 4, 50, 20, COLOR_PANEL);
+    gfx->drawRect(8, 4, 40, 16, COLOR_TEXT_DARK);
+    gfx->fillRect(48, 8, 4, 8, COLOR_TEXT_DARK);
+    int fillW = static_cast<int>(36 * constrain(batteryPercent, 0, 100) / 100.0f);
+    gfx->fillRect(10, 6, fillW, 12, COLOR_ACCENT);
+    gfx->setTextColor(COLOR_TEXT_DARK);
+    gfx->setTextSize(1);
+    gfx->setCursor(56, 8);
+    gfx->printf("%d%%", constrain(batteryPercent, 0, 100));
+    lastBattery = batteryPercent;
+  }
 
-  gfx->fillRoundRect(150, 14, 74, 28, 8, COLOR_TEAL);
-  gfx->setTextColor(COLOR_WHITE);
-  gfx->setTextSize(1);
-  gfx->setCursor(160, 22);
-  gfx->println("ONLINE");
+  if (satellites != lastSatellites || gpsFix != lastGpsFix) {
+    gfx->fillRect(110, 4, 70, 20, COLOR_PANEL);
+    gfx->setTextColor(gpsFix ? COLOR_TEXT_DARK : COLOR_WARNING);
+    gfx->setTextSize(1);
+    gfx->setCursor(112, 8);
+    gfx->printf("%d sats", satellites);
+    lastSatellites = satellites;
+    lastGpsFix = gpsFix;
+  }
 
-  gfx->fillRoundRect(16, 72, 208, 84, 12, COLOR_NAVY);
-  gfx->setTextColor(COLOR_SILVER);
-  gfx->setTextSize(1);
-  gfx->setCursor(28, 84);
-  gfx->println("Anchor");
-  gfx->setCursor(28, 104);
-  gfx->setTextColor(COLOR_WHITE);
-  gfx->setTextSize(2);
-  gfx->println("LOCKED");
+  if (!lastMode.equals(mode)) {
+    gfx->fillRect(180, 4, 56, 20, COLOR_PANEL);
+    gfx->fillRoundRect(182, 6, 54, 16, 4, COLOR_ACCENT);
+    gfx->setTextColor(COLOR_WHITE);
+    gfx->setTextSize(1);
+    gfx->setCursor(186, 10);
+    gfx->print(mode);
+    lastMode = mode;
+  }
 
-  gfx->setTextSize(1);
-  gfx->setTextColor(COLOR_SILVER);
-  gfx->setCursor(140, 84);
-  gfx->println("GPS");
-  gfx->setTextColor(COLOR_WHITE);
-  gfx->setTextSize(2);
-  gfx->setCursor(140, 104);
-  gfx->println(gpsFix ? "FIX" : "NO");
-  gfx->setTextSize(1);
-  gfx->setCursor(140, 120);
-  gfx->println(gpsFix ? "LOCK" : "GPS");
+  if (fabs(heading - lastHeading) > 1.0f ||
+      fabs(anchorBearing - lastAnchorBearing) > 1.0f) {
+    gfx->fillRect(20, 40, 200, 185, COLOR_BG_LIGHT);
+    draw_compass(heading, anchorBearing);
+    gfx->setTextColor(COLOR_TEXT_DARK);
+    gfx->setTextSize(2);
+    gfx->setCursor(90, 50);
+    gfx->printf("%03d", static_cast<int>(heading));
+    lastHeading = heading;
+    lastAnchorBearing = anchorBearing;
+  }
 
-  gfx->fillRoundRect(16, 176, 64, 64, 14, COLOR_NAVY);
-  gfx->fillRoundRect(88, 176, 64, 64, 14, COLOR_NAVY);
-  gfx->fillRoundRect(160, 176, 64, 64, 14, COLOR_NAVY);
-
-  draw_icon_anchor(gfx, 22, 184);
-  draw_icon_gps(gfx,    94, 184);
-  draw_icon_settings(gfx,166,184);
-
-  gfx->setTextColor(COLOR_SILVER);
-  gfx->setTextSize(1);
-  gfx->setCursor(28, 246);
-  gfx->println("Anchor");
-  gfx->setCursor(102, 246);
-  gfx->println("Locate");
-  gfx->setCursor(176, 246);
-  gfx->println("Settings");
+  if (fabs(speedKmh - lastSpeed) > 0.1f ||
+      fabs(distanceMeters - lastDistance) > 0.1f ||
+      !lastMode.equals(mode)) {
+    gfx->fillRect(0, 240 - BOTTOM_BAR_H, 240, BOTTOM_BAR_H, COLOR_PANEL);
+    gfx->setTextColor(COLOR_TEXT_DARK);
+    gfx->setTextSize(1);
+    gfx->setCursor(8, 240 - 20);
+    gfx->printf("SPD %.1f km/h", speedKmh);
+    gfx->setCursor(96, 240 - 20);
+    gfx->printf("DST %.1f m", distanceMeters);
+    gfx->setCursor(176, 240 - 20);
+    gfx->print(mode);
+    lastSpeed = speedKmh;
+    lastDistance = distanceMeters;
+  }
 }
