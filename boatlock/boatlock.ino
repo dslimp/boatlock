@@ -9,6 +9,8 @@
 #include <freertos/task.h>
 #include <SPI.h>
 #include <SD.h>
+#include <functional>
+#include <string>
 
 #include "Settings.h"
 #include "Logger.h"
