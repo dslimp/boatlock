@@ -64,10 +64,12 @@ void display_draw_debug(const String &msg, int y) {
 }
 
 namespace {
+constexpr int SCREEN_W = 240;
+constexpr int SCREEN_H = 320;
 constexpr int TOP_BAR_H = 28;
 constexpr int BOTTOM_BAR_H = 30;
-constexpr int COMPASS_CX = 120;
-constexpr int COMPASS_CY = 130;
+constexpr int COMPASS_CX = SCREEN_W / 2;
+constexpr int COMPASS_CY = 150;
 constexpr int COMPASS_R = 84;
 } // namespace
 
@@ -132,9 +134,9 @@ void display_draw_ui(bool gpsFix,
 
   if (!ui_drawn || force) {
     gfx->fillScreen(COLOR_BG_LIGHT);
-    gfx->fillRect(0, 0, 240, TOP_BAR_H, COLOR_PANEL);
-    gfx->fillRect(0, 240 - BOTTOM_BAR_H, 240, BOTTOM_BAR_H, COLOR_PANEL);
-    gfx->drawRect(0, 0, 240, 240, COLOR_SILVER);
+    gfx->fillRect(0, 0, SCREEN_W, TOP_BAR_H, COLOR_PANEL);
+    gfx->fillRect(0, SCREEN_H - BOTTOM_BAR_H, SCREEN_W, BOTTOM_BAR_H, COLOR_PANEL);
+    gfx->drawRect(0, 0, SCREEN_W, SCREEN_H, COLOR_SILVER);
     ui_drawn = true;
     lastMode = "";
     lastSatellites = -1;
@@ -180,13 +182,15 @@ void display_draw_ui(bool gpsFix,
     lastMode = mode;
   }
 
-  if (fabs(heading - lastHeading) > 1.0f ||
+  if (lastHeading < 0.0f || lastAnchorBearing < 0.0f ||
+      fabs(heading - lastHeading) > 1.0f ||
       fabs(anchorBearing - lastAnchorBearing) > 1.0f) {
-    gfx->fillRect(20, 40, 200, 185, COLOR_BG_LIGHT);
+    gfx->fillRect(0, TOP_BAR_H, SCREEN_W,
+                  SCREEN_H - TOP_BAR_H - BOTTOM_BAR_H, COLOR_BG_LIGHT);
     draw_compass(heading, anchorBearing);
     gfx->setTextColor(COLOR_TEXT_DARK);
     gfx->setTextSize(2);
-    gfx->setCursor(96, 46);
+    gfx->setCursor(COMPASS_CX - 24, TOP_BAR_H + 18);
     gfx->printf("%03d", static_cast<int>(heading));
     lastHeading = heading;
     lastAnchorBearing = anchorBearing;
@@ -196,14 +200,14 @@ void display_draw_ui(bool gpsFix,
       fabs(distanceMeters - lastDistance) > 0.1f ||
       fabs(errorDeg - lastErrorDeg) > 0.5f ||
       !lastMode.equals(mode)) {
-    gfx->fillRect(0, 240 - BOTTOM_BAR_H, 240, BOTTOM_BAR_H, COLOR_PANEL);
+    gfx->fillRect(0, SCREEN_H - BOTTOM_BAR_H, SCREEN_W, BOTTOM_BAR_H, COLOR_PANEL);
     gfx->setTextColor(COLOR_TEXT_DARK);
     gfx->setTextSize(1);
-    gfx->setCursor(8, 240 - 20);
+    gfx->setCursor(8, SCREEN_H - 20);
     gfx->printf("SPD %.1f km/h", speedKmh);
-    gfx->setCursor(92, 240 - 20);
+    gfx->setCursor(92, SCREEN_H - 20);
     gfx->printf("DIST %.1f m", distanceMeters);
-    gfx->setCursor(174, 240 - 20);
+    gfx->setCursor(174, SCREEN_H - 20);
     gfx->printf("ERR %.0f%c", errorDeg, 176);
     lastSpeed = speedKmh;
     lastDistance = distanceMeters;
