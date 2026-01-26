@@ -9,8 +9,7 @@
 #include <freertos/task.h>
 #include <SPI.h>
 #include <SD.h>
-#include <functional>
-#include <string>
+#include "ParamHelpers.h"
 
 #include "Settings.h"
 #include "Logger.h"
@@ -85,15 +84,6 @@ int manualSpeed = 0;
 
 void drawDebug(const String &msg, int y = 48) {
   display_draw_debug(msg, y);
-}
-
-template<typename F>
-std::function<std::string()> makeFloatParam(F valueFunc, const char* fmt) {
-    return [valueFunc, fmt]() {
-        char buf[20];
-        snprintf(buf, sizeof(buf), fmt, valueFunc());
-        return std::string(buf);
-    };
 }
 
 void calibrateCompassAndSave() {
