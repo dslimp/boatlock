@@ -30,6 +30,7 @@ const SettingEntry defaultEntries[] = {
     {"GPS_TYPE",  "GPS model",          TYPE_INT,   0, 0, 0, 4, 1, "", false},
     {"IMU_TYPE",  "IMU model",          TYPE_INT,   1, 1, 0, 4, 1, "", false},
     {"GpsFWin",   "GPS filter window",  TYPE_INT,   5,    5,     1,   20,    1, "", false},
+    {"DebugGps",  "Debug GPS serial",   TYPE_INT,   0,    0,     0,   1,     1, "", true},
     {"AnchorEnabled", "Enable anchor",     TYPE_INT,   0, 0, 0, 1, 1, "", false},
     {"AnchorLat",     "Anchor latitude",   TYPE_FLOAT, 0.0, 0.0, -90.0, 90.0,   0.000001, "", false},
     {"AnchorLon",     "Anchor longitude",  TYPE_FLOAT, 0.0, 0.0,-180.0, 180.0, 0.000001, "", false},

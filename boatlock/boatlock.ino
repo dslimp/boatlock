@@ -191,6 +191,18 @@ void loop() {
     gps.encode(gpsSerial.read());
   }
 
+  static unsigned long lastGpsDebug = 0;
+  if (settings.get("DebugGps") == 1 && millis() - lastGpsDebug >= 1000) {
+    Serial.printf("[GPS] bytes=%lu valid=%d fix=%d sats=%d hdop=%.2f age=%lu\n",
+                  gps.charsProcessed(),
+                  gps.location.isValid(),
+                  gpsFix,
+                  gps.satellites.value(),
+                  gps.hdop.value() * 0.01f,
+                  gps.location.age());
+    lastGpsDebug = millis();
+  }
+
   float lat = gps.location.lat();
   float lon = gps.location.lng();
   if (gps.location.isValid() && gps.location.age() < 2000) {
