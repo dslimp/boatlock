@@ -63,7 +63,12 @@ void display_draw_debug(const String &msg, int y) {
   gfx->print(msg);
 }
 
-void display_draw_ui() {
+void display_draw_ui(bool force) {
+  static bool ui_drawn = false;
+  if (ui_drawn && !force) {
+    return;
+  }
+  ui_drawn = true;
   gfx->fillScreen(COLOR_BLACK);
 
   gfx->fillRect(0, 0, 240, 56, COLOR_NAVY);
