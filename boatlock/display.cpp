@@ -156,10 +156,7 @@ void display_draw_ui(bool gpsFix,
 
   Layout layout = display_layout();
 
-  bool compassChanged = lastHeading < 0.0f || lastAnchorBearing < 0.0f ||
-                        fabs(heading - lastHeading) > 1.0f ||
-                        fabs(anchorBearing - lastAnchorBearing) > 1.0f;
-  bool fullRedraw = !ui_drawn || force || compassChanged;
+  bool fullRedraw = true;
 
   if (fullRedraw) {
     gfx->fillScreen(COLOR_BG_LIGHT);
