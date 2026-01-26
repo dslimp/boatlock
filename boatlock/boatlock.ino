@@ -35,6 +35,8 @@ bool sdReady = false;
 #define DIR_PIN 4
 #define I2C_SDA_PIN 47
 #define I2C_SCL_PIN 48
+#define GPS_RX_PIN 17
+#define GPS_TX_PIN 18
 #define MOTOR_PWM_PIN 7
 #define MOTOR_DIR_PIN1 6
 #define MOTOR_DIR_PIN2 10
@@ -126,7 +128,7 @@ void setup() {
   if (!display_init()) {
     logMessage("Display init failed\n");
   }
-  gpsSerial.begin(9600, SERIAL_8N1, 17, 18);
+  gpsSerial.begin(9600, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
 
   bleBoatLock.setCommandHandler(handleBleCommand);
   bleBoatLock.registerParam("lat", makeFloatParam([&](){
