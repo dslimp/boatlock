@@ -43,19 +43,27 @@ The app and firmware communicate through a simple text protocol; see
 
 ## Building the Firmware
 
-The `boatlock` directory is a [PlatformIO](https://platformio.org/) project.
+The `boatlock` directory is an Arduino sketch. Open `boatlock/boatlock.ino`
+in the Arduino IDE or build it with `arduino-cli`.
 
 ### Requirements
-- PlatformIO CLI (or the PlatformIO extension for VS Code)
-- Python (installed automatically with PlatformIO)
+- Arduino IDE 2.x (or `arduino-cli`)
 - An ESP32‑S3 development board
+- Installed libraries:
+  - Arduino_GFX
+  - NimBLE-Arduino
+  - AccelStepper
+  - TinyGPSPlus
+  - Adafruit Unified Sensor
+  - Adafruit HMC5883 Unified
 
-### Build and Upload
+### Build and Upload (Arduino CLI)
 ```bash
-cd boatlock
-platformio run              # build the firmware
-platformio run --target upload  # flash to the board
-platformio device monitor   # optional: view serial output
+arduino-cli lib install "Arduino_GFX" "NimBLE-Arduino" "AccelStepper" "TinyGPSPlus" \
+  "Adafruit Unified Sensor" "Adafruit HMC5883 Unified"
+arduino-cli core install esp32:esp32
+arduino-cli compile --fqbn esp32:esp32:esp32s3 boatlock
+arduino-cli upload --fqbn esp32:esp32:esp32s3 --port /dev/ttyUSB0 boatlock
 ```
 
 ## Running the Flutter App
@@ -78,8 +86,7 @@ Use `flutter build <platform>` to create release builds.
 
 | Component        | Purpose                                |
 |------------------|----------------------------------------|
-| PlatformIO       | Building and flashing the ESP32 firmware |
-| Python           | Required by PlatformIO                  |
+| Arduino IDE/CLI  | Building and flashing the ESP32 firmware |
 | Flutter SDK      | Running the cross‑platform UI           |
 | Git              | Cloning and updating this repository    |
 
@@ -97,16 +104,9 @@ NEO‑M8N receiver. Connect the module to the ESP32‑S3 board as follows:
 - **VCC** → 5 V (or 3.3 V if your module supports it)
 - **GND** → **GND**
 
-After wiring, build and flash the firmware:
-
-```bash
-cd boatlock
-platformio run
-platformio run --target upload
-```
-
-Open the serial monitor (`platformio device monitor`) to verify that GPS data is
-being received.
+After wiring, build and flash the firmware from the Arduino IDE or with
+`arduino-cli` (see the build section above). Open the serial monitor to verify
+that GPS data is being received.
 
 ## Compass Calibration
 
@@ -120,7 +120,7 @@ See [CHANGELOG.md](CHANGELOG.md) for recent changes and firmware versions.
 ## HC 160A S2 Motor Controller
 
 The HC 160A S2 driver requires two direction pins. Define them in
-`boatlock/src/main.cpp`:
+`boatlock/boatlock.ino`:
 
 ```cpp
 #define MOTOR_DIR_PIN1 6   // IN1 on the driver

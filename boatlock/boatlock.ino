@@ -1,7 +1,5 @@
 #include <Arduino.h>
 #include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
 #include <TinyGPSPlus.h>
 #include <HardwareSerial.h>
 #include <EEPROM.h>
@@ -20,7 +18,7 @@ constexpr size_t EEPROM_SIZE = Settings::EEPROM_ADDR + sizeof(float) * count + s
 #include "MotorControl.h"
 #include "StepperControl.h"
 
-#include "BoatDisplay.h"
+#include "display.h"
 #include "HMC5883Compass.h"
 #include "PathControl.h"
 #include "BleCommandHandler.h"
@@ -31,13 +29,6 @@ BLEBoatLock bleBoatLock;
 File routeLog;
 const char* ROUTE_LOG_PATH = "/route.csv";
 bool sdReady = false;
-
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-#define OLED_RESET    -1
-
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-BoatDisplay boatDisplay(&display);
 
 #define STEP_PIN 5
 #define DIR_PIN 4
@@ -91,13 +82,7 @@ int manualDir = -1;
 int manualSpeed = 0;
 
 void drawDebug(const String &msg, int y = 48) {
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0,  y);
-  display.print("[D]");
-  display.print(msg);
-  display.display();
+  display_draw_debug(msg, y);
 }
 
 template<typename F>
@@ -144,7 +129,9 @@ void setup() {
 
   pinMode(BOOT_PIN, INPUT_PULLUP);
 
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  if (!display_init()) {
+    logMessage("Display init failed\n");
+  }
   gpsSerial.begin(9600, SERIAL_8N1, 17, 18);
 
   bleBoatLock.setCommandHandler(handleBleCommand);
@@ -351,13 +338,7 @@ void loop() {
       bleBoatLock.notifyAll();
       lastNotify = now;
 
-      boatDisplay.showStatus(
-              gps,
-              anchor.anchorLat, anchor.anchorLon, settings.get("AnchorEnabled"),
-              dist, bearing,
-              settings.get("EmuCompass") ? emuHeading : (compassReady ? compass.getAzimuth() : 0.0f),
-              holding
-          );
+      display_draw_ui();
   }
   bleBoatLock.loop();
 }
