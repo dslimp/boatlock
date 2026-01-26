@@ -33,6 +33,8 @@ bool sdReady = false;
 
 #define STEP_PIN 5
 #define DIR_PIN 4
+#define I2C_SDA_PIN 47
+#define I2C_SCL_PIN 48
 #define MOTOR_PWM_PIN 7
 #define MOTOR_DIR_PIN1 6
 #define MOTOR_DIR_PIN2 10
@@ -116,7 +118,7 @@ void setup() {
   Serial.begin(115200);
   logMessage("\n[BoatLock] ESP32 стартует! Версия прошивки: 0.1.2\n");
 
-  Wire.begin(8, 9);
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
   compassReady = compass.init();
 
   pinMode(BOOT_PIN, INPUT_PULLUP);
@@ -330,7 +332,7 @@ void loop() {
       bleBoatLock.notifyAll();
       lastNotify = now;
 
-      display_draw_ui();
+      display_draw_ui(gpsFix);
   }
   bleBoatLock.loop();
 }

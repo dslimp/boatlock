@@ -63,12 +63,25 @@ void display_draw_debug(const String &msg, int y) {
   gfx->print(msg);
 }
 
-void display_draw_ui(bool force) {
+void display_draw_ui(bool gpsFix, bool force) {
   static bool ui_drawn = false;
+  static bool lastGpsFix = false;
   if (ui_drawn && !force) {
+    if (gpsFix != lastGpsFix) {
+      gfx->fillRect(136, 98, 88, 24, COLOR_NAVY);
+      gfx->setTextColor(COLOR_WHITE);
+      gfx->setTextSize(2);
+      gfx->setCursor(140, 104);
+      gfx->println(gpsFix ? "FIX" : "NO");
+      gfx->setTextSize(1);
+      gfx->setCursor(140, 120);
+      gfx->println(gpsFix ? "LOCK" : "GPS");
+      lastGpsFix = gpsFix;
+    }
     return;
   }
   ui_drawn = true;
+  lastGpsFix = gpsFix;
   gfx->fillScreen(COLOR_BLACK);
 
   gfx->fillRect(0, 0, 240, 56, COLOR_NAVY);
@@ -103,7 +116,10 @@ void display_draw_ui(bool force) {
   gfx->setTextColor(COLOR_WHITE);
   gfx->setTextSize(2);
   gfx->setCursor(140, 104);
-  gfx->println("STABLE");
+  gfx->println(gpsFix ? "FIX" : "NO");
+  gfx->setTextSize(1);
+  gfx->setCursor(140, 120);
+  gfx->println(gpsFix ? "LOCK" : "GPS");
 
   gfx->fillRoundRect(16, 176, 64, 64, 14, COLOR_NAVY);
   gfx->fillRoundRect(88, 176, 64, 64, 14, COLOR_NAVY);
