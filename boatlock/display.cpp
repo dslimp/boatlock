@@ -41,8 +41,8 @@ bool display_init() {
     return false;
   }
 
-  gfx->fillScreen(COLOR_BLACK);
-  gfx->setTextColor(COLOR_WHITE);
+  gfx->fillScreen(COLOR_BG_LIGHT);
+  gfx->setTextColor(COLOR_TEXT_DARK);
   gfx->setTextSize(2);
   gfx->setCursor(16, 10);
   gfx->println("BoatLock");
@@ -51,12 +51,12 @@ bool display_init() {
 }
 
 void display_clear() {
-  gfx->fillScreen(COLOR_BLACK);
+  gfx->fillScreen(COLOR_BG_LIGHT);
 }
 
 void display_draw_debug(const String &msg, int y) {
-  gfx->fillScreen(COLOR_BLACK);
-  gfx->setTextColor(COLOR_WHITE);
+  gfx->fillScreen(COLOR_BG_LIGHT);
+  gfx->setTextColor(COLOR_TEXT_DARK);
   gfx->setTextSize(1);
   gfx->setCursor(0, y);
   gfx->print("[D]");
