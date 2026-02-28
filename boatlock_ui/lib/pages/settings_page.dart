@@ -9,7 +9,16 @@ class SettingsPage extends StatefulWidget {
   final double stepMaxSpd;
   final double stepAccel;
   final bool isConnected;
-  const SettingsPage({Key? key, required this.ble, required this.holdHeading, required this.emuCompass, required this.stepSpr, required this.stepMaxSpd, required this.stepAccel, required this.isConnected}) : super(key: key);
+  const SettingsPage({
+    super.key,
+    required this.ble,
+    required this.holdHeading,
+    required this.emuCompass,
+    required this.stepSpr,
+    required this.stepMaxSpd,
+    required this.stepAccel,
+    required this.isConnected,
+  });
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -50,8 +59,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   void _toggleEmu(bool v) {
     setState(() => emuCompass = v);
-    widget.ble
-        .sendCustomCommand('EMU_COMPASS:${v ? 1 : 0}');
+    widget.ble.sendCustomCommand('EMU_COMPASS:${v ? 1 : 0}');
   }
 
   Future<void> _editStepSpr() async {
@@ -62,10 +70,12 @@ class _SettingsPageState extends State<SettingsPage> {
       builder: (_) => SimpleDialog(
         title: const Text('Шагов за оборот'),
         children: options
-            .map((v) => SimpleDialogOption(
-                  child: Text(v.toString()),
-                  onPressed: () => Navigator.pop(context, v),
-                ))
+            .map(
+              (v) => SimpleDialogOption(
+                child: Text(v.toString()),
+                onPressed: () => Navigator.pop(context, v),
+              ),
+            )
             .toList(),
       ),
     );
@@ -87,12 +97,16 @@ class _SettingsPageState extends State<SettingsPage> {
           keyboardType: TextInputType.number,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
           TextButton(
-              onPressed: () {
-                Navigator.pop(context, double.tryParse(ctrl.text));
-              },
-              child: const Text('OK')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context, double.tryParse(ctrl.text));
+            },
+            child: const Text('OK'),
+          ),
         ],
       ),
     );
@@ -114,12 +128,16 @@ class _SettingsPageState extends State<SettingsPage> {
           keyboardType: TextInputType.number,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
           TextButton(
-              onPressed: () {
-                Navigator.pop(context, double.tryParse(ctrl.text));
-              },
-              child: const Text('OK')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context, double.tryParse(ctrl.text));
+            },
+            child: const Text('OK'),
+          ),
         ],
       ),
     );

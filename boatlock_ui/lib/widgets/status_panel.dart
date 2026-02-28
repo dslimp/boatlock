@@ -13,19 +13,22 @@ class StatusPanel extends StatelessWidget {
       margin: EdgeInsets.all(12),
       padding: EdgeInsets.symmetric(vertical: 10, horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.93),
+        color: Colors.white.withValues(alpha: 0.93),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [BoxShadow(blurRadius: 8, color: Colors.black12)],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      child: Wrap(
+        alignment: WrapAlignment.spaceEvenly,
+        runSpacing: 8,
+        spacing: 14,
         children: [
           _iconText(Icons.info_outline, data!.status),
           _iconText(
-              Icons.anchor,
-              (data!.anchorLat != 0 || data!.anchorLon != 0)
-                  ? "${data!.anchorLat.toStringAsFixed(3)}, ${data!.anchorLon.toStringAsFixed(3)}"
-                  : "нет"),
+            Icons.anchor,
+            (data!.anchorLat != 0 || data!.anchorLon != 0)
+                ? "${data!.anchorLat.toStringAsFixed(3)}, ${data!.anchorLon.toStringAsFixed(3)}"
+                : "нет",
+          ),
           _iconText(Icons.directions_boat, data!.mode),
           _iconText(Icons.network_cell, "${data!.rssi} дБ"),
         ],
@@ -34,6 +37,7 @@ class StatusPanel extends StatelessWidget {
   }
 
   Widget _iconText(IconData icon, String text) => Row(
+    mainAxisSize: MainAxisSize.min,
     children: [
       Icon(icon, size: 20, color: Colors.blueGrey),
       SizedBox(width: 4),

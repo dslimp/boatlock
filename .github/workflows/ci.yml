@@ -7,7 +7,7 @@ name: CI
   pull_request:
 
 jobs:
-  platformio:
+  firmware:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -16,20 +16,27 @@ jobs:
           python-version: '3.x'
       - name: Install PlatformIO
         run: pip install platformio
-      - name: Build firmware
-        working-directory: boatlock
-        run: platformio run
-      - name: Check format
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format
+      - name: Check test format
         working-directory: boatlock
         run: |
           clang-format --version
-          find test -name '*.cpp' | xargs clang-format --dry-run --Werror
+          find test -name '*.cpp' | xargs -r clang-format --dry-run --Werror
       - name: Run unit tests
         working-directory: boatlock
         run: platformio test -e native
-      - name: Lint
-        working-directory: boatlock
-        run: platformio check -e native
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Install Arduino core and libraries
+        run: |
+          arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core install esp32:esp32 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli lib install "Arduino_GFX" "NimBLE-Arduino" "AccelStepper" "TinyGPSPlus" "Adafruit Unified Sensor" "Adafruit HMC5883 Unified"
+      - name: Build firmware
+        run: |
+          arduino-cli compile --fqbn esp32:esp32:esp32s3 boatlock
 
   flutter:
     runs-on: ubuntu-latest

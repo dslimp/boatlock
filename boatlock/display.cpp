@@ -25,8 +25,8 @@ static Arduino_GFX *gfx = new Arduino_ST7789(
   LCD_RST,
   1,
   true,
-  320,
-  240
+  240,
+  320
 );
 
 Arduino_GFX *display_gfx() {
@@ -208,6 +208,7 @@ void display_draw_ui(bool gpsFix,
   }
 
   if (fullRedraw || compassChanged) {
+    gfx->fillScreen(COLOR_BG_LIGHT);
     gfx->fillRect(0, layout.contentY, layout.screenW, layout.contentH, COLOR_BG_LIGHT);
     draw_compass(heading, anchorBearing, layout);
     gfx->setTextColor(COLOR_TEXT_DARK);

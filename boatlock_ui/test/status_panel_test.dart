@@ -8,12 +8,14 @@ void main() {
     final data = BoatData(
       lat: 0,
       lon: 0,
-      anchorLat: 0,
-      anchorLon: 0,
+      anchorLat: 59.1234,
+      anchorLon: 30.5678,
       distance: 12.3,
       heading: 45,
       battery: 50,
       status: 'OK',
+      mode: 'MANUAL',
+      rssi: -63,
       holdHeading: true,
       emuCompass: 0,
       routeIdx: 0,
@@ -22,10 +24,10 @@ void main() {
       stepAccel: 500,
     );
     await tester.pumpWidget(MaterialApp(home: StatusPanel(data: data)));
-    expect(find.text('12.3 м'), findsOneWidget);
-    expect(find.text('45°'), findsOneWidget);
-    expect(find.text('50%'), findsOneWidget);
     expect(find.text('OK'), findsOneWidget);
+    expect(find.text('59.123, 30.568'), findsOneWidget);
+    expect(find.text('MANUAL'), findsOneWidget);
+    expect(find.text('-63 дБ'), findsOneWidget);
   });
 
   testWidgets('renders empty when no data', (WidgetTester tester) async {

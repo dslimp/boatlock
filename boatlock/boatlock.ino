@@ -120,7 +120,7 @@ void stepperTask(void*) {
 
 void setup() {
   Serial.begin(115200);
-  logMessage("\n[BoatLock] ESP32 стартует! Версия прошивки: 0.1.2\n");
+  logMessage("\n[BoatLock] ESP32 стартует! Версия прошивки: 0.1.5\n");
 
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
   compassReady = compass.init();

@@ -1,5 +1,5 @@
 #pragma once
-#include <TinyGPS++.h>
+#include <TinyGPSPlus.h>
 #include "Settings.h"
 #include "Logger.h"
 

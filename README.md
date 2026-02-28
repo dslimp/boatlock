@@ -70,9 +70,18 @@ in the Arduino IDE or build it with `arduino-cli`.
 ```bash
 arduino-cli lib install "Arduino_GFX" "NimBLE-Arduino" "AccelStepper" "TinyGPSPlus" \
   "Adafruit Unified Sensor" "Adafruit HMC5883 Unified"
-arduino-cli core install esp32:esp32
+arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+arduino-cli core install esp32:esp32 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
 arduino-cli compile --fqbn esp32:esp32:esp32s3 boatlock
 arduino-cli upload --fqbn esp32:esp32:esp32s3 --port /dev/ttyUSB0 boatlock
+```
+
+### Firmware Unit Tests
+`boatlock/test` uses Unity tests under PlatformIO native environment.
+
+```bash
+cd boatlock
+platformio test -e native
 ```
 
 ## Running the Flutter App

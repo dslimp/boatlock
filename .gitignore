@@ -45,3 +45,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local workspace artifacts
+/flutter/
+/6f720725-ef07-45a5-ab32-101f2250f856.png

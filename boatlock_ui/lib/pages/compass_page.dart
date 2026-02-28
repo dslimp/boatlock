@@ -7,7 +7,7 @@ import '../ble/ble_boatlock.dart';
 class CompassPage extends StatefulWidget {
   final BleBoatLock ble;
   final bool emuCompass;
-  const CompassPage({Key? key, required this.ble, required this.emuCompass}) : super(key: key);
+  const CompassPage({super.key, required this.ble, required this.emuCompass});
 
   @override
   State<CompassPage> createState() => _CompassPageState();
@@ -33,8 +33,7 @@ class _CompassPageState extends State<CompassPage> {
   }
 
   void _sendHeading() {
-    widget.ble
-        .sendCustomCommand('SET_HEADING:${_heading.toStringAsFixed(1)}');
+    widget.ble.sendCustomCommand('SET_HEADING:${_heading.toStringAsFixed(1)}');
   }
 
   void _togglePhone(bool v) {
@@ -42,8 +41,7 @@ class _CompassPageState extends State<CompassPage> {
     _sub?.cancel();
     if (_usePhone) {
       _sub = magnetometerEventStream().listen((event) {
-        final h =
-            (math.atan2(event.y, event.x) * 180 / math.pi + 360) % 360;
+        final h = (math.atan2(event.y, event.x) * 180 / math.pi + 360) % 360;
         setState(() => _heading = h);
         if (widget.emuCompass) _sendHeading();
       });
@@ -59,8 +57,10 @@ class _CompassPageState extends State<CompassPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('${_heading.toStringAsFixed(1)}°',
-                style: const TextStyle(fontSize: 32)),
+            Text(
+              '${_heading.toStringAsFixed(1)}°',
+              style: const TextStyle(fontSize: 32),
+            ),
             Slider(
               min: 0,
               max: 360,

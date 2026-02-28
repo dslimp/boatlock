@@ -20,6 +20,8 @@ extern bool manualMode;
 extern int manualDir;
 extern int manualSpeed;
 void startCompassCalibration();
+void exportRouteLog();
+void clearRouteLog();
 
 inline void handleBleCommand(const std::string &cmd) {
   if (cmd.rfind("SET_ANCHOR:", 0) == 0) {
@@ -92,7 +94,11 @@ inline void handleBleCommand(const std::string &cmd) {
   } else if (cmd.rfind("MANUAL_DIR:", 0) == 0) {
     manualDir = atoi(cmd.c_str() + 11);
   } else if (cmd.rfind("MANUAL_SPEED:", 0) == 0) {
-    manualSpeed = atoi(cmd.c_str() + 12);
+    manualSpeed = atoi(cmd.c_str() + 13);
+  } else if (cmd == "EXPORT_LOG") {
+    exportRouteLog();
+  } else if (cmd == "CLEAR_LOG") {
+    clearRouteLog();
   } else {
     logMessage("[BLE] Unhandled command: %s\n", cmd.c_str());
   }

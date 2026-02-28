@@ -17,6 +17,8 @@ The firmware receives ASCII commands over its BLE characteristic. The Flutter ap
 | `SET_STEP_ACCEL:<float>` | float | Stepper acceleration (steps/s²) |
 | `MANUAL:<0|1>` | integer flag | Toggle manual control mode |
 | `MANUAL_DIR:<0|1>` | integer | Rudder direction: `0` = port, `1` = starboard |
-| `MANUAL_SPEED:<int>` | integer | Thruster power (0–100) |
+| `MANUAL_SPEED:<int>` | integer | Thruster power (-255..255) |
+| `EXPORT_LOG` | none | Stream route log rows as `ROUTE:<line>` notifications |
+| `CLEAR_LOG` | none | Delete route log file on device |
 
-These commands correspond to the implementation in [`boatlock/include/BleCommandHandler.h`](../boatlock/include/BleCommandHandler.h) and are used by the mobile application.
+These commands correspond to the implementation in [`boatlock/BleCommandHandler.h`](../boatlock/BleCommandHandler.h) and are used by the mobile application.

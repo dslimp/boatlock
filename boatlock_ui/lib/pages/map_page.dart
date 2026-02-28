@@ -13,7 +13,6 @@ import 'settings_page.dart';
 import 'route_page.dart';
 import 'compass_page.dart';
 
-
 class MapPage extends StatefulWidget {
   const MapPage({super.key});
   @override
@@ -58,39 +57,42 @@ class _MapPageState extends State<MapPage> {
   }
 
   Widget _holdBtn(IconData icon, int dir) => Padding(
-        padding: const EdgeInsets.all(4),
-        child: GestureDetector(
-          onTapDown: (_) => _sendDirection(dir),
-          onTapUp: (_) => _sendDirection(-1),
-          onTapCancel: () => _sendDirection(-1),
-          child: Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Icon(icon, color: Colors.white),
-          ),
+    padding: const EdgeInsets.all(4),
+    child: GestureDetector(
+      onTapDown: (_) => _sendDirection(dir),
+      onTapUp: (_) => _sendDirection(-1),
+      onTapCancel: () => _sendDirection(-1),
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.primary,
+          borderRadius: BorderRadius.circular(4),
         ),
-      );
+        child: Icon(icon, color: Colors.white),
+      ),
+    ),
+  );
 
   @override
   void initState() {
     super.initState();
-    ble = BleBoatLock(onData: (data) {
-      setState(() {
-        boatData = data;
-        _manualMode = data?.mode == 'MANUAL';
-        if (data != null && data.lat != 0 && data.lon != 0) {
-          final p = LatLng(data.lat, data.lon);
-          _addToHistory(p);
-          if (_autoCenter) {
-            _mapController.move(p, _zoom);
+    ble = BleBoatLock(
+      onData: (data) {
+        setState(() {
+          boatData = data;
+          _manualMode = data?.mode == 'MANUAL';
+          if (data != null && data.lat != 0 && data.lon != 0) {
+            final p = LatLng(data.lat, data.lon);
+            _addToHistory(p);
+            if (_autoCenter) {
+              _mapController.move(p, _zoom);
+            }
           }
-        }
-      });
-    }, onLog: (line) => logService.add(line));
+        });
+      },
+      onLog: (line) => logService.add(line),
+    );
     ble.connectAndListen();
     _initLocation();
   }
@@ -129,313 +131,333 @@ class _MapPageState extends State<MapPage> {
     if (_history.length > 500) _history.removeAt(0);
   }
 
-@override
-Widget build(BuildContext context) {
-  final boatPos =
-      (boatData != null && boatData!.lat != 0 && boatData!.lon != 0)
-          ? LatLng(boatData!.lat, boatData!.lon)
-          : null;
-  final anchorPos =
-      (boatData != null && boatData!.anchorLat != 0 && boatData!.anchorLon != 0)
-          ? LatLng(boatData!.anchorLat, boatData!.anchorLon)
-          : null;
-  final center = boatPos ?? phonePos ?? anchorPos ?? const LatLng(0, 0);
+  @override
+  Widget build(BuildContext context) {
+    final boatPos =
+        (boatData != null && boatData!.lat != 0 && boatData!.lon != 0)
+        ? LatLng(boatData!.lat, boatData!.lon)
+        : null;
+    final anchorPos =
+        (boatData != null &&
+            boatData!.anchorLat != 0 &&
+            boatData!.anchorLon != 0)
+        ? LatLng(boatData!.anchorLat, boatData!.anchorLon)
+        : null;
+    final center = boatPos ?? phonePos ?? anchorPos ?? const LatLng(0, 0);
 
-
-  return Scaffold(
-    appBar: AppBar(
-      title: const Text('BoatLock OSM Map'),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.list),
-          tooltip: 'Логи',
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const LogsPage()),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('BoatLock OSM Map'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.list),
+            tooltip: 'Логи',
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const LogsPage())),
           ),
-        ),
-        IconButton(
-          icon: const Icon(Icons.alt_route),
-          tooltip: 'Трек',
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => RoutePage(ble: ble)),
+          IconButton(
+            icon: const Icon(Icons.alt_route),
+            tooltip: 'Трек',
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => RoutePage(ble: ble))),
           ),
-        ),
-        IconButton(
-          icon: const Icon(Icons.explore),
-          tooltip: 'Компас',
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => CompassPage(
-                ble: ble,
-                emuCompass: boatData?.emuCompass == 1,
+          IconButton(
+            icon: const Icon(Icons.explore),
+            tooltip: 'Компас',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => CompassPage(
+                  ble: ble,
+                  emuCompass: boatData?.emuCompass == 1,
+                ),
               ),
             ),
           ),
-        ),
-        IconButton(
-          icon: const Icon(Icons.settings),
-          tooltip: 'Настройки',
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => SettingsPage(
-                ble: ble,
-                holdHeading: boatData?.holdHeading ?? false,
-                emuCompass: boatData?.emuCompass == 1,
-                stepSpr: boatData?.stepSpr ?? 200,
-                stepMaxSpd: boatData?.stepMaxSpd ?? 1000,
-                stepAccel: boatData?.stepAccel ?? 500,
-                isConnected: boatData != null,
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Настройки',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => SettingsPage(
+                  ble: ble,
+                  holdHeading: boatData?.holdHeading ?? false,
+                  emuCompass: boatData?.emuCompass == 1,
+                  stepSpr: boatData?.stepSpr ?? 200,
+                  stepMaxSpd: boatData?.stepMaxSpd ?? 1000,
+                  stepAccel: boatData?.stepAccel ?? 500,
+                  isConnected: boatData != null,
+                ),
               ),
             ),
           ),
-        ),
-        IconButton(
-          icon: Icon(_satellite ? Icons.map : Icons.satellite),
-          tooltip: 'Переключить карту',
-          onPressed: () => setState(() {
-            _satellite = !_satellite;
-          }),
-        ),
-      ],
-    ),
-    body: Stack(
-      children: [
-        FlutterMap(
-          mapController: _mapController,
-          options: MapOptions(
-            center: center,
-            zoom: _zoom,
-            onPositionChanged: (pos, hasGesture) {
-              if (pos.zoom != null) _zoom = pos.zoom!;
-              if (hasGesture) _autoCenter = false;
-            },
-            onLongPress: (_, point) {
-              if (boatData != null) {
-                setState(() {
-                  selectedAnchorPos = point;
-                });
-              }
-            },
+          IconButton(
+            icon: Icon(_satellite ? Icons.map : Icons.satellite),
+            tooltip: 'Переключить карту',
+            onPressed: () => setState(() {
+              _satellite = !_satellite;
+            }),
           ),
-          children: [
-            TileLayer(
-              urlTemplate: _satellite
-                  ? 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-                  : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        ],
+      ),
+      body: Stack(
+        children: [
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: center,
+              initialZoom: _zoom,
+              onPositionChanged: (pos, hasGesture) {
+                if (pos.zoom != null) _zoom = pos.zoom!;
+                if (hasGesture) _autoCenter = false;
+              },
+              onLongPress: (_, point) {
+                if (boatData != null) {
+                  setState(() {
+                    selectedAnchorPos = point;
+                  });
+                }
+              },
             ),
-            if (_history.length > 1)
-              PolylineLayer(
-                polylines: [
-                  Polyline(points: _history, color: Colors.blueAccent, strokeWidth: 3),
+            children: [
+              TileLayer(
+                urlTemplate: _satellite
+                    ? 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                    : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              ),
+              if (_history.length > 1)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: _history,
+                      color: Colors.blueAccent,
+                      strokeWidth: 3,
+                    ),
+                  ],
+                ),
+              MarkerLayer(
+                markers: [
+                  if (boatPos != null)
+                    Marker(
+                      point: boatPos,
+                      width: 40,
+                      height: 40,
+                      child: Transform.rotate(
+                        angle: (boatData?.heading ?? 0) * math.pi / 180,
+                        child: Icon(
+                          Icons.directions_boat,
+                          color: Colors.blue,
+                          size: 36,
+                        ),
+                      ),
+                    ),
+                  if (anchorPos != null)
+                    Marker(
+                      point: anchorPos,
+                      width: 40,
+                      height: 40,
+                      child: Icon(Icons.anchor, color: Colors.red, size: 36),
+                    ),
+                  if (selectedAnchorPos != null)
+                    Marker(
+                      point: selectedAnchorPos!,
+                      width: 40,
+                      height: 40,
+                      child: Icon(Icons.place, color: Colors.orange, size: 36),
+                    ),
                 ],
               ),
-            MarkerLayer(markers: [
-              if (boatPos != null)
-                Marker(
-                  point: boatPos,
-                  width: 40,
-                  height: 40,
-                  child: Transform.rotate(
-                    angle: (boatData?.heading ?? 0) * math.pi / 180,
-                    child: Icon(Icons.directions_boat, color: Colors.blue, size: 36),
+            ],
+          ),
+          if (boatData == null)
+            Positioned(
+              bottom: 16,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      SizedBox(width: 8),
+                      Text('Поиск устройства BoatLock…'),
+                    ],
                   ),
                 ),
-              if (anchorPos != null)
-                Marker(
-                  point: anchorPos,
-                  width: 40,
-                  height: 40,
-                  child: Icon(Icons.anchor, color: Colors.red, size: 36),
-                ),
-              if (selectedAnchorPos != null)
-                Marker(
-                  point: selectedAnchorPos!,
-                  width: 40,
-                  height: 40,
-                  child: Icon(Icons.place, color: Colors.orange, size: 36),
-                ),
-            ]),
-          ],
-        ),
-        if (boatData == null)
+              ),
+            ),
+          // Панель статуса — всегда вверху
           Positioned(
-            bottom: 16,
+            top: 0,
             left: 0,
             right: 0,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(12),
+            child: StatusPanel(data: boatData),
+          ),
+          Positioned(
+            top: 80,
+            right: 8,
+            child: Column(
+              children: [
+                FloatingActionButton(
+                  heroTag: 'zoom_in_btn',
+                  mini: true,
+                  onPressed: () {
+                    setState(() => _zoom += 1);
+                    _mapController.move(_mapController.camera.center, _zoom);
+                  },
+                  child: const Icon(Icons.add),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                const SizedBox(height: 8),
+                FloatingActionButton(
+                  heroTag: 'zoom_out_btn',
+                  mini: true,
+                  onPressed: () {
+                    setState(() => _zoom -= 1);
+                    _mapController.move(_mapController.camera.center, _zoom);
+                  },
+                  child: const Icon(Icons.remove),
+                ),
+                const SizedBox(height: 8),
+                FloatingActionButton(
+                  heroTag: 'center_btn',
+                  mini: true,
+                  onPressed: _centerOnCurrent,
+                  child: const Icon(Icons.my_location),
+                ),
+                const SizedBox(height: 8),
+                FloatingActionButton(
+                  heroTag: 'north_btn',
+                  mini: true,
+                  onPressed: () => _mapController.rotate(0),
+                  child: const Icon(Icons.north),
+                ),
+              ],
+            ),
+          ),
+          // Панель с дистанцией — только если есть данные
+          if (boatData != null && boatData!.distance > 0)
+            Positioned(
+              bottom: 24,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.85),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(blurRadius: 8, color: Colors.black12),
+                    ],
+                  ),
+                  child: Text(
+                    'До якоря: ${boatData!.distance.toStringAsFixed(1)} м',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ),
+          if (selectedAnchorPos != null && boatData != null)
+            Positioned(
+              bottom: 90,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.check),
+                  label: const Text('Установить якорь здесь'),
+                  onPressed: boatData == null
+                      ? null
+                      : () {
+                          final cmd =
+                              'SET_ANCHOR:${selectedAnchorPos!.latitude},${selectedAnchorPos!.longitude}';
+                          ble.sendCustomCommand(cmd);
+                          setState(() {
+                            selectedAnchorPos = null;
+                          });
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
                     ),
-                    SizedBox(width: 8),
-                    Text('Поиск устройства BoatLock…'),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
-        // Панель статуса — всегда вверху
-        Positioned(
-          top: 0, left: 0, right: 0,
-          child: StatusPanel(data: boatData),
-        ),
-        Positioned(
-          top: 80,
-          right: 8,
-          child: Column(
-            children: [
-              FloatingActionButton(
-                heroTag: 'zoom_in_btn',
-                mini: true,
-                child: const Icon(Icons.add),
-                onPressed: () {
-                  setState(() => _zoom += 1);
-                  _mapController.move(_mapController.center, _zoom);
-                },
-              ),
-              const SizedBox(height: 8),
-              FloatingActionButton(
-                heroTag: 'zoom_out_btn',
-                mini: true,
-                child: const Icon(Icons.remove),
-                onPressed: () {
-                  setState(() => _zoom -= 1);
-                  _mapController.move(_mapController.center, _zoom);
-                },
-              ),
-              const SizedBox(height: 8),
-              FloatingActionButton(
-                heroTag: 'center_btn',
-                mini: true,
-                child: const Icon(Icons.my_location),
-                onPressed: _centerOnCurrent,
-              ),
-              const SizedBox(height: 8),
-              FloatingActionButton(
-                heroTag: 'north_btn',
-                mini: true,
-                child: const Icon(Icons.north),
-                onPressed: () => _mapController.rotate(0),
-              ),
-            ],
-          ),
-        ),
-        // Панель с дистанцией — только если есть данные
-        if (boatData != null && boatData!.distance > 0)
           Positioned(
-            bottom: 24,
-            left: 0, right: 0,
-            child: Center(
-              child: Container(
-                padding: EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.85),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [BoxShadow(blurRadius: 8, color: Colors.black12)],
-                ),
-                child: Text(
-                  'До якоря: ${boatData!.distance.toStringAsFixed(1)} м',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-          ),
-        if (selectedAnchorPos != null && boatData != null)
-          Positioned(
-            bottom: 90,
+            bottom: 150,
             left: 0,
             right: 0,
-            child: Center(
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.check),
-                label: const Text('Установить якорь здесь'),
-                onPressed: boatData == null
-                    ? null
-                    : () {
-                        final cmd =
-                            'SET_ANCHOR:${selectedAnchorPos!.latitude},${selectedAnchorPos!.longitude}';
-                        ble.sendCustomCommand(cmd);
-                        setState(() {
-                          selectedAnchorPos = null;
-                        });
-                      },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ElevatedButton.icon(
+                  icon: Icon(_manualMode ? Icons.toggle_on : Icons.toggle_off),
+                  label: const Text('Ручной режим'),
+                  onPressed: () => _toggleManual(!_manualMode),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _manualMode ? Colors.green : Colors.blue,
+                  ),
                 ),
+                if (_manualMode)
+                  Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _holdBtn(Icons.rotate_left, 0),
+                          _holdBtn(Icons.rotate_right, 1),
+                        ],
+                      ),
+                      Slider(
+                        min: -255,
+                        max: 255,
+                        value: _manualSpeed,
+                        onChanged: (v) => _setSpeed(v),
+                      ),
+                    ],
+                  ),
+              ],
             ),
           ),
-        ),
-        Positioned(
-          bottom: 150,
-          left: 0,
-          right: 0,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ElevatedButton.icon(
-                icon: Icon(_manualMode ? Icons.toggle_on : Icons.toggle_off),
-                label: const Text('Ручной режим'),
-                onPressed: () => _toggleManual(!_manualMode),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      _manualMode ? Colors.green : Colors.blue,
-                ),
-              ),
-              if (_manualMode)
-                Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _holdBtn(Icons.rotate_left, 0),
-                        _holdBtn(Icons.rotate_right, 1),
-                      ],
-                    ),
-                    Slider(
-                      min: -255,
-                      max: 255,
-                      value: _manualSpeed,
-                      onChanged: (v) => _setSpeed(v),
-                    ),
-                  ],
-                ),
-            ],
+        ],
+      ),
+      floatingActionButton: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton(
+            heroTag: 'refresh',
+            tooltip: "Обновить данные",
+            onPressed: () => ble.requestAllParams(),
+            child: Icon(Icons.refresh),
           ),
-        ),
-      ],
-    ),
-    floatingActionButton: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        FloatingActionButton(
-          heroTag: 'refresh',
-          child: Icon(Icons.refresh),
-          tooltip: "Обновить данные",
-          onPressed: () => ble.requestAllParams(),
-        ),
-        SizedBox(width: 12),
-        FloatingActionButton(
-          heroTag: 'set_anchor',
-          child: Icon(Icons.anchor),
-          tooltip: "Установить якорь",
-          onPressed: boatData == null ? null : () => ble.setAnchor(),
-          backgroundColor:
-              boatData == null ? Colors.grey : Colors.red[400],
-        ),
-      ],
-    ),
-  );
-}
+          SizedBox(width: 12),
+          FloatingActionButton(
+            heroTag: 'set_anchor',
+            tooltip: "Установить якорь",
+            onPressed: boatData == null ? null : () => ble.setAnchor(),
+            backgroundColor: boatData == null ? Colors.grey : Colors.red[400],
+            child: Icon(Icons.anchor),
+          ),
+        ],
+      ),
+    );
+  }
 }
