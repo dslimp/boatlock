@@ -33,7 +33,7 @@ class _CompassPageState extends State<CompassPage> {
   }
 
   void _sendHeading() {
-    widget.ble.sendCustomCommand('SET_HEADING:${_heading.toStringAsFixed(1)}');
+    widget.ble.sendHeading(_heading);
   }
 
   void _togglePhone(bool v) {

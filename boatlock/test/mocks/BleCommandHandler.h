@@ -19,6 +19,8 @@ extern bool compassReady;
 extern bool manualMode;
 extern int manualDir;
 extern int manualSpeed;
+void setPhoneGpsFix(float lat, float lon, float speedKmh, int satellites);
+void setPhoneHeading(float headingDeg);
 void startCompassCalibration();
 void exportRouteLog();
 void clearRouteLog();
@@ -60,11 +62,31 @@ inline void handleBleCommand(const std::string &cmd) {
   } else if (cmd == "CALIB_COMPASS") {
     startCompassCalibration();
   } else if (cmd.rfind("SET_HEADING:", 0) == 0) {
-    emuHeading = atof(cmd.c_str() + 12);
+    setPhoneHeading(atof(cmd.c_str() + 12));
+  } else if (cmd.rfind("SET_PHONE_GPS:", 0) == 0) {
+    float lat = 0.0f, lon = 0.0f, speedKmh = 0.0f;
+    int satellites = 0;
+    int parsed = sscanf(cmd.c_str() + 14, "%f,%f,%f,%d", &lat, &lon, &speedKmh, &satellites);
+    if (parsed >= 2) {
+      if (parsed < 3) {
+        speedKmh = 0.0f;
+      }
+      if (parsed < 4) {
+        satellites = 0;
+      }
+      if (lat >= -90.0f && lat <= 90.0f && lon >= -180.0f && lon <= 180.0f) {
+        setPhoneGpsFix(lat, lon, speedKmh, satellites);
+      } else {
+        logMessage("[BLE] Invalid phone GPS range: %.6f, %.6f\n", lat, lon);
+      }
+    } else {
+      logMessage("[BLE] Invalid phone GPS payload: %s\n", cmd.c_str());
+    }
   } else if (cmd.rfind("EMU_COMPASS:", 0) == 0) {
     int v = atoi(cmd.c_str() + 12);
     settings.set("EmuCompass", v);
     settings.save();
+    logMessage("[BLE] EmuCompass set to %d\n", v);
   } else if (cmd.rfind("SET_STEP_SPR:", 0) == 0) {
     int v = atoi(cmd.c_str() + 13);
     settings.set("StepSpr", v);

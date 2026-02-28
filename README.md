@@ -43,37 +43,18 @@ The app and firmware communicate through a simple text protocol; see
 
 ## Building the Firmware
 
-The `boatlock` directory is an Arduino sketch. Open `boatlock/boatlock.ino`
-in the Arduino IDE or build it with `arduino-cli`.
-
-> **Troubleshooting duplicate symbol errors**
->
-> The Arduino build system compiles **all** `.ino`, `.cpp`, and `.c` files inside
-> the sketch folder. If you accidentally copy the sketch to another file (for
-> example `gp.cpp` containing `setup()`/`loop()` or duplicate globals), the linker
-> will fail with “multiple definition” errors. Remove any extra files that define
-> `setup()`, `loop()`, or the same global variables so that `boatlock.ino` remains
-> the only entry point.
+The `boatlock` directory is built with PlatformIO only.
 
 ### Requirements
-- Arduino IDE 2.x (or `arduino-cli`)
-- An ESP32‑S3 development board
-- Installed libraries:
-  - Arduino_GFX
-  - NimBLE-Arduino
-  - AccelStepper
-  - TinyGPSPlus
-  - Adafruit Unified Sensor
-  - Adafruit HMC5883 Unified
+- PlatformIO CLI
+- ESP32‑S3 development board
 
-### Build and Upload (Arduino CLI)
+### Build and Upload (PlatformIO)
 ```bash
-arduino-cli lib install "Arduino_GFX" "NimBLE-Arduino" "AccelStepper" "TinyGPSPlus" \
-  "Adafruit Unified Sensor" "Adafruit HMC5883 Unified"
-arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-arduino-cli core install esp32:esp32 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-arduino-cli compile --fqbn esp32:esp32:esp32s3 boatlock
-arduino-cli upload --fqbn esp32:esp32:esp32s3 --port /dev/ttyUSB0 boatlock
+cd boatlock
+pio run -e esp32s3
+pio run -e esp32s3 -t upload
+pio device monitor -e esp32s3
 ```
 
 ### Firmware Unit Tests
@@ -104,7 +85,7 @@ Use `flutter build <platform>` to create release builds.
 
 | Component        | Purpose                                |
 |------------------|----------------------------------------|
-| Arduino IDE/CLI  | Building and flashing the ESP32 firmware |
+| PlatformIO CLI   | Building and flashing the ESP32 firmware |
 | Flutter SDK      | Running the cross‑platform UI           |
 | Git              | Cloning and updating this repository    |
 
@@ -117,13 +98,13 @@ NEO‑M8N receiver. Connect the module to the ESP32‑S3 board as follows:
 
 - **GPS TX** → **GPIO17**
 - **GPS RX** → **GPIO18**
-- **SDA** → **GPIO8**
-- **SCL** → **GPIO9**
+- **SDA** → **GPIO47**
+- **SCL** → **GPIO48**
 - **VCC** → 5 V (or 3.3 V if your module supports it)
 - **GND** → **GND**
 
-After wiring, build and flash the firmware from the Arduino IDE or with
-`arduino-cli` (see the build section above). Open the serial monitor to verify
+After wiring, build and flash the firmware with PlatformIO
+(see the build section above). Open the serial monitor to verify
 that GPS data is being received.
 
 ## Compass Calibration
@@ -137,18 +118,18 @@ See [CHANGELOG.md](CHANGELOG.md) for recent changes and firmware versions.
 
 ## HC 160A S2 Motor Controller
 
-The HC 160A S2 driver requires two direction pins. Define them in
-`boatlock/boatlock.ino`:
+The HC 160A S2 driver requires two direction pins. They are configured in
+`boatlock/main.cpp`:
 
 ```cpp
-#define MOTOR_DIR_PIN1 6   // IN1 on the driver
-#define MOTOR_DIR_PIN2 10  // IN2 on the driver
+constexpr int kMotorDirPin1 = 6;   // IN1 on the driver
+constexpr int kMotorDirPin2 = 10;  // IN2 on the driver
 ```
 
 During setup the firmware calls:
 
 ```cpp
-motor.setDirPins(MOTOR_DIR_PIN1, MOTOR_DIR_PIN2);
+motor.setDirPins(kMotorDirPin1, kMotorDirPin2);
 ```
 
 Pin 1 should be HIGH and Pin 2 LOW for forward rotation. The logic is reversed

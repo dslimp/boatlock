@@ -10,7 +10,8 @@ The firmware receives ASCII commands over its BLE characteristic. The Flutter ap
 | `START_ROUTE` | none | Begin following the uploaded route |
 | `STOP_ROUTE` | none | Halt route following |
 | `CALIB_COMPASS` | none | Start compass calibration |
-| `SET_HEADING:<deg>` | heading in degrees (float) | Provide external heading when emulating the compass |
+| `SET_HEADING:<deg>` | heading in degrees (float) | Provide external heading from phone; used in emulation mode and as fallback when onboard compass is unavailable |
+| `SET_PHONE_GPS:<lat>,<lon>[,<speedKmh>[,<satellites>]]` | latitude, longitude, optional speed in km/h, optional satellites used in fix | Provide phone GPS fix (used as fallback when onboard GPS has no fresh fix) |
 | `EMU_COMPASS:<0|1>` | integer flag | Enable (`1`) or disable (`0`) use of emulated heading |
 | `SET_STEP_SPR:<int>` | integer | Stepper steps per revolution |
 | `SET_STEP_MAXSPD:<float>` | float | Maximum stepper speed (steps/s) |

@@ -10,6 +10,7 @@ void main() {
       lon: 0,
       anchorLat: 59.1234,
       anchorLon: 30.5678,
+      anchorHeading: 87.0,
       distance: 12.3,
       heading: 45,
       battery: 50,

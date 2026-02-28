@@ -1,5 +1,6 @@
 #pragma once
 #include <EEPROM.h>
+#include <math.h>
 #include <string.h>
 #include "Logger.h"
 
@@ -115,13 +116,23 @@ public:
             entries[i] = defaultEntries[i];
 
         uint8_t v = 0;
+        bool shouldSave = false;
         EEPROM.get(EEPROM_ADDR, v);
         if (v == VERSION) {
             float values[count];
             EEPROM.get(EEPROM_ADDR + sizeof(uint8_t), values);
-            for (int i = 0; i < count; i++)
-                entries[i].value = values[i];
+            for (int i = 0; i < count; i++) {
+                float normalized = sanitizeLoadedValue(entries[i], values[i]);
+                if (normalized != values[i]) {
+                    shouldSave = true;
+                }
+                entries[i].value = normalized;
+            }
         } else {
+            shouldSave = true;
+        }
+
+        if (shouldSave) {
             save();
         }
 
@@ -129,6 +140,33 @@ public:
 
         buildKeyMap();
     }
+
+private:
+    static float sanitizeLoadedValue(const SettingEntry& entry, float raw) {
+        if (!isfinite(raw)) {
+            return entry.defaultValue;
+        }
+
+        float value = raw;
+        if (entry.type == TYPE_BOOL) {
+            value = value >= 0.5f ? 1.0f : 0.0f;
+        } else if (entry.type == TYPE_INT) {
+            value = roundf(value);
+        }
+
+        if (value < entry.minValue || value > entry.maxValue) {
+            value = entry.defaultValue;
+        }
+        if (value < entry.minValue) {
+            value = entry.minValue;
+        }
+        if (value > entry.maxValue) {
+            value = entry.maxValue;
+        }
+        return value;
+    }
 };
+
+extern Settings settings;
 
 constexpr uint8_t Settings::VERSION;

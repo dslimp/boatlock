@@ -8,6 +8,7 @@ BoatData _data({required double lat, required double lon}) {
     lon: lon,
     anchorLat: 0,
     anchorLon: 0,
+    anchorHeading: 0,
     distance: 0,
     heading: 0,
     battery: 0,
@@ -39,6 +40,30 @@ void main() {
         _data(lat: 59.1234567, lon: 30.7654321),
       ),
       'SET_ANCHOR:59.123457,30.765432',
+    );
+  });
+
+  test('buildSetPhoneGpsCommand validates and formats payload', () {
+    expect(
+      BleBoatLock.buildSetPhoneGpsCommand(59.9386312, 30.3141119, speedKmh: 12.34),
+      'SET_PHONE_GPS:59.938631,30.314112,12.3',
+    );
+    expect(
+      BleBoatLock.buildSetPhoneGpsCommand(
+        59.9386312,
+        30.3141119,
+        speedKmh: 12.34,
+        satellites: 9,
+      ),
+      'SET_PHONE_GPS:59.938631,30.314112,12.3,9',
+    );
+    expect(
+      BleBoatLock.buildSetPhoneGpsCommand(95, 30.0),
+      isNull,
+    );
+    expect(
+      BleBoatLock.buildSetPhoneGpsCommand(59.0, 200.0),
+      isNull,
     );
   });
 }

@@ -10,8 +10,6 @@
 .history
 .svn/
 .swiftpm/
-.arduino/
-arduino-cli.yaml
 migrate_working_dir/
 
 # IntelliJ related
@@ -34,6 +32,9 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+/.build-s3/
+**/.pio/
+**/build/
 
 # Symbolication related
 app.*.symbols

@@ -3,6 +3,7 @@ class BoatData {
   final double lon;
   final double anchorLat;
   final double anchorLon;
+  final double anchorHeading;
   final double distance;
   final double heading;
   final int battery;
@@ -21,6 +22,7 @@ class BoatData {
     required this.lon,
     required this.anchorLat,
     required this.anchorLon,
+    required this.anchorHeading,
     required this.distance,
     required this.heading,
     required this.battery,
@@ -41,6 +43,7 @@ class BoatData {
       lon: double.tryParse(json['lon']?.toString() ?? '') ?? 0,
       anchorLat: double.tryParse(json['anchorLat']?.toString() ?? '') ?? 0,
       anchorLon: double.tryParse(json['anchorLon']?.toString() ?? '') ?? 0,
+      anchorHeading: double.tryParse(json['anchorHead']?.toString() ?? '') ?? 0,
       distance: double.tryParse(json['distance']?.toString() ?? '') ?? 0,
       heading: double.tryParse(json['heading']?.toString() ?? '') ?? 0,
       battery: int.tryParse(json['battery']?.toString() ?? '') ?? 0,

@@ -27,15 +27,8 @@ public:
 
     void setupPWM(int pin, int channel, int freq, int res) {
         pwmChannel = channel;
-#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
-        int attachedChannel = ledcAttach(pin, freq, res);
-        if (attachedChannel >= 0) {
-            pwmChannel = attachedChannel;
-        }
-#else
-        ledcSetup(channel, freq, res);
-        ledcAttachPin(pin, channel);
-#endif
+        ledcSetup(pwmChannel, freq, res);
+        ledcAttachPin(pin, pwmChannel);
         ledcWrite(pwmChannel, 0);
     }
 

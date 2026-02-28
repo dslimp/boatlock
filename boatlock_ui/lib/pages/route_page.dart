@@ -72,6 +72,7 @@ class _RoutePageState extends State<RoutePage> {
         children: [
           TileLayer(
             urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            userAgentPackageName: 'com.example.boatlock_ui',
           ),
           if (_points.length > 1)
             PolylineLayer(

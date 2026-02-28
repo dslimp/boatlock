@@ -1,7 +1,8 @@
 #include "display.h"
 #include "colors.h"
-#include "icons.h"
 #include <Arduino.h>
+#include <cstring>
+#include <math.h>
 
 // ===== LCD pins =====
 #define LCD_BL   1
@@ -12,7 +13,27 @@
 #define LCD_SCLK 39
 #define LCD_MISO -1
 
-static Arduino_DataBus *bus = new Arduino_ESP32SPI(
+namespace {
+struct DisplayProfile {
+  int rotation;
+  bool ips;
+  int width;
+  int height;
+  int colOffset1;
+  int rowOffset1;
+  int colOffset2;
+  int rowOffset2;
+  uint32_t spiHz;
+};
+
+constexpr DisplayProfile kDisplayProfile = {1, true, 240, 320, 0, 0, 0, 0, 16000000};
+constexpr bool kUseCanvasCompositor = true;
+constexpr bool kRotationSwapsAxes = (kDisplayProfile.rotation & 1) != 0;
+constexpr int kCanvasWidth = kRotationSwapsAxes ? kDisplayProfile.height : kDisplayProfile.width;
+constexpr int kCanvasHeight = kRotationSwapsAxes ? kDisplayProfile.width : kDisplayProfile.height;
+} // namespace
+
+static Arduino_ESP32SPI bus(
   LCD_DC,
   LCD_CS,
   LCD_SCLK,
@@ -20,14 +41,26 @@ static Arduino_DataBus *bus = new Arduino_ESP32SPI(
   LCD_MISO
 );
 
-static Arduino_GFX *gfx = new Arduino_ST7789(
-  bus,
+static Arduino_ST7789 panel(
+  &bus,
   LCD_RST,
-  1,
-  true,
-  240,
-  320
+  kDisplayProfile.rotation,
+  kDisplayProfile.ips,
+  kDisplayProfile.width,
+  kDisplayProfile.height,
+  kDisplayProfile.colOffset1,
+  kDisplayProfile.rowOffset1,
+  kDisplayProfile.colOffset2,
+  kDisplayProfile.rowOffset2
 );
+static Arduino_Canvas canvas(kCanvasWidth, kCanvasHeight, &panel);
+static Arduino_GFX *gfx = &panel;
+
+static void display_flush() {
+  if (gfx == &canvas) {
+    canvas.flush();
+  }
+}
 
 Arduino_GFX *display_gfx() {
   return gfx;
@@ -37,22 +70,35 @@ bool display_init() {
   pinMode(LCD_BL, OUTPUT);
   digitalWrite(LCD_BL, HIGH);
 
-  if (!gfx->begin()) {
+  if (!panel.begin(kDisplayProfile.spiHz)) {
     return false;
   }
 
-  gfx->setRotation(1);
+  panel.setRotation(kDisplayProfile.rotation);
+
+  if (kUseCanvasCompositor) {
+    if (canvas.begin(GFX_SKIP_OUTPUT_BEGIN)) {
+      canvas.setRotation(0);
+      gfx = &canvas;
+    } else {
+      gfx = &panel;
+    }
+  } else {
+    gfx = &panel;
+  }
+
   gfx->fillScreen(COLOR_BG_LIGHT);
   gfx->setTextColor(COLOR_TEXT_DARK);
   gfx->setTextSize(2);
   gfx->setCursor(16, 10);
   gfx->println("BoatLock");
-
+  display_flush();
   return true;
 }
 
 void display_clear() {
   gfx->fillScreen(COLOR_BG_LIGHT);
+  display_flush();
 }
 
 void display_draw_debug(const String &msg, int y) {
@@ -62,259 +108,601 @@ void display_draw_debug(const String &msg, int y) {
   gfx->setCursor(0, y);
   gfx->print("[D]");
   gfx->print(msg);
+  display_flush();
 }
 
 namespace {
-constexpr int TOP_BAR_H = 32;
-constexpr int BOTTOM_BAR_H = 32;
 constexpr int PANEL_RADIUS = 8;
-} // namespace
+constexpr int PANEL_RADIUS_COMPACT = 5;
 
 struct Layout {
   int screenW;
   int screenH;
-  int topBarH;
-  int bottomBarH;
+  bool compact;
+  int margin;
+  int gap;
+  int panelRadius;
+  int headerX;
+  int headerY;
+  int headerW;
+  int headerH;
   int contentY;
   int contentH;
+  int rightX;
+  int rightY;
+  int rightW;
+  int rightH;
+  int cardH;
   int compassCx;
   int compassCy;
   int compassR;
-  int panelX;
-  int panelW;
-  int panelH;
+  int footerX;
+  int footerY;
+  int footerW;
+  int footerH;
 };
 
+static int normalize_deg(float deg) {
+  int value = static_cast<int>(roundf(deg));
+  value %= 360;
+  if (value < 0) {
+    value += 360;
+  }
+  return value;
+}
+
+static float sanitize_non_negative(float value) {
+  if (!isfinite(value) || value < 0.0f) {
+    return 0.0f;
+  }
+  return value;
+}
+
+static float sanitize_signed(float value) {
+  if (!isfinite(value)) {
+    return 0.0f;
+  }
+  return value;
+}
+
 static Layout display_layout() {
-  Layout layout;
+  Layout layout{};
   layout.screenW = gfx->width();
   layout.screenH = gfx->height();
-  layout.topBarH = TOP_BAR_H;
-  layout.bottomBarH = BOTTOM_BAR_H;
-  layout.contentY = layout.topBarH;
-  layout.contentH = layout.screenH - layout.topBarH - layout.bottomBarH;
-  int minSide = min(layout.screenW / 2, layout.contentH);
-  layout.compassR = minSide / 2 - 8;
-  if (layout.compassR < 40) {
-    layout.compassR = 40;
-  }
-  layout.compassCx = layout.compassR + 22;
-  layout.compassCy = layout.contentY + (layout.contentH / 2);
-  layout.panelX = layout.compassCx + layout.compassR + 16;
-  layout.panelW = layout.screenW - layout.panelX - 12;
-  layout.panelH = layout.contentH;
+  layout.compact = (layout.screenH <= 170 || layout.screenW <= 260);
+  layout.margin = layout.compact ? 3 : 6;
+  layout.gap = layout.compact ? 3 : 6;
+  layout.panelRadius = layout.compact ? PANEL_RADIUS_COMPACT : PANEL_RADIUS;
+
+  layout.headerX = layout.margin;
+  layout.headerY = layout.margin;
+  layout.headerW = layout.screenW - layout.margin * 2;
+  layout.headerH = layout.compact ? 20 : 28;
+
+  layout.footerX = layout.margin;
+  layout.footerH = layout.compact ? 16 : 28;
+  layout.footerY = layout.screenH - layout.margin - layout.footerH;
+  layout.footerW = layout.screenW - layout.margin * 2;
+
+  layout.contentY = layout.headerY + layout.headerH + layout.gap;
+  layout.contentH = layout.footerY - layout.gap - layout.contentY;
+
+  layout.rightW = layout.compact
+                      ? constrain(layout.screenW * 36 / 100, 82, 96)
+                      : constrain(layout.screenW * 34 / 100, 104, 124);
+  layout.rightX = layout.screenW - layout.margin - layout.rightW;
+  layout.rightY = layout.contentY;
+  layout.rightH = layout.contentH;
+  layout.cardH = (layout.rightH - layout.gap * 2) / 3;
+
+  int leftAreaX = layout.margin;
+  int leftAreaW = layout.rightX - layout.gap - leftAreaX;
+  layout.compassCx = leftAreaX + leftAreaW / 2;
+  layout.compassCy = layout.contentY + layout.contentH / 2;
+  int rByW = (leftAreaW - 12) / 2;
+  int rByH = (layout.contentH - 12) / 2;
+  int minRadius = layout.compact ? 24 : 44;
+  layout.compassR = max(minRadius, min(rByW, rByH));
   return layout;
+}
+
+static void draw_panel(int x, int y, int w, int h, int radius, uint16_t fillColor) {
+  gfx->fillRoundRect(x, y, w, h, radius, fillColor);
+  gfx->drawRoundRect(x, y, w, h, radius, COLOR_SILVER);
+}
+
+static uint16_t mode_color(const char *mode) {
+  if (strcmp(mode, "MANUAL") == 0) {
+    return COLOR_WARNING;
+  }
+  if (strcmp(mode, "ANCHOR") == 0) {
+    return COLOR_ACCENT;
+  }
+  if (strcmp(mode, "ROUTE") == 0) {
+    return COLOR_TEAL;
+  }
+  return COLOR_SILVER;
 }
 
 static void draw_arrow(float heading, int cx, int cy, int radius, uint16_t color) {
   float rad = (heading - 90.0f) * DEG_TO_RAD;
-  float tipX = cx + cos(rad) * (radius - 10);
-  float tipY = cy + sin(rad) * (radius - 10);
-  float baseRad = rad + PI;
-  float baseX = cx + cos(baseRad) * (radius - 34);
-  float baseY = cy + sin(baseRad) * (radius - 34);
-  float leftRad = rad + DEG_TO_RAD * 150.0f;
-  float rightRad = rad - DEG_TO_RAD * 150.0f;
-  int x1 = static_cast<int>(tipX);
-  int y1 = static_cast<int>(tipY);
-  int x2 = static_cast<int>(baseX + cos(leftRad) * 12);
-  int y2 = static_cast<int>(baseY + sin(leftRad) * 12);
-  int x3 = static_cast<int>(baseX + cos(rightRad) * 12);
-  int y3 = static_cast<int>(baseY + sin(rightRad) * 12);
+  int tipDist = max(radius - 8, radius / 2);
+  int tailDist = max(radius - 20, radius / 3);
+  int wing = max(4, radius / 6);
+
+  int x1 = cx + static_cast<int>(tipDist * cos(rad));
+  int y1 = cy + static_cast<int>(tipDist * sin(rad));
+  int xBase = cx + static_cast<int>(tailDist * cos(rad + PI));
+  int yBase = cy + static_cast<int>(tailDist * sin(rad + PI));
+  int x2 = xBase + static_cast<int>(wing * cos(rad + DEG_TO_RAD * 140.0f));
+  int y2 = yBase + static_cast<int>(wing * sin(rad + DEG_TO_RAD * 140.0f));
+  int x3 = xBase + static_cast<int>(wing * cos(rad - DEG_TO_RAD * 140.0f));
+  int y3 = yBase + static_cast<int>(wing * sin(rad - DEG_TO_RAD * 140.0f));
+
   gfx->fillTriangle(x1, y1, x2, y2, x3, y3, color);
   gfx->drawLine(cx, cy, x1, y1, color);
 }
 
-static void draw_compass(float heading, float anchorBearing, const Layout &layout) {
-  gfx->fillCircle(layout.compassCx, layout.compassCy, layout.compassR + 6, COLOR_PANEL);
-  gfx->drawCircle(layout.compassCx, layout.compassCy, layout.compassR + 2, COLOR_SILVER);
-  gfx->drawCircle(layout.compassCx, layout.compassCy, layout.compassR - 18, COLOR_SILVER);
-  for (int deg = 0; deg < 360; deg += 15) {
-    float rad = (deg - 90.0f) * DEG_TO_RAD;
-    int tickOuter = (deg % 90 == 0) ? layout.compassR + 2 : layout.compassR - 6;
-    int tickInner = layout.compassR - 12;
-    int x1 = layout.compassCx + static_cast<int>(tickOuter * cos(rad));
-    int y1 = layout.compassCy + static_cast<int>(tickOuter * sin(rad));
-    int x2 = layout.compassCx + static_cast<int>(tickInner * cos(rad));
-    int y2 = layout.compassCy + static_cast<int>(tickInner * sin(rad));
-    gfx->drawLine(x1, y1, x2, y2, COLOR_SILVER);
+static int compass_dynamic_radius(const Layout &layout) {
+  int innerR = layout.compassR - (layout.compact ? 10 : 16);
+  if (innerR < 10) {
+    innerR = 10;
   }
-  gfx->setTextColor(COLOR_TEXT_DARK);
-  gfx->setTextSize(1);
-  gfx->setCursor(layout.compassCx - 4, layout.compassCy - layout.compassR + 6);
-  gfx->print("N");
-  gfx->setCursor(layout.compassCx - 4, layout.compassCy + layout.compassR - 14);
-  gfx->print("S");
-  gfx->setCursor(layout.compassCx - layout.compassR + 8, layout.compassCy - 4);
-  gfx->print("W");
-  gfx->setCursor(layout.compassCx + layout.compassR - 12, layout.compassCy - 4);
-  gfx->print("E");
-
-  draw_arrow(heading, layout.compassCx, layout.compassCy, layout.compassR, COLOR_ACCENT);
-
-  float anchorRad = (anchorBearing - 90.0f) * DEG_TO_RAD;
-  int ax = layout.compassCx + static_cast<int>((layout.compassR - 8) * cos(anchorRad));
-  int ay = layout.compassCy + static_cast<int>((layout.compassR - 8) * sin(anchorRad));
-  gfx->drawLine(layout.compassCx, layout.compassCy, ax, ay, COLOR_WARNING);
-  gfx->fillCircle(ax, ay, 4, COLOR_WARNING);
-  gfx->fillCircle(layout.compassCx, layout.compassCy, 4, COLOR_TEXT_DARK);
+  return innerR - 2;
 }
+
+static void draw_compass_static(const Layout &layout) {
+  gfx->fillCircle(layout.compassCx, layout.compassCy, layout.compassR + 3, COLOR_PANEL);
+  gfx->drawCircle(layout.compassCx, layout.compassCy, layout.compassR + 1, COLOR_SILVER);
+  int innerR = layout.compassR - (layout.compact ? 10 : 16);
+  if (innerR > 6) {
+    gfx->drawCircle(layout.compassCx, layout.compassCy, innerR, COLOR_SILVER);
+  }
+
+  // Fixed bow marker: the boat nose is always "up" on this dial.
+  int bowY = layout.compassCy - layout.compassR - (layout.compact ? 1 : 2);
+  gfx->fillTriangle(layout.compassCx,
+                    bowY - (layout.compact ? 4 : 6),
+                    layout.compassCx - (layout.compact ? 4 : 5),
+                    bowY + (layout.compact ? 2 : 3),
+                    layout.compassCx + (layout.compact ? 4 : 5),
+                    bowY + (layout.compact ? 2 : 3),
+                    COLOR_ACCENT);
+  gfx->drawLine(layout.compassCx,
+                layout.compassCy - layout.compassR + 3,
+                layout.compassCx,
+                layout.compassCy - layout.compassR + 10,
+                COLOR_ACCENT);
+}
+
+static void draw_rotating_compass_card(float headingDeg,
+                                       const Layout &layout,
+                                       uint16_t tickColor,
+                                       uint16_t labelColor) {
+  int tickStep = layout.compact ? 15 : 10;
+  int majorStep = layout.compact ? 45 : 30;
+  for (int worldDeg = 0; worldDeg < 360; worldDeg += tickStep) {
+    float screenDeg = worldDeg - headingDeg;
+    float rad = (screenDeg - 90.0f) * DEG_TO_RAD;
+    int outer = (worldDeg % majorStep == 0) ? layout.compassR + 1 : layout.compassR - 3;
+    int inner = (worldDeg % majorStep == 0) ? layout.compassR - 9 : layout.compassR - 6;
+    int x1 = layout.compassCx + static_cast<int>(outer * cos(rad));
+    int y1 = layout.compassCy + static_cast<int>(outer * sin(rad));
+    int x2 = layout.compassCx + static_cast<int>(inner * cos(rad));
+    int y2 = layout.compassCy + static_cast<int>(inner * sin(rad));
+    gfx->drawLine(x1, y1, x2, y2, tickColor);
+  }
+
+  static const int kCardDeg[4] = {0, 90, 180, 270};
+  static const char* kCardLabel[4] = {"N", "E", "S", "W"};
+  int labelRadius = layout.compassR - (layout.compact ? 12 : 14);
+  gfx->setTextSize(1);
+  gfx->setTextColor(labelColor);
+  for (int i = 0; i < 4; ++i) {
+    float screenDeg = kCardDeg[i] - headingDeg;
+    float rad = (screenDeg - 90.0f) * DEG_TO_RAD;
+    int lx = layout.compassCx + static_cast<int>(labelRadius * cos(rad)) - 3;
+    int ly = layout.compassCy + static_cast<int>(labelRadius * sin(rad)) - 3;
+    gfx->setCursor(lx, ly);
+    gfx->print(kCardLabel[i]);
+  }
+}
+
+static void draw_compass_dynamic(float heading,
+                                 float anchorBearing,
+                                 bool headingValid,
+                                 const Layout &layout,
+                                 uint16_t tickColor,
+                                 uint16_t labelColor,
+                                 uint16_t anchorColor) {
+  int dynR = compass_dynamic_radius(layout);
+  float cardHeading = headingValid ? heading : 0.0f;
+  draw_rotating_compass_card(cardHeading, layout, tickColor, labelColor);
+  if (headingValid) {
+    // Course-up logic: bow is fixed at top (0 deg), arrow shows anchor direction relative to bow.
+    float rel = anchorBearing - heading;
+    while (rel < 0.0f) rel += 360.0f;
+    while (rel >= 360.0f) rel -= 360.0f;
+    draw_arrow(rel, layout.compassCx, layout.compassCy, dynR, anchorColor);
+  }
+
+  int markerR = layout.compact ? 3 : 4;
+  gfx->fillCircle(layout.compassCx, layout.compassCy, markerR, COLOR_TEXT_DARK);
+}
+} // namespace
 
 void display_draw_ui(bool gpsFix,
                      int satellites,
+                     bool gpsFromPhone,
                      float speedKmh,
                      float heading,
+                     bool headingValid,
+                     bool headingFromPhone,
                      float anchorBearing,
                      float distanceMeters,
                      float errorDeg,
                      const char* mode,
                      int batteryPercent,
                      bool force) {
-  static bool ui_drawn = false;
-  static bool lastGpsFix = false;
-  static int lastSatellites = -1;
+  static bool uiInitialized = false;
+  static int lastScreenW = -1;
+  static int lastScreenH = -1;
+  static int lastHdgDeg = -1000;
+  static int lastBrgDeg = -1000;
+  static float lastCompassHeading = -1000.0f;
+  static float lastCompassBearing = -1000.0f;
+  static int lastSatCount = -1;
   static int lastBattery = -1;
-  static float lastSpeed = -1.0f;
-  static float lastHeading = -1.0f;
-  static float lastAnchorBearing = -1.0f;
-  static float lastDistance = -1.0f;
-  static float lastErrorDeg = -1.0f;
+  static bool lastGpsFix = false;
+  static bool lastGpsFromPhone = false;
+  static float lastSpeed = -1000.0f;
+  static float lastDist = -1000.0f;
+  static float lastErr = -1000.0f;
+  static bool lastHeadingValid = false;
+  static bool lastHeadingFromPhone = false;
   static String lastMode;
 
+  const char *modeLabel = mode ? mode : "IDLE";
+  int satCount = max(0, satellites);
+  int battery = constrain(batteryPercent, 0, 100);
+  float speed = sanitize_non_negative(speedKmh);
+  float hdg = sanitize_signed(heading);
+  float brg = sanitize_signed(anchorBearing);
+  float dist = sanitize_non_negative(distanceMeters);
+  float err = fabsf(sanitize_signed(errorDeg));
+  int hdgDeg = normalize_deg(hdg);
+  int brgDeg = normalize_deg(brg);
+
   Layout layout = display_layout();
+  int card1Y = layout.rightY;
+  int card2Y = card1Y + layout.cardH + layout.gap;
+  int card3Y = card2Y + layout.cardH + layout.gap;
 
-  bool compassChanged = lastHeading < 0.0f || lastAnchorBearing < 0.0f ||
-                        fabs(heading - lastHeading) > 1.0f ||
-                        fabs(anchorBearing - lastAnchorBearing) > 1.0f;
-  bool fullRedraw = !ui_drawn || force;
+  bool fullInit = force || !uiInitialized ||
+                  layout.screenW != lastScreenW ||
+                  layout.screenH != lastScreenH;
+  bool dirty = false;
 
-  if (fullRedraw) {
+  if (fullInit) {
     gfx->fillScreen(COLOR_BG_LIGHT);
-    gfx->fillRoundRect(8, 4, layout.screenW - 16, layout.topBarH - 6,
-                       PANEL_RADIUS, COLOR_PANEL);
-    gfx->fillRoundRect(8, layout.screenH - layout.bottomBarH + 4,
-                       layout.screenW - 16, layout.bottomBarH - 8,
-                       PANEL_RADIUS, COLOR_PANEL);
-    ui_drawn = true;
-    lastMode = "";
-    lastSatellites = -1;
+    draw_panel(layout.headerX, layout.headerY, layout.headerW, layout.headerH, layout.panelRadius, COLOR_PANEL);
+    draw_panel(layout.rightX, card1Y, layout.rightW, layout.cardH, layout.panelRadius, COLOR_PANEL);
+    draw_panel(layout.rightX, card2Y, layout.rightW, layout.cardH, layout.panelRadius, COLOR_PANEL);
+    draw_panel(layout.rightX, card3Y, layout.rightW, layout.cardH, layout.panelRadius, COLOR_PANEL);
+    draw_panel(layout.footerX, layout.footerY, layout.footerW, layout.footerH, layout.panelRadius, COLOR_PANEL);
+
+    uiInitialized = true;
+    lastScreenW = layout.screenW;
+    lastScreenH = layout.screenH;
+    lastHdgDeg = -1000;
+    lastBrgDeg = -1000;
+    lastCompassHeading = -1000.0f;
+    lastCompassBearing = -1000.0f;
+    lastSatCount = -1;
     lastBattery = -1;
-    lastSpeed = -1.0f;
-    lastHeading = heading;
-    lastAnchorBearing = anchorBearing;
-    lastDistance = -1.0f;
-    lastErrorDeg = -1.0f;
     lastGpsFix = !gpsFix;
+    lastGpsFromPhone = !gpsFromPhone;
+    lastSpeed = -1000.0f;
+    lastDist = -1000.0f;
+    lastErr = -1000.0f;
+    lastHeadingValid = !headingValid;
+    lastHeadingFromPhone = !headingFromPhone;
+    lastMode = "";
+    dirty = true;
   }
 
-  if (fullRedraw || compassChanged) {
-    gfx->fillScreen(COLOR_BG_LIGHT);
-    gfx->fillRect(0, layout.contentY, layout.screenW, layout.contentH, COLOR_BG_LIGHT);
-    draw_compass(heading, anchorBearing, layout);
+  bool modeChanged = fullInit || !lastMode.equals(modeLabel);
+  bool headingChanged = fullInit || lastHdgDeg != hdgDeg;
+  bool bearingChanged = fullInit || lastBrgDeg != brgDeg || modeChanged;
+  int hdgX = layout.headerX + (layout.compact ? 30 : 38);
+  int hdgY = layout.headerY + (layout.compact ? 6 : 8);
+  int hdgW = layout.compact ? 34 : 56;
+  int hdgH = layout.compact ? 8 : 16;
+
+  if (fullInit) {
     gfx->setTextColor(COLOR_TEXT_DARK);
-    gfx->setTextSize(2);
-    gfx->setCursor(layout.compassCx - 24, layout.contentY + 6);
-    gfx->printf("%03d%c", static_cast<int>(heading), 176);
-    lastHeading = heading;
-    lastAnchorBearing = anchorBearing;
+    gfx->setTextSize(1);
+    gfx->setCursor(layout.headerX + 6, layout.headerY + (layout.compact ? 6 : 9));
+    gfx->print("HDG");
   }
 
-  if (batteryPercent != lastBattery) {
-    gfx->fillRect(18, 8, 64, 18, COLOR_PANEL);
-    gfx->drawRect(18, 10, 40, 12, COLOR_TEXT_DARK);
-    gfx->fillRect(58, 12, 4, 8, COLOR_TEXT_DARK);
-    int fillW = static_cast<int>(36 * constrain(batteryPercent, 0, 100) / 100.0f);
-    gfx->fillRect(20, 12, fillW, 8, COLOR_ACCENT);
+  if (headingChanged) {
+    gfx->fillRect(hdgX, hdgY, hdgW, hdgH, COLOR_PANEL);
     gfx->setTextColor(COLOR_TEXT_DARK);
-    gfx->setTextSize(1);
-    gfx->setCursor(66, 12);
-    gfx->printf("%d%%", constrain(batteryPercent, 0, 100));
-    lastBattery = batteryPercent;
+    gfx->setTextSize(layout.compact ? 1 : 2);
+    gfx->setCursor(hdgX, hdgY);
+    gfx->printf("%03d%c", hdgDeg, 176);
+    dirty = true;
   }
 
-  if (satellites != lastSatellites || gpsFix != lastGpsFix) {
-    gfx->fillRect(layout.panelX, layout.contentY + 4, layout.panelW, 44, COLOR_PANEL);
-    gfx->setTextColor(COLOR_TEXT_DARK);
+  bool headingSourceChanged = fullInit ||
+                              headingValid != lastHeadingValid ||
+                              headingFromPhone != lastHeadingFromPhone;
+  if (headingSourceChanged) {
+    int srcX = hdgX + hdgW + 2;
+    int srcY = layout.headerY + (layout.compact ? 6 : 9);
+    int srcW = layout.compact ? 18 : 24;
+    int srcH = layout.compact ? 8 : 10;
+    gfx->fillRect(srcX, srcY, srcW, srcH, COLOR_PANEL);
+    gfx->setTextColor(headingValid ? COLOR_TEXT_DARK : COLOR_WARNING);
     gfx->setTextSize(1);
-    gfx->setCursor(layout.panelX + 8, layout.contentY + 8);
-    gfx->print("GPS");
-    gfx->setTextColor(gpsFix ? COLOR_TEXT_DARK : COLOR_WARNING);
-    gfx->setTextSize(2);
-    gfx->setCursor(layout.panelX + 8, layout.contentY + 22);
-    gfx->printf("%d", satellites);
-    gfx->setTextSize(1);
-    gfx->setCursor(layout.panelX + 40, layout.contentY + 26);
-    gfx->print(gpsFix ? "FIX" : "NO FIX");
-    lastSatellites = satellites;
-    lastGpsFix = gpsFix;
+    gfx->setCursor(srcX, srcY);
+    if (!headingValid) {
+      gfx->print("--");
+    } else {
+      gfx->print(headingFromPhone ? "PH" : "HW");
+    }
+    dirty = true;
   }
 
-  if (!lastMode.equals(mode)) {
-    gfx->fillRect(layout.screenW - 94, 8, 76, 18, COLOR_PANEL);
-    gfx->fillRoundRect(layout.screenW - 94, 8, 76, 18, 6, COLOR_ACCENT);
-    gfx->setTextColor(COLOR_WHITE);
+  if (bearingChanged) {
+    int rightZoneX = layout.headerX + (layout.compact ? 84 : 118);
+    int rightZoneW = layout.headerW - (rightZoneX - layout.headerX) - 4;
+    if (rightZoneW > 4) {
+      gfx->fillRect(rightZoneX, layout.headerY + 2, rightZoneW, layout.headerH - 4, COLOR_PANEL);
+    }
+
+    int modeLen = static_cast<int>(strlen(modeLabel));
+    int badgePadX = layout.compact ? 6 : 8;
+    int minBadgeW = layout.compact ? 40 : 64;
+    int reserveLeft = layout.compact ? 124 : 120;
+    int maxBadgeW = max(minBadgeW, layout.headerW - reserveLeft);
+    int badgeW = constrain(modeLen * 6 + badgePadX * 2, minBadgeW, maxBadgeW);
+    int badgeH = layout.compact ? 12 : 18;
+    int badgeX = layout.headerX + layout.headerW - badgeW - 8;
+    int badgeY = layout.headerY + (layout.headerH - badgeH) / 2;
+    uint16_t badgeColor = mode_color(modeLabel);
+    gfx->fillRoundRect(badgeX, badgeY, badgeW, badgeH, 6, badgeColor);
+    gfx->setTextColor((badgeColor == COLOR_SILVER) ? COLOR_TEXT_DARK : COLOR_WHITE);
     gfx->setTextSize(1);
-    gfx->setCursor(layout.screenW - 88, 12);
-    gfx->printf("%s", mode);
-    lastMode = mode;
+    gfx->setCursor(badgeX + badgePadX, badgeY + (layout.compact ? 3 : 6));
+    gfx->print(modeLabel);
+
+    int brgTextX = layout.headerX + (layout.compact ? 88 : 124);
+    int brgWidth = layout.compact ? 34 : 64;
+    if (brgTextX + brgWidth < badgeX) {
+      gfx->setTextColor(COLOR_TEXT_DARK);
+      gfx->setTextSize(1);
+      gfx->setCursor(brgTextX, layout.headerY + (layout.compact ? 6 : 10));
+      if (layout.compact) {
+        gfx->printf("B%03d", brgDeg);
+      } else {
+        gfx->printf("BRG %03d%c", brgDeg, 176);
+      }
+    }
+    dirty = true;
   }
 
-  if (fabs(speedKmh - lastSpeed) > 0.1f ||
-      fabs(distanceMeters - lastDistance) > 0.1f ||
-      fabs(errorDeg - lastErrorDeg) > 0.5f ||
-      !lastMode.equals(mode)) {
-    int rowY = layout.contentY + 52;
-    int availableH = layout.contentY + layout.contentH - rowY;
-    int rowGap = 8;
-    int rowH = (availableH - rowGap * 2) / 3;
-    gfx->fillRect(layout.panelX, rowY, layout.panelW, rowH, COLOR_PANEL);
-    gfx->setTextColor(COLOR_TEXT_DARK);
-    gfx->setTextSize(1);
-    gfx->setCursor(layout.panelX + 8, rowY + 8);
-    gfx->print("SPEED");
-    gfx->setTextSize(2);
-    gfx->setCursor(layout.panelX + 8, rowY + 20);
-    gfx->printf("%.1f", speedKmh);
-    gfx->setTextSize(1);
-    gfx->setCursor(layout.panelX + 74, rowY + 26);
-    gfx->print("km/h");
+  bool compassChanged = fullInit ||
+                        lastHdgDeg != hdgDeg ||
+                        lastBrgDeg != brgDeg ||
+                        headingValid != lastHeadingValid;
+  if (compassChanged) {
+    if (fullInit) {
+      draw_compass_static(layout);
+    } else if (lastCompassHeading > -900.0f && lastCompassBearing > -900.0f) {
+      // Erase only previous dynamic vectors to avoid full-area blink.
+      draw_compass_dynamic(lastCompassHeading,
+                           lastCompassBearing,
+                           lastHeadingValid,
+                           layout,
+                           COLOR_PANEL,
+                           COLOR_PANEL,
+                           COLOR_PANEL);
+    }
 
-    int row2Y = rowY + rowH + rowGap;
-    gfx->fillRect(layout.panelX, row2Y, layout.panelW, rowH, COLOR_PANEL);
-    gfx->setTextColor(COLOR_TEXT_DARK);
-    gfx->setTextSize(1);
-    gfx->setCursor(layout.panelX + 8, row2Y + 8);
-    gfx->print("ANCHOR");
-    gfx->setTextSize(2);
-    gfx->setCursor(layout.panelX + 8, row2Y + 20);
-    gfx->printf("%.1f", distanceMeters);
-    gfx->setTextSize(1);
-    gfx->setCursor(layout.panelX + 74, row2Y + 26);
-    gfx->print("m");
+    draw_compass_dynamic(hdg,
+                         brg,
+                         headingValid,
+                         layout,
+                         COLOR_SILVER,
+                         COLOR_TEXT_DARK,
+                         COLOR_WARNING);
+    lastCompassHeading = hdg;
+    lastCompassBearing = brg;
+    dirty = true;
+  }
 
-    int row3Y = row2Y + rowH + rowGap;
-    gfx->fillRect(layout.panelX, row3Y, layout.panelW, rowH, COLOR_PANEL);
-    gfx->setTextColor(COLOR_TEXT_DARK);
-    gfx->setTextSize(1);
-    gfx->setCursor(layout.panelX + 8, row3Y + 8);
-    gfx->print("ERROR");
-    gfx->setTextSize(2);
-    gfx->setCursor(layout.panelX + 8, row3Y + 20);
-    gfx->printf("%.0f%c", errorDeg, 176);
+  bool speedChanged = fullInit || fabsf(speed - lastSpeed) > 0.05f;
+  if (speedChanged) {
+    if (fullInit) {
+      gfx->setTextColor(COLOR_TEXT_DARK);
+      gfx->setTextSize(1);
+      gfx->setCursor(layout.rightX + 6, card1Y + (layout.compact ? 4 : 8));
+      gfx->print("SPD");
+    }
+    if (layout.compact) {
+      gfx->fillRect(layout.rightX + 6, card1Y + 11, layout.rightW - 12, 10, COLOR_PANEL);
+      gfx->setTextColor(COLOR_TEXT_DARK);
+      gfx->setTextSize(1);
+      gfx->setCursor(layout.rightX + 6, card1Y + 15);
+      gfx->printf("%.1f", speed);
+      gfx->setCursor(layout.rightX + layout.rightW - 12, card1Y + 15);
+      gfx->print("k");
+    } else {
+      gfx->fillRect(layout.rightX + 8, card1Y + 18, layout.rightW - 14, 18, COLOR_PANEL);
+      gfx->setTextColor(COLOR_TEXT_DARK);
+      gfx->setTextSize(2);
+      gfx->setCursor(layout.rightX + 8, card1Y + 22);
+      gfx->printf("%.1f", speed);
+      gfx->setTextSize(1);
+      gfx->setCursor(layout.rightX + layout.rightW - 30, card1Y + 26);
+      gfx->print("km/h");
+    }
+    dirty = true;
+  }
 
-    gfx->fillRoundRect(16, layout.screenH - layout.bottomBarH + 6,
-                       layout.screenW - 32, layout.bottomBarH - 12,
-                       PANEL_RADIUS, COLOR_PANEL);
-    gfx->setTextColor(COLOR_TEXT_DARK);
+  bool gpsChanged = fullInit ||
+                    satCount != lastSatCount ||
+                    gpsFix != lastGpsFix ||
+                    gpsFromPhone != lastGpsFromPhone;
+  if (gpsChanged) {
+    if (fullInit) {
+      gfx->setTextColor(COLOR_TEXT_DARK);
+      gfx->setTextSize(1);
+      gfx->setCursor(layout.rightX + 6, card2Y + (layout.compact ? 4 : 8));
+      gfx->print("GPS");
+    }
+    if (layout.compact) {
+      gfx->fillRect(layout.rightX + 6, card2Y + 11, layout.rightW - 12, 10, COLOR_PANEL);
+      gfx->setTextColor(gpsFix ? COLOR_TEXT_DARK : COLOR_WARNING);
+      gfx->setTextSize(1);
+      gfx->setCursor(layout.rightX + 6, card2Y + 15);
+      gfx->printf("%d", satCount);
+      gfx->setCursor(layout.rightX + 20, card2Y + 15);
+      gfx->print(gpsFix ? "FIX" : "NO");
+      if (gpsFix) {
+        gfx->setCursor(layout.rightX + layout.rightW - 18, card2Y + 15);
+        gfx->print(gpsFromPhone ? "PH" : "HW");
+      }
+    } else {
+      gfx->fillRect(layout.rightX + 8, card2Y + 18, layout.rightW - 14, 18, COLOR_PANEL);
+      gfx->setTextColor(gpsFix ? COLOR_TEXT_DARK : COLOR_WARNING);
+      gfx->setTextSize(2);
+      gfx->setCursor(layout.rightX + 8, card2Y + 22);
+      gfx->printf("%d", satCount);
+      gfx->setTextSize(1);
+      gfx->setCursor(layout.rightX + 44, card2Y + 26);
+      if (gpsFix) {
+        gfx->print(gpsFromPhone ? "FIX PH" : "FIX HW");
+      } else {
+        gfx->print("NO FIX");
+      }
+    }
+    dirty = true;
+  }
+
+  bool card3Changed = fullInit;
+  if (layout.compact) {
+    card3Changed = card3Changed || fabsf(dist - lastDist) > 0.05f;
+  } else {
+    card3Changed = card3Changed || battery != lastBattery;
+  }
+  if (card3Changed) {
+    if (layout.compact) {
+      if (fullInit) {
+        gfx->setTextColor(COLOR_TEXT_DARK);
+        gfx->setTextSize(1);
+        gfx->setCursor(layout.rightX + 6, card3Y + 4);
+        gfx->print("DIST");
+      }
+      gfx->fillRect(layout.rightX + 6, card3Y + 11, layout.rightW - 12, 10, COLOR_PANEL);
+      gfx->setTextColor(COLOR_TEXT_DARK);
+      gfx->setTextSize(1);
+      gfx->setCursor(layout.rightX + 6, card3Y + 4);
+      gfx->setCursor(layout.rightX + 6, card3Y + 15);
+      gfx->printf("%.1fm", dist);
+    } else {
+      int bodyX = layout.rightX + 8;
+      int bodyY = card3Y + 22;
+      int bodyW = layout.rightW - 28;
+      if (bodyW < 32) {
+        bodyW = 32;
+      }
+      if (fullInit) {
+        gfx->setTextColor(COLOR_TEXT_DARK);
+        gfx->setTextSize(1);
+        gfx->setCursor(layout.rightX + 8, card3Y + 8);
+        gfx->print("PWR");
+        gfx->drawRect(bodyX, bodyY, bodyW, 12, COLOR_TEXT_DARK);
+        gfx->fillRect(bodyX + bodyW, bodyY + 3, 3, 6, COLOR_TEXT_DARK);
+      }
+      gfx->fillRect(bodyX + 1, bodyY + 1, bodyW - 2, 10, COLOR_PANEL);
+      int fillW = ((bodyW - 4) * battery) / 100;
+      uint16_t batteryColor = (battery >= 25) ? COLOR_ACCENT : COLOR_WARNING;
+      gfx->fillRect(bodyX + 2, bodyY + 2, fillW, 8, batteryColor);
+      gfx->fillRect(layout.rightX + 8, card3Y + layout.cardH - 12, 44, 10, COLOR_PANEL);
+      gfx->setTextColor(COLOR_TEXT_DARK);
+      gfx->setTextSize(1);
+      gfx->setCursor(layout.rightX + 8, card3Y + layout.cardH - 10);
+      gfx->printf("%d%%", battery);
+    }
+    dirty = true;
+  }
+
+  bool footerChanged = fullInit ||
+                       fabsf(dist - lastDist) > 0.05f ||
+                       fabsf(err - lastErr) > 0.2f ||
+                       brgDeg != lastBrgDeg ||
+                       gpsFix != lastGpsFix;
+  if (footerChanged) {
     gfx->setTextSize(1);
-    gfx->setCursor(24, layout.screenH - 20);
-    gfx->printf("HDG %03d%c", static_cast<int>(heading), 176);
-    gfx->setCursor(110, layout.screenH - 20);
-    gfx->printf("BRG %03d%c", static_cast<int>(anchorBearing), 176);
-    gfx->setCursor(200, layout.screenH - 20);
-    gfx->printf("SAT %d", satellites);
-    lastSpeed = speedKmh;
-    lastDistance = distanceMeters;
-    lastErrorDeg = errorDeg;
+    gfx->setTextColor(COLOR_TEXT_DARK);
+    int col1 = layout.footerX + (layout.compact ? 4 : 8);
+    int col2 = layout.footerX + layout.footerW / 3;
+    int col3 = layout.footerX + (layout.footerW * 2) / 3;
+    int footerY = layout.footerY + (layout.compact ? 5 : 10);
+    int footerValueH = layout.compact ? 9 : 11;
+    int footerValueY = layout.footerY + (layout.compact ? 3 : 8);
+
+    if (layout.compact) {
+      gfx->fillRect(col1, footerValueY, 52, footerValueH, COLOR_PANEL);
+      gfx->fillRect(col2, footerValueY, 52, footerValueH, COLOR_PANEL);
+      gfx->fillRect(col3, footerValueY, 72, footerValueH, COLOR_PANEL);
+      gfx->setCursor(col1, footerY);
+      gfx->printf("D%.1f", dist);
+      gfx->setTextColor(err > 20.0f ? COLOR_WARNING : COLOR_TEXT_DARK);
+      gfx->setCursor(col2, footerY);
+      gfx->printf("E%.0f", err);
+      gfx->setTextColor(COLOR_TEXT_DARK);
+      gfx->setCursor(col3, footerY);
+      if (gpsFix) {
+        gfx->printf("B%03d", brgDeg);
+      } else {
+        gfx->print("NO GPS");
+      }
+    } else {
+      gfx->fillRect(col1, footerValueY, 76, footerValueH, COLOR_PANEL);
+      gfx->fillRect(col2, footerValueY, 74, footerValueH, COLOR_PANEL);
+      gfx->fillRect(col3, footerValueY, 84, footerValueH, COLOR_PANEL);
+      gfx->setCursor(col1, footerY);
+      gfx->printf("DIST %.1fm", dist);
+
+      gfx->setTextColor(err > 20.0f ? COLOR_WARNING : COLOR_TEXT_DARK);
+      gfx->setCursor(col2, footerY);
+      gfx->printf("ERR %.0f%c", err, 176);
+
+      gfx->setTextColor(COLOR_TEXT_DARK);
+      gfx->setCursor(col3, footerY);
+      gfx->printf("BRG %03d%c %s", brgDeg, 176, gpsFix ? "OK" : "NO");
+    }
+    dirty = true;
+  }
+
+  lastHdgDeg = hdgDeg;
+  lastBrgDeg = brgDeg;
+  lastSatCount = satCount;
+  lastBattery = battery;
+  lastGpsFix = gpsFix;
+  lastGpsFromPhone = gpsFromPhone;
+  lastSpeed = speed;
+  lastDist = dist;
+  lastErr = err;
+  lastHeadingValid = headingValid;
+  lastHeadingFromPhone = headingFromPhone;
+  lastMode = modeLabel;
+
+  if (dirty) {
+    display_flush();
   }
 }

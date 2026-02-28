@@ -7,8 +7,11 @@ bool display_init();
 void display_clear();
 void display_draw_ui(bool gpsFix,
                      int satellites,
+                     bool gpsFromPhone,
                      float speedKmh,
                      float heading,
+                     bool headingValid,
+                     bool headingFromPhone,
                      float anchorBearing,
                      float distanceMeters,
                      float errorDeg,

@@ -8,6 +8,7 @@ void main() {
       'lon': '4.56',
       'anchorLat': '7.89',
       'anchorLon': '0.12',
+      'anchorHead': '123.4',
       'distance': '3.4',
       'heading': '90',
       'battery': '75',
@@ -21,6 +22,7 @@ void main() {
     });
     expect(data.lat, 1.23);
     expect(data.lon, 4.56);
+    expect(data.anchorHeading, 123.4);
     expect(data.holdHeading, isTrue);
     expect(data.stepSpr, 400);
     expect(data.status, 'OK');
