@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/log_service.dart';
 
 class LogsPage extends StatefulWidget {
-  const LogsPage({Key? key}) : super(key: key);
+  const LogsPage({super.key});
 
   @override
   State<LogsPage> createState() => _LogsPageState();
@@ -46,9 +46,9 @@ class _LogsPageState extends State<LogsPage> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        child: Icon(Icons.delete),
         tooltip: "Очистить логи",
         onPressed: () => logService.clear(),
+        child: Icon(Icons.delete),
       ),
     );
   }

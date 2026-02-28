@@ -68,31 +68,36 @@ class _RoutePageState extends State<RoutePage> {
       ),
       body: FlutterMap(
         mapController: _mapController,
-        options: MapOptions(center: center, zoom: 15),
+        options: MapOptions(initialCenter: center, initialZoom: 15),
         children: [
-          TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+          TileLayer(
+            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          ),
           if (_points.length > 1)
-            PolylineLayer(polylines: [
-              Polyline(points: _points, color: Colors.red, strokeWidth: 4)
-            ]),
+            PolylineLayer(
+              polylines: [
+                Polyline(points: _points, color: Colors.red, strokeWidth: 4),
+              ],
+            ),
           if (_points.isNotEmpty)
-            MarkerLayer(markers: [
-              Marker(
-                point: _points.first,
-                width: 40,
-                height: 40,
-                child: const Icon(Icons.play_arrow, color: Colors.green),
-              ),
-              Marker(
-                point: _points.last,
-                width: 40,
-                height: 40,
-                child: const Icon(Icons.flag, color: Colors.blue),
-              ),
-            ]),
+            MarkerLayer(
+              markers: [
+                Marker(
+                  point: _points.first,
+                  width: 40,
+                  height: 40,
+                  child: const Icon(Icons.play_arrow, color: Colors.green),
+                ),
+                Marker(
+                  point: _points.last,
+                  width: 40,
+                  height: 40,
+                  child: const Icon(Icons.flag, color: Colors.blue),
+                ),
+              ],
+            ),
         ],
       ),
     );
   }
 }
-

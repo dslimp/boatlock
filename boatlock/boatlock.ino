@@ -1,7 +1,5 @@
 #include <Arduino.h>
 #include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
 #include <TinyGPSPlus.h>
 #include <HardwareSerial.h>
 #include <EEPROM.h>
@@ -11,6 +9,7 @@
 #include <freertos/task.h>
 #include <SPI.h>
 #include <SD.h>
+#include "ParamHelpers.h"
 
 #include "Settings.h"
 #include "Logger.h"
@@ -20,7 +19,7 @@ constexpr size_t EEPROM_SIZE = Settings::EEPROM_ADDR + sizeof(float) * count + s
 #include "MotorControl.h"
 #include "StepperControl.h"
 
-#include "BoatDisplay.h"
+#include "display.h"
 #include "HMC5883Compass.h"
 #include "PathControl.h"
 #include "BleCommandHandler.h"
@@ -32,15 +31,12 @@ File routeLog;
 const char* ROUTE_LOG_PATH = "/route.csv";
 bool sdReady = false;
 
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-#define OLED_RESET    -1
-
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-BoatDisplay boatDisplay(&display);
-
 #define STEP_PIN 5
 #define DIR_PIN 4
+#define I2C_SDA_PIN 47
+#define I2C_SCL_PIN 48
+#define GPS_RX_PIN 17
+#define GPS_TX_PIN 18
 #define MOTOR_PWM_PIN 7
 #define MOTOR_DIR_PIN1 6
 #define MOTOR_DIR_PIN2 10
@@ -60,6 +56,8 @@ AnchorControl anchor;
 MotorControl motor;
 PathControl pathControl;
 bool compassReady = false;
+float fallbackHeading = 0.0f;
+float fallbackBearing = 0.0f;
 
 TaskHandle_t compassCalibTaskHandle = nullptr;
 
@@ -91,22 +89,7 @@ int manualDir = -1;
 int manualSpeed = 0;
 
 void drawDebug(const String &msg, int y = 48) {
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0,  y);
-  display.print("[D]");
-  display.print(msg);
-  display.display();
-}
-
-template<typename F>
-std::function<std::string()> makeFloatParam(F valueFunc, const char* fmt) {
-    return [valueFunc, fmt]() {
-        char buf[20];
-        snprintf(buf, sizeof(buf), fmt, valueFunc());
-        return std::string(buf);
-    };
+  display_draw_debug(msg, y);
 }
 
 void calibrateCompassAndSave() {
@@ -137,15 +120,20 @@ void stepperTask(void*) {
 
 void setup() {
   Serial.begin(115200);
-  logMessage("\n[BoatLock] ESP32 стартует! Версия прошивки: 0.1.2\n");
+  logMessage("\n[BoatLock] ESP32 стартует! Версия прошивки: 0.1.5\n");
 
-  Wire.begin(8, 9);
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
   compassReady = compass.init();
 
   pinMode(BOOT_PIN, INPUT_PULLUP);
 
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-  gpsSerial.begin(9600, SERIAL_8N1, 17, 18);
+  if (!display_init()) {
+    logMessage("Display init failed\n");
+  }
+  randomSeed(micros());
+  fallbackHeading = random(0, 360);
+  fallbackBearing = random(0, 360);
+  gpsSerial.begin(9600, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
 
   bleBoatLock.setCommandHandler(handleBleCommand);
   bleBoatLock.registerParam("lat", makeFloatParam([&](){
@@ -208,6 +196,18 @@ void loop() {
 
   while (gpsSerial.available()) {
     gps.encode(gpsSerial.read());
+  }
+
+  static unsigned long lastGpsDebug = 0;
+  if (settings.get("DebugGps") == 1 && millis() - lastGpsDebug >= 1000) {
+    Serial.printf("[GPS] bytes=%lu valid=%d fix=%d sats=%d hdop=%.2f age=%lu\n",
+                  gps.charsProcessed(),
+                  gps.location.isValid(),
+                  gpsFix,
+                  gps.satellites.value(),
+                  gps.hdop.value() * 0.01f,
+                  gps.location.age());
+    lastGpsDebug = millis();
   }
 
   float lat = gps.location.lat();
@@ -294,6 +294,16 @@ void loop() {
   }
 
   float heading = settings.get("EmuCompass") ? emuHeading : (compassReady ? compass.getAzimuth() : 0.0f);
+  bool hasHeading = settings.get("EmuCompass") || compassReady;
+  bool hasBearing = gpsFix;
+  float diff = 0.0f;
+  float errorDeg = 0.0f;
+  if (hasHeading && hasBearing) {
+    diff = bearing - heading;
+    if (diff > 180) diff -= 360;
+    if (diff < -180) diff += 360;
+    errorDeg = fabs(diff);
+  }
   if (manualMode) {
     if (manualDir == 0) {
       stepperControl.startManual(-1);
@@ -306,10 +316,7 @@ void loop() {
     holding = false;
   } else {
     stepperControl.stopManual();
-    if (gpsFix) {
-      float diff = bearing - heading;
-      if (diff > 180) diff -= 360;
-      if (diff < -180) diff += 360;
+    if (hasHeading && hasBearing) {
       static unsigned long lastStepCheck = 0;
       const unsigned long stepInterval = 3000;
       if (!stepperControl.busy && fabs(diff) > 2.0f && now - lastStepCheck > stepInterval) {
@@ -351,13 +358,20 @@ void loop() {
       bleBoatLock.notifyAll();
       lastNotify = now;
 
-      boatDisplay.showStatus(
-              gps,
-              anchor.anchorLat, anchor.anchorLon, settings.get("AnchorEnabled"),
-              dist, bearing,
-              settings.get("EmuCompass") ? emuHeading : (compassReady ? compass.getAzimuth() : 0.0f),
-              holding
-          );
+      int batteryPercent = 0;
+      float displayHeading = hasHeading ? heading : fallbackHeading;
+      float displayBearing = hasBearing ? bearing : fallbackBearing;
+      display_draw_ui(
+          gpsFix,
+          gps.satellites.value(),
+          gps.speed.kmph(),
+          displayHeading,
+          displayBearing,
+          dist,
+          errorDeg,
+          modeStr.c_str(),
+          batteryPercent
+      );
   }
   bleBoatLock.loop();
 }

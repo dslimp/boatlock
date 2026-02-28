@@ -10,6 +10,10 @@ public:
 
     bool init() {
         Wire.begin();
+        Wire.beginTransmission(0x1E);
+        if (Wire.endTransmission() != 0) {
+            return false;
+        }
         return mag.begin();
     }
 

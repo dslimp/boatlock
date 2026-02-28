@@ -1,43 +1,17 @@
-.pio
+.pio/
 .vscode/.browse.c_cpp.db*
 .vscode/c_cpp_properties.json
 .vscode/launch.json
-.vscode/ipch
-
-
-
-
-
-##### Restore backup from cluster to single node
-On cluster create only schema backup 
-```clickhouse-backup create --schema Schema_10_09_2024
-clickhouse-backup upload Schema_10_09_2024```
-On new node
-```clickhouse-backup download Schema_10_09_2024
-cd /var/lib/clickhouse/backup/Schema_10_09_2024/metadata/default/```
-And change ENGINE in files from ReplicatedMergeTree to MergeTree (and other Replicated* engines), for example - 
-```{
-        "table": "callcenters",
-        "database": "default",
-        "parts": null,
-        "query": "CREATE TABLE default.callcenters UUID 'df953b5d-e3ca-48b1-93ce-fa390eeead33' (`uuid` UUID, `id` Int32, `name` String, `created_at` DateTime, `cluster_uuid` UUID, `cluster_name` String, `manager_uuid` UUID, `manager_name` String, `manager_email` String, `client_uuid` UUID, `client_name` String, `client_email` String, `client_api_key` String, `billing_enabled` UInt8, `calls_rate_deck_uuid` UUID, `sms_rate_deck_uuid` UUID) ENGINE = ENGINE = ReplicatedReplacingMergeTree('/clickhouse/tables/callcenters', '{replica}') ORDER BY uuid SETTINGS index_granularity = 8192",
-        "size": null,
-        "total_bytes": 541264,
-        "metadata_only": false
-}```
-to
-```{
-        "table": "callcenters",
-        "database": "default",
-        "parts": null,
-        "query": "CREATE TABLE default.callcenters UUID 'df953b5d-e3ca-48b1-93ce-fa390eeead33' (`uuid` UUID, `id` Int32, `name` String, `created_at` DateTime, `cluster_uuid` UUID, `cluster_name` String, `manager_uuid` UUID, `manager_name` String, `manager_email` String, `client_uuid` UUID, `client_name` String, `client_email` String, `client_api_key` String, `billing_enabled` UInt8, `calls_rate_deck_uuid` UUID, `sms_rate_deck_uuid` UUID) ENGINE = ReplacingMergeTree ORDER BY uuid SETTINGS index_granularity = 8192",
-        "size": null,
-        "total_bytes": 541264,
-        "metadata_only": false
-}```
-
-Restore schema:
-```clickhouse-backup restore --schema Schema_10_09_2024```
-
-Restore data, run in screen:
-```clickhouse-backup restore_remote --data Backup_Name_S3```
+.vscode/ipch/
+.DS_Store
+1
+comp
+i2c
+out.h
+patch
+*.png
+*.zip
+woocommerce_oculus_case_images/
+lib/
+src/
+png_to_rgb565.py
