@@ -31,6 +31,7 @@ AnchorDeniedReason currentGnssDeniedReason();
 void setLastAnchorDeniedReason(AnchorDeniedReason reason);
 void setLastFailsafeReason(FailsafeReason reason);
 bool preprocessSecureCommand(const std::string& incoming, std::string* effective);
+bool handleSimCommand(const std::string& command);
 
 inline void handleBleCommand(const std::string& cmd) {
     std::string effectiveCmd;
@@ -42,6 +43,10 @@ inline void handleBleCommand(const std::string& cmd) {
     noteControlActivityNow();
 
     if (command == "HEARTBEAT") {
+        return;
+    }
+
+    if (handleSimCommand(command)) {
         return;
     }
 

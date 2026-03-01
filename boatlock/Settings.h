@@ -22,10 +22,10 @@ struct SettingEntry {
 const SettingEntry defaultEntries[] = {
     // GNSS quality gate
     {"MinFixType", "Min fix type",      TYPE_INT,   3.0,  3.0,   2.0,   3.0,    1.0, "", false},
-    {"MinSats",    "Min satellites",    TYPE_INT,   6.0,  6.0,   3.0,  20.0,    1.0, "", true},
-    {"MaxHdop",    "Max HDOP",          TYPE_FLOAT, 3.5,  3.5,   0.5,  10.0,    0.1, "", true},
-    {"MaxGpsAgeMs","Max GPS age",       TYPE_INT,   2000, 2000,  300, 20000,  100.0, "ms", false},
-    {"MaxPosJumpM","Max GPS jump",      TYPE_FLOAT, 20.0, 20.0,  1.0, 200.0,    0.5, "m", false},
+    {"MinSats",    "Min satellites",    TYPE_INT,   10.0,  10.0,   3.0,  20.0,    1.0, "", true},
+    {"MaxHdop",    "Max HDOP",          TYPE_FLOAT, 1.8,  1.8,   0.5,  10.0,    0.1, "", true},
+    {"MaxGpsAgeMs","Max GPS age",       TYPE_INT,   1500, 1500,  300, 20000,  100.0, "ms", false},
+    {"MaxPosJumpM","Max GPS jump",      TYPE_FLOAT, 8.0, 8.0,  1.0, 200.0,    0.5, "m", false},
     {"MinStatSpd", "Min stationary spd",TYPE_FLOAT, 0.25, 0.25,  0.05, 2.0,    0.01, "m/s", false},
     {"SpdSanity",  "Speed sanity",      TYPE_INT,   0.0,  0.0,   0.0,   1.0,    1.0, "", false},
     {"MaxSpdMps",  "Max speed sanity",  TYPE_FLOAT, 25.0, 25.0,  1.0,  60.0,    0.5, "m/s", false},
@@ -33,25 +33,25 @@ const SettingEntry defaultEntries[] = {
     {"ReqSent",    "Required sentences",TYPE_INT,   0.0,  0.0,   0.0,  20.0,    1.0, "", false},
 
     // Anchor control
-    {"HoldRadius", "Hold radius",       TYPE_FLOAT, 2.0,  2.0,   0.5,  20.0,    0.1, "m", true},
+    {"HoldRadius", "Hold radius",       TYPE_FLOAT, 2.5,  2.5,   0.5,  20.0,    0.1, "m", true},
     {"DeadbandM",  "Anchor deadband",   TYPE_FLOAT, 1.5,  1.5,   0.2,  10.0,    0.1, "m", true},
-    {"MaxThrustA", "Max thrust anchor", TYPE_INT,   75.0, 75.0,  10.0, 100.0,   1.0, "%", true},
+    {"MaxThrustA", "Max thrust anchor", TYPE_INT,   60.0, 60.0,  10.0, 100.0,   1.0, "%", true},
     {"ThrRampA",   "Thrust ramp anchor",TYPE_FLOAT, 35.0, 35.0,  1.0, 100.0,    1.0, "%/s", true},
-    {"MaxTurnRt",  "Max turn rate",     TYPE_FLOAT, 180.0,180.0, 30.0, 720.0,   1.0, "deg/s", false},
+    {"MaxTurnRt",  "Max turn rate",     TYPE_FLOAT, 120.0,120.0, 30.0, 720.0,   1.0, "deg/s", false},
     {"PidILim",    "PID I limit",       TYPE_FLOAT, 100.0,100.0, 1.0, 500.0,    1.0, "", false},
     {"ReacqStrat", "Reacquire strategy",TYPE_INT,   0.0,  0.0,   0.0,   1.0,    1.0, "", false},
     {"AnchorProf", "Anchor profile",    TYPE_INT,   1.0,  1.0,   0.0,   2.0,    1.0, "", true},
 
     // Safety supervisor
-    {"CommToutMs", "Comm timeout",      TYPE_INT,   7000, 7000,  500, 60000,  100.0, "ms", false},
-    {"CtrlLoopMs", "Control loop tout", TYPE_INT,   600,  600,   100, 10000,   10.0, "ms", false},
-    {"SensorTout", "Sensor timeout",    TYPE_INT,   3000, 3000,  300, 30000,  100.0, "ms", false},
+    {"CommToutMs", "Comm timeout",      TYPE_INT,   1200, 1200,  500, 60000,  100.0, "ms", false},
+    {"CtrlLoopMs", "Control loop tout", TYPE_INT,   200,  200,   100, 10000,   10.0, "ms", false},
+    {"SensorTout", "Sensor timeout",    TYPE_INT,   1500, 1500,  300, 30000,  100.0, "ms", false},
     {"FailAct",    "Failsafe action",   TYPE_INT,   0.0,  0.0,   0.0,   1.0,    1.0, "", false},
-    {"MaxThrustS", "Max thrust time",   TYPE_INT,   180,  180,    10,  3600,    1.0, "s", false},
+    {"MaxThrustS", "Max thrust time",   TYPE_INT,   60,  60,    10,  3600,    1.0, "s", false},
     {"NanAct",     "NaN guard action",  TYPE_INT,   0.0,  0.0,   0.0,   1.0,    1.0, "", false},
 
     // UX / events
-    {"GpsWeakHys", "GPS weak hysteresis", TYPE_FLOAT, 5.0, 5.0, 0.5, 60.0, 0.5, "s", false},
+    {"GpsWeakHys", "GPS weak hysteresis", TYPE_FLOAT, 1.5, 1.5, 0.5, 60.0, 0.5, "s", false},
     {"EventRateMs","Event rate limit",  TYPE_INT,   1000, 1000, 100, 10000, 100.0, "ms", false},
 
     // Legacy/general params kept for compatibility
@@ -59,8 +59,8 @@ const SettingEntry defaultEntries[] = {
     {"Ki",        "Ki for PID",         TYPE_FLOAT, 0.5,  0.5,   0.0,  10.0,  0.01, "", true},
     {"Kd",        "Kd for PID",         TYPE_FLOAT, 5.0,  5.0,   0.0, 100.0,  0.1, "", true},
     {"DistTh",    "Distance threshold", TYPE_FLOAT, 2.0,  2.0,   0.1,  10.0,  0.1, "m", true},
-    {"DriftAlert","Drift alert",        TYPE_FLOAT, 8.0,  8.0,   2.0, 200.0,  0.5, "m", true},
-    {"DriftFail", "Drift fail",         TYPE_FLOAT, 20.0, 20.0,  5.0, 500.0,  1.0, "m", true},
+    {"DriftAlert","Drift alert",        TYPE_FLOAT, 6.0,  6.0,   2.0, 200.0,  0.5, "m", true},
+    {"DriftFail", "Drift fail",         TYPE_FLOAT, 12.0, 12.0,  5.0, 500.0,  1.0, "m", true},
     {"AngTol",    "Angle tolerance",    TYPE_FLOAT, 3.0,  3.0,   0.1,  180.0, 1.0, "deg", true},
     {"ScreenBr",  "Screen brightness",  TYPE_INT,   128.0,128.0, 0,    255,    1, "", true},
     {"Encoder0",  "Encoder zero",       TYPE_INT,   0,    0,     0,   16384,   1, "", false},

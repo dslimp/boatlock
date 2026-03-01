@@ -119,7 +119,7 @@ void test_load_sanitizes_nan_and_out_of_range_values() {
   EEPROM.put(Settings::CRC_ADDR, crc);
 
   s.load();
-  TEST_ASSERT_EQUAL_FLOAT(3.5f, s.get("MaxHdop"));
+  TEST_ASSERT_EQUAL_FLOAT(1.8f, s.get("MaxHdop"));
   TEST_ASSERT_EQUAL_FLOAT(1.0f, s.get("AnchorProf"));
   TEST_ASSERT_EQUAL_FLOAT(8.0f, s.get("MinSats"));
 }

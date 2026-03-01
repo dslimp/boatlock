@@ -37,6 +37,9 @@ bool securityForceReject = false;
 bool securityRequireWrapper = false;
 bool securitySessionActive = false;
 uint32_t securityLastCounter = 0;
+bool simHandlerConsumes = false;
+int simHandlerCalls = 0;
+std::string simLastCommand;
 void setPhoneGpsFix(float lat, float lon, float speedKmh, int satellites) {
   phoneGpsFixSet = true;
   phoneGpsLat = lat;
@@ -90,6 +93,11 @@ bool preprocessSecureCommand(const std::string& incoming, std::string* effective
   *effective = incoming.substr(p2 + 1);
   return true;
 }
+bool handleSimCommand(const std::string& command) {
+  ++simHandlerCalls;
+  simLastCommand = command;
+  return simHandlerConsumes;
+}
 
 void setUp() {
   settings.reset();
@@ -126,6 +134,9 @@ void setUp() {
   securityRequireWrapper = false;
   securitySessionActive = false;
   securityLastCounter = 0;
+  simHandlerConsumes = false;
+  simHandlerCalls = 0;
+  simLastCommand.clear();
 }
 
 void tearDown() {}
@@ -365,6 +376,22 @@ void test_command_parser_fuzz_does_not_break_safe_state() {
   TEST_ASSERT_TRUE(manualDir >= -1 && manualDir <= 1);
 }
 
+void test_sim_command_is_forwarded_and_consumed() {
+  simHandlerConsumes = true;
+  handleBleCommand("SIM_STATUS");
+  TEST_ASSERT_EQUAL(1, simHandlerCalls);
+  TEST_ASSERT_EQUAL_STRING("SIM_STATUS", simLastCommand.c_str());
+  TEST_ASSERT_FALSE(stopAllMotionCalled);
+}
+
+void test_non_sim_command_still_runs_when_sim_handler_declines() {
+  simHandlerConsumes = false;
+  handleBleCommand("STOP");
+  TEST_ASSERT_EQUAL(1, simHandlerCalls);
+  TEST_ASSERT_EQUAL_STRING("STOP", simLastCommand.c_str());
+  TEST_ASSERT_TRUE(stopAllMotionCalled);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_set_hold_heading);
@@ -393,5 +420,7 @@ int main() {
   RUN_TEST(test_security_rejects_plain_control_command_when_wrapper_required);
   RUN_TEST(test_security_accepts_wrapped_command_with_increasing_counter);
   RUN_TEST(test_command_parser_fuzz_does_not_break_safe_state);
+  RUN_TEST(test_sim_command_is_forwarded_and_consumed);
+  RUN_TEST(test_non_sim_command_still_runs_when_sim_handler_declines);
   return UNITY_END();
 }

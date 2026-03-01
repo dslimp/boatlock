@@ -24,6 +24,7 @@
 #include "AnchorProfiles.h"
 #include "AnchorReasons.h"
 #include "BleSecurity.h"
+#include "HilSimRunner.h"
 #include "BleCommandHandler.h"
 #include "BLEBoatLock.h"
 
@@ -156,6 +157,8 @@ BleSecurity bleSecurity;
 bool manualMode = false;
 int manualDir = -1;
 int manualSpeed = 0;
+hilsim::HilSimManager hilSim;
+unsigned long simLastWallMs = 0;
 
 void setPhoneGpsFix(float lat, float lon, float speedKmh, int satellites);
 void captureStepperBowZero();
@@ -173,6 +176,7 @@ const char* currentAnchorDeniedReason();
 const char* currentFailsafeReason();
 AnchorDeniedReason currentGnssDeniedReason();
 bool preprocessSecureCommand(const std::string& incoming, std::string* effective);
+bool handleSimCommand(const std::string& command);
 
 namespace {
 TaskHandle_t stepperTaskHandle = nullptr;
@@ -584,6 +588,22 @@ void registerBleParams() {
   bleBoatLock.registerParam("mode", [&]() {
     return std::string(currentModeLabel());
   });
+
+  bleBoatLock.registerParam("simState", [&]() {
+    return std::string(hilSim.stateLabel());
+  });
+
+  bleBoatLock.registerParam("simScenario", [&]() {
+    return hilSim.currentScenarioId();
+  });
+
+  bleBoatLock.registerParam("simProgress", makeFloatParam([&]() {
+    return hilSim.progressPct();
+  }, "%.1f"));
+
+  bleBoatLock.registerParam("simPass", makeFloatParam([&]() {
+    return (float)hilSim.lastPass();
+  }, "%.0f"));
 
   bleBoatLock.registerParam("cfgVer", makeFloatParam([&]() {
     return (float)Settings::VERSION;
@@ -1017,6 +1037,79 @@ void publishBleAndUi(unsigned long now,
   }
 }
 
+std::string trimAscii(const std::string& in) {
+  size_t b = 0;
+  while (b < in.size() && (in[b] == ' ' || in[b] == '\t' || in[b] == '\r' || in[b] == '\n')) {
+    ++b;
+  }
+  size_t e = in.size();
+  while (e > b &&
+         (in[e - 1] == ' ' || in[e - 1] == '\t' || in[e - 1] == '\r' || in[e - 1] == '\n')) {
+    --e;
+  }
+  return in.substr(b, e - b);
+}
+
+bool parseSimRunCommand(const std::string& command, std::string* id, int* speedup) {
+  if (!id || !speedup) {
+    return false;
+  }
+  *id = "";
+  *speedup = 0;
+  std::string payload;
+  const size_t colon = command.find(':');
+  if (colon != std::string::npos && colon + 1 < command.size()) {
+    payload = command.substr(colon + 1);
+  } else {
+    const size_t space = command.find(' ');
+    if (space != std::string::npos && space + 1 < command.size()) {
+      payload = command.substr(space + 1);
+    }
+  }
+  payload = trimAscii(payload);
+  if (payload.empty()) {
+    return false;
+  }
+
+  if (!payload.empty() && payload.front() == '{') {
+    // Accept: SIM_RUN {id=S1_current_0p4_good,speedup=0}
+    const size_t idPos = payload.find("id");
+    if (idPos != std::string::npos) {
+      size_t sep = payload.find_first_of(":=", idPos);
+      if (sep != std::string::npos) {
+        size_t start = sep + 1;
+        while (start < payload.size() && (payload[start] == ' ' || payload[start] == '"' || payload[start] == '\'')) {
+          ++start;
+        }
+        size_t end = start;
+        while (end < payload.size() && payload[end] != ',' && payload[end] != '}' &&
+               payload[end] != '"' && payload[end] != '\'') {
+          ++end;
+        }
+        *id = trimAscii(payload.substr(start, end - start));
+      }
+    }
+    const size_t spPos = payload.find("speedup");
+    if (spPos != std::string::npos) {
+      size_t sep = payload.find_first_of(":=", spPos);
+      if (sep != std::string::npos) {
+        *speedup = atoi(payload.c_str() + sep + 1);
+      }
+    }
+    return !id->empty();
+  }
+
+  // Accept: SIM_RUN:S1_current_0p4_good,0
+  const size_t comma = payload.find(',');
+  if (comma == std::string::npos) {
+    *id = trimAscii(payload);
+    return !id->empty();
+  }
+  *id = trimAscii(payload.substr(0, comma));
+  *speedup = atoi(payload.c_str() + comma + 1);
+  return !id->empty();
+}
+
 } // namespace
 
 void setPhoneGpsFix(float lat, float lon, float speedKmh, int satellites) {
@@ -1106,6 +1199,65 @@ bool preprocessSecureCommand(const std::string& incoming, std::string* effective
     return false;
   }
 
+  return true;
+}
+
+bool handleSimCommand(const std::string& command) {
+  if (command.rfind("SIM_", 0) != 0) {
+    return false;
+  }
+
+  if (command == "SIM_LIST") {
+    logMessage("[SIM] LIST %s\n", hilSim.listCsv().c_str());
+    return true;
+  }
+
+  if (command == "SIM_STATUS") {
+    logMessage("[SIM] STATUS %s\n", hilSim.statusJson().c_str());
+    return true;
+  }
+
+  if (command.rfind("SIM_RUN", 0) == 0) {
+    std::string scenarioId;
+    int speedup = 0;
+    if (!parseSimRunCommand(command, &scenarioId, &speedup)) {
+      logMessage("[SIM] RUN rejected: invalid payload\n");
+      return true;
+    }
+    stopAllMotionNow();
+    setLastFailsafeReason(FailsafeReason::NONE);
+    setLastAnchorDeniedReason(AnchorDeniedReason::NONE);
+    std::string err;
+    if (!hilSim.startRun(scenarioId, speedup, &err)) {
+      logMessage("[SIM] RUN failed id=%s err=%s\n", scenarioId.c_str(), err.c_str());
+      return true;
+    }
+    simLastWallMs = millis();
+    logMessage("[SIM] RUN started id=%s speedup=%d\n", scenarioId.c_str(), speedup);
+    return true;
+  }
+
+  if (command == "SIM_ABORT") {
+    hilSim.abortRun();
+    logMessage("[SIM] ABORTED\n");
+    return true;
+  }
+
+  if (command.rfind("SIM_REPORT", 0) == 0) {
+    const std::string json = hilSim.reportJson();
+    if (json.empty()) {
+      logMessage("[SIM] REPORT unavailable\n");
+      return true;
+    }
+    const size_t chunkSize = 220;
+    for (size_t i = 0; i < json.size(); i += chunkSize) {
+      const std::string chunk = json.substr(i, chunkSize);
+      logMessage("[SIM] REPORT %s\n", chunk.c_str());
+    }
+    return true;
+  }
+
+  logMessage("[SIM] unknown command: %s\n", command.c_str());
   return true;
 }
 
@@ -1346,11 +1498,18 @@ void setup() {
              cfg::kStepIn3Pin,
              cfg::kStepIn4Pin);
   logMessage("[STOP] button pin=%d active=LOW\n", cfg::kStopButtonPin);
+  simLastWallMs = millis();
 
   xTaskCreatePinnedToCore(stepperTask, "stepper", 4096, nullptr, 1, &stepperTaskHandle, 1);
 }
 
 void loop() {
+  const unsigned long wallNowMs = millis();
+  const unsigned long wallDtMs =
+      (simLastWallMs == 0 || wallNowMs < simLastWallMs) ? 0 : (wallNowMs - simLastWallMs);
+  simLastWallMs = wallNowMs;
+  hilSim.loop(wallDtMs);
+
   updateGpsFromSerial();
   handleBootButton();
   handleStopButton();

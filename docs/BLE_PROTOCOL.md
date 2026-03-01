@@ -28,6 +28,11 @@ The firmware receives ASCII commands over its BLE characteristic. The Flutter ap
 | `MANUAL:<0|1>` | integer flag | Toggle manual control mode |
 | `MANUAL_DIR:<0|1>` | integer | Rudder direction: `0` = port, `1` = starboard |
 | `MANUAL_SPEED:<int>` | integer | Thruster power (-255..255) |
+| `SIM_LIST` | none | List built-in on-device HIL scenarios (`S0..S9`) |
+| `SIM_RUN:<scenario_id>[,<speedup>]` | id + speed mode (`0` fastest, `1` realtime) | Start deterministic closed-loop simulation on device |
+| `SIM_STATUS` | none | Return current simulation progress JSON |
+| `SIM_REPORT` | optional scenario id | Return final simulation report JSON (chunked in logs) |
+| `SIM_ABORT` | none | Abort currently running simulation |
 
 These commands correspond to the implementation in [`boatlock/BleCommandHandler.h`](../boatlock/BleCommandHandler.h) and are used by the mobile application.
 
@@ -75,3 +80,7 @@ Additional telemetry params:
 - `secPairWin` (`0|1`)
 - `secNonce` (challenge nonce for `AUTH_PROVE`)
 - `secReject` (last security rejection reason)
+- `simState` (`IDLE|RUNNING|DONE|ABORTED`)
+- `simScenario` (active scenario id)
+- `simProgress` (0..100)
+- `simPass` (`-1` running/no result, `0` fail, `1` pass)
