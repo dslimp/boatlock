@@ -308,10 +308,10 @@ class _MapPageState extends State<MapPage> {
       final now = DateTime.now();
       final enoughTimePassed =
           _lastPhoneHeadingSentAt == null ||
-          now.difference(_lastPhoneHeadingSentAt!).inMilliseconds >= 400;
+          now.difference(_lastPhoneHeadingSentAt!).inMilliseconds >= 150;
       final changedEnough =
           _lastPhoneHeadingSent == null ||
-          _angularDistanceDeg(heading, _lastPhoneHeadingSent!) >= 1.5;
+          _angularDistanceDeg(heading, _lastPhoneHeadingSent!) >= 1.0;
       if (!enoughTimePassed || !changedEnough) {
         return;
       }

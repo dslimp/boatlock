@@ -48,6 +48,7 @@ constexpr int kPwmChannel = 0;
 
 constexpr int kMaxGpsFilterWindow = 20;
 constexpr unsigned long kBleNotifyIntervalMs = 1000;
+constexpr unsigned long kUiRefreshIntervalMs = 120;
 constexpr unsigned long kStepperCheckIntervalMs = 3000;
 constexpr unsigned long kHardwareGpsMaxAgeMs = 2000;
 constexpr unsigned long kPhoneGpsTimeoutMs = 5000;
@@ -105,6 +106,7 @@ TaskHandle_t compassCalibTaskHandle = nullptr;
 
 unsigned long lastGpsDebugMs = 0;
 unsigned long lastBleNotifyMs = 0;
+unsigned long lastUiRefreshMs = 0;
 unsigned long lastStepperCheckMs = 0;
 bool lastBootButton = HIGH;
 
@@ -435,50 +437,49 @@ void publishBleAndUi(unsigned long now,
                      bool hasBearing,
                      float heading,
                      float errorDeg) {
-  if (now - lastBleNotifyMs < cfg::kBleNotifyIntervalMs) {
-    return;
-  }
-
   const char* mode = currentModeLabel();
-
-  std::string err;
-  if (!gps.location.isValid() && !gpsFix) {
-    err = "NO_GPS";
-  }
-  if (!hasHeading) {
-    if (!err.empty()) {
-      err += ",";
-    }
-    err += "NO_COMPASS";
-  }
-
-  std::string status = std::string(bleBoatLock.statusString()) + ":" + mode;
-  if (!err.empty()) {
-    status += ":" + err;
-  }
-
-  bleBoatLock.setStatus(status);
-  bleBoatLock.notifyAll();
-
   const float displayHeading = hasHeading ? heading : fallbackHeading;
   const float displayBearing = hasBearing ? bearing : fallbackBearing;
   const int batteryPercent = 0;
   const bool headingFromPhone = hasHeading && headingSourceIsPhone();
 
-  display_draw_ui(gpsFix,
-                  currentSatellites,
-                  gpsSourcePhone,
-                  currentSpeedKmh,
-                  displayHeading,
-                  hasHeading,
-                  headingFromPhone,
-                  displayBearing,
-                  dist,
-                  errorDeg,
-                  mode,
-                  batteryPercent);
+  if (now - lastUiRefreshMs >= cfg::kUiRefreshIntervalMs) {
+    display_draw_ui(gpsFix,
+                    currentSatellites,
+                    gpsSourcePhone,
+                    currentSpeedKmh,
+                    displayHeading,
+                    hasHeading,
+                    headingFromPhone,
+                    displayBearing,
+                    dist,
+                    errorDeg,
+                    mode,
+                    batteryPercent);
+    lastUiRefreshMs = now;
+  }
 
-  lastBleNotifyMs = now;
+  if (now - lastBleNotifyMs >= cfg::kBleNotifyIntervalMs) {
+    std::string err;
+    if (!gps.location.isValid() && !gpsFix) {
+      err = "NO_GPS";
+    }
+    if (!hasHeading) {
+      if (!err.empty()) {
+        err += ",";
+      }
+      err += "NO_COMPASS";
+    }
+
+    std::string status = std::string(bleBoatLock.statusString()) + ":" + mode;
+    if (!err.empty()) {
+      status += ":" + err;
+    }
+
+    bleBoatLock.setStatus(status);
+    bleBoatLock.notifyAll();
+    lastBleNotifyMs = now;
+  }
 }
 
 } // namespace
