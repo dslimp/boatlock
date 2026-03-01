@@ -67,15 +67,6 @@ class BleBoatLock {
     }
   }
 
-  Future<void> sendHeading(double headingDeg) async {
-    if (_cmdChar == null || !headingDeg.isFinite) return;
-    final normalized = ((headingDeg % 360.0) + 360.0) % 360.0;
-    await _cmdChar!.write(
-      utf8.encode('SET_HEADING:${normalized.toStringAsFixed(1)}'),
-      withoutResponse: false,
-    );
-  }
-
   Future<void> sendPhoneGps(
     double lat,
     double lon, {
@@ -103,7 +94,7 @@ class BleBoatLock {
     _scanResultsSub = null;
 
     bool found = false;
-    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 6));
+    final scanDone = Completer<void>();
     _scanResultsSub = FlutterBluePlus.scanResults.listen((results) async {
       if (found) return;
       for (var r in results) {
@@ -112,6 +103,9 @@ class BleBoatLock {
         );
         if (_isBoatLockDevice(r)) {
           found = true;
+          if (!scanDone.isCompleted) {
+            scanDone.complete();
+          }
           _log('BoatLock found, connecting...');
           _device = r.device;
           await FlutterBluePlus.stopScan();
@@ -124,10 +118,23 @@ class BleBoatLock {
       }
     });
 
-    // Safety: разрешить новую попытку через 7 сек
-    Future.delayed(const Duration(seconds: 7), () {
+    try {
+      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 6));
+      await Future.any([
+        scanDone.future,
+        Future.delayed(const Duration(seconds: 7)),
+      ]);
+    } finally {
+      await FlutterBluePlus.stopScan();
+      await _scanResultsSub?.cancel();
+      _scanResultsSub = null;
       _isConnecting = false;
-    });
+    }
+
+    if (!found) {
+      _log('BoatLock not found, retry scan in 3s');
+      _scheduleReconnect();
+    }
   }
 
   Future<void> _connectToDevice() async {
@@ -209,7 +216,7 @@ class BleBoatLock {
           now.difference(_lastDataLogAt!).inSeconds >= 2) {
         _lastDataLogAt = now;
         _log(
-          'data mode=${_lastData!.mode} emu=${_lastData!.emuCompass} '
+          'data mode=${_lastData!.mode} '
           'lat=${_lastData!.lat.toStringAsFixed(6)} lon=${_lastData!.lon.toStringAsFixed(6)}',
         );
       }
@@ -231,31 +238,19 @@ class BleBoatLock {
     await _cmdChar!.write(utf8.encode(cmd), withoutResponse: false);
   }
 
-  Future<void> startRoute() async {
-    if (_cmdChar != null) {
-      await _cmdChar!.write(utf8.encode('START_ROUTE'), withoutResponse: false);
-    }
-  }
-
-  Future<void> stopRoute() async {
-    if (_cmdChar != null) {
-      await _cmdChar!.write(utf8.encode('STOP_ROUTE'), withoutResponse: false);
-    }
-  }
-
-  Future<void> calibrateCompass() async {
+  Future<void> setManualMode(bool manual) async {
     if (_cmdChar != null) {
       await _cmdChar!.write(
-        utf8.encode('CALIB_COMPASS'),
+        utf8.encode('MANUAL:${manual ? 1 : 0}'),
         withoutResponse: false,
       );
     }
   }
 
-  Future<void> setManualMode(bool manual) async {
+  Future<void> setStepperBowZero() async {
     if (_cmdChar != null) {
       await _cmdChar!.write(
-        utf8.encode('MANUAL:${manual ? 1 : 0}'),
+        utf8.encode('SET_STEPPER_BOW'),
         withoutResponse: false,
       );
     }
@@ -276,18 +271,6 @@ class BleBoatLock {
         utf8.encode('MANUAL_SPEED:$speed'),
         withoutResponse: false,
       );
-    }
-  }
-
-  Future<void> exportLog() async {
-    if (_cmdChar != null) {
-      await _cmdChar!.write(utf8.encode('EXPORT_LOG'), withoutResponse: false);
-    }
-  }
-
-  Future<void> clearLog() async {
-    if (_cmdChar != null) {
-      await _cmdChar!.write(utf8.encode('CLEAR_LOG'), withoutResponse: false);
     }
   }
 
@@ -339,7 +322,17 @@ class BleBoatLock {
   bool _isBoatLockDevice(ScanResult r) {
     final advName = r.advertisementData.advName.trim().toLowerCase();
     final devName = r.device.platformName.trim().toLowerCase();
-    return advName == 'boatlock' || devName == 'boatlock';
+    final nameMatch =
+        advName == 'boatlock' ||
+        devName == 'boatlock' ||
+        advName.contains('boatlock') ||
+        devName.contains('boatlock');
+
+    final serviceMatch = r.advertisementData.serviceUuids.any(
+      (uuid) => uuid.toString().toLowerCase().contains('12ab'),
+    );
+
+    return nameMatch || serviceMatch;
   }
 
   Future<bool> _ensurePermissions() async {

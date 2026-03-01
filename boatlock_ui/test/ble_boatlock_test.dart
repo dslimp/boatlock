@@ -16,11 +16,19 @@ BoatData _data({required double lat, required double lon}) {
     mode: '',
     rssi: 0,
     holdHeading: false,
-    emuCompass: 0,
-    routeIdx: 0,
     stepSpr: 200,
     stepMaxSpd: 1000,
     stepAccel: 500,
+    headingRaw: 0,
+    compassOffset: 0,
+    compassQ: 0,
+    magQ: 0,
+    gyroQ: 0,
+    rvAcc: 0,
+    magNorm: 0,
+    gyroNorm: 0,
+    pitch: 0,
+    roll: 0,
   );
 }
 
@@ -45,7 +53,11 @@ void main() {
 
   test('buildSetPhoneGpsCommand validates and formats payload', () {
     expect(
-      BleBoatLock.buildSetPhoneGpsCommand(59.9386312, 30.3141119, speedKmh: 12.34),
+      BleBoatLock.buildSetPhoneGpsCommand(
+        59.9386312,
+        30.3141119,
+        speedKmh: 12.34,
+      ),
       'SET_PHONE_GPS:59.938631,30.314112,12.3',
     );
     expect(
@@ -57,13 +69,7 @@ void main() {
       ),
       'SET_PHONE_GPS:59.938631,30.314112,12.3,9',
     );
-    expect(
-      BleBoatLock.buildSetPhoneGpsCommand(95, 30.0),
-      isNull,
-    );
-    expect(
-      BleBoatLock.buildSetPhoneGpsCommand(59.0, 200.0),
-      isNull,
-    );
+    expect(BleBoatLock.buildSetPhoneGpsCommand(95, 30.0), isNull);
+    expect(BleBoatLock.buildSetPhoneGpsCommand(59.0, 200.0), isNull);
   });
 }

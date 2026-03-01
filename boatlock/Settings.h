@@ -25,7 +25,7 @@ const SettingEntry defaultEntries[] = {
     {"DistTh",    "Distance threshold", TYPE_FLOAT, 2.0,  2.0,   0.1,  10.0,  0.1, "m", true},
     {"AngTol",    "Angle tolerance",    TYPE_FLOAT, 3.0,  3.0,   0.1,  180.0, 1.0, "deg", true},
     {"ScreenBr",  "Screen brightness",  TYPE_INT,   128.0,128.0, 0,    255,    1, "", true},
-    {"Encoder0",  "Encoder zero",       TYPE_INT,   0,    0,     0,    4095,   1, "", false},
+    {"Encoder0",  "Encoder zero",       TYPE_INT,   0,    0,     0,   16384,   1, "", false},
     {"USAngle",   "US angle",           TYPE_FLOAT, 30.0, 30.0,  0.0,  90.0,   1.0, "deg", false},
     {"USThresh",  "US threshold",       TYPE_FLOAT, 1.5,  1.5,   0.1,  6.0,    0.1, "m", false},
     {"GPS_TYPE",  "GPS model",          TYPE_INT,   0, 0, 0, 4, 1, "", false},
@@ -37,16 +37,15 @@ const SettingEntry defaultEntries[] = {
     {"AnchorLon",     "Anchor longitude",  TYPE_FLOAT, 0.0, 0.0,-180.0, 180.0, 0.000001, "", false},
     {"AnchorHead",    "Anchor heading",    TYPE_FLOAT, 0.0, 0.0,   0.0, 360.0, 1.0, "deg", false},
     {"HoldHeading",   "Hold heading",      TYPE_INT,   0, 0, 0, 1, 1, "", true},
-    {"EmuCompass",   "Use emulated compass", TYPE_INT,   0, 0, 0, 1, 1, "", false},
     {"MagOffX",      "Compass offset X",  TYPE_FLOAT, 0.0, 0.0, -5000.0, 5000.0, 1.0, "", false},
     {"MagOffY",      "Compass offset Y",  TYPE_FLOAT, 0.0, 0.0, -5000.0, 5000.0, 1.0, "", false},
     {"MagOffZ",      "Compass offset Z",  TYPE_FLOAT, 0.0, 0.0, -5000.0, 5000.0, 1.0, "", false},
     {"MagScaleX",    "Compass scale X",   TYPE_FLOAT, 1.0, 1.0, 0.1, 5.0, 0.01, "", false},
     {"MagScaleY",    "Compass scale Y",   TYPE_FLOAT, 1.0, 1.0, 0.1, 5.0, 0.01, "", false},
     {"MagScaleZ",    "Compass scale Z",   TYPE_FLOAT, 1.0, 1.0, 0.1, 5.0, 0.01, "", false},
-    {"StepMaxSpd",   "Stepper max speed", TYPE_FLOAT, 5000.0, 1000.0, 10.0, 5000.0, 10.0, "", true},
-    {"StepAccel",    "Stepper accel",     TYPE_FLOAT, 2500.0, 500.0, 10.0, 5000.0, 10.0, "", true},
-    {"StepSpr",      "Stepper steps/rev", TYPE_INT,   200,   200,   200,  3200, 200, "", true},
+    {"StepMaxSpd",   "Stepper max speed", TYPE_FLOAT, 700.0, 700.0, 100.0, 1500.0, 10.0, "", true},
+    {"StepAccel",    "Stepper accel",     TYPE_FLOAT, 250.0, 250.0,  50.0, 1200.0, 10.0, "", true},
+    {"StepSpr",      "Stepper steps/rev", TYPE_INT,   4096, 4096,  4096,  4096,   1, "", false},
 };
 
 static const int count = sizeof(defaultEntries) / sizeof(defaultEntries[0]);
@@ -56,7 +55,7 @@ const char* imuTypeNames[] = { "BNO055", "MPU9250", "BNO085", "LSM9DS1", "None" 
 
 class Settings {
 public:
-    static constexpr uint8_t VERSION = 0x11;
+    static constexpr uint8_t VERSION = 0x12;
     static const int EEPROM_ADDR = 256;
 
     struct KeyIdx { const char* key; int idx; };

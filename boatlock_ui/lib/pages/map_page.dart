@@ -4,16 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:sensors_plus/sensors_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../ble/ble_boatlock.dart';
 import '../models/boat_data.dart';
 import '../widgets/status_panel.dart';
-import '../services/log_service.dart';
-import 'logs_page.dart';
 import 'settings_page.dart';
-import 'route_page.dart';
-import 'compass_page.dart';
 
 class MapPage extends StatefulWidget {
   const MapPage({super.key});
@@ -22,7 +16,6 @@ class MapPage extends StatefulWidget {
 }
 
 class _MapPageState extends State<MapPage> {
-  static const String _kPhoneHeadingOffsetKey = 'phone_heading_offset_deg';
   BoatData? boatData;
   late BleBoatLock ble;
   LatLng? selectedAnchorPos;
@@ -32,18 +25,10 @@ class _MapPageState extends State<MapPage> {
   LatLng? phonePos;
   final List<LatLng> _history = [];
   StreamSubscription<Position>? _posSub;
-  StreamSubscription<MagnetometerEvent>? _magSub;
   bool _autoCenter = true;
   bool _manualMode = false;
   double _manualSpeed = 0;
   DateTime? _lastPhoneGpsSentAt;
-  DateTime? _lastPhoneHeadingSentAt;
-  double? _lastPhoneHeadingSent;
-  double? _lastRawPhoneHeading;
-  double? _lastGpsCourseHeadingDeg;
-  DateTime? _lastGpsCourseUpdatedAt;
-  double _phoneHeadingOffsetDeg = 0.0;
-  bool _pausePhoneHeadingForwarding = false;
 
   void _centerOnCurrent() {
     final pos = (boatData != null && boatData!.lat != 0 && boatData!.lon != 0)
@@ -86,141 +71,6 @@ class _MapPageState extends State<MapPage> {
     ),
   );
 
-  double _normalizeDeg(double value) {
-    var normalized = value % 360.0;
-    if (normalized < 0) normalized += 360.0;
-    return normalized;
-  }
-
-  double _normalizeSignedDeg(double value) {
-    var normalized = _normalizeDeg(value);
-    if (normalized > 180.0) normalized -= 360.0;
-    return normalized;
-  }
-
-  double _angularDistanceDeg(double a, double b) {
-    final diff = (a - b).abs();
-    return diff > 180.0 ? 360.0 - diff : diff;
-  }
-
-  Future<void> _loadPhoneHeadingOffset() async {
-    final prefs = await SharedPreferences.getInstance();
-    _phoneHeadingOffsetDeg = _normalizeSignedDeg(
-      prefs.getDouble(_kPhoneHeadingOffsetKey) ?? 0.0,
-    );
-  }
-
-  Future<void> _savePhoneHeadingOffset() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(_kPhoneHeadingOffsetKey, _phoneHeadingOffsetDeg);
-  }
-
-  Future<void> _calibratePhoneBow() async {
-    final rawHeading = _lastRawPhoneHeading;
-    final course = _lastGpsCourseHeadingDeg;
-    final courseFresh =
-        course != null &&
-        _lastGpsCourseUpdatedAt != null &&
-        DateTime.now().difference(_lastGpsCourseUpdatedAt!).inSeconds <= 6;
-
-    if (rawHeading == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Нет данных компаса телефона')),
-      );
-      return;
-    }
-
-    if (!courseFresh) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Нужен курс GPS: двигайтесь прямо 5-10 секунд'),
-        ),
-      );
-      return;
-    }
-
-    _phoneHeadingOffsetDeg = _normalizeSignedDeg(course - rawHeading);
-    await _savePhoneHeadingOffset();
-    if (!mounted) return;
-    setState(() {});
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Калибровка носа сохранена: offset ${_phoneHeadingOffsetDeg.toStringAsFixed(1)}°',
-        ),
-      ),
-    );
-  }
-
-  Future<void> _calibratePhoneBowStatic() async {
-    final mountedRaw = _lastRawPhoneHeading;
-    if (mountedRaw == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Нет данных компаса телефона')),
-      );
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Калибровка носа без движения'),
-        content: const Text(
-          '1) Текущее положение телефона будет сохранено как монтажное.\n'
-          '2) Поверните телефон так, чтобы его верх смотрел точно в нос лодки.\n'
-          '3) Нажмите "Готово".',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Готово'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) {
-      return;
-    }
-
-    final bowRaw = _lastRawPhoneHeading;
-    if (bowRaw == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось прочитать компас телефона')),
-      );
-      return;
-    }
-
-    _phoneHeadingOffsetDeg = _normalizeSignedDeg(bowRaw - mountedRaw);
-    await _savePhoneHeadingOffset();
-    if (!mounted) return;
-    setState(() {});
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Калибровка без движения сохранена: offset ${_phoneHeadingOffsetDeg.toStringAsFixed(1)}°',
-        ),
-      ),
-    );
-  }
-
-  Future<void> _resetPhoneBowCalibration() async {
-    _phoneHeadingOffsetDeg = 0.0;
-    await _savePhoneHeadingOffset();
-    if (!mounted) return;
-    setState(() {});
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Калибровка носа сброшена')),
-    );
-  }
-
   @override
   void initState() {
     super.initState();
@@ -238,14 +88,11 @@ class _MapPageState extends State<MapPage> {
           }
         });
       },
-      onLog: (line) => logService.add(line),
     );
     _bootstrap();
   }
 
   Future<void> _bootstrap() async {
-    await _loadPhoneHeadingOffset();
-    _startPhoneCompassForwarding();
     await ble.connectAndListen();
     await _initLocation();
   }
@@ -254,7 +101,6 @@ class _MapPageState extends State<MapPage> {
   void dispose() {
     ble.dispose();
     _posSub?.cancel();
-    _magSub?.cancel();
     super.dispose();
   }
 
@@ -274,52 +120,18 @@ class _MapPageState extends State<MapPage> {
       distanceFilter: 1,
     );
 
-    _posSub = Geolocator.getPositionStream(
-      locationSettings: locationSettings,
-    ).listen((pos) {
-      final speedMps = (pos.speed.isFinite && pos.speed > 0.0) ? pos.speed : 0.0;
-      if (pos.heading.isFinite && pos.heading >= 0 && speedMps >= 1.5) {
-        _lastGpsCourseHeadingDeg = _normalizeDeg(pos.heading);
-        _lastGpsCourseUpdatedAt = DateTime.now();
-      }
-      final p = LatLng(pos.latitude, pos.longitude);
-      setState(() {
-        phonePos = p;
-        _addToHistory(p);
-        if (boatData == null && _autoCenter) {
-          _mapController.move(p, _zoom);
-        }
-      });
-      _forwardPhoneGps(pos);
-    });
-  }
-
-  void _startPhoneCompassForwarding() {
-    _magSub?.cancel();
-    _magSub = magnetometerEventStream().listen((event) {
-      if (_pausePhoneHeadingForwarding) {
-        return;
-      }
-
-      final rawHeading =
-          _normalizeDeg(math.atan2(event.y, event.x) * 180.0 / math.pi);
-      _lastRawPhoneHeading = rawHeading;
-      final heading = _normalizeDeg(rawHeading + _phoneHeadingOffsetDeg);
-      final now = DateTime.now();
-      final enoughTimePassed =
-          _lastPhoneHeadingSentAt == null ||
-          now.difference(_lastPhoneHeadingSentAt!).inMilliseconds >= 150;
-      final changedEnough =
-          _lastPhoneHeadingSent == null ||
-          _angularDistanceDeg(heading, _lastPhoneHeadingSent!) >= 1.0;
-      if (!enoughTimePassed || !changedEnough) {
-        return;
-      }
-
-      _lastPhoneHeadingSentAt = now;
-      _lastPhoneHeadingSent = heading;
-      ble.sendHeading(heading);
-    });
+    _posSub = Geolocator.getPositionStream(locationSettings: locationSettings)
+        .listen((pos) {
+          final p = LatLng(pos.latitude, pos.longitude);
+          setState(() {
+            phonePos = p;
+            _addToHistory(p);
+            if (boatData == null && _autoCenter) {
+              _mapController.move(p, _zoom);
+            }
+          });
+          _forwardPhoneGps(pos);
+        });
   }
 
   void _forwardPhoneGps(Position pos) {
@@ -373,67 +185,6 @@ class _MapPageState extends State<MapPage> {
         title: const Text('BoatLock OSM Map'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.list),
-            tooltip: 'Логи',
-            onPressed: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const LogsPage())),
-          ),
-          IconButton(
-            icon: const Icon(Icons.alt_route),
-            tooltip: 'Трек',
-            onPressed: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => RoutePage(ble: ble))),
-          ),
-          IconButton(
-            icon: const Icon(Icons.explore),
-            tooltip: 'Компас',
-            onPressed: () async {
-              setState(() => _pausePhoneHeadingForwarding = true);
-              await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => CompassPage(
-                    ble: ble,
-                    emuCompass: boatData?.emuCompass == 1,
-                  ),
-                ),
-              );
-              if (mounted) {
-                setState(() => _pausePhoneHeadingForwarding = false);
-              }
-            },
-          ),
-          PopupMenuButton<String>(
-            tooltip: 'Калибровка носа',
-            icon: const Icon(Icons.compass_calibration),
-            onSelected: (value) async {
-              if (value == 'calibrate') {
-                await _calibratePhoneBow();
-              } else if (value == 'calibrate_static') {
-                await _calibratePhoneBowStatic();
-              } else if (value == 'reset') {
-                await _resetPhoneBowCalibration();
-              }
-            },
-            itemBuilder: (_) => [
-              const PopupMenuItem<String>(
-                value: 'calibrate_static',
-                child: Text('Калибровать нос (без движения)'),
-              ),
-              const PopupMenuItem<String>(
-                value: 'calibrate',
-                child: Text('Калибровать нос (по GPS курсу)'),
-              ),
-              PopupMenuItem<String>(
-                value: 'reset',
-                child: Text(
-                  'Сбросить калибровку (${_phoneHeadingOffsetDeg.toStringAsFixed(1)}°)',
-                ),
-              ),
-            ],
-          ),
-          IconButton(
             icon: const Icon(Icons.settings),
             tooltip: 'Настройки',
             onPressed: () => Navigator.of(context).push(
@@ -441,10 +192,18 @@ class _MapPageState extends State<MapPage> {
                 builder: (_) => SettingsPage(
                   ble: ble,
                   holdHeading: boatData?.holdHeading ?? false,
-                  emuCompass: boatData?.emuCompass == 1,
-                  stepSpr: boatData?.stepSpr ?? 200,
+                  stepSpr: boatData?.stepSpr ?? 4096,
                   stepMaxSpd: boatData?.stepMaxSpd ?? 1000,
                   stepAccel: boatData?.stepAccel ?? 500,
+                  compassOffset: boatData?.compassOffset ?? 0.0,
+                  compassQ: boatData?.compassQ ?? 0,
+                  magQ: boatData?.magQ ?? 0,
+                  gyroQ: boatData?.gyroQ ?? 0,
+                  rvAcc: boatData?.rvAcc ?? 0.0,
+                  magNorm: boatData?.magNorm ?? 0.0,
+                  gyroNorm: boatData?.gyroNorm ?? 0.0,
+                  pitch: boatData?.pitch ?? 0.0,
+                  roll: boatData?.roll ?? 0.0,
                   isConnected: boatData != null,
                 ),
               ),
@@ -678,6 +437,30 @@ class _MapPageState extends State<MapPage> {
                 if (_manualMode)
                   Column(
                     children: [
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.navigation),
+                        label: const Text('Сохранить "нос лодки"'),
+                        onPressed: () async {
+                          if (boatData == null) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Нет BLE-соединения'),
+                              ),
+                            );
+                            return;
+                          }
+                          await ble.setStepperBowZero();
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Ноль шаговика сохранен: текущее направление принято за нос лодки',
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [

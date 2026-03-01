@@ -7,8 +7,6 @@
 #include <math.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <SPI.h>
-#include <SD.h>
 
 #include "ParamHelpers.h"
 #include "Settings.h"
@@ -18,7 +16,6 @@
 #include "StepperControl.h"
 #include "display.h"
 #include "BNO08xCompass.h"
-#include "PathControl.h"
 #include "BleCommandHandler.h"
 #include "BLEBoatLock.h"
 
@@ -29,22 +26,28 @@ constexpr size_t EEPROM_SIZE =
 BLEBoatLock bleBoatLock;
 
 namespace cfg {
-constexpr char kFirmwareVersion[] = "0.2.0";
+constexpr char kFirmwareVersion[] = "0.1.0";
 
-constexpr int kStepPin = 5;
-constexpr int kDirPin = 4;
 #if defined(BOATLOCK_BOARD_JC4832W535)
+constexpr int kStepIn1Pin = 11;
+constexpr int kStepIn2Pin = 12;
+constexpr int kStepIn3Pin = 13;
+constexpr int kStepIn4Pin = 14;
 // JC4832W535 display uses GPIO47/48 for LCD QSPI, so I2C must be moved.
 constexpr int kI2cSdaPin = 4;
 constexpr int kI2cSclPin = 8;
 #else
+constexpr int kStepIn1Pin = 2;
+constexpr int kStepIn2Pin = 4;
+constexpr int kStepIn3Pin = 6;
+constexpr int kStepIn4Pin = 16;
 constexpr int kI2cSdaPin = 47;
 constexpr int kI2cSclPin = 48;
 #endif
 constexpr int kGpsRxPin = 17;
 constexpr int kGpsTxPin = 18;
 constexpr int kMotorPwmPin = 7;
-constexpr int kMotorDirPin1 = 6;
+constexpr int kMotorDirPin1 = 5;
 constexpr int kMotorDirPin2 = 10;
 constexpr int kBootPin = 0;
 
@@ -55,31 +58,31 @@ constexpr int kPwmChannel = 0;
 constexpr int kMaxGpsFilterWindow = 20;
 constexpr unsigned long kBleNotifyIntervalMs = 1000;
 constexpr unsigned long kUiRefreshIntervalMs = 120;
-constexpr unsigned long kStepperCheckIntervalMs = 3000;
+constexpr unsigned long kStepperCheckIntervalMs = 250;
 constexpr unsigned long kHardwareGpsMaxAgeMs = 2000;
 constexpr unsigned long kPhoneGpsTimeoutMs = 5000;
-constexpr unsigned long kPhoneHeadingTimeoutMs = 3000;
 constexpr unsigned long kCompassRetryIntervalMs = 5000;
 constexpr float kGpsCorrMinSpeedKmh = 3.0f;
 constexpr float kGpsCorrMinMoveM = 4.0f;
 constexpr float kGpsCorrAlpha = 0.18f;
 constexpr float kGpsCorrMaxAbsDeg = 90.0f;
 constexpr unsigned long kGpsCorrMaxAgeMs = 180000;
-
-constexpr const char* kRouteLogPath = "/route.csv";
+constexpr unsigned long kAnchorBearingCacheMaxAgeMs = 120000;
+constexpr float kStepperDeadbandBaseDeg = 2.2f;
+constexpr float kStepperDeadbandMaxDeg = 9.0f;
+constexpr float kStepperDeadbandHystDeg = 0.9f;
 } // namespace cfg
-
-File routeLog;
-bool sdReady = false;
 
 HardwareSerial gpsSerial(1);
 TinyGPSPlus gps;
-StepperControl stepperControl(cfg::kStepPin, cfg::kDirPin);
+StepperControl stepperControl(cfg::kStepIn1Pin,
+                              cfg::kStepIn2Pin,
+                              cfg::kStepIn3Pin,
+                              cfg::kStepIn4Pin);
 
 BNO08xCompass compass;
 AnchorControl anchor;
 MotorControl motor;
-PathControl pathControl;
 
 bool compassReady = false;
 float fallbackHeading = 0.0f;
@@ -97,26 +100,23 @@ float phoneSpeedKmh = 0.0f;
 int phoneSatellites = 0;
 unsigned long phoneGpsUpdatedMs = 0;
 bool phoneGpsValid = false;
-unsigned long phoneHeadingUpdatedMs = 0;
-bool phoneHeadingValid = false;
 bool gpsSourcePhone = false;
-float emuHeading = 0.0f;
 float gpsHeadingCorrDeg = 0.0f;
 unsigned long gpsHeadingCorrUpdatedMs = 0;
 bool gpsHeadingCorrValid = false;
 float gpsCorrRefLat = 0.0f;
 float gpsCorrRefLon = 0.0f;
 bool gpsCorrRefValid = false;
+float anchorBearingCacheDeg = 0.0f;
+unsigned long anchorBearingCacheUpdatedMs = 0;
+bool anchorBearingCacheValid = false;
 
 bool manualMode = false;
 int manualDir = -1;
 int manualSpeed = 0;
 
-void startCompassCalibration();
-void exportRouteLog();
-void clearRouteLog();
 void setPhoneGpsFix(float lat, float lon, float speedKmh, int satellites);
-void setPhoneHeading(float headingDeg);
+void captureStepperBowZero();
 
 namespace {
 TaskHandle_t stepperTaskHandle = nullptr;
@@ -126,6 +126,7 @@ unsigned long lastBleNotifyMs = 0;
 unsigned long lastUiRefreshMs = 0;
 unsigned long lastStepperCheckMs = 0;
 unsigned long lastCompassRetryMs = 0;
+bool stepperTrackingActive = false;
 bool lastBootButton = HIGH;
 bool gpsUartSeen = false;
 bool gpsNoDataWarned = false;
@@ -232,7 +233,7 @@ float normalize180Deg(float deg) {
 }
 
 void maybeUpdateGpsHeadingCorrection(float lat, float lon, float speedKmh) {
-  if (!compassReady || settings.get("EmuCompass") == 1) {
+  if (!compassReady) {
     gpsCorrRefValid = false;
     return;
   }
@@ -288,21 +289,11 @@ float correctedCompassHeading(float headingDeg) {
 
 const char* currentModeLabel() {
   if (manualMode) return "MANUAL";
-  if (pathControl.active) return "ROUTE";
   if (settings.get("AnchorEnabled") == 1) return "ANCHOR";
   return "IDLE";
 }
 
 float currentHeadingValue() {
-  const bool phoneHeadingFresh =
-      phoneHeadingValid &&
-      (millis() - phoneHeadingUpdatedMs <= cfg::kPhoneHeadingTimeoutMs);
-  const bool usePhoneHeading =
-      (settings.get("EmuCompass") == 1) || (!compassReady && phoneHeadingFresh);
-
-  if (usePhoneHeading) {
-    return emuHeading;
-  }
   if (compassReady) {
     return correctedCompassHeading(compass.getAzimuth());
   }
@@ -310,17 +301,26 @@ float currentHeadingValue() {
 }
 
 bool headingAvailable() {
-  const bool phoneHeadingFresh =
-      phoneHeadingValid &&
-      (millis() - phoneHeadingUpdatedMs <= cfg::kPhoneHeadingTimeoutMs);
-  return (settings.get("EmuCompass") == 1) || compassReady || (!compassReady && phoneHeadingFresh);
+  return compassReady;
 }
 
-bool headingSourceIsPhone() {
-  const bool phoneHeadingFresh =
-      phoneHeadingValid &&
-      (millis() - phoneHeadingUpdatedMs <= cfg::kPhoneHeadingTimeoutMs);
-  return (settings.get("EmuCompass") == 1) || (!compassReady && phoneHeadingFresh);
+float currentStepperDeadbandDeg() {
+  float deadband = cfg::kStepperDeadbandBaseDeg;
+  if (compassReady) {
+    const float rvAcc = compass.getRvAccuracyDeg();
+    if (isfinite(rvAcc) && rvAcc > 0.0f) {
+      deadband = max(deadband, 1.2f + rvAcc * 1.3f);
+    }
+    const int rvQ = compass.getHeadingQuality();
+    if (rvQ <= 1) {
+      deadband += 0.8f;
+    }
+    if (rvQ == 0) {
+      deadband += 1.0f;
+    }
+  }
+
+  return constrain(deadband, cfg::kStepperDeadbandBaseDeg, cfg::kStepperDeadbandMaxDeg);
 }
 
 void stepperTask(void*) {
@@ -409,14 +409,6 @@ void registerBleParams() {
 
   bleBoatLock.registerParam("holdHeading", makeFloatParam([&]() {
     return settings.get("HoldHeading");
-  }, "%.0f"));
-
-  bleBoatLock.registerParam("emuCompass", makeFloatParam([&]() {
-    return settings.get("EmuCompass");
-  }, "%.0f"));
-
-  bleBoatLock.registerParam("routeIdx", makeFloatParam([&]() {
-    return (float)pathControl.currentIndex;
   }, "%.0f"));
 
   bleBoatLock.registerParam("stepSpr", makeFloatParam([&]() {
@@ -510,29 +502,12 @@ void updateGpsFromSerial() {
   gpsCorrRefValid = false;
 }
 
-void appendRouteLogIfNeeded() {
-  if (!sdReady || !gps.location.isUpdated() || !gps.location.isValid() || !routeLog) {
-    return;
-  }
-
-  if (gps.date.isValid() && gps.time.isValid()) {
-    routeLog.printf("%04d-%02d-%02dT%02d:%02d:%02d,%.6f,%.6f\n",
-                    gps.date.year(), gps.date.month(), gps.date.day(),
-                    gps.time.hour(), gps.time.minute(), gps.time.second(),
-                    gps.location.lat(), gps.location.lng());
-  } else {
-    routeLog.printf("%lu,%.6f,%.6f\n", millis(), gps.location.lat(), gps.location.lng());
-  }
-
-  routeLog.flush();
-}
-
 void handleBootButton() {
   const bool nowButton = digitalRead(cfg::kBootPin);
   if (lastBootButton == HIGH && nowButton == LOW && (gps.location.isValid() || gpsFix)) {
     anchor.saveAnchor(lastLat,
                       lastLon,
-                      settings.get("EmuCompass") ? emuHeading : currentHeadingValue());
+                      currentHeadingValue());
     settings.set("AnchorEnabled", 1);
     logMessage("Anchor point set!\n");
   }
@@ -540,27 +515,39 @@ void handleBootButton() {
 }
 
 void updateDistanceAndBearing() {
-  if (!manualMode && pathControl.active && gpsFix &&
-      pathControl.currentIndex < pathControl.numPoints) {
-    const Waypoint& wp = pathControl.points[pathControl.currentIndex];
-    dist = TinyGPSPlus::distanceBetween(lastLat, lastLon, wp.lat, wp.lon);
-    bearing = TinyGPSPlus::courseTo(lastLat, lastLon, wp.lat, wp.lon);
-
-    if (dist < settings.get("DistTh")) {
-      ++pathControl.currentIndex;
-      if (pathControl.currentIndex >= pathControl.numPoints) {
-        pathControl.active = false;
-      }
+  if (!manualMode && settings.get("AnchorEnabled") == 1) {
+    if (settings.get("HoldHeading") == 1) {
+      bearing = anchor.anchorHeading;
+      dist = gpsFix
+                 ? TinyGPSPlus::distanceBetween(lastLat, lastLon, anchor.anchorLat, anchor.anchorLon)
+                 : 0.0f;
+      return;
     }
-    return;
-  }
 
-  if (!manualMode && settings.get("AnchorEnabled") == 1 && gpsFix) {
-    dist = TinyGPSPlus::distanceBetween(lastLat, lastLon, anchor.anchorLat, anchor.anchorLon);
-    bearing = (settings.get("HoldHeading") == 1)
-                  ? anchor.anchorHeading
-                  : TinyGPSPlus::courseTo(lastLat, lastLon, anchor.anchorLat, anchor.anchorLon);
-    return;
+    if (gpsFix) {
+      dist = TinyGPSPlus::distanceBetween(lastLat, lastLon, anchor.anchorLat, anchor.anchorLon);
+      const float computedBearing =
+          TinyGPSPlus::courseTo(lastLat, lastLon, anchor.anchorLat, anchor.anchorLon);
+      if (isfinite(computedBearing)) {
+        bearing = computedBearing;
+        anchorBearingCacheDeg = computedBearing;
+        anchorBearingCacheUpdatedMs = millis();
+        anchorBearingCacheValid = true;
+      } else if (anchorBearingCacheValid &&
+                 millis() - anchorBearingCacheUpdatedMs <= cfg::kAnchorBearingCacheMaxAgeMs) {
+        bearing = anchorBearingCacheDeg;
+      } else {
+        bearing = 0.0f;
+      }
+      return;
+    }
+
+    if (anchorBearingCacheValid &&
+        millis() - anchorBearingCacheUpdatedMs <= cfg::kAnchorBearingCacheMaxAgeMs) {
+      bearing = anchorBearingCacheDeg;
+      dist = 0.0f;
+      return;
+    }
   }
 
   dist = 0.0f;
@@ -574,6 +561,7 @@ void applyMotionControl(unsigned long now,
                         float heading,
                         float diff) {
   if (manualMode) {
+    stepperTrackingActive = false;
     if (manualDir == 0) {
       stepperControl.startManual(-1);
     } else if (manualDir == 1) {
@@ -587,12 +575,33 @@ void applyMotionControl(unsigned long now,
 
   stepperControl.stopManual();
 
-  if (autoControlActive && hasHeading && hasBearing) {
-    if (!stepperControl.busy && fabsf(diff) > 2.0f && now - lastStepperCheckMs > cfg::kStepperCheckIntervalMs) {
-      stepperControl.moveToBearing(bearing, heading);
-      lastStepperCheckMs = now;
+  if (autoControlActive) {
+    if (hasHeading && hasBearing) {
+      const float absDiff = fabsf(diff);
+      const float deadband = currentStepperDeadbandDeg();
+      const float engageBand = deadband + cfg::kStepperDeadbandHystDeg;
+
+      if (stepperTrackingActive) {
+        if (absDiff <= deadband) {
+          stepperTrackingActive = false;
+        }
+      } else if (absDiff >= engageBand) {
+        stepperTrackingActive = true;
+      }
+
+      if (stepperTrackingActive &&
+          now - lastStepperCheckMs >= cfg::kStepperCheckIntervalMs) {
+        stepperControl.pointToBearing(bearing, heading);
+        lastStepperCheckMs = now;
+      } else if (!stepperTrackingActive) {
+        stepperControl.cancelMove();
+      }
+    } else {
+      stepperTrackingActive = false;
+      stepperControl.cancelMove();
     }
   } else {
+    stepperTrackingActive = false;
     stepperControl.cancelMove();
   }
 
@@ -613,7 +622,7 @@ void publishBleAndUi(unsigned long now,
   const float displayBearing = hasBearing ? bearing : fallbackBearing;
   const int compassQuality = compassReady ? compass.getHeadingQuality() : 0;
   const int batteryPercent = 0;
-  const bool headingFromPhone = hasHeading && headingSourceIsPhone();
+  const bool headingFromPhone = false;
 
   if (now - lastUiRefreshMs >= cfg::kUiRefreshIntervalMs) {
     display_draw_ui(gpsFix,
@@ -666,21 +675,8 @@ void setPhoneGpsFix(float lat, float lon, float speedKmh, int satellites) {
   phoneGpsValid = true;
 }
 
-void setPhoneHeading(float headingDeg) {
-  if (!isfinite(headingDeg)) {
-    return;
-  }
-  float normalized = fmodf(headingDeg, 360.0f);
-  if (normalized < 0.0f) {
-    normalized += 360.0f;
-  }
-  emuHeading = normalized;
-  phoneHeadingUpdatedMs = millis();
-  phoneHeadingValid = true;
-}
-
-void startCompassCalibration() {
-  logMessage("[COMPASS] explicit calibration command ignored (BNO08x dynamic calibration in use)\n");
+void captureStepperBowZero() {
+  stepperControl.captureBowZero();
 }
 
 void setup() {
@@ -712,9 +708,7 @@ void setup() {
 
   EEPROM.begin(EEPROM_SIZE);
   settings.load();
-  logMessage("[CFG] EmuCompass=%d HoldHeading=%d\n",
-             (int)settings.get("EmuCompass"),
-             (int)settings.get("HoldHeading"));
+  logMessage("[CFG] HoldHeading=%d\n", (int)settings.get("HoldHeading"));
 
   gpsFilter.reset((int)settings.get("GpsFWin"));
 
@@ -730,29 +724,23 @@ void setup() {
   registerBleParams();
   bleBoatLock.begin();
 
-  #if defined(BOATLOCK_BOARD_JC4832W535)
-  // SD over default SPI can reconfigure the same host used by LCD QSPI on this board.
-  sdReady = false;
-  #else
-  sdReady = SD.begin();
-  if (sdReady) {
-    routeLog = SD.open(cfg::kRouteLogPath, FILE_APPEND);
-  }
-  #endif
-
   motor.setupPWM(cfg::kMotorPwmPin, cfg::kPwmChannel, cfg::kPwmFreq, cfg::kPwmResolution);
   motor.setDirPins(cfg::kMotorDirPin1, cfg::kMotorDirPin2);
   motor.loadPIDfromSettings();
 
   stepperControl.attachSettings(&settings);
   stepperControl.loadFromSettings();
+  logMessage("[STEP] pins IN1=%d IN2=%d IN3=%d IN4=%d\n",
+             cfg::kStepIn1Pin,
+             cfg::kStepIn2Pin,
+             cfg::kStepIn3Pin,
+             cfg::kStepIn4Pin);
 
-  xTaskCreatePinnedToCore(stepperTask, "stepper", 2048, nullptr, 1, &stepperTaskHandle, 1);
+  xTaskCreatePinnedToCore(stepperTask, "stepper", 4096, nullptr, 1, &stepperTaskHandle, 1);
 }
 
 void loop() {
   updateGpsFromSerial();
-  appendRouteLogIfNeeded();
   handleBootButton();
 
   if (!compassReady && millis() - lastCompassRetryMs >= cfg::kCompassRetryIntervalMs) {
@@ -775,11 +763,15 @@ void loop() {
 
   updateDistanceAndBearing();
 
-  const bool autoControlActive =
-      !manualMode && (pathControl.active || settings.get("AnchorEnabled") == 1);
+  const bool autoControlActive = !manualMode && (settings.get("AnchorEnabled") == 1);
   const float heading = currentHeadingValue();
   const bool hasHeading = headingAvailable();
-  const bool hasBearing = gpsFix && autoControlActive;
+  const bool anchorBearingAvailable =
+      (settings.get("HoldHeading") == 1) ||
+      gpsFix ||
+      (anchorBearingCacheValid &&
+       millis() - anchorBearingCacheUpdatedMs <= cfg::kAnchorBearingCacheMaxAgeMs);
+  const bool hasBearing = autoControlActive && anchorBearingAvailable;
   const float diff = (hasHeading && hasBearing) ? normalizeDiffDeg(bearing, heading) : 0.0f;
 
   const unsigned long now = millis();
@@ -787,40 +779,4 @@ void loop() {
   publishBleAndUi(now, hasHeading, hasBearing, heading, diff);
 
   bleBoatLock.loop();
-}
-
-void exportRouteLog() {
-  if (!sdReady) {
-    return;
-  }
-
-  routeLog.flush();
-  routeLog.close();
-
-  File f = SD.open(cfg::kRouteLogPath, FILE_READ);
-  if (!f) {
-    return;
-  }
-
-  while (f.available()) {
-    String line = f.readStringUntil('\n');
-    if (line.length() > 0) {
-      String out = String("ROUTE:") + line;
-      bleBoatLock.sendLog(out.c_str());
-      delay(5);
-    }
-  }
-
-  f.close();
-  routeLog = SD.open(cfg::kRouteLogPath, FILE_APPEND);
-}
-
-void clearRouteLog() {
-  if (!sdReady) {
-    return;
-  }
-
-  routeLog.close();
-  SD.remove(cfg::kRouteLogPath);
-  routeLog = SD.open(cfg::kRouteLogPath, FILE_APPEND);
 }

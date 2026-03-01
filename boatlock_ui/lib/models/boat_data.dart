@@ -11,11 +11,19 @@ class BoatData {
   final String mode;
   final int rssi;
   final bool holdHeading;
-  final int emuCompass;
-  final int routeIdx;
   final int stepSpr;
   final double stepMaxSpd;
   final double stepAccel;
+  final double headingRaw;
+  final double compassOffset;
+  final int compassQ;
+  final int magQ;
+  final int gyroQ;
+  final double rvAcc;
+  final double magNorm;
+  final double gyroNorm;
+  final double pitch;
+  final double roll;
 
   BoatData({
     required this.lat,
@@ -30,11 +38,19 @@ class BoatData {
     required this.mode,
     required this.rssi,
     required this.holdHeading,
-    required this.emuCompass,
-    required this.routeIdx,
     required this.stepSpr,
     required this.stepMaxSpd,
     required this.stepAccel,
+    required this.headingRaw,
+    required this.compassOffset,
+    required this.compassQ,
+    required this.magQ,
+    required this.gyroQ,
+    required this.rvAcc,
+    required this.magNorm,
+    required this.gyroNorm,
+    required this.pitch,
+    required this.roll,
   });
 
   factory BoatData.fromJson(Map<String, dynamic> json, {int rssi = 0}) {
@@ -50,13 +66,21 @@ class BoatData {
       status: json['status']?.toString() ?? '',
       mode: json['mode']?.toString() ?? '',
       rssi: rssi,
-      holdHeading:
-          int.tryParse(json['holdHeading']?.toString() ?? '') == 1,
-      emuCompass: int.tryParse(json['emuCompass']?.toString() ?? '') ?? 0,
-      routeIdx: int.tryParse(json['routeIdx']?.toString() ?? '') ?? 0,
-      stepSpr: int.tryParse(json['stepSpr']?.toString() ?? '') ?? 200,
+      holdHeading: int.tryParse(json['holdHeading']?.toString() ?? '') == 1,
+      stepSpr: int.tryParse(json['stepSpr']?.toString() ?? '') ?? 4096,
       stepMaxSpd: double.tryParse(json['stepMaxSpd']?.toString() ?? '') ?? 1000,
       stepAccel: double.tryParse(json['stepAccel']?.toString() ?? '') ?? 500,
+      headingRaw: double.tryParse(json['headingRaw']?.toString() ?? '') ?? 0,
+      compassOffset:
+          double.tryParse(json['compassOffset']?.toString() ?? '') ?? 0,
+      compassQ: int.tryParse(json['compassQ']?.toString() ?? '') ?? 0,
+      magQ: int.tryParse(json['magQ']?.toString() ?? '') ?? 0,
+      gyroQ: int.tryParse(json['gyroQ']?.toString() ?? '') ?? 0,
+      rvAcc: double.tryParse(json['rvAcc']?.toString() ?? '') ?? 0,
+      magNorm: double.tryParse(json['magNorm']?.toString() ?? '') ?? 0,
+      gyroNorm: double.tryParse(json['gyroNorm']?.toString() ?? '') ?? 0,
+      pitch: double.tryParse(json['pitch']?.toString() ?? '') ?? 0,
+      roll: double.tryParse(json['roll']?.toString() ?? '') ?? 0,
     );
   }
 }

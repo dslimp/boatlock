@@ -14,8 +14,6 @@ void main() {
       'battery': '75',
       'status': 'OK',
       'holdHeading': '1',
-      'emuCompass': '0',
-      'routeIdx': '2',
       'stepSpr': '400',
       'stepMaxSpd': '1500',
       'stepAccel': '600',

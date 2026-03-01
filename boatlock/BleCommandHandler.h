@@ -2,60 +2,34 @@
 #include <string>
 #include "Settings.h"
 #include "AnchorControl.h"
-#include "PathControl.h"
 #include "StepperControl.h"
 #include "MotorControl.h"
 #include "Logger.h"
 #include "BNO08xCompass.h"
 
 extern AnchorControl anchor;
-extern PathControl pathControl;
 extern StepperControl stepperControl;
 extern MotorControl motor;
 extern Settings settings;
 extern BNO08xCompass compass;
-extern float emuHeading;
 extern bool compassReady;
 extern bool manualMode;
 extern int manualDir;
 extern int manualSpeed;
 void setPhoneGpsFix(float lat, float lon, float speedKmh, int satellites);
-void setPhoneHeading(float headingDeg);
-void startCompassCalibration();
-void exportRouteLog();
-void clearRouteLog();
+void captureStepperBowZero();
 
 inline void handleBleCommand(const std::string& cmd) {
     if (cmd.rfind("SET_ANCHOR:", 0) == 0) {
         float lat = 0, lon = 0;
         sscanf(cmd.c_str() + 11, "%f,%f", &lat, &lon);
-        anchor.saveAnchor(lat, lon, settings.get("EmuCompass") ? emuHeading : (compassReady ? compass.getAzimuth() : 0.0f));
+        anchor.saveAnchor(lat, lon, compassReady ? compass.getAzimuth() : 0.0f);
         logMessage("[BLE] Anchor set via BLE: %.6f, %.6f\n", lat, lon);
     } else if (cmd.rfind("SET_HOLD_HEADING:", 0) == 0) {
         int val = atoi(cmd.c_str() + 17);
         settings.set("HoldHeading", val);
         settings.save();
         logMessage("[BLE] HoldHeading set to %d\n", val);
-    } else if (cmd.rfind("SET_ROUTE:",0) == 0) {
-        pathControl.reset();
-        const char* s = cmd.c_str() + 10;
-        while (*s) {
-            float lat=0, lon=0; int n=0;
-            if (sscanf(s, "%f,%f%n", &lat, &lon, &n) == 2) {
-                pathControl.addPoint(lat, lon);
-                s += n;
-                if (*s == ';') s++;
-            } else break;
-        }
-        logMessage("[BLE] Route set with %d points\n", pathControl.numPoints);
-    } else if (cmd == "START_ROUTE") {
-        pathControl.start();
-        settings.set("AnchorEnabled", 0);
-    } else if (cmd == "STOP_ROUTE") {
-        pathControl.stop();
-    } else if (cmd == "CALIB_COMPASS") {
-        // For BNO08x this is kept as compatibility command.
-        startCompassCalibration();
     } else if (cmd.rfind("SET_COMPASS_OFFSET:",0) == 0) {
         float off = atof(cmd.c_str() + 19);
         compass.setHeadingOffsetDeg(off);
@@ -67,8 +41,6 @@ inline void handleBleCommand(const std::string& cmd) {
         settings.set("MagOffX", 0.0f);
         settings.save();
         logMessage("[BLE] CompassOffset reset\n");
-    } else if (cmd.rfind("SET_HEADING:",0) == 0) {
-        setPhoneHeading(atof(cmd.c_str() + 12));
     } else if (cmd.rfind("SET_PHONE_GPS:", 0) == 0) {
         float lat = 0.0f, lon = 0.0f, speedKmh = 0.0f;
         int satellites = 0;
@@ -88,16 +60,12 @@ inline void handleBleCommand(const std::string& cmd) {
         } else {
             logMessage("[BLE] Invalid phone GPS payload: %s\n", cmd.c_str());
         }
-    } else if (cmd.rfind("EMU_COMPASS:",0) == 0) {
-        int v = atoi(cmd.c_str() + 12);
-        settings.set("EmuCompass", v);
-        settings.save();
-        logMessage("[BLE] EmuCompass set to %d\n", v);
     } else if (cmd.rfind("SET_STEP_SPR:",0) == 0) {
-        int v = atoi(cmd.c_str() + 13);
-        settings.set("StepSpr", v);
+        // Legacy STEP/DIR support removed. Keep command for protocol compatibility.
+        settings.set("StepSpr", 4096);
         settings.save();
         stepperControl.loadFromSettings();
+        logMessage("[BLE] SET_STEP_SPR ignored (28BYJ fixed 4096)\n");
     } else if (cmd.rfind("SET_STEP_MAXSPD:",0) == 0) {
         float v = atof(cmd.c_str() + 16);
         settings.set("StepMaxSpd", v);
@@ -108,6 +76,8 @@ inline void handleBleCommand(const std::string& cmd) {
         settings.set("StepAccel", v);
         settings.save();
         stepperControl.loadFromSettings();
+    } else if (cmd == "SET_STEPPER_BOW") {
+        captureStepperBowZero();
     } else if (cmd.rfind("MANUAL:",0) == 0) {
         bool newMode = atoi(cmd.c_str() + 7) != 0;
         if (newMode) {
@@ -123,10 +93,6 @@ inline void handleBleCommand(const std::string& cmd) {
         manualDir = atoi(cmd.c_str() + 11);
     } else if (cmd.rfind("MANUAL_SPEED:",0) == 0) {
         manualSpeed = atoi(cmd.c_str() + 13);
-    } else if (cmd == "EXPORT_LOG") {
-        exportRouteLog();
-    } else if (cmd == "CLEAR_LOG") {
-        clearRouteLog();
     } else {
         logMessage("[BLE] Unhandled command: %s\n", cmd.c_str());
     }

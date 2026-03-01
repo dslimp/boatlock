@@ -8,9 +8,9 @@ Boatlock combines the ESP32-S3 firmware with a companion mobile app to automate
 anchoring and thruster control. Major capabilities include:
 
 - saving the current location as an anchor point with heading
-- automatically holding position or following an uploaded route
+- automatically holding position near the saved anchor
 - manual rudder and motor control from the app
-- compass calibration and heading emulation
+- onboard BNO08x heading diagnostics and persistent heading offset
 
 The app and firmware communicate through a simple text protocol; see
 [docs/BLE_PROTOCOL.md](docs/BLE_PROTOCOL.md) for the full command list.
@@ -37,9 +37,9 @@ The app and firmware communicate through a simple text protocol; see
 1. Enable heading hold in the app.
 2. The rudder and thruster adjust automatically to keep the boat near the saved point.
 
-### Return to Point
-1. Upload a route containing the desired waypoint and start it.
-2. The boat navigates back to the specified location.
+### Manual Override
+1. Enable **Ручной режим** in the app.
+2. Use left/right steering buttons and the speed slider for direct control.
 
 ## Building the Firmware
 
@@ -107,12 +107,12 @@ After wiring, build and flash the firmware with PlatformIO
 (see the build section above). Open the serial monitor to verify
 that GPS data is being received.
 
-## Compass Calibration
+## Compass (BNO08x)
 
-Run the BLE command `CALIB_COMPASS` or press the BOOT button while the device is
-running to start calibration. Slowly rotate the device in all directions for
-about 10 seconds. The calculated offsets and scale factors are saved to EEPROM
-and automatically reloaded on startup.
+The firmware uses onboard BNO08x dynamic calibration and does not expose a
+manual BLE calibration command. If mounting angle needs adjustment, use the
+compass offset controls in app settings (`SET_COMPASS_OFFSET` /
+`RESET_COMPASS_OFFSET`).
 
 See [CHANGELOG.md](CHANGELOG.md) for recent changes and firmware versions.
 

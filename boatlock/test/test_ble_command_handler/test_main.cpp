@@ -2,12 +2,10 @@
 #include <unity.h>
 
 AnchorControl anchor;
-PathControl pathControl;
 StepperControl stepperControl;
 MotorControl motor;
 Settings settings;
 BNO08xCompass compass;
-float emuHeading = 0;
 bool compassReady = false;
 bool manualMode = false;
 int manualDir = -1;
@@ -17,9 +15,7 @@ float phoneGpsLat = 0.0f;
 float phoneGpsLon = 0.0f;
 float phoneGpsSpeed = 0.0f;
 int phoneGpsSatellites = 0;
-float lastPhoneHeading = 0.0f;
-bool exportLogCalled = false;
-bool clearLogCalled = false;
+bool stepperBowCaptured = false;
 void setPhoneGpsFix(float lat, float lon, float speedKmh, int satellites) {
   phoneGpsFixSet = true;
   phoneGpsLat = lat;
@@ -27,10 +23,7 @@ void setPhoneGpsFix(float lat, float lon, float speedKmh, int satellites) {
   phoneGpsSpeed = speedKmh;
   phoneGpsSatellites = satellites;
 }
-void setPhoneHeading(float headingDeg) { lastPhoneHeading = headingDeg; }
-void startCompassCalibration() {}
-void exportRouteLog() { exportLogCalled = true; }
-void clearRouteLog() { clearLogCalled = true; }
+void captureStepperBowZero() { stepperBowCaptured = true; }
 
 void setUp() {
   settings.reset();
@@ -39,9 +32,6 @@ void setUp() {
   stepperControl.stopManualCalled = false;
   stepperControl.loadCalled = false;
   motor.stopCalled = false;
-  pathControl.startCalled = false;
-  pathControl.stopCalled = false;
-  pathControl.numPoints = 0;
   manualMode = false;
   manualDir = -1;
   manualSpeed = 0;
@@ -50,9 +40,7 @@ void setUp() {
   phoneGpsLon = 0.0f;
   phoneGpsSpeed = 0.0f;
   phoneGpsSatellites = 0;
-  lastPhoneHeading = 0.0f;
-  exportLogCalled = false;
-  clearLogCalled = false;
+  stepperBowCaptured = false;
 }
 
 void tearDown() {}
@@ -64,25 +52,8 @@ void test_set_hold_heading() {
 
 void test_set_step_spr() {
   handleBleCommand("SET_STEP_SPR:400");
-  TEST_ASSERT_EQUAL_FLOAT(400.0f, settings.get("StepSpr"));
+  TEST_ASSERT_EQUAL_FLOAT(4096.0f, settings.get("StepSpr"));
   TEST_ASSERT_TRUE(stepperControl.loadCalled);
-}
-
-void test_set_route_parses_points() {
-  handleBleCommand("SET_ROUTE:59.100,30.200;59.300,30.400;59.500,30.600");
-  TEST_ASSERT_EQUAL(3, pathControl.numPoints);
-}
-
-void test_start_route_disables_anchor() {
-  settings.set("AnchorEnabled", 1);
-  handleBleCommand("START_ROUTE");
-  TEST_ASSERT_TRUE(pathControl.startCalled);
-  TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
-}
-
-void test_stop_route_calls_stop() {
-  handleBleCommand("STOP_ROUTE");
-  TEST_ASSERT_TRUE(pathControl.stopCalled);
 }
 
 void test_manual_on_cancels_stepper_move() {
@@ -110,11 +81,9 @@ void test_manual_dir_and_speed() {
   TEST_ASSERT_EQUAL(-123, manualSpeed);
 }
 
-void test_export_and_clear_log_commands() {
-  handleBleCommand("EXPORT_LOG");
-  handleBleCommand("CLEAR_LOG");
-  TEST_ASSERT_TRUE(exportLogCalled);
-  TEST_ASSERT_TRUE(clearLogCalled);
+void test_set_stepper_bow_calls_capture() {
+  handleBleCommand("SET_STEPPER_BOW");
+  TEST_ASSERT_TRUE(stepperBowCaptured);
 }
 
 void test_set_phone_gps_with_speed() {
@@ -139,9 +108,30 @@ void test_set_phone_gps_with_satellites() {
   TEST_ASSERT_EQUAL(9, phoneGpsSatellites);
 }
 
-void test_set_heading_updates_phone_heading() {
+void test_removed_route_commands_do_not_change_state() {
+  settings.set("AnchorEnabled", 1.0f);
+  handleBleCommand("SET_ROUTE:59.100,30.200;59.300,30.400");
+  handleBleCommand("START_ROUTE");
+  handleBleCommand("STOP_ROUTE");
+  TEST_ASSERT_EQUAL_FLOAT(1.0f, settings.get("AnchorEnabled"));
+  TEST_ASSERT_FALSE(manualMode);
+  TEST_ASSERT_EQUAL(-1, manualDir);
+  TEST_ASSERT_EQUAL(0, manualSpeed);
+}
+
+void test_removed_compass_and_log_commands_do_not_change_state() {
+  settings.set("HoldHeading", 0.0f);
+  const float offsetBefore = compass.getHeadingOffsetDeg();
+
+  handleBleCommand("CALIB_COMPASS");
   handleBleCommand("SET_HEADING:123.4");
-  TEST_ASSERT_EQUAL_FLOAT(123.4f, lastPhoneHeading);
+  handleBleCommand("EMU_COMPASS:1");
+  handleBleCommand("EXPORT_LOG");
+  handleBleCommand("CLEAR_LOG");
+
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("HoldHeading"));
+  TEST_ASSERT_EQUAL_FLOAT(offsetBefore, compass.getHeadingOffsetDeg());
+  TEST_ASSERT_FALSE(phoneGpsFixSet);
 }
 
 void test_set_compass_offset() {
@@ -157,17 +147,15 @@ int main() {
   UNITY_BEGIN();
   RUN_TEST(test_set_hold_heading);
   RUN_TEST(test_set_step_spr);
-  RUN_TEST(test_set_route_parses_points);
-  RUN_TEST(test_start_route_disables_anchor);
-  RUN_TEST(test_stop_route_calls_stop);
   RUN_TEST(test_manual_on_cancels_stepper_move);
   RUN_TEST(test_manual_off);
   RUN_TEST(test_manual_dir_and_speed);
-  RUN_TEST(test_export_and_clear_log_commands);
+  RUN_TEST(test_set_stepper_bow_calls_capture);
   RUN_TEST(test_set_phone_gps_with_speed);
   RUN_TEST(test_set_phone_gps_without_speed);
   RUN_TEST(test_set_phone_gps_with_satellites);
-  RUN_TEST(test_set_heading_updates_phone_heading);
+  RUN_TEST(test_removed_route_commands_do_not_change_state);
+  RUN_TEST(test_removed_compass_and_log_commands_do_not_change_state);
   RUN_TEST(test_set_compass_offset);
   return UNITY_END();
 }

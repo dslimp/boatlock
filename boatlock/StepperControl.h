@@ -7,69 +7,172 @@
 
 class StepperControl {
 public:
-    static constexpr int DEFAULT_STEPS_PER_REV = 200;
+    static constexpr int STEPS_PER_REV_28BYJ = 4096;
+    static constexpr int DIRECTION_SIGN = -1;
+    static constexpr unsigned long COIL_RELEASE_DELAY_MS = 1200;
+    static constexpr long MIN_COMMAND_STEPS = 4;
     AccelStepper stepper;
     Settings* settings;
     int stepsPerRev;
     bool busy = false;
     bool manual = false;
     float manualSpd = 0;
+    long bowZeroSteps = 0;
+    bool outputsEnabled = true;
+    unsigned long idleSinceMs = 0;
 
-    StepperControl(int stepPin, int dirPin)
-        : stepper(AccelStepper::DRIVER, stepPin, dirPin), settings(nullptr),
-          stepsPerRev(DEFAULT_STEPS_PER_REV) {}
+    // 28BYJ-48 + ULN2003 (HALF4WIRE). Pin order IN1, IN3, IN2, IN4 for AccelStepper.
+    StepperControl(int in1Pin, int in2Pin, int in3Pin, int in4Pin)
+        : stepper(AccelStepper::HALF4WIRE, in1Pin, in3Pin, in2Pin, in4Pin),
+          settings(nullptr),
+          stepsPerRev(STEPS_PER_REV_28BYJ) {}
 
     void attachSettings(Settings* s) { settings = s; }
+
+    long normalizeSteps(long steps) const {
+        if (stepsPerRev <= 0) return 0;
+        long normalized = steps % stepsPerRev;
+        if (normalized < 0) {
+            normalized += stepsPerRev;
+        }
+        return normalized;
+    }
+
+    static float normalize180(float deg) {
+        while (deg > 180.0f) deg -= 360.0f;
+        while (deg < -180.0f) deg += 360.0f;
+        return deg;
+    }
 
     void loadFromSettings() {
         if (!settings) return;
         stepper.setMaxSpeed(settings->get("StepMaxSpd"));
         stepper.setAcceleration(settings->get("StepAccel"));
-        stepsPerRev = (int)settings->get("StepSpr");
+        // Legacy STEP/DIR support removed: 28BYJ is fixed at 4096 steps/rev.
+        stepsPerRev = STEPS_PER_REV_28BYJ;
+        ensureOutputsEnabled();
+
+        bowZeroSteps = normalizeSteps(lroundf(settings->get("Encoder0")));
         logMessage("[STEP] cfg maxSpd=%.0f accel=%.0f spr=%d\n",
                    settings->get("StepMaxSpd"),
                    settings->get("StepAccel"),
                    stepsPerRev);
+        logMessage("[STEP] bow zero=%ld\n", bowZeroSteps);
     }
 
-    void moveToBearing(float bearing, float heading) {
-        if (!busy || stepper.distanceToGo() == 0) {
-            float diff = bearing - heading;
-            if (diff > 180) diff -= 360;
-            if (diff < -180) diff += 360;
-            long targetSteps = lround(diff / 360.0f * stepsPerRev);
-            stepper.move(targetSteps);
-            logMessage("[STEP] move diff=%.1f steps=%ld\n", diff, targetSteps);
-            busy = true;
-        };
-        if (stepper.distanceToGo() == 0) {
-            busy = false;
+    void captureBowZero() {
+        bowZeroSteps = normalizeSteps(stepper.currentPosition());
+        if (settings) {
+            settings->set("Encoder0", bowZeroSteps);
+            settings->save();
         }
+        logMessage("[STEP] bow calibrated zero=%ld current=%ld\n",
+                   bowZeroSteps,
+                   stepper.currentPosition());
+    }
+
+    void pointToBearing(float bearing, float heading) {
+        if (!isfinite(bearing) || !isfinite(heading) || stepsPerRev <= 0) {
+            return;
+        }
+
+        const float relativeDeg = normalize180(bearing - heading);
+        const long relativeSteps =
+            lroundf(relativeDeg / 360.0f * stepsPerRev) * DIRECTION_SIGN;
+        const long targetNorm = normalizeSteps(bowZeroSteps + relativeSteps);
+        const long currentAbs = stepper.currentPosition();
+        const long currentNorm = normalizeSteps(currentAbs);
+
+        long delta = targetNorm - currentNorm;
+        const long half = stepsPerRev / 2;
+        if (delta > half) {
+            delta -= stepsPerRev;
+        } else if (delta < -half) {
+            delta += stepsPerRev;
+        }
+
+        if (llabs(delta) < MIN_COMMAND_STEPS) {
+            busy = false;
+            return;
+        }
+
+        ensureOutputsEnabled();
+        const long targetAbs = currentAbs + delta;
+        stepper.moveTo(targetAbs);
+        busy = (stepper.distanceToGo() != 0);
+        idleSinceMs = 0;
     }
 
     void startManual(int dir) {
         manual = true;
+        ensureOutputsEnabled();
         float spd = settings ? settings->get("StepMaxSpd") : 1000;
-        manualSpd = dir < 0 ? -spd : spd;
+        manualSpd = (dir < 0 ? -spd : spd) * DIRECTION_SIGN;
         stepper.setSpeed(manualSpd);
+        idleSinceMs = 0;
     }
 
     void stopManual() {
+        if (!manual) {
+            return;
+        }
         manual = false;
         manualSpd = 0;
+        // Manual release must be an immediate hold, without trailing deceleration.
+        const long nowPos = stepper.currentPosition();
+        stepper.moveTo(nowPos);
+        busy = false;
+        idleSinceMs = millis();
     }
 
     void cancelMove() {
-        stepper.stop();
+        const bool hadPendingTarget = (stepper.distanceToGo() != 0);
+        // Hard-cancel any pending target (stepper.stop() decelerates and can keep moving).
+        const long nowPos = stepper.currentPosition();
+        stepper.moveTo(nowPos);
         busy = false;
+        if (hadPendingTarget && idleSinceMs == 0) {
+            idleSinceMs = millis();
+        }
     }
 
     void run() {
         if (manual) {
+            ensureOutputsEnabled();
             stepper.runSpeed();
+            idleSinceMs = 0;
         } else {
-            stepper.run();
-            if (stepper.distanceToGo() == 0) busy = false;
+            if (stepper.distanceToGo() != 0) {
+                ensureOutputsEnabled();
+                stepper.run();
+                if (stepper.distanceToGo() != 0) {
+                    busy = true;
+                    idleSinceMs = 0;
+                    return;
+                }
+                busy = false;
+                if (idleSinceMs == 0) {
+                    idleSinceMs = millis();
+                }
+                return;
+            }
+
+            busy = false;
+            if (idleSinceMs == 0) {
+                idleSinceMs = millis();
+            }
+            if (outputsEnabled && (millis() - idleSinceMs >= COIL_RELEASE_DELAY_MS)) {
+                stepper.disableOutputs();
+                outputsEnabled = false;
+            }
+        }
+    }
+
+private:
+    void ensureOutputsEnabled() {
+        if (!outputsEnabled) {
+            stepper.enableOutputs();
+            outputsEnabled = true;
         }
     }
 };

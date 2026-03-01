@@ -1,63 +1,123 @@
----
 name: CI
 
-'on':
+on:
   push:
-    branches: [main]
+    branches:
+      - main
+    tags:
+      - "v*"
   pull_request:
 
 jobs:
   firmware:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: "3.x"
+
       - name: Install PlatformIO
         run: pip install platformio
-      - name: Install clang-format
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang-format
-      - name: Check test format
+
+      - name: Run firmware unit tests
         working-directory: boatlock
-        run: |
-          clang-format --version
-          find test -name '*.cpp' | xargs -r clang-format --dry-run --Werror
-      - name: Run unit tests
+        run: pio test -e native
+
+      - name: Build firmware (esp32s3)
         working-directory: boatlock
-        run: platformio test -e native
-      - uses: arduino/setup-arduino-cli@v2
-      - name: Install Arduino core and libraries
-        run: |
-          arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-          arduino-cli core install esp32:esp32 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-          arduino-cli lib install "Arduino_GFX" "NimBLE-Arduino" "AccelStepper" "TinyGPSPlus" "Adafruit Unified Sensor" "Adafruit HMC5883 Unified"
-      - name: Build firmware
-        run: |
-          arduino-cli compile --fqbn esp32:esp32:esp32s3 boatlock
+        run: pio run -e esp32s3
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-esp32s3
+          if-no-files-found: error
+          path: |
+            boatlock/.pio/build/esp32s3/firmware.bin
+            boatlock/.pio/build/esp32s3/bootloader.bin
+            boatlock/.pio/build/esp32s3/partitions.bin
+            boatlock/.pio/build/esp32s3/firmware.elf
 
   flutter:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: subosito/flutter-action@v2
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
-          flutter-version: '3.32.4'
-          channel: 'stable'
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.32.4"
+          channel: stable
+          cache: true
+
       - name: Install dependencies
         working-directory: boatlock_ui
         run: flutter pub get
-      - name: Format
+
+      - name: Check formatting
         working-directory: boatlock_ui
         run: dart format --output=none --set-exit-if-changed lib test
+
       - name: Analyze
         working-directory: boatlock_ui
         run: flutter analyze
-      - name: Build web
-        working-directory: boatlock_ui
-        run: flutter build web
+
       - name: Test
         working-directory: boatlock_ui
         run: flutter test
+
+      - name: Build Android APK (release)
+        working-directory: boatlock_ui
+        run: flutter build apk --release
+
+      - name: Build web
+        working-directory: boatlock_ui
+        run: flutter build web --release
+
+      - name: Pack web artifact
+        working-directory: boatlock_ui
+        run: |
+          cd build/web
+          zip -r ../../web-build.zip .
+
+      - name: Upload Flutter artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-android-web
+          if-no-files-found: error
+          path: |
+            boatlock_ui/build/app/outputs/flutter-apk/app-release.apk
+            boatlock_ui/web-build.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - firmware
+      - flutter
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/firmware-esp32s3/*
+            artifacts/flutter-android-web/*

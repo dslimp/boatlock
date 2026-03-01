@@ -18,11 +18,19 @@ void main() {
       mode: 'MANUAL',
       rssi: -63,
       holdHeading: true,
-      emuCompass: 0,
-      routeIdx: 0,
       stepSpr: 200,
       stepMaxSpd: 1000,
       stepAccel: 500,
+      headingRaw: 0,
+      compassOffset: 0,
+      compassQ: 0,
+      magQ: 0,
+      gyroQ: 0,
+      rvAcc: 0,
+      magNorm: 0,
+      gyroNorm: 0,
+      pitch: 0,
+      roll: 0,
     );
     await tester.pumpWidget(MaterialApp(home: StatusPanel(data: data)));
     expect(find.text('OK'), findsOneWidget);

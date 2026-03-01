@@ -1,5 +1,7 @@
 #include "BLEBoatLock.h"
 #include "Logger.h"
+#include <algorithm>
+#include <cstring>
 
 // --- Server callbacks ---
 class BLEBoatLock::ServerCallbacks : public NimBLEServerCallbacks {
@@ -35,6 +37,7 @@ BLEBoatLock::BLEBoatLock() {}
 
 void BLEBoatLock::begin() {
     NimBLEDevice::init("BoatLock");
+    logMessage("[BLE] init name=BoatLock service=12ab data=34cd cmd=56ef log=78ab\n");
     // allow sending larger JSON blobs
     NimBLEDevice::setMTU(512);
     pServer = NimBLEDevice::createServer();
@@ -61,8 +64,16 @@ void BLEBoatLock::begin() {
     NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(pService->getUUID());
     pAdvertising->setName("BoatLock");
-    pAdvertising->start();
+    const bool advOk = pAdvertising->start();
     bleStatus = ADVERTISING;
+    logMessage("[BLE] advertising %s\n", advOk ? "started" : "failed");
+
+    if (!cmdQueue) {
+        cmdQueue = xQueueCreate(kCmdQueueLen, kCmdMaxLen);
+        if (!cmdQueue) {
+            logMessage("[BLE] command queue create failed\n");
+        }
+    }
 
     // Регистрируем базовые параметры (можно добавить свои!)
     registerParam("distance", [this]() { char buf[16]; snprintf(buf, sizeof(buf), "%.2f", distance); return std::string(buf); });
@@ -79,8 +90,7 @@ void BLEBoatLock::setCommandHandler(CommandHandler handler) {
 }
 
 void BLEBoatLock::loop() {
-    // Можешь уведомлять клиента о всех параметрах по таймеру (если нужно)
-    // notifyAll();
+    processQueuedCommands();
 }
 
 void BLEBoatLock::handleParamRequest(const std::string& param) {
@@ -111,8 +121,35 @@ void BLEBoatLock::handleParamRequest(const std::string& param) {
         if (bleStatus == CONNECTED)
             pDataChar->notify();
     }
-    // Для расширения: можешь обработать другие команды
-    if (cmdHandler) cmdHandler(param);
+    // Handle SET_* commands from the main loop context, not NimBLE callback context.
+    enqueueCommand(param);
+}
+
+void BLEBoatLock::enqueueCommand(const std::string& cmd) {
+    if (!cmdQueue) {
+        return;
+    }
+
+    char payload[kCmdMaxLen];
+    memset(payload, 0, sizeof(payload));
+    const size_t n = std::min(cmd.size(), kCmdMaxLen - 1);
+    memcpy(payload, cmd.data(), n);
+
+    if (xQueueSend(cmdQueue, payload, 0) != pdTRUE) {
+        logMessage("[BLE] command queue full, dropped: %s\n", payload);
+    }
+}
+
+void BLEBoatLock::processQueuedCommands() {
+    if (!cmdQueue || !cmdHandler) {
+        return;
+    }
+
+    char payload[kCmdMaxLen];
+    while (xQueueReceive(cmdQueue, payload, 0) == pdTRUE) {
+        payload[kCmdMaxLen - 1] = '\0';
+        cmdHandler(std::string(payload));
+    }
 }
 
 std::string BLEBoatLock::collectAllParams() {

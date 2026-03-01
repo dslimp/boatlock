@@ -31,6 +31,22 @@ class StatusPanel extends StatelessWidget {
           ),
           _iconText(Icons.directions_boat, data!.mode),
           _iconText(Icons.network_cell, "${data!.rssi} дБ"),
+          _iconText(
+            Icons.explore,
+            "Q ${data!.compassQ}/3 M${data!.magQ} G${data!.gyroQ}",
+          ),
+          _iconText(
+            Icons.speed,
+            "rv ${data!.rvAcc.toStringAsFixed(1)}°",
+          ),
+          _iconText(
+            Icons.waves,
+            "B ${data!.magNorm.toStringAsFixed(1)}uT w ${data!.gyroNorm.toStringAsFixed(1)}",
+          ),
+          _iconText(
+            Icons.screen_rotation,
+            "P/R ${data!.pitch.toStringAsFixed(1)}/${data!.roll.toStringAsFixed(1)}",
+          ),
         ],
       ),
     );

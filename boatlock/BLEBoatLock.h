@@ -3,6 +3,8 @@
 #include <functional>
 #include <string>
 #include <map>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
 
 class BLEBoatLock {
 public:
@@ -31,6 +33,8 @@ public:
     const char* statusString() const;
 
 private:
+    static constexpr size_t kCmdMaxLen = 192;
+    static constexpr size_t kCmdQueueLen = 8;
     NimBLEServer* pServer = nullptr;
     NimBLEService* pService = nullptr;
     NimBLECharacteristic* pDataChar = nullptr;
@@ -38,6 +42,7 @@ private:
     NimBLECharacteristic* pLogChar = nullptr;
 
     unsigned long lastNotify = 0;
+    QueueHandle_t cmdQueue = nullptr;
 
     std::map<std::string, ParamGetter> paramMap;
     CommandHandler cmdHandler = nullptr;
@@ -50,6 +55,8 @@ private:
 
     // Обработка запроса параметра по имени
     void handleParamRequest(const std::string& param);
+    void enqueueCommand(const std::string& cmd);
+    void processQueuedCommands();
     std::string collectAllParams();
 
     // Для примера: фиктивные значения параметров
