@@ -31,6 +31,11 @@ jobs:
           python3 tools/ci/test_check_config_schema_version.py
           python3 tools/ci/check_config_schema_version.py
 
+      - name: Check firmware semver
+        run: |
+          python3 tools/ci/test_check_firmware_version.py
+          python3 tools/ci/check_firmware_version.py
+
       - name: Firmware warnings as errors (critical modules)
         run: bash tools/ci/check_firmware_werror.sh
 
@@ -132,6 +137,17 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate release tag against firmware version
+        run: python3 tools/ci/check_firmware_version.py --tag "${{ github.ref_name }}"
+
+      - name: Generate release notes from changelog
+        run: |
+          python3 tools/ci/test_generate_release_notes.py
+          python3 tools/ci/generate_release_notes.py --tag "${{ github.ref_name }}" --out release-notes.md
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -140,7 +156,7 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          body_path: release-notes.md
           files: |
             artifacts/firmware-esp32s3/*
             artifacts/flutter-android-web/*
