@@ -33,8 +33,14 @@ constexpr char kFirmwareVersion[] = "0.2.0";
 
 constexpr int kStepPin = 5;
 constexpr int kDirPin = 4;
+#if defined(BOATLOCK_BOARD_JC4832W535)
+// JC4832W535 display uses GPIO47/48 for LCD QSPI, so I2C must be moved.
+constexpr int kI2cSdaPin = 4;
+constexpr int kI2cSclPin = 8;
+#else
 constexpr int kI2cSdaPin = 47;
 constexpr int kI2cSclPin = 48;
+#endif
 constexpr int kGpsRxPin = 17;
 constexpr int kGpsTxPin = 18;
 constexpr int kMotorPwmPin = 7;
@@ -556,10 +562,15 @@ void setup() {
   registerBleParams();
   bleBoatLock.begin();
 
+  #if defined(BOATLOCK_BOARD_JC4832W535)
+  // SD over default SPI can reconfigure the same host used by LCD QSPI on this board.
+  sdReady = false;
+  #else
   sdReady = SD.begin();
   if (sdReady) {
     routeLog = SD.open(cfg::kRouteLogPath, FILE_APPEND);
   }
+  #endif
 
   motor.setupPWM(cfg::kMotorPwmPin, cfg::kPwmChannel, cfg::kPwmFreq, cfg::kPwmResolution);
   motor.setDirPins(cfg::kMotorDirPin1, cfg::kMotorDirPin2);
