@@ -51,6 +51,14 @@ void main() {
     );
   });
 
+  test('buildSetAnchorCommandFromCoords validates ranges', () {
+    expect(BleBoatLock.buildSetAnchorCommandFromCoords(59.1, 30.2), 'SET_ANCHOR:59.100000,30.200000');
+    expect(BleBoatLock.buildSetAnchorCommandFromCoords(double.nan, 30.2), isNull);
+    expect(BleBoatLock.buildSetAnchorCommandFromCoords(59.1, double.infinity), isNull);
+    expect(BleBoatLock.buildSetAnchorCommandFromCoords(-95.0, 30.0), isNull);
+    expect(BleBoatLock.buildSetAnchorCommandFromCoords(59.0, 181.0), isNull);
+  });
+
   test('buildSetPhoneGpsCommand validates and formats payload', () {
     expect(
       BleBoatLock.buildSetPhoneGpsCommand(
@@ -71,5 +79,43 @@ void main() {
     );
     expect(BleBoatLock.buildSetPhoneGpsCommand(95, 30.0), isNull);
     expect(BleBoatLock.buildSetPhoneGpsCommand(59.0, 200.0), isNull);
+  });
+
+  test('buildNudgeDirCommand validates direction and distance', () {
+    expect(BleBoatLock.buildNudgeDirCommand('left', meters: 2.0), 'NUDGE_DIR:LEFT,2.0');
+    expect(BleBoatLock.buildNudgeDirCommand('foo', meters: 2.0), isNull);
+    expect(BleBoatLock.buildNudgeDirCommand('RIGHT', meters: 0.5), isNull);
+    expect(BleBoatLock.buildNudgeDirCommand('RIGHT', meters: 6.0), isNull);
+  });
+
+  test('buildNudgeBearingCommand normalizes bearing and validates distance', () {
+    expect(BleBoatLock.buildNudgeBearingCommand(450.0, meters: 3.0), 'NUDGE_BRG:90.0,3.0');
+    expect(BleBoatLock.buildNudgeBearingCommand(-10.0, meters: 1.0), 'NUDGE_BRG:350.0,1.0');
+    expect(BleBoatLock.buildNudgeBearingCommand(double.nan, meters: 2.0), isNull);
+    expect(BleBoatLock.buildNudgeBearingCommand(120.0, meters: 0.9), isNull);
+  });
+
+  test('buildSetAnchorProfileCommand validates profile values', () {
+    expect(BleBoatLock.buildSetAnchorProfileCommand('quiet'), 'SET_ANCHOR_PROFILE:quiet');
+    expect(BleBoatLock.buildSetAnchorProfileCommand(' CURRENT '), 'SET_ANCHOR_PROFILE:current');
+    expect(BleBoatLock.buildSetAnchorProfileCommand('storm'), isNull);
+    expect(BleBoatLock.buildSetAnchorProfileCommand(''), isNull);
+  });
+
+  test('security helpers build deterministic auth and secure commands', () {
+    expect(BleBoatLock.normalizeOwnerCode('123456'), '123456');
+    expect(BleBoatLock.normalizeOwnerCode('12-34-56'), '123456');
+    expect(BleBoatLock.normalizeOwnerCode('012345'), isNull);
+
+    final proof = BleBoatLock.buildAuthProofHex('123456', 0xABCDEF01);
+    expect(proof.length, 8);
+    final sessionKey = BleBoatLock.buildSessionKey(proof);
+    final secure = BleBoatLock.buildSecureCommand(
+      payload: 'ANCHOR_ON',
+      counter: 1,
+      sessionKey: sessionKey,
+    );
+    expect(secure.startsWith('SEC_CMD:00000001:'), isTrue);
+    expect(secure.endsWith(':ANCHOR_ON'), isTrue);
   });
 }

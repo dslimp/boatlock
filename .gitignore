@@ -50,3 +50,11 @@ app.*.map.json
 # Local workspace artifacts
 /flutter/
 /6f720725-ef07-45a5-ab32-101f2250f856.png
+
+# Local python/env artifacts
+.venv_ble/
+**/__pycache__/
+
+# Generated simulator reports
+/tools/sim/report.json
+/tools/sim/soak_report.json

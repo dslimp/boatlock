@@ -10,7 +10,7 @@ public:
 
     void attachSettings(Settings* s) { settings = s; }
 
-    void saveAnchor(float lat, float lon, float heading) {
+    void saveAnchor(float lat, float lon, float heading, bool enableAnchor = true) {
         anchorLat = lat;
         anchorLon = lon;
         anchorHeading = heading;
@@ -18,10 +18,14 @@ public:
             settings->set("AnchorLat", lat);
             settings->set("AnchorLon", lon);
             settings->set("AnchorHead", heading);
-            settings->set("AnchorEnabled", 1);
+            settings->set("AnchorEnabled", enableAnchor ? 1 : 0);
             settings->save();
         }
-        logMessage("[ANCHOR] saved lat=%.6f lon=%.6f head=%.1f\n", lat, lon, heading);
+        logMessage("[ANCHOR] saved lat=%.6f lon=%.6f head=%.1f enabled=%d\n",
+                   lat,
+                   lon,
+                   heading,
+                   enableAnchor ? 1 : 0);
     }
 
     void loadAnchor() {

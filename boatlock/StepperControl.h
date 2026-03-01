@@ -44,6 +44,12 @@ public:
         return deg;
     }
 
+    static int signOf(long v) {
+        if (v > 0) return 1;
+        if (v < 0) return -1;
+        return 0;
+    }
+
     void loadFromSettings() {
         if (!settings) return;
         stepper.setMaxSpeed(settings->get("StepMaxSpd"));
@@ -91,13 +97,29 @@ public:
             delta += stepsPerRev;
         }
 
+        const long pending = stepper.distanceToGo();
         if (llabs(delta) < MIN_COMMAND_STEPS) {
+            // New target is essentially current heading: drop stale queued move.
+            if (pending != 0) {
+                const long holdPos = stepper.currentPosition();
+                stepper.moveTo(holdPos);
+            }
             busy = false;
+            if (idleSinceMs == 0) {
+                idleSinceMs = millis();
+            }
             return;
         }
 
+        // If target direction flipped, preempt old target immediately.
+        if (pending != 0 && signOf(pending) != signOf(delta)) {
+            const long holdPos = stepper.currentPosition();
+            stepper.moveTo(holdPos);
+        }
+
         ensureOutputsEnabled();
-        const long targetAbs = currentAbs + delta;
+        const long basePos = stepper.currentPosition();
+        const long targetAbs = basePos + delta;
         stepper.moveTo(targetAbs);
         busy = (stepper.distanceToGo() != 0);
         idleSinceMs = 0;

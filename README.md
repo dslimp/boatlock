@@ -36,6 +36,7 @@ The app and firmware communicate through a simple text protocol; see
 ### Holding Position
 1. Enable heading hold in the app.
 2. The rudder and thruster adjust automatically to keep the boat near the saved point.
+3. Anchor thrust uses human-friendly control: hold radius (`DistTh`) + deadband, PWM ramp limiting, and anti-oscillation filtering to avoid constant motor twitching.
 
 ### Manual Override
 1. Enable **Ручной режим** in the app.
@@ -143,6 +144,18 @@ Tap **Ручной режим** on the main screen to override automatic modes.
 Hold the left or right rotate buttons to steer and move the speed
 slider to drive the motor forward or reverse. See [docs/MANUAL_CONTROL.md](docs/MANUAL_CONTROL.md)
 for a short how-to.
+
+## Emergency STOP Button (Hardware)
+
+Firmware supports a dedicated hardware STOP input:
+
+- **GPIO15** (configured as `INPUT_PULLUP`)
+- connect a **momentary button between GPIO15 and GND**
+- pressing the button triggers the same action as BLE `STOP`:
+  - disables Anchor mode
+  - exits manual mode
+  - cancels stepper movement
+  - stops thruster PWM
 
 ## License
 

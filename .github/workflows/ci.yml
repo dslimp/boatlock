@@ -20,12 +20,33 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Install cppcheck
+        run: sudo apt-get update && sudo apt-get install -y cppcheck
+
       - name: Install PlatformIO
         run: pip install platformio
+
+      - name: Check config schema version
+        run: |
+          python3 tools/ci/test_check_config_schema_version.py
+          python3 tools/ci/check_config_schema_version.py
+
+      - name: Firmware warnings as errors (critical modules)
+        run: bash tools/ci/check_firmware_werror.sh
+
+      - name: Firmware static analysis (cppcheck)
+        run: bash tools/ci/check_firmware_cppcheck.sh
 
       - name: Run firmware unit tests
         working-directory: boatlock
         run: pio test -e native
+
+      - name: Run anchor simulation tests
+        run: |
+          python3 tools/sim/test_sim_core.py
+          python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json
+          python3 tools/sim/test_soak.py
+          python3 tools/sim/run_soak.py --hours 6 --check --json-out tools/sim/soak_report.json
 
       - name: Build firmware (esp32s3)
         working-directory: boatlock
@@ -41,6 +62,8 @@ jobs:
             boatlock/.pio/build/esp32s3/bootloader.bin
             boatlock/.pio/build/esp32s3/partitions.bin
             boatlock/.pio/build/esp32s3/firmware.elf
+            tools/sim/report.json
+            tools/sim/soak_report.json
 
   flutter:
     runs-on: ubuntu-latest

@@ -9,6 +9,7 @@ void display_clear();
 void display_draw_ui(bool gpsFix,
                      int satellites,
                      bool gpsFromPhone,
+                     float gpsHdop,
                      float speedKmh,
                      float heading,
                      bool headingValid,
@@ -18,6 +19,6 @@ void display_draw_ui(bool gpsFix,
                      float distanceMeters,
                      float errorDeg,
                      const char* mode,
-                     int batteryPercent,
+                     int motorPwmPercent,
                      bool force = false);
 void display_draw_debug(const String &msg, int y = 48);

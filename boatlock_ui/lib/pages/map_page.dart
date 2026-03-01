@@ -30,6 +30,36 @@ class _MapPageState extends State<MapPage> {
   double _manualSpeed = 0;
   DateTime? _lastPhoneGpsSentAt;
 
+  Future<void> _confirmAndStopAll() async {
+    if (boatData == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Аварийный STOP'),
+        content: const Text('Остановить якорь и моторы прямо сейчас?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('STOP'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true) {
+      await ble.stopAll();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('STOP отправлен')),
+      );
+    }
+  }
+
   void _centerOnCurrent() {
     final pos = (boatData != null && boatData!.lat != 0 && boatData!.lon != 0)
         ? LatLng(boatData!.lat, boatData!.lon)
@@ -400,10 +430,11 @@ class _MapPageState extends State<MapPage> {
                   label: const Text('Установить якорь здесь'),
                   onPressed: boatData == null
                       ? null
-                      : () {
-                          final cmd =
-                              'SET_ANCHOR:${selectedAnchorPos!.latitude},${selectedAnchorPos!.longitude}';
-                          ble.sendCustomCommand(cmd);
+                      : () async {
+                          await ble.setAnchorAt(
+                            selectedAnchorPos!.latitude,
+                            selectedAnchorPos!.longitude,
+                          );
                           setState(() {
                             selectedAnchorPos = null;
                           });
@@ -485,18 +516,27 @@ class _MapPageState extends State<MapPage> {
         mainAxisSize: MainAxisSize.min,
         children: [
           FloatingActionButton(
+            heroTag: 'stop_all',
+            tooltip: "Аварийный STOP",
+            onPressed: boatData == null ? null : _confirmAndStopAll,
+            backgroundColor: boatData == null ? Colors.grey : Colors.red,
+            foregroundColor: Colors.white,
+            child: const Icon(Icons.stop),
+          ),
+          const SizedBox(width: 12),
+          FloatingActionButton(
             heroTag: 'refresh',
             tooltip: "Обновить данные",
             onPressed: () => ble.requestAllParams(),
-            child: Icon(Icons.refresh),
+            child: const Icon(Icons.refresh),
           ),
-          SizedBox(width: 12),
+          const SizedBox(width: 12),
           FloatingActionButton(
             heroTag: 'set_anchor',
             tooltip: "Установить якорь",
             onPressed: boatData == null ? null : () => ble.setAnchor(),
             backgroundColor: boatData == null ? Colors.grey : Colors.red[400],
-            child: Icon(Icons.anchor),
+            child: const Icon(Icons.anchor),
           ),
         ],
       ),

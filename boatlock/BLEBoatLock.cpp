@@ -37,6 +37,7 @@ BLEBoatLock::BLEBoatLock() {}
 
 void BLEBoatLock::begin() {
     NimBLEDevice::init("BoatLock");
+    NimBLEDevice::setSecurityAuth(true, true, true);
     logMessage("[BLE] init name=BoatLock service=12ab data=34cd cmd=56ef log=78ab\n");
     // allow sending larger JSON blobs
     NimBLEDevice::setMTU(512);

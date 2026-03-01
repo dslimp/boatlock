@@ -18,7 +18,14 @@ class BleBoatLock {
   final BoatDataCallback onData;
   final LogCallback? onLog;
   BoatData? _lastData;
+  Map<String, dynamic>? _lastRaw;
   int _lastRssi = 0;
+  bool _secPaired = false;
+  bool _secAuth = false;
+  int _secNonce = 0;
+  int _secCounter = 0;
+  int _sessionKey = 0;
+  String? _ownerCode;
 
   BoatData? get currentData => _lastData;
 
@@ -27,6 +34,7 @@ class BleBoatLock {
   StreamSubscription<List<int>>? _dataSub;
   StreamSubscription<List<int>>? _logSub;
   Timer? _reconnectTimer;
+  Timer? _heartbeatTimer;
   bool _isConnecting = false;
   DateTime? _lastDataLogAt;
 
@@ -45,6 +53,7 @@ class BleBoatLock {
 
   Future<void> _disconnectCurrentDevice() async {
     _reconnectTimer?.cancel();
+    _heartbeatTimer?.cancel();
     await _scanResultsSub?.cancel();
     _scanResultsSub = null;
     await _connectionSub?.cancel();
@@ -81,7 +90,7 @@ class BleBoatLock {
       satellites: satellites,
     );
     if (cmd == null) return;
-    await _cmdChar!.write(utf8.encode(cmd), withoutResponse: false);
+    await _writeCommand(cmd);
   }
 
   Future<void> _scanAndConnect() async {
@@ -152,6 +161,7 @@ class BleBoatLock {
       _connectionSub = _device!.connectionState.listen((state) {
         _log('BLE state: $state');
         if (state == BluetoothConnectionState.disconnected) {
+          _heartbeatTimer?.cancel();
           _clearCharacteristics();
           _scheduleReconnect();
         }
@@ -181,11 +191,28 @@ class BleBoatLock {
         }
       }
       await requestAllParams();
+      _startHeartbeat();
     } catch (e) {
       _log('connect failed: $e');
       _scheduleReconnect();
     }
     _isConnecting = false;
+  }
+
+  void _startHeartbeat() {
+    _heartbeatTimer?.cancel();
+    if (_cmdChar == null) return;
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      if (_cmdChar == null) return;
+      try {
+        await _cmdChar!.write(
+          utf8.encode('HEARTBEAT'),
+          withoutResponse: false,
+        );
+      } catch (_) {
+        // reconnect flow handles link issues
+      }
+    });
   }
 
   void _scheduleReconnect() {
@@ -206,6 +233,12 @@ class BleBoatLock {
     if (jsonString.trim().isEmpty) return;
     try {
       final data = jsonDecode(jsonString);
+      if (data is Map<String, dynamic>) {
+        _lastRaw = data;
+        _secPaired = int.tryParse(data['secPaired']?.toString() ?? '0') == 1;
+        _secAuth = int.tryParse(data['secAuth']?.toString() ?? '0') == 1;
+        _secNonce = int.tryParse(data['secNonce']?.toString() ?? '0') ?? 0;
+      }
       try {
         _lastRssi = await _device?.readRssi() ?? _lastRssi;
       } catch (_) {}
@@ -235,49 +268,173 @@ class BleBoatLock {
     if (_cmdChar == null) return;
     final cmd = buildSetAnchorCommand(_lastData);
     if (cmd == null) return;
+    await _writeCommand(cmd);
+    await _writeCommand('ANCHOR_ON');
+  }
+
+  Future<void> setAnchorAt(double lat, double lon) async {
+    if (_cmdChar == null) return;
+    final cmd = buildSetAnchorCommandFromCoords(lat, lon);
+    if (cmd == null) return;
+    await _writeCommand(cmd);
+    await _writeCommand('ANCHOR_ON');
+  }
+
+  Future<void> anchorOn() async {
+    if (_cmdChar == null) return;
+    await _writeCommand('ANCHOR_ON');
+  }
+
+  Future<void> anchorOff() async {
+    if (_cmdChar == null) return;
+    await _writeCommand('ANCHOR_OFF');
+  }
+
+  Future<void> stopAll() async {
+    if (_cmdChar == null) return;
+    await _writeCommand('STOP');
+  }
+
+  Future<void> nudgeDir(String direction, {double meters = 1.0}) async {
+    if (_cmdChar == null) return;
+    final cmd = buildNudgeDirCommand(direction, meters: meters);
+    if (cmd == null) return;
+    await _writeCommand(cmd);
+  }
+
+  Future<void> nudgeBearing(double bearingDeg, {double meters = 1.0}) async {
+    if (_cmdChar == null) return;
+    final cmd = buildNudgeBearingCommand(bearingDeg, meters: meters);
+    if (cmd == null) return;
+    await _writeCommand(cmd);
+  }
+
+  Future<void> setAnchorProfile(String profile) async {
+    if (_cmdChar == null) return;
+    final cmd = buildSetAnchorProfileCommand(profile);
+    if (cmd == null) return;
     await _cmdChar!.write(utf8.encode(cmd), withoutResponse: false);
   }
 
   Future<void> setManualMode(bool manual) async {
     if (_cmdChar != null) {
-      await _cmdChar!.write(
-        utf8.encode('MANUAL:${manual ? 1 : 0}'),
-        withoutResponse: false,
-      );
+      await _writeCommand('MANUAL:${manual ? 1 : 0}');
     }
   }
 
   Future<void> setStepperBowZero() async {
     if (_cmdChar != null) {
-      await _cmdChar!.write(
-        utf8.encode('SET_STEPPER_BOW'),
-        withoutResponse: false,
-      );
+      await _writeCommand('SET_STEPPER_BOW');
     }
   }
 
   Future<void> sendManualDirection(int dir) async {
     if (_cmdChar != null) {
-      await _cmdChar!.write(
-        utf8.encode('MANUAL_DIR:$dir'),
-        withoutResponse: false,
-      );
+      await _writeCommand('MANUAL_DIR:$dir');
     }
   }
 
   Future<void> sendManualSpeed(int speed) async {
     if (_cmdChar != null) {
-      await _cmdChar!.write(
-        utf8.encode('MANUAL_SPEED:$speed'),
-        withoutResponse: false,
-      );
+      await _writeCommand('MANUAL_SPEED:$speed');
     }
+  }
+
+  void setOwnerCode(String? code) {
+    if (code == null) {
+      _ownerCode = null;
+      return;
+    }
+    _ownerCode = normalizeOwnerCode(code);
+  }
+
+  Future<void> pairSetOwnerCode(String code) async {
+    if (_cmdChar == null) return;
+    final normalized = normalizeOwnerCode(code);
+    if (normalized == null) return;
+    await _cmdChar!.write(
+      utf8.encode('PAIR_SET:$normalized'),
+      withoutResponse: false,
+    );
+  }
+
+  Future<void> clearPairing() async {
+    if (_cmdChar == null) return;
+    await _cmdChar!.write(
+      utf8.encode('PAIR_CLEAR'),
+      withoutResponse: false,
+    );
+    _sessionKey = 0;
+    _secCounter = 0;
+  }
+
+  Future<bool> _ensureSecuritySession() async {
+    if (_cmdChar == null) return false;
+    if (!_secPaired) return true;
+    if (_secAuth && _sessionKey != 0) return true;
+    final code = _ownerCode;
+    if (code == null) return false;
+
+    await _cmdChar!.write(utf8.encode('AUTH_HELLO'), withoutResponse: false);
+    await Future.delayed(const Duration(milliseconds: 120));
+    await requestAllParams();
+    await Future.delayed(const Duration(milliseconds: 120));
+    if (_secNonce == 0) return false;
+
+    final proof = buildAuthProofHex(code, _secNonce);
+    await _cmdChar!.write(utf8.encode('AUTH_PROVE:$proof'), withoutResponse: false);
+    await Future.delayed(const Duration(milliseconds: 120));
+    await requestAllParams();
+    await Future.delayed(const Duration(milliseconds: 120));
+    if (!_secAuth) return false;
+
+    _sessionKey = buildSessionKey(proof);
+    _secCounter = 0;
+    return true;
+  }
+
+  Future<void> _writeCommand(String cmd) async {
+    if (_cmdChar == null) return;
+    if (_isPlainAllowed(cmd)) {
+      await _cmdChar!.write(utf8.encode(cmd), withoutResponse: false);
+      return;
+    }
+
+    final ok = await _ensureSecuritySession();
+    if (!ok || !_secPaired) {
+      await _cmdChar!.write(utf8.encode(cmd), withoutResponse: false);
+      return;
+    }
+
+    _secCounter += 1;
+    final secure = buildSecureCommand(
+      payload: cmd,
+      counter: _secCounter,
+      sessionKey: _sessionKey,
+    );
+    await _cmdChar!.write(utf8.encode(secure), withoutResponse: false);
+  }
+
+  bool _isPlainAllowed(String cmd) {
+    return cmd == 'STOP' ||
+        cmd == 'ANCHOR_OFF' ||
+        cmd == 'HEARTBEAT' ||
+        cmd == 'all' ||
+        cmd.startsWith('AUTH_') ||
+        cmd.startsWith('PAIR_') ||
+        cmd.startsWith('SEC_CMD:');
   }
 
   static String? buildSetAnchorCommand(BoatData? data) {
     if (data == null) return null;
-    if (data.lat == 0 || data.lon == 0) return null;
-    return 'SET_ANCHOR:${data.lat.toStringAsFixed(6)},${data.lon.toStringAsFixed(6)}';
+    return buildSetAnchorCommandFromCoords(data.lat, data.lon);
+  }
+
+  static String? buildSetAnchorCommandFromCoords(double lat, double lon) {
+    if (!lat.isFinite || !lon.isFinite) return null;
+    if (lat == 0 || lon == 0) return null;
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+    return 'SET_ANCHOR:${lat.toStringAsFixed(6)},${lon.toStringAsFixed(6)}';
   }
 
   static String? buildSetPhoneGpsCommand(
@@ -298,12 +455,81 @@ class BleBoatLock {
     return '$base,$safeSat';
   }
 
+  static String? buildNudgeDirCommand(String direction, {double meters = 1.0}) {
+    final dir = direction.trim().toUpperCase();
+    const allowed = {'FWD', 'BACK', 'LEFT', 'RIGHT'};
+    if (!allowed.contains(dir)) return null;
+    if (!meters.isFinite || meters < 1.0 || meters > 5.0) return null;
+    return 'NUDGE_DIR:$dir,${meters.toStringAsFixed(1)}';
+  }
+
+  static String? buildNudgeBearingCommand(double bearingDeg, {double meters = 1.0}) {
+    if (!bearingDeg.isFinite) return null;
+    if (!meters.isFinite || meters < 1.0 || meters > 5.0) return null;
+    var norm = bearingDeg % 360.0;
+    if (norm < 0) norm += 360.0;
+    return 'NUDGE_BRG:${norm.toStringAsFixed(1)},${meters.toStringAsFixed(1)}';
+  }
+
+  static String? buildSetAnchorProfileCommand(String profile) {
+    final raw = profile.trim().toLowerCase();
+    if (raw.isEmpty) return null;
+    const allowed = {'quiet', 'normal', 'current'};
+    if (!allowed.contains(raw)) return null;
+    return 'SET_ANCHOR_PROFILE:$raw';
+  }
+
+  static String? normalizeOwnerCode(String raw) {
+    final digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.length != 6) return null;
+    if (digits.startsWith('0')) return null;
+    return digits;
+  }
+
+  static String buildAuthProofHex(String ownerCode, int nonce) {
+    final norm = normalizeOwnerCode(ownerCode);
+    if (norm == null || nonce <= 0) return '00000000';
+    final msg = '$norm:${_hex32(nonce)}';
+    final hash = _fnv1a32(utf8.encode(msg));
+    return _hex32(hash);
+  }
+
+  static int buildSessionKey(String proofHex) {
+    final msg = 'SK:${proofHex.toUpperCase()}';
+    return _fnv1a32(utf8.encode(msg));
+  }
+
+  static String buildSecureCommand({
+    required String payload,
+    required int counter,
+    required int sessionKey,
+  }) {
+    final prefix = '${_hex32(sessionKey)}:${_hex32(counter)}:';
+    final hash = _fnv1a32(utf8.encode(prefix + payload));
+    return 'SEC_CMD:${_hex32(counter)}:${_hex32(hash)}:$payload';
+  }
+
+  static int _fnv1a32(List<int> bytes) {
+    var hash = 0x811C9DC5;
+    for (final b in bytes) {
+      hash ^= (b & 0xFF);
+      hash = (hash * 0x01000193) & 0xFFFFFFFF;
+    }
+    return hash & 0xFFFFFFFF;
+  }
+
+  static String _hex32(int value) {
+    final v = value & 0xFFFFFFFF;
+    return v.toRadixString(16).toUpperCase().padLeft(8, '0');
+  }
+
   void dispose() {
     _scanResultsSub?.cancel();
     _connectionSub?.cancel();
     _dataSub?.cancel();
     _logSub?.cancel();
     _reconnectTimer?.cancel();
+    _heartbeatTimer?.cancel();
     _device?.disconnect();
     _clearCharacteristics();
   }

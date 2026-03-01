@@ -11,4 +11,5 @@ constexpr uint16_t COLOR_BG_LIGHT = 0xFFFF;
 constexpr uint16_t COLOR_PANEL = 0xF7DE;
 constexpr uint16_t COLOR_TEXT_DARK = 0x10A2;
 constexpr uint16_t COLOR_ACCENT = 0x2E6B;
+constexpr uint16_t COLOR_CAUTION = 0xFBE0;
 constexpr uint16_t COLOR_WARNING = 0xD145;

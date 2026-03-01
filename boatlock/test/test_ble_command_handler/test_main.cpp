@@ -1,5 +1,7 @@
 #include "../mocks/BleCommandHandler.h"
 #include <unity.h>
+#include <cstring>
+#include <cstdlib>
 
 AnchorControl anchor;
 StepperControl stepperControl;
@@ -16,6 +18,25 @@ float phoneGpsLon = 0.0f;
 float phoneGpsSpeed = 0.0f;
 int phoneGpsSatellites = 0;
 bool stepperBowCaptured = false;
+bool anchorPointPresent = true;
+bool anchorEnableAllowed = true;
+bool stopAllMotionCalled = false;
+int controlActivityNotes = 0;
+bool nudgeCardinalCalled = false;
+bool nudgeBearingCalled = false;
+char nudgeDirLast[16] = {0};
+float nudgeBearingLast = 0.0f;
+float nudgeMetersLast = 0.0f;
+bool nudgeCardinalResult = true;
+bool nudgeBearingResult = true;
+const char* gnssReasonStub = "GPS_HDOP_TOO_HIGH";
+AnchorDeniedReason gnssDeniedReasonStub = AnchorDeniedReason::GPS_HDOP_TOO_HIGH;
+AnchorDeniedReason lastDeniedReason = AnchorDeniedReason::NONE;
+FailsafeReason lastFailsafeReason = FailsafeReason::NONE;
+bool securityForceReject = false;
+bool securityRequireWrapper = false;
+bool securitySessionActive = false;
+uint32_t securityLastCounter = 0;
 void setPhoneGpsFix(float lat, float lon, float speedKmh, int satellites) {
   phoneGpsFixSet = true;
   phoneGpsLat = lat;
@@ -24,6 +45,51 @@ void setPhoneGpsFix(float lat, float lon, float speedKmh, int satellites) {
   phoneGpsSatellites = satellites;
 }
 void captureStepperBowZero() { stepperBowCaptured = true; }
+bool canEnableAnchorNow() { return anchorEnableAllowed; }
+bool hasAnchorPoint() { return anchorPointPresent; }
+void stopAllMotionNow() { stopAllMotionCalled = true; }
+void noteControlActivityNow() { ++controlActivityNotes; }
+bool nudgeAnchorCardinal(const char* dir, float meters) {
+  nudgeCardinalCalled = true;
+  strncpy(nudgeDirLast, dir ? dir : "", sizeof(nudgeDirLast) - 1);
+  nudgeDirLast[sizeof(nudgeDirLast) - 1] = '\0';
+  nudgeMetersLast = meters;
+  return nudgeCardinalResult;
+}
+bool nudgeAnchorBearing(float bearingDeg, float meters) {
+  nudgeBearingCalled = true;
+  nudgeBearingLast = bearingDeg;
+  nudgeMetersLast = meters;
+  return nudgeBearingResult;
+}
+const char* currentGnssFailReason() { return gnssReasonStub; }
+AnchorDeniedReason currentGnssDeniedReason() { return gnssDeniedReasonStub; }
+void setLastAnchorDeniedReason(AnchorDeniedReason reason) { lastDeniedReason = reason; }
+void setLastFailsafeReason(FailsafeReason reason) { lastFailsafeReason = reason; }
+bool preprocessSecureCommand(const std::string& incoming, std::string* effective) {
+  if (!effective) return false;
+  if (securityForceReject) return false;
+  if (!securityRequireWrapper) {
+    *effective = incoming;
+    return true;
+  }
+  if (incoming.rfind("SEC_CMD:", 0) != 0) {
+    return false;
+  }
+  size_t p1 = incoming.find(':', 8);
+  size_t p2 = (p1 == std::string::npos) ? std::string::npos : incoming.find(':', p1 + 1);
+  if (p1 == std::string::npos || p2 == std::string::npos || p2 + 1 >= incoming.size()) {
+    return false;
+  }
+  const std::string counterHex = incoming.substr(8, p1 - 8);
+  uint32_t counter = (uint32_t)strtoul(counterHex.c_str(), nullptr, 16);
+  if (!securitySessionActive || counter <= securityLastCounter) {
+    return false;
+  }
+  securityLastCounter = counter;
+  *effective = incoming.substr(p2 + 1);
+  return true;
+}
 
 void setUp() {
   settings.reset();
@@ -41,6 +107,25 @@ void setUp() {
   phoneGpsSpeed = 0.0f;
   phoneGpsSatellites = 0;
   stepperBowCaptured = false;
+  anchorPointPresent = true;
+  anchorEnableAllowed = true;
+  stopAllMotionCalled = false;
+  controlActivityNotes = 0;
+  nudgeCardinalCalled = false;
+  nudgeBearingCalled = false;
+  nudgeDirLast[0] = '\0';
+  nudgeBearingLast = 0.0f;
+  nudgeMetersLast = 0.0f;
+  nudgeCardinalResult = true;
+  nudgeBearingResult = true;
+  gnssReasonStub = "GPS_HDOP_TOO_HIGH";
+  gnssDeniedReasonStub = AnchorDeniedReason::GPS_HDOP_TOO_HIGH;
+  lastDeniedReason = AnchorDeniedReason::NONE;
+  lastFailsafeReason = FailsafeReason::NONE;
+  securityForceReject = false;
+  securityRequireWrapper = false;
+  securitySessionActive = false;
+  securityLastCounter = 0;
 }
 
 void tearDown() {}
@@ -84,6 +169,86 @@ void test_manual_dir_and_speed() {
 void test_set_stepper_bow_calls_capture() {
   handleBleCommand("SET_STEPPER_BOW");
   TEST_ASSERT_TRUE(stepperBowCaptured);
+}
+
+void test_set_anchor_saves_point_without_enabling_mode() {
+  settings.set("AnchorEnabled", 1.0f);
+  handleBleCommand("SET_ANCHOR:59.9386,30.3141");
+  TEST_ASSERT_EQUAL_FLOAT(59.9386f, anchor.anchorLat);
+  TEST_ASSERT_EQUAL_FLOAT(30.3141f, anchor.anchorLon);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
+}
+
+void test_anchor_on_rejected_without_anchor_point() {
+  anchorPointPresent = false;
+  settings.set("AnchorEnabled", 0.0f);
+  handleBleCommand("ANCHOR_ON");
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
+  TEST_ASSERT_EQUAL((int)AnchorDeniedReason::NO_ANCHOR_POINT, (int)lastDeniedReason);
+}
+
+void test_anchor_on_rejected_on_bad_gnss() {
+  anchorPointPresent = true;
+  anchorEnableAllowed = false;
+  settings.set("AnchorEnabled", 0.0f);
+  handleBleCommand("ANCHOR_ON");
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
+  TEST_ASSERT_EQUAL((int)AnchorDeniedReason::GPS_HDOP_TOO_HIGH, (int)lastDeniedReason);
+}
+
+void test_anchor_on_accepts_and_exits_manual_mode() {
+  manualMode = true;
+  manualDir = 1;
+  manualSpeed = 90;
+  anchorPointPresent = true;
+  anchorEnableAllowed = true;
+  settings.set("AnchorEnabled", 0.0f);
+  handleBleCommand("ANCHOR_ON");
+  TEST_ASSERT_FALSE(manualMode);
+  TEST_ASSERT_EQUAL(-1, manualDir);
+  TEST_ASSERT_EQUAL(0, manualSpeed);
+  TEST_ASSERT_EQUAL_FLOAT(1.0f, settings.get("AnchorEnabled"));
+  TEST_ASSERT_EQUAL((int)AnchorDeniedReason::NONE, (int)lastDeniedReason);
+}
+
+void test_anchor_off_always_disables_anchor_and_stops_drive() {
+  settings.set("AnchorEnabled", 1.0f);
+  handleBleCommand("ANCHOR_OFF");
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
+  TEST_ASSERT_TRUE(stepperControl.cancelCalled);
+  TEST_ASSERT_TRUE(motor.stopCalled);
+  TEST_ASSERT_EQUAL((int)FailsafeReason::NONE, (int)lastFailsafeReason);
+}
+
+void test_stop_always_has_highest_priority() {
+  stopAllMotionCalled = false;
+  handleBleCommand("STOP");
+  TEST_ASSERT_TRUE(stopAllMotionCalled);
+  TEST_ASSERT_EQUAL((int)FailsafeReason::STOP_CMD, (int)lastFailsafeReason);
+}
+
+void test_heartbeat_marks_control_activity_without_state_change() {
+  settings.set("AnchorEnabled", 1.0f);
+  handleBleCommand("HEARTBEAT");
+  TEST_ASSERT_EQUAL(1, controlActivityNotes);
+  TEST_ASSERT_EQUAL_FLOAT(1.0f, settings.get("AnchorEnabled"));
+  TEST_ASSERT_FALSE(stopAllMotionCalled);
+}
+
+void test_nudge_dir_routes_to_cardinal_handler() {
+  handleBleCommand("NUDGE_DIR:LEFT,2.5");
+  TEST_ASSERT_TRUE(nudgeCardinalCalled);
+  TEST_ASSERT_EQUAL_STRING("LEFT", nudgeDirLast);
+  TEST_ASSERT_EQUAL_FLOAT(2.5f, nudgeMetersLast);
+  TEST_ASSERT_FALSE(nudgeBearingCalled);
+}
+
+void test_nudge_bearing_routes_to_bearing_handler() {
+  handleBleCommand("NUDGE_BRG:123.4,3.0");
+  TEST_ASSERT_TRUE(nudgeBearingCalled);
+  TEST_ASSERT_EQUAL_FLOAT(123.4f, nudgeBearingLast);
+  TEST_ASSERT_EQUAL_FLOAT(3.0f, nudgeMetersLast);
+  TEST_ASSERT_FALSE(nudgeCardinalCalled);
 }
 
 void test_set_phone_gps_with_speed() {
@@ -143,6 +308,63 @@ void test_set_compass_offset() {
   TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("MagOffX"));
 }
 
+void test_set_anchor_profile_applies_bundle() {
+  handleBleCommand("SET_ANCHOR_PROFILE:quiet");
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorProf"));
+  TEST_ASSERT_EQUAL_FLOAT(3.0f, settings.get("HoldRadius"));
+  TEST_ASSERT_EQUAL_FLOAT(2.2f, settings.get("DeadbandM"));
+  TEST_ASSERT_EQUAL_FLOAT(45.0f, settings.get("MaxThrustA"));
+  TEST_ASSERT_EQUAL_FLOAT(20.0f, settings.get("ThrRampA"));
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("ReacqStrat"));
+}
+
+void test_set_anchor_profile_rejects_invalid_payload() {
+  const float holdBefore = settings.get("HoldRadius");
+  const float profileBefore = settings.get("AnchorProf");
+  handleBleCommand("SET_ANCHOR_PROFILE:storm");
+  TEST_ASSERT_EQUAL_FLOAT(profileBefore, settings.get("AnchorProf"));
+  TEST_ASSERT_EQUAL_FLOAT(holdBefore, settings.get("HoldRadius"));
+}
+
+void test_security_rejects_plain_control_command_when_wrapper_required() {
+  securityRequireWrapper = true;
+  securitySessionActive = true;
+  settings.set("AnchorEnabled", 0.0f);
+  handleBleCommand("ANCHOR_ON");
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
+}
+
+void test_security_accepts_wrapped_command_with_increasing_counter() {
+  securityRequireWrapper = true;
+  securitySessionActive = true;
+  anchorPointPresent = true;
+  anchorEnableAllowed = true;
+
+  handleBleCommand("SEC_CMD:1:deadbeef:ANCHOR_ON");
+  TEST_ASSERT_EQUAL_FLOAT(1.0f, settings.get("AnchorEnabled"));
+
+  settings.set("AnchorEnabled", 0.0f);
+  handleBleCommand("SEC_CMD:1:deadbeef:ANCHOR_ON");
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
+}
+
+void test_command_parser_fuzz_does_not_break_safe_state() {
+  srand(42);
+  settings.set("AnchorEnabled", 0.0f);
+  for (int i = 0; i < 500; ++i) {
+    char cmd[96];
+    int len = 1 + (rand() % 80);
+    for (int j = 0; j < len; ++j) {
+      const int r = 32 + (rand() % 95);  // printable ASCII
+      cmd[j] = static_cast<char>(r);
+    }
+    cmd[len] = '\0';
+    handleBleCommand(cmd);
+  }
+  TEST_ASSERT_TRUE(settings.get("AnchorEnabled") == 0.0f || settings.get("AnchorEnabled") == 1.0f);
+  TEST_ASSERT_TRUE(manualDir >= -1 && manualDir <= 1);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_set_hold_heading);
@@ -151,11 +373,25 @@ int main() {
   RUN_TEST(test_manual_off);
   RUN_TEST(test_manual_dir_and_speed);
   RUN_TEST(test_set_stepper_bow_calls_capture);
+  RUN_TEST(test_set_anchor_saves_point_without_enabling_mode);
+  RUN_TEST(test_anchor_on_rejected_without_anchor_point);
+  RUN_TEST(test_anchor_on_rejected_on_bad_gnss);
+  RUN_TEST(test_anchor_on_accepts_and_exits_manual_mode);
+  RUN_TEST(test_anchor_off_always_disables_anchor_and_stops_drive);
+  RUN_TEST(test_stop_always_has_highest_priority);
+  RUN_TEST(test_heartbeat_marks_control_activity_without_state_change);
+  RUN_TEST(test_nudge_dir_routes_to_cardinal_handler);
+  RUN_TEST(test_nudge_bearing_routes_to_bearing_handler);
   RUN_TEST(test_set_phone_gps_with_speed);
   RUN_TEST(test_set_phone_gps_without_speed);
   RUN_TEST(test_set_phone_gps_with_satellites);
   RUN_TEST(test_removed_route_commands_do_not_change_state);
   RUN_TEST(test_removed_compass_and_log_commands_do_not_change_state);
   RUN_TEST(test_set_compass_offset);
+  RUN_TEST(test_set_anchor_profile_applies_bundle);
+  RUN_TEST(test_set_anchor_profile_rejects_invalid_payload);
+  RUN_TEST(test_security_rejects_plain_control_command_when_wrapper_required);
+  RUN_TEST(test_security_accepts_wrapped_command_with_increasing_counter);
+  RUN_TEST(test_command_parser_fuzz_does_not_break_safe_state);
   return UNITY_END();
 }

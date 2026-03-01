@@ -5,6 +5,7 @@
 #include <EEPROM.h>
 #include <AccelStepper.h>
 #include <math.h>
+#include <strings.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -16,12 +17,22 @@
 #include "StepperControl.h"
 #include "display.h"
 #include "BNO08xCompass.h"
+#include "DriftMonitor.h"
+#include "AnchorSupervisor.h"
+#include "AnchorDiagnostics.h"
+#include "GnssQualityGate.h"
+#include "AnchorProfiles.h"
+#include "AnchorReasons.h"
+#include "BleSecurity.h"
 #include "BleCommandHandler.h"
 #include "BLEBoatLock.h"
 
 Settings settings;
 constexpr size_t EEPROM_SIZE =
-    Settings::EEPROM_ADDR + sizeof(float) * count + sizeof(uint8_t);
+    (Settings::EEPROM_ADDR + Settings::STORED_BYTES >
+     BleSecurity::EEPROM_ADDR + BleSecurity::STORED_BYTES)
+        ? (Settings::EEPROM_ADDR + Settings::STORED_BYTES)
+        : (BleSecurity::EEPROM_ADDR + BleSecurity::STORED_BYTES);
 
 BLEBoatLock bleBoatLock;
 
@@ -50,6 +61,7 @@ constexpr int kMotorPwmPin = 7;
 constexpr int kMotorDirPin1 = 5;
 constexpr int kMotorDirPin2 = 10;
 constexpr int kBootPin = 0;
+constexpr int kStopButtonPin = 15;
 
 constexpr int kPwmFreq = 5000;
 constexpr int kPwmResolution = 8;
@@ -59,7 +71,6 @@ constexpr int kMaxGpsFilterWindow = 20;
 constexpr unsigned long kBleNotifyIntervalMs = 1000;
 constexpr unsigned long kUiRefreshIntervalMs = 120;
 constexpr unsigned long kStepperCheckIntervalMs = 250;
-constexpr unsigned long kHardwareGpsMaxAgeMs = 2000;
 constexpr unsigned long kPhoneGpsTimeoutMs = 5000;
 constexpr unsigned long kCompassRetryIntervalMs = 5000;
 constexpr float kGpsCorrMinSpeedKmh = 3.0f;
@@ -71,6 +82,8 @@ constexpr unsigned long kAnchorBearingCacheMaxAgeMs = 120000;
 constexpr float kStepperDeadbandBaseDeg = 2.2f;
 constexpr float kStepperDeadbandMaxDeg = 9.0f;
 constexpr float kStepperDeadbandHystDeg = 0.9f;
+constexpr float kMotorHeadingHystDeg = 2.0f;
+constexpr unsigned long kSafetyReasonHoldMs = 15000;
 } // namespace cfg
 
 HardwareSerial gpsSerial(1);
@@ -83,6 +96,9 @@ StepperControl stepperControl(cfg::kStepIn1Pin,
 BNO08xCompass compass;
 AnchorControl anchor;
 MotorControl motor;
+DriftMonitor driftMonitor;
+AnchorSupervisor anchorSupervisor;
+AnchorDiagnostics anchorDiagnostics;
 
 bool compassReady = false;
 float fallbackHeading = 0.0f;
@@ -92,8 +108,15 @@ float bearing = 0.0f;
 float lastLat = 0.0f;
 float lastLon = 0.0f;
 bool gpsFix = false;
+enum class FixTypeSource : uint8_t {
+  NONE = 0,
+  NMEA_GSA = 1,
+  UBX = 2,
+};
+FixTypeSource fixTypeSource = FixTypeSource::NONE;
 float currentSpeedKmh = 0.0f;
 int currentSatellites = 0;
+float currentGpsHdop = NAN;
 float phoneLat = 0.0f;
 float phoneLon = 0.0f;
 float phoneSpeedKmh = 0.0f;
@@ -110,6 +133,25 @@ bool gpsCorrRefValid = false;
 float anchorBearingCacheDeg = 0.0f;
 unsigned long anchorBearingCacheUpdatedMs = 0;
 bool anchorBearingCacheValid = false;
+bool driftAlertActive = false;
+bool driftFailActive = false;
+std::string safetyReason;
+unsigned long safetyReasonMs = 0;
+unsigned long currentGpsAgeMs = 999999;
+float currentPosJumpM = 0.0f;
+bool currentPosJumpRejected = false;
+float currentSpeedMps = 0.0f;
+float currentAccelMps2 = 0.0f;
+bool currentAccelValid = false;
+unsigned long speedSampleMs = 0;
+float prevSpeedMps = NAN;
+unsigned long hwFixSamplesCount = 0;
+GnssQualityFailReason lastGnssFailReason = GnssQualityFailReason::NO_FIX;
+bool minFixTypeIgnoredLogged = false;
+unsigned long lastLoopMs = 0;
+AnchorDeniedReason lastAnchorDeniedReason = AnchorDeniedReason::NONE;
+FailsafeReason lastFailsafeReason = FailsafeReason::NONE;
+BleSecurity bleSecurity;
 
 bool manualMode = false;
 int manualDir = -1;
@@ -117,6 +159,20 @@ int manualSpeed = 0;
 
 void setPhoneGpsFix(float lat, float lon, float speedKmh, int satellites);
 void captureStepperBowZero();
+bool canEnableAnchorNow();
+bool hasAnchorPoint();
+void stopAllMotionNow();
+void noteControlActivityNow();
+bool nudgeAnchorCardinal(const char* dir, float meters);
+bool nudgeAnchorBearing(float bearingDeg, float meters);
+const char* currentGnssFailReason();
+void applySupervisorDecision(const AnchorSupervisor::Decision& decision);
+void setLastAnchorDeniedReason(AnchorDeniedReason reason);
+void setLastFailsafeReason(FailsafeReason reason);
+const char* currentAnchorDeniedReason();
+const char* currentFailsafeReason();
+AnchorDeniedReason currentGnssDeniedReason();
+bool preprocessSecureCommand(const std::string& incoming, std::string* effective);
 
 namespace {
 TaskHandle_t stepperTaskHandle = nullptr;
@@ -127,10 +183,88 @@ unsigned long lastUiRefreshMs = 0;
 unsigned long lastStepperCheckMs = 0;
 unsigned long lastCompassRetryMs = 0;
 bool stepperTrackingActive = false;
+bool motorHeadingAligned = false;
 bool lastBootButton = HIGH;
+bool lastStopButton = HIGH;
+unsigned long stopButtonDownSinceMs = 0;
+bool stopPairingActionDone = false;
 bool gpsUartSeen = false;
 bool gpsNoDataWarned = false;
 unsigned long bootMs = 0;
+
+const char* fixTypeSourceString(FixTypeSource src) {
+  switch (src) {
+    case FixTypeSource::NMEA_GSA:
+      return "NMEA_GSA";
+    case FixTypeSource::UBX:
+      return "UBX";
+    case FixTypeSource::NONE:
+    default:
+      return "NONE";
+  }
+}
+
+bool anchorPointConfigured() {
+  return isfinite(anchor.anchorLat) &&
+         isfinite(anchor.anchorLon) &&
+         !(anchor.anchorLat == 0.0f && anchor.anchorLon == 0.0f);
+}
+
+bool gpsQualityGoodForAnchorOn() {
+  GnssQualityConfig cfg;
+  cfg.maxGpsAgeMs =
+      static_cast<unsigned long>(constrain(settings.get("MaxGpsAgeMs"), 300.0f, 20000.0f));
+  cfg.minSats = constrain((int)settings.get("MinSats"), 3, 20);
+  cfg.maxHdop = constrain(settings.get("MaxHdop"), 0.5f, 10.0f);
+  cfg.maxPositionJumpM = constrain(settings.get("MaxPosJumpM"), 1.0f, 200.0f);
+  cfg.enableSpeedAccelSanity = ((int)settings.get("SpdSanity") == 1);
+  cfg.maxSpeedMps = constrain(settings.get("MaxSpdMps"), 1.0f, 60.0f);
+  cfg.maxAccelMps2 = constrain(settings.get("MaxAccMps2"), 0.5f, 20.0f);
+  cfg.requiredSentences = constrain((int)settings.get("ReqSent"), 0, 20);
+
+  GnssQualitySample s;
+  s.fix = gpsFix;
+  s.ageMs = currentGpsAgeMs;
+  s.sats = currentSatellites;
+  s.hasHdop = !gpsSourcePhone && isfinite(currentGpsHdop) && currentGpsHdop > 0.0f;
+  s.hdop = currentGpsHdop;
+  s.jumpRejected = currentPosJumpRejected;
+  s.jumpM = currentPosJumpM;
+  s.hasSpeed = isfinite(currentSpeedMps);
+  s.speedMps = currentSpeedMps;
+  s.hasAccel = currentAccelValid && isfinite(currentAccelMps2);
+  s.accelMps2 = currentAccelMps2;
+  s.hasSentences = !gpsSourcePhone;
+  s.sentences = (int)hwFixSamplesCount;
+
+  lastGnssFailReason = evaluateGnssQuality(cfg, s);
+  return lastGnssFailReason == GnssQualityFailReason::NONE;
+}
+
+int gnssQualityLevel() {
+  if (!gpsFix) {
+    return 0;
+  }
+  if (lastGnssFailReason == GnssQualityFailReason::NONE || gpsQualityGoodForAnchorOn()) {
+    return 2;
+  }
+  return 1;
+}
+
+void setSafetyReason(const char* reason) {
+  safetyReason = reason ? reason : "";
+  safetyReasonMs = millis();
+}
+
+std::string activeSafetyReason(unsigned long now) {
+  if (safetyReason.empty()) {
+    return "";
+  }
+  if (now - safetyReasonMs > cfg::kSafetyReasonHoldMs) {
+    return "";
+  }
+  return safetyReason;
+}
 
 struct GpsFilterState {
   float latBuf[cfg::kMaxGpsFilterWindow] = {0};
@@ -427,8 +561,77 @@ void registerBleParams() {
     return dist;
   }, "%.2f"));
 
+  bleBoatLock.registerParam("driftSpeed", makeFloatParam([&]() {
+    return driftMonitor.driftSpeedMps();
+  }, "%.2f"));
+
+  bleBoatLock.registerParam("driftAlert", makeFloatParam([&]() {
+    return driftAlertActive ? 1.0f : 0.0f;
+  }, "%.0f"));
+
+  bleBoatLock.registerParam("driftFail", makeFloatParam([&]() {
+    return driftFailActive ? 1.0f : 0.0f;
+  }, "%.0f"));
+
+  bleBoatLock.registerParam("gnssQ", makeFloatParam([&]() {
+    return (float)gnssQualityLevel();
+  }, "%.0f"));
+
+  bleBoatLock.registerParam("motorPwm", makeFloatParam([&]() {
+    return (float)motor.pwmPercent();
+  }, "%.0f"));
+
   bleBoatLock.registerParam("mode", [&]() {
     return std::string(currentModeLabel());
+  });
+
+  bleBoatLock.registerParam("cfgVer", makeFloatParam([&]() {
+    return (float)Settings::VERSION;
+  }, "%.0f"));
+
+  bleBoatLock.registerParam("anchorProfile", makeFloatParam([&]() {
+    return settings.get("AnchorProf");
+  }, "%.0f"));
+
+  bleBoatLock.registerParam("anchorProfileName", [&]() {
+    const int raw = constrain((int)settings.get("AnchorProf"), 0, 2);
+    return std::string(anchorProfileName((AnchorProfileId)raw));
+  });
+
+  bleBoatLock.registerParam("fixType", [&]() {
+    return std::string("UNKNOWN");
+  });
+
+  bleBoatLock.registerParam("fixTypeSource", [&]() {
+    return std::string(fixTypeSourceString(fixTypeSource));
+  });
+
+  bleBoatLock.registerParam("anchorDeniedReason", [&]() {
+    return std::string(currentAnchorDeniedReason());
+  });
+
+  bleBoatLock.registerParam("failsafeReason", [&]() {
+    return std::string(currentFailsafeReason());
+  });
+
+  bleBoatLock.registerParam("secPaired", makeFloatParam([&]() {
+    return bleSecurity.isPaired() ? 1.0f : 0.0f;
+  }, "%.0f"));
+
+  bleBoatLock.registerParam("secAuth", makeFloatParam([&]() {
+    return bleSecurity.sessionActive() ? 1.0f : 0.0f;
+  }, "%.0f"));
+
+  bleBoatLock.registerParam("secPairWin", makeFloatParam([&]() {
+    return bleSecurity.pairingWindowOpen(millis()) ? 1.0f : 0.0f;
+  }, "%.0f"));
+
+  bleBoatLock.registerParam("secNonce", makeFloatParam([&]() {
+    return (float)bleSecurity.sessionNonce();
+  }, "%.0f"));
+
+  bleBoatLock.registerParam("secReject", [&]() {
+    return std::string(bleSecurity.lastRejectString());
   });
 }
 
@@ -462,7 +665,9 @@ void updateGpsFromSerial() {
     lastGpsDebugMs = millis();
   }
 
-  const bool hardwareFix = gps.location.isValid() && gps.location.age() < cfg::kHardwareGpsMaxAgeMs;
+  const unsigned long maxGpsAgeMs =
+      static_cast<unsigned long>(constrain(settings.get("MaxGpsAgeMs"), 300.0f, 20000.0f));
+  const bool hardwareFix = gps.location.isValid() && gps.location.age() < maxGpsAgeMs;
   if (hardwareFix) {
     int requestedWindow = constrain((int)settings.get("GpsFWin"),
                                     1,
@@ -471,12 +676,46 @@ void updateGpsFromSerial() {
       gpsFilter.reset(requestedWindow);
     }
 
-    gpsFilter.push(gps.location.lat(), gps.location.lng());
+    const float rawLat = gps.location.lat();
+    const float rawLon = gps.location.lng();
+    const float maxPosJumpM = constrain(settings.get("MaxPosJumpM"), 1.0f, 200.0f);
+    const bool hasPrev = gpsFilter.count > 0;
+    if (hasPrev) {
+      const float jumpM =
+          TinyGPSPlus::distanceBetween(lastLat, lastLon, rawLat, rawLon);
+      currentPosJumpM = isfinite(jumpM) ? jumpM : 0.0f;
+      if (isfinite(jumpM) && jumpM > maxPosJumpM) {
+        currentPosJumpRejected = true;
+        currentGpsAgeMs = gps.location.age();
+        logMessage("[EVENT] GPS_JUMP_REJECTED jump=%.2f max=%.2f\n", jumpM, maxPosJumpM);
+        return;
+      }
+    }
+
+    gpsFilter.push(rawLat, rawLon);
     lastLat = gpsFilter.avgLat();
     lastLon = gpsFilter.avgLon();
     const float hwSpeed = gps.speed.kmph();
     currentSpeedKmh = (isfinite(hwSpeed) && hwSpeed > 0.0f) ? hwSpeed : 0.0f;
+    currentSpeedMps = currentSpeedKmh / 3.6f;
+    if (speedSampleMs > 0 && isfinite(prevSpeedMps)) {
+      const float dt = (millis() - speedSampleMs) / 1000.0f;
+      if (isfinite(dt) && dt > 0.05f && dt < 5.0f) {
+        currentAccelMps2 = (currentSpeedMps - prevSpeedMps) / dt;
+        currentAccelValid = true;
+      } else {
+        currentAccelValid = false;
+      }
+    } else {
+      currentAccelValid = false;
+    }
+    speedSampleMs = millis();
+    prevSpeedMps = currentSpeedMps;
     currentSatellites = max(0, (int)gps.satellites.value());
+    currentGpsHdop = gps.hdop.isValid() ? (gps.hdop.value() * 0.01f) : NAN;
+    currentGpsAgeMs = gps.location.age();
+    currentPosJumpRejected = false;
+    ++hwFixSamplesCount;
     gpsSourcePhone = false;
     gpsFix = true;
     maybeUpdateGpsHeadingCorrection(lastLat, lastLon, currentSpeedKmh);
@@ -488,7 +727,14 @@ void updateGpsFromSerial() {
     lastLon = phoneLon;
     currentSpeedKmh =
         (isfinite(phoneSpeedKmh) && phoneSpeedKmh > 0.0f) ? phoneSpeedKmh : 0.0f;
+    currentSpeedMps = currentSpeedKmh / 3.6f;
+    currentAccelValid = false;
+    prevSpeedMps = currentSpeedMps;
     currentSatellites = max(0, phoneSatellites);
+    currentGpsHdop = NAN;
+    currentGpsAgeMs = millis() - phoneGpsUpdatedMs;
+    currentPosJumpRejected = false;
+    currentPosJumpM = 0.0f;
     gpsSourcePhone = true;
     gpsFix = true;
     maybeUpdateGpsHeadingCorrection(lastLat, lastLon, currentSpeedKmh);
@@ -496,7 +742,15 @@ void updateGpsFromSerial() {
   }
 
   currentSpeedKmh = 0.0f;
+  currentSpeedMps = 0.0f;
+  currentAccelMps2 = 0.0f;
+  currentAccelValid = false;
+  prevSpeedMps = NAN;
   currentSatellites = 0;
+  currentGpsHdop = NAN;
+  currentGpsAgeMs = 999999;
+  currentPosJumpRejected = false;
+  currentPosJumpM = 0.0f;
   gpsSourcePhone = false;
   gpsFix = false;
   gpsCorrRefValid = false;
@@ -508,10 +762,46 @@ void handleBootButton() {
     anchor.saveAnchor(lastLat,
                       lastLon,
                       currentHeadingValue());
-    settings.set("AnchorEnabled", 1);
+    if (canEnableAnchorNow()) {
+      setLastAnchorDeniedReason(AnchorDeniedReason::NONE);
+      setLastFailsafeReason(FailsafeReason::NONE);
+      settings.set("AnchorEnabled", 1);
+      settings.save();
+      logMessage("[EVENT] ANCHOR_ON source=BOOT_BUTTON\n");
+      logMessage("[ANCHOR] enabled from BOOT button\n");
+    } else {
+      setLastAnchorDeniedReason(currentGnssDeniedReason());
+      settings.set("AnchorEnabled", 0);
+      settings.save();
+      logMessage("[EVENT] ANCHOR_DENIED reason=%s source=BOOT_BUTTON\n", currentGnssFailReason());
+      logMessage("[ANCHOR] BOOT set point, enable rejected (GNSS quality)\n");
+    }
     logMessage("Anchor point set!\n");
   }
   lastBootButton = nowButton;
+}
+
+void handleStopButton() {
+  const bool nowButton = digitalRead(cfg::kStopButtonPin);
+  const unsigned long now = millis();
+  if (lastStopButton == HIGH && nowButton == LOW) {
+    stopButtonDownSinceMs = now;
+    stopPairingActionDone = false;
+    setLastFailsafeReason(FailsafeReason::STOP_CMD);
+    stopAllMotionNow();
+    logMessage("[STOP] hardware stop button pressed (GPIO%d)\n", cfg::kStopButtonPin);
+  } else if (nowButton == LOW) {
+    if (!stopPairingActionDone && stopButtonDownSinceMs > 0 && now - stopButtonDownSinceMs >= 3000) {
+      stopPairingActionDone = true;
+      bleSecurity.openPairingWindow(now);
+      logMessage("[EVENT] PAIRING_WINDOW_OPEN source=STOP_BUTTON timeout_ms=%lu\n",
+                 (unsigned long)BleSecurity::kPairingWindowMs);
+    }
+  } else if (lastStopButton == LOW && nowButton == HIGH) {
+    stopButtonDownSinceMs = 0;
+    stopPairingActionDone = false;
+  }
+  lastStopButton = nowButton;
 }
 
 void updateDistanceAndBearing() {
@@ -554,6 +844,15 @@ void updateDistanceAndBearing() {
   bearing = 0.0f;
 }
 
+void updateDriftState(unsigned long now) {
+  const bool anchorActive = !manualMode && (settings.get("AnchorEnabled") == 1);
+  const float driftAlertM = settings.get("DriftAlert");
+  const float driftFailM = settings.get("DriftFail");
+  driftMonitor.update(now, anchorActive, gpsFix, dist, driftAlertM, driftFailM);
+  driftAlertActive = driftMonitor.alertActive();
+  driftFailActive = driftMonitor.failActive();
+}
+
 void applyMotionControl(unsigned long now,
                         bool autoControlActive,
                         bool hasHeading,
@@ -562,6 +861,7 @@ void applyMotionControl(unsigned long now,
                         float diff) {
   if (manualMode) {
     stepperTrackingActive = false;
+    motorHeadingAligned = false;
     if (manualDir == 0) {
       stepperControl.startManual(-1);
     } else if (manualDir == 1) {
@@ -575,6 +875,7 @@ void applyMotionControl(unsigned long now,
 
   stepperControl.stopManual();
 
+  bool motorCanRun = false;
   if (autoControlActive) {
     if (hasHeading && hasBearing) {
       const float absDiff = fabsf(diff);
@@ -596,20 +897,39 @@ void applyMotionControl(unsigned long now,
       } else if (!stepperTrackingActive) {
         stepperControl.cancelMove();
       }
+
+      const float motorTol = max(2.0f, settings.get("AngTol"));
+      const float motorReleaseTol = motorTol + cfg::kMotorHeadingHystDeg;
+      if (motorHeadingAligned) {
+        if (absDiff > motorReleaseTol) {
+          motorHeadingAligned = false;
+        }
+      } else if (absDiff <= motorTol) {
+        motorHeadingAligned = true;
+      }
+      motorCanRun = motorHeadingAligned;
     } else {
       stepperTrackingActive = false;
+      motorHeadingAligned = false;
       stepperControl.cancelMove();
     }
   } else {
     stepperTrackingActive = false;
+    motorHeadingAligned = false;
     stepperControl.cancelMove();
   }
 
-  if (autoControlActive) {
-    motor.applyPID(dist);
-  } else {
-    motor.stop();
-  }
+  const float holdRadiusMeters = max(0.5f, settings.get("HoldRadius"));
+  const float deadbandMeters = constrain(settings.get("DeadbandM"), 0.2f, 10.0f);
+  const int maxThrustPctAnchor = constrain((int)settings.get("MaxThrustA"), 10, 100);
+  const float thrustRampPctPerS = constrain(settings.get("ThrRampA"), 1.0f, 100.0f);
+  const bool allowThrust = autoControlActive && motorCanRun && !driftFailActive;
+  motor.driveAnchorAuto(dist,
+                        holdRadiusMeters,
+                        allowThrust,
+                        deadbandMeters,
+                        maxThrustPctAnchor,
+                        thrustRampPctPerS);
 }
 
 void publishBleAndUi(unsigned long now,
@@ -621,13 +941,14 @@ void publishBleAndUi(unsigned long now,
   const float displayHeading = hasHeading ? heading : fallbackHeading;
   const float displayBearing = hasBearing ? bearing : fallbackBearing;
   const int compassQuality = compassReady ? compass.getHeadingQuality() : 0;
-  const int batteryPercent = 0;
+  const int motorPwmPercent = motor.pwmPercent();
   const bool headingFromPhone = false;
 
   if (now - lastUiRefreshMs >= cfg::kUiRefreshIntervalMs) {
     display_draw_ui(gpsFix,
                     currentSatellites,
                     gpsSourcePhone,
+                    currentGpsHdop,
                     currentSpeedKmh,
                     displayHeading,
                     hasHeading,
@@ -637,7 +958,7 @@ void publishBleAndUi(unsigned long now,
                     dist,
                     diffDeg,
                     mode,
-                    batteryPercent);
+                    motorPwmPercent);
     lastUiRefreshMs = now;
   }
 
@@ -645,12 +966,44 @@ void publishBleAndUi(unsigned long now,
     std::string err;
     if (!gps.location.isValid() && !gpsFix) {
       err = "NO_GPS";
+    } else if (!gpsQualityGoodForAnchorOn()) {
+      err = currentGnssFailReason();
     }
     if (!hasHeading) {
       if (!err.empty()) {
         err += ",";
       }
       err += "NO_COMPASS";
+    }
+    if (driftFailActive) {
+      if (!err.empty()) {
+        err += ",";
+      }
+      err += "DRIFT_FAIL";
+    } else if (driftAlertActive) {
+      if (!err.empty()) {
+        err += ",";
+      }
+      err += "DRIFT_ALERT";
+    }
+    if (settings.get("AnchorEnabled") != 1 && lastAnchorDeniedReason != AnchorDeniedReason::NONE) {
+      if (!err.empty()) {
+        err += ",";
+      }
+      err += currentAnchorDeniedReason();
+    }
+    if (lastFailsafeReason != FailsafeReason::NONE) {
+      if (!err.empty()) {
+        err += ",";
+      }
+      err += currentFailsafeReason();
+    }
+    const std::string safety = activeSafetyReason(now);
+    if (!safety.empty()) {
+      if (!err.empty()) {
+        err += ",";
+      }
+      err += safety;
     }
 
     std::string status = std::string(bleBoatLock.statusString()) + ":" + mode;
@@ -679,12 +1032,263 @@ void captureStepperBowZero() {
   stepperControl.captureBowZero();
 }
 
+bool hasAnchorPoint() {
+  return anchorPointConfigured();
+}
+
+bool canEnableAnchorNow() {
+  return hasAnchorPoint() && gpsQualityGoodForAnchorOn();
+}
+
+const char* currentGnssFailReason() {
+  return gnssFailReasonString(lastGnssFailReason);
+}
+
+AnchorDeniedReason currentGnssDeniedReason() {
+  return deniedReasonFromGnss(lastGnssFailReason);
+}
+
+bool preprocessSecureCommand(const std::string& incoming, std::string* effective) {
+  if (!effective) {
+    return false;
+  }
+  *effective = incoming;
+  const unsigned long now = millis();
+
+  if (incoming == "AUTH_HELLO") {
+    const uint32_t nonce = bleSecurity.startAuth(now);
+    if (nonce == 0) {
+      logMessage("[EVENT] AUTH_DENIED reason=%s\n", bleSecurity.lastRejectString());
+    } else {
+      logMessage("[EVENT] AUTH_CHALLENGE nonce=%08lX\n", (unsigned long)nonce);
+    }
+    return false;
+  }
+
+  if (incoming.rfind("AUTH_PROVE:", 0) == 0) {
+    const char* proof = incoming.c_str() + 11;
+    if (bleSecurity.proveAuthHex(proof)) {
+      logMessage("[EVENT] AUTH_OK role=OWNER\n");
+    } else {
+      logMessage("[EVENT] AUTH_DENIED reason=%s\n", bleSecurity.lastRejectString());
+    }
+    return false;
+  }
+
+  if (incoming.rfind("PAIR_SET:", 0) == 0) {
+    const unsigned long code = strtoul(incoming.c_str() + 9, nullptr, 10);
+    if (bleSecurity.setPairCode((uint32_t)code, now)) {
+      logMessage("[EVENT] PAIRING_COMPLETED code=%06lu\n", code);
+    } else {
+      logMessage("[EVENT] PAIRING_DENIED reason=%s\n", bleSecurity.lastRejectString());
+    }
+    return false;
+  }
+
+  if (incoming == "PAIR_CLEAR") {
+    bleSecurity.clearPairing();
+    logMessage("[EVENT] PAIRING_CLEARED\n");
+    return false;
+  }
+
+  if (incoming.rfind("SEC_CMD:", 0) == 0) {
+    std::string payload;
+    if (!bleSecurity.unwrapSecureCommand(incoming, &payload, now)) {
+      logMessage("[EVENT] AUTH_REJECT reason=%s\n", bleSecurity.lastRejectString());
+      return false;
+    }
+    *effective = payload;
+    return true;
+  }
+
+  if (bleSecurity.commandNeedsAuth(incoming)) {
+    logMessage("[EVENT] AUTH_REQUIRED command=%s\n", incoming.c_str());
+    return false;
+  }
+
+  return true;
+}
+
+void setLastAnchorDeniedReason(AnchorDeniedReason reason) {
+  lastAnchorDeniedReason = reason;
+}
+
+void setLastFailsafeReason(FailsafeReason reason) {
+  lastFailsafeReason = reason;
+}
+
+const char* currentAnchorDeniedReason() {
+  return anchorDeniedReasonString(lastAnchorDeniedReason);
+}
+
+const char* currentFailsafeReason() {
+  return failsafeReasonString(lastFailsafeReason);
+}
+
+void stopAllMotionNow() {
+  const bool wasAnchorOn = settings.get("AnchorEnabled") == 1;
+  settings.set("AnchorEnabled", 0);
+  settings.save();
+  manualMode = false;
+  manualDir = -1;
+  manualSpeed = 0;
+  stepperTrackingActive = false;
+  motorHeadingAligned = false;
+  stepperControl.stopManual();
+  stepperControl.cancelMove();
+  motor.stop();
+  if (wasAnchorOn) {
+    logMessage("[EVENT] ANCHOR_OFF reason=STOP\n");
+  }
+}
+
+void noteControlActivityNow() {
+  anchorSupervisor.noteControlActivity(millis());
+}
+
+void disableAnchorAndStop(const char* reason) {
+  settings.set("AnchorEnabled", 0);
+  settings.save();
+  stepperTrackingActive = false;
+  motorHeadingAligned = false;
+  stepperControl.cancelMove();
+  motor.stop();
+  setSafetyReason(reason);
+  logMessage("[EVENT] ANCHOR_OFF reason=%s\n", reason ? reason : "UNKNOWN");
+}
+
+void applySupervisorDecision(const AnchorSupervisor::Decision& decision) {
+  if (decision.action == AnchorSupervisor::SafeAction::NONE) {
+    return;
+  }
+  FailsafeReason fsReason = FailsafeReason::NONE;
+  switch (decision.reason) {
+    case AnchorSupervisor::Reason::GPS_WEAK:
+      fsReason = FailsafeReason::GPS_WEAK;
+      break;
+    case AnchorSupervisor::Reason::COMM_TIMEOUT:
+      fsReason = FailsafeReason::COMM_TIMEOUT;
+      break;
+    case AnchorSupervisor::Reason::CONTROL_LOOP_TIMEOUT:
+      fsReason = FailsafeReason::CONTROL_LOOP_TIMEOUT;
+      break;
+    case AnchorSupervisor::Reason::SENSOR_TIMEOUT:
+      fsReason = FailsafeReason::SENSOR_TIMEOUT;
+      break;
+    case AnchorSupervisor::Reason::INTERNAL_ERROR_NAN:
+      fsReason = FailsafeReason::INTERNAL_ERROR_NAN;
+      break;
+    case AnchorSupervisor::Reason::COMMAND_OUT_OF_RANGE:
+      fsReason = FailsafeReason::COMMAND_OUT_OF_RANGE;
+      break;
+    case AnchorSupervisor::Reason::NONE:
+    default:
+      fsReason = FailsafeReason::NONE;
+      break;
+  }
+  const char* reason = failsafeReasonString(fsReason);
+  setLastFailsafeReason(fsReason);
+  if (decision.action == AnchorSupervisor::SafeAction::EXIT_ANCHOR) {
+    disableAnchorAndStop(reason);
+    return;
+  }
+
+  settings.set("AnchorEnabled", 0);
+  settings.save();
+
+  if (decision.action == AnchorSupervisor::SafeAction::MANUAL) {
+    manualMode = true;
+    manualDir = -1;
+    manualSpeed = 0;
+    stepperTrackingActive = false;
+    motorHeadingAligned = false;
+    stepperControl.stopManual();
+    stepperControl.cancelMove();
+    motor.stop();
+    setSafetyReason(reason);
+    logMessage("[EVENT] FAILSAFE_TRIGGERED reason=%s action=MANUAL\n", reason);
+    return;
+  }
+
+  stopAllMotionNow();
+  setSafetyReason(reason);
+  logMessage("[EVENT] FAILSAFE_TRIGGERED reason=%s action=STOP\n", reason);
+}
+
+bool nudgeAnchorBearing(float bearingDeg, float meters) {
+  if (settings.get("AnchorEnabled") != 1) {
+    logMessage("[EVENT] NUDGE_DENIED reason=ANCHOR_INACTIVE\n");
+    return false;
+  }
+  if (!canEnableAnchorNow()) {
+    logMessage("[EVENT] NUDGE_DENIED reason=GNSS_QUALITY\n");
+    return false;
+  }
+  if (!isfinite(bearingDeg) || !isfinite(meters) || meters < 1.0f || meters > 5.0f) {
+    logMessage("[EVENT] NUDGE_DENIED reason=RANGE\n");
+    return false;
+  }
+  if (!isfinite(anchor.anchorLat) || !isfinite(anchor.anchorLon)) {
+    logMessage("[EVENT] NUDGE_DENIED reason=NO_ANCHOR_POINT\n");
+    return false;
+  }
+
+  const double lat1 = anchor.anchorLat * (M_PI / 180.0);
+  const double lon1 = anchor.anchorLon * (M_PI / 180.0);
+  const double brg = normalize360Deg(bearingDeg) * (M_PI / 180.0);
+  const double distRatio = meters / 6378137.0;
+
+  const double sinLat2 =
+      sin(lat1) * cos(distRatio) + cos(lat1) * sin(distRatio) * cos(brg);
+  const double lat2 = asin(sinLat2);
+  const double lon2 = lon1 + atan2(sin(brg) * sin(distRatio) * cos(lat1),
+                                   cos(distRatio) - sin(lat1) * sin(lat2));
+
+  const float newLat = (float)(lat2 * 180.0 / M_PI);
+  const float newLon = (float)(lon2 * 180.0 / M_PI);
+  anchor.saveAnchor(newLat, newLon, anchor.anchorHeading, true);
+  setSafetyReason("NUDGE_OK");
+  logMessage("[EVENT] NUDGE_APPLIED bearing=%.1f meters=%.2f lat=%.6f lon=%.6f\n",
+             normalize360Deg(bearingDeg),
+             meters,
+             newLat,
+             newLon);
+  return true;
+}
+
+bool nudgeAnchorCardinal(const char* dir, float meters) {
+  if (!dir) {
+    return false;
+  }
+  if (!compassReady) {
+    logMessage("[EVENT] NUDGE_DENIED reason=NO_COMPASS\n");
+    return false;
+  }
+
+  float heading = currentHeadingValue();
+  float bearing = heading;
+  if (strcasecmp(dir, "FWD") == 0 || strcasecmp(dir, "FORWARD") == 0) {
+    bearing = heading;
+  } else if (strcasecmp(dir, "BACK") == 0) {
+    bearing = heading + 180.0f;
+  } else if (strcasecmp(dir, "LEFT") == 0) {
+    bearing = heading - 90.0f;
+  } else if (strcasecmp(dir, "RIGHT") == 0) {
+    bearing = heading + 90.0f;
+  } else {
+    logMessage("[EVENT] NUDGE_DENIED reason=DIR\n");
+    return false;
+  }
+  return nudgeAnchorBearing(bearing, meters);
+}
+
 void setup() {
   Serial.begin(115200);
   logMessage("\n[BoatLock] ESP32 start, firmware: %s\n", cfg::kFirmwareVersion);
   bootMs = millis();
 
   pinMode(cfg::kBootPin, INPUT_PULLUP);
+  pinMode(cfg::kStopButtonPin, INPUT_PULLUP);
 
   Wire.begin(cfg::kI2cSdaPin, cfg::kI2cSclPin);
   Wire.setTimeOut(20);
@@ -708,7 +1312,13 @@ void setup() {
 
   EEPROM.begin(EEPROM_SIZE);
   settings.load();
+  bleSecurity.load();
+  logMessage("[SEC] paired=%d\n", bleSecurity.isPaired() ? 1 : 0);
   logMessage("[CFG] HoldHeading=%d\n", (int)settings.get("HoldHeading"));
+  if (!minFixTypeIgnoredLogged && fixTypeSource == FixTypeSource::NONE) {
+    minFixTypeIgnoredLogged = true;
+    logMessage("[EVENT] CONFIG_FIELD_IGNORED field=min_fix_type reason=fix_type_unavailable\n");
+  }
 
   gpsFilter.reset((int)settings.get("GpsFWin"));
 
@@ -735,6 +1345,7 @@ void setup() {
              cfg::kStepIn2Pin,
              cfg::kStepIn3Pin,
              cfg::kStepIn4Pin);
+  logMessage("[STOP] button pin=%d active=LOW\n", cfg::kStopButtonPin);
 
   xTaskCreatePinnedToCore(stepperTask, "stepper", 4096, nullptr, 1, &stepperTaskHandle, 1);
 }
@@ -742,6 +1353,7 @@ void setup() {
 void loop() {
   updateGpsFromSerial();
   handleBootButton();
+  handleStopButton();
 
   if (!compassReady && millis() - lastCompassRetryMs >= cfg::kCompassRetryIntervalMs) {
     lastCompassRetryMs = millis();
@@ -762,6 +1374,41 @@ void loop() {
   }
 
   updateDistanceAndBearing();
+  const unsigned long now = millis();
+  const unsigned long loopDtMs = (lastLoopMs == 0 || now < lastLoopMs) ? 0 : (now - lastLoopMs);
+  lastLoopMs = now;
+  updateDriftState(now);
+
+  const bool anchorActive = !manualMode && (settings.get("AnchorEnabled") == 1);
+  const bool gpsQualityOk = gpsQualityGoodForAnchorOn();
+  const bool bleConnected = (bleBoatLock.bleStatus == BLEBoatLock::CONNECTED);
+  AnchorSupervisor::Config supCfg;
+  supCfg.commTimeoutMs =
+      static_cast<unsigned long>(constrain(settings.get("CommToutMs"), 500.0f, 60000.0f));
+  supCfg.controlLoopTimeoutMs =
+      static_cast<unsigned long>(constrain(settings.get("CtrlLoopMs"), 100.0f, 10000.0f));
+  supCfg.sensorTimeoutMs =
+      static_cast<unsigned long>(constrain(settings.get("SensorTout"), 300.0f, 30000.0f));
+  supCfg.gpsWeakGraceMs =
+      static_cast<unsigned long>(constrain(settings.get("GpsWeakHys"), 0.5f, 60.0f) * 1000.0f);
+  supCfg.maxCommandThrustPct = 100;
+  supCfg.failsafeAction =
+      ((int)settings.get("FailAct") == 1) ? AnchorSupervisor::SafeAction::MANUAL
+                                          : AnchorSupervisor::SafeAction::STOP;
+  supCfg.nanGuardAction =
+      ((int)settings.get("NanAct") == 1) ? AnchorSupervisor::SafeAction::MANUAL
+                                         : AnchorSupervisor::SafeAction::STOP;
+
+  AnchorSupervisor::Input supIn;
+  supIn.nowMs = now;
+  supIn.anchorActive = anchorActive;
+  supIn.gpsQualityOk = gpsQualityOk;
+  supIn.linkOk = bleConnected;
+  supIn.sensorsOk = gpsFix && headingAvailable();
+  supIn.hasNaN = (!isfinite(dist) || !isfinite(bearing));
+  supIn.controlLoopDtMs = loopDtMs;
+  supIn.commandThrustPct = motor.pwmPercent();
+  applySupervisorDecision(anchorSupervisor.update(supCfg, supIn));
 
   const bool autoControlActive = !manualMode && (settings.get("AnchorEnabled") == 1);
   const float heading = currentHeadingValue();
@@ -774,8 +1421,24 @@ void loop() {
   const bool hasBearing = autoControlActive && anchorBearingAvailable;
   const float diff = (hasHeading && hasBearing) ? normalizeDiffDeg(bearing, heading) : 0.0f;
 
-  const unsigned long now = millis();
   applyMotionControl(now, autoControlActive, hasHeading, hasBearing, heading, diff);
+  const AnchorDiagnostics::Events diag = anchorDiagnostics.update(
+      now,
+      autoControlActive,
+      gpsFix,
+      hasHeading,
+      driftAlertActive,
+      motor.pwmPercent(),
+      MotorControl::AUTO_MAX_PWM_PCT);
+  if (diag.driftAlert) {
+    logMessage("[EVENT] DRIFT_ALERT dist=%.2f\n", dist);
+  }
+  if (diag.controlSaturated) {
+    logMessage("[EVENT] CONTROL_SATURATED pwm=%d\n", motor.pwmPercent());
+  }
+  if (diag.sensorTimeout) {
+    logMessage("[EVENT] SENSOR_TIMEOUT\n");
+  }
   publishBleAndUi(now, hasHeading, hasBearing, heading, diff);
 
   bleBoatLock.loop();

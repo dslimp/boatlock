@@ -269,6 +269,30 @@ static uint16_t mode_color(const char *mode) {
   return COLOR_SILVER;
 }
 
+static uint16_t gps_quality_color(bool gpsFix, bool gpsFromPhone, float hdop, int satCount) {
+  if (!gpsFix) {
+    return COLOR_WARNING;
+  }
+
+  if (!gpsFromPhone && isfinite(hdop) && hdop > 0.0f) {
+    if (hdop <= 1.6f) {
+      return COLOR_ACCENT;
+    }
+    if (hdop <= 3.5f) {
+      return COLOR_CAUTION;
+    }
+    return COLOR_WARNING;
+  }
+
+  if (satCount >= 10) {
+    return COLOR_ACCENT;
+  }
+  if (satCount >= 6) {
+    return COLOR_CAUTION;
+  }
+  return COLOR_WARNING;
+}
+
 static void draw_arrow(float heading, int cx, int cy, int radius, uint16_t color) {
   float rad = (heading - 90.0f) * DEG_TO_RAD;
   int tipDist = max(radius - 8, radius / 2);
@@ -381,6 +405,7 @@ static void draw_compass_dynamic(float heading,
 void display_draw_ui(bool gpsFix,
                      int satellites,
                      bool gpsFromPhone,
+                     float gpsHdop,
                      float speedKmh,
                      float heading,
                      bool headingValid,
@@ -390,17 +415,18 @@ void display_draw_ui(bool gpsFix,
                      float distanceMeters,
                      float errorDeg,
                      const char* mode,
-                     int batteryPercent,
+                     int motorPwmPercent,
                      bool force) {
   static bool uiInitialized = false;
   static int lastScreenW = -1;
   static int lastScreenH = -1;
   static int lastHdgDeg = -1000;
   static int lastBrgDeg = -1000;
+  static float lastGpsHdop = NAN;
   static float lastCompassHeading = -1000.0f;
   static float lastCompassBearing = -1000.0f;
   static int lastSatCount = -1;
-  static int lastBattery = -1;
+  static int lastMotorPwm = -1;
   static bool lastGpsFix = false;
   static bool lastGpsFromPhone = false;
   static float lastSpeed = -1000.0f;
@@ -413,10 +439,11 @@ void display_draw_ui(bool gpsFix,
 
   const char *modeLabel = mode ? mode : "IDLE";
   int satCount = max(0, satellites);
-  int battery = constrain(batteryPercent, 0, 100);
+  int motorPwm = constrain(motorPwmPercent, 0, 100);
   float speed = sanitize_non_negative(speedKmh);
   float hdg = sanitize_signed(heading);
   float brg = sanitize_signed(anchorBearing);
+  float hdop = (isfinite(gpsHdop) && gpsHdop > 0.0f) ? gpsHdop : NAN;
   float dist = sanitize_non_negative(distanceMeters);
   float err = sanitize_signed(errorDeg);
   float errAbs = fabsf(err);
@@ -447,10 +474,11 @@ void display_draw_ui(bool gpsFix,
     lastScreenH = layout.screenH;
     lastHdgDeg = -1000;
     lastBrgDeg = -1000;
+    lastGpsHdop = NAN;
     lastCompassHeading = -1000.0f;
     lastCompassBearing = -1000.0f;
     lastSatCount = -1;
-    lastBattery = -1;
+    lastMotorPwm = -1;
     lastGpsFix = !gpsFix;
     lastGpsFromPhone = !gpsFromPhone;
     lastSpeed = -1000.0f;
@@ -465,7 +493,15 @@ void display_draw_ui(bool gpsFix,
 
   bool modeChanged = fullInit || !lastMode.equals(modeLabel);
   bool headingChanged = fullInit || lastHdgDeg != hdgDeg;
-  bool bearingChanged = fullInit || lastBrgDeg != brgDeg || modeChanged;
+  bool gpsTopChanged = fullInit ||
+                       satCount != lastSatCount ||
+                       gpsFix != lastGpsFix ||
+                       gpsFromPhone != lastGpsFromPhone ||
+                       (isfinite(hdop) != isfinite(lastGpsHdop)) ||
+                       (isfinite(hdop) && isfinite(lastGpsHdop) &&
+                        fabsf(hdop - lastGpsHdop) > 0.05f);
+  bool rightHeaderChanged =
+      fullInit || lastBrgDeg != brgDeg || modeChanged || gpsTopChanged;
   int hdgX = layout.headerX + (layout.compact ? 30 : 38);
   int hdgY = layout.headerY + (layout.compact ? 6 : 8);
   int hdgW = layout.compact ? 34 : 56;
@@ -526,7 +562,7 @@ void display_draw_ui(bool gpsFix,
     dirty = true;
   }
 
-  if (bearingChanged) {
+  if (rightHeaderChanged) {
     int rightZoneX = layout.headerX + (layout.compact ? 84 : 118);
     int rightZoneW = layout.headerW - (rightZoneX - layout.headerX) - 4;
     if (rightZoneW > 4) {
@@ -549,16 +585,17 @@ void display_draw_ui(bool gpsFix,
     gfx->setCursor(badgeX + badgePadX, badgeY + (layout.compact ? 3 : 6));
     gfx->print(modeLabel);
 
-    int brgTextX = layout.headerX + (layout.compact ? 88 : 124);
-    int brgWidth = layout.compact ? 34 : 64;
-    if (brgTextX + brgWidth < badgeX) {
-      gfx->setTextColor(COLOR_TEXT_DARK);
+    int gpsTextX = layout.headerX + (layout.compact ? 88 : 124);
+    int gpsTextW = layout.compact ? 34 : 64;
+    if (gpsTextX + gpsTextW < badgeX) {
+      uint16_t gpsColor = gps_quality_color(gpsFix, gpsFromPhone, hdop, satCount);
+      gfx->setTextColor(gpsColor);
       gfx->setTextSize(1);
-      gfx->setCursor(brgTextX, layout.headerY + (layout.compact ? 6 : 10));
-      if (layout.compact) {
-        gfx->printf("B%03d", brgDeg);
+      gfx->setCursor(gpsTextX, layout.headerY + (layout.compact ? 6 : 10));
+      if (gpsFix) {
+        gfx->printf("GPS %d", satCount);
       } else {
-        gfx->printf("BRG %03d%c", brgDeg, 176);
+        gfx->print("GPS -");
       }
     }
     dirty = true;
@@ -623,52 +660,41 @@ void display_draw_ui(bool gpsFix,
     dirty = true;
   }
 
-  bool gpsChanged = fullInit ||
-                    satCount != lastSatCount ||
-                    gpsFix != lastGpsFix ||
-                    gpsFromPhone != lastGpsFromPhone;
-  if (gpsChanged) {
+  bool motorChanged = fullInit || motorPwm != lastMotorPwm;
+  if (motorChanged) {
+    const bool motorOn = motorPwm > 0;
+    const uint16_t pwmColor = motorOn ? COLOR_WARNING : COLOR_ACCENT;
     if (fullInit) {
       gfx->setTextColor(COLOR_TEXT_DARK);
       gfx->setTextSize(1);
       gfx->setCursor(layout.rightX + 6, card2Y + (layout.compact ? 4 : 8));
-      gfx->print("GPS");
+      gfx->print("PWM");
     }
     if (layout.compact) {
       gfx->fillRect(layout.rightX + 6, card2Y + 11, layout.rightW - 12, 10, COLOR_PANEL);
-      gfx->setTextColor(gpsFix ? COLOR_TEXT_DARK : COLOR_WARNING);
+      gfx->setTextColor(pwmColor);
       gfx->setTextSize(1);
       gfx->setCursor(layout.rightX + 6, card2Y + 15);
-      gfx->printf("%d", satCount);
-      gfx->setCursor(layout.rightX + 20, card2Y + 15);
-      gfx->print(gpsFix ? "FIX" : "NO");
-      if (gpsFix) {
-        gfx->setCursor(layout.rightX + layout.rightW - 18, card2Y + 15);
-        gfx->print(gpsFromPhone ? "PH" : "HW");
+      if (motorOn) {
+        gfx->printf("%d%%", motorPwm);
+      } else {
+        gfx->print("0");
       }
     } else {
       gfx->fillRect(layout.rightX + 8, card2Y + 18, layout.rightW - 14, 18, COLOR_PANEL);
-      gfx->setTextColor(gpsFix ? COLOR_TEXT_DARK : COLOR_WARNING);
+      gfx->setTextColor(pwmColor);
       gfx->setTextSize(2);
       gfx->setCursor(layout.rightX + 8, card2Y + 22);
-      gfx->printf("%d", satCount);
-      gfx->setTextSize(1);
-      gfx->setCursor(layout.rightX + 44, card2Y + 26);
-      if (gpsFix) {
-        gfx->print(gpsFromPhone ? "FIX PH" : "FIX HW");
+      if (motorOn) {
+        gfx->printf("%d%%", motorPwm);
       } else {
-        gfx->print("NO FIX");
+        gfx->print("0");
       }
     }
     dirty = true;
   }
 
-  bool card3Changed = fullInit;
-  if (layout.compact) {
-    card3Changed = card3Changed || fabsf(dist - lastDist) > 0.05f;
-  } else {
-    card3Changed = card3Changed || battery != lastBattery;
-  }
+  bool card3Changed = fullInit || fabsf(dist - lastDist) > 0.05f;
   if (card3Changed) {
     if (layout.compact) {
       if (fullInit) {
@@ -684,29 +710,17 @@ void display_draw_ui(bool gpsFix,
       gfx->setCursor(layout.rightX + 6, card3Y + 15);
       gfx->printf("%.1fm", dist);
     } else {
-      int bodyX = layout.rightX + 8;
-      int bodyY = card3Y + 22;
-      int bodyW = layout.rightW - 28;
-      if (bodyW < 32) {
-        bodyW = 32;
-      }
       if (fullInit) {
         gfx->setTextColor(COLOR_TEXT_DARK);
         gfx->setTextSize(1);
         gfx->setCursor(layout.rightX + 8, card3Y + 8);
-        gfx->print("PWR");
-        gfx->drawRect(bodyX, bodyY, bodyW, 12, COLOR_TEXT_DARK);
-        gfx->fillRect(bodyX + bodyW, bodyY + 3, 3, 6, COLOR_TEXT_DARK);
+        gfx->print("DIST");
       }
-      gfx->fillRect(bodyX + 1, bodyY + 1, bodyW - 2, 10, COLOR_PANEL);
-      int fillW = ((bodyW - 4) * battery) / 100;
-      uint16_t batteryColor = (battery >= 25) ? COLOR_ACCENT : COLOR_WARNING;
-      gfx->fillRect(bodyX + 2, bodyY + 2, fillW, 8, batteryColor);
-      gfx->fillRect(layout.rightX + 8, card3Y + layout.cardH - 12, 44, 10, COLOR_PANEL);
+      gfx->fillRect(layout.rightX + 8, card3Y + 18, layout.rightW - 14, layout.cardH - 24, COLOR_PANEL);
       gfx->setTextColor(COLOR_TEXT_DARK);
-      gfx->setTextSize(1);
-      gfx->setCursor(layout.rightX + 8, card3Y + layout.cardH - 10);
-      gfx->printf("%d%%", battery);
+      gfx->setTextSize(2);
+      gfx->setCursor(layout.rightX + 8, card3Y + 26);
+      gfx->printf("%.1fm", dist);
     }
     dirty = true;
   }
@@ -762,8 +776,9 @@ void display_draw_ui(bool gpsFix,
 
   lastHdgDeg = hdgDeg;
   lastBrgDeg = brgDeg;
+  lastGpsHdop = hdop;
   lastSatCount = satCount;
-  lastBattery = battery;
+  lastMotorPwm = motorPwm;
   lastGpsFix = gpsFix;
   lastGpsFromPhone = gpsFromPhone;
   lastSpeed = speed;
