@@ -263,6 +263,9 @@ static uint16_t mode_color(const char *mode) {
   if (strcmp(mode, "ANCHOR") == 0) {
     return COLOR_ACCENT;
   }
+  if (strcmp(mode, "SIM") == 0) {
+    return COLOR_TEAL;
+  }
   if (strcmp(mode, "ROUTE") == 0) {
     return COLOR_TEAL;
   }
@@ -415,6 +418,7 @@ void display_draw_ui(bool gpsFix,
                      float distanceMeters,
                      float errorDeg,
                      const char* mode,
+                     const char* stickyBadge,
                      int motorPwmPercent,
                      bool force) {
   static bool uiInitialized = false;
@@ -436,8 +440,11 @@ void display_draw_ui(bool gpsFix,
   static bool lastHeadingValid = false;
   static bool lastHeadingFromPhone = false;
   static String lastMode;
+  static String lastStickyBadge;
 
   const char *modeLabel = mode ? mode : "IDLE";
+  const bool simMode = (strcmp(modeLabel, "SIM") == 0);
+  const char* stickyLabel = (stickyBadge && stickyBadge[0]) ? stickyBadge : "";
   int satCount = max(0, satellites);
   int motorPwm = constrain(motorPwmPercent, 0, 100);
   float speed = sanitize_non_negative(speedKmh);
@@ -488,6 +495,7 @@ void display_draw_ui(bool gpsFix,
     lastHeadingValid = !headingValid;
     lastHeadingFromPhone = !headingFromPhone;
     lastMode = "";
+    lastStickyBadge = "";
     dirty = true;
   }
 
@@ -502,6 +510,9 @@ void display_draw_ui(bool gpsFix,
                         fabsf(hdop - lastGpsHdop) > 0.05f);
   bool rightHeaderChanged =
       fullInit || lastBrgDeg != brgDeg || modeChanged || gpsTopChanged;
+  if (!rightHeaderChanged && !lastStickyBadge.equals(stickyLabel)) {
+    rightHeaderChanged = true;
+  }
   int hdgX = layout.headerX + (layout.compact ? 30 : 38);
   int hdgY = layout.headerY + (layout.compact ? 6 : 8);
   int hdgW = layout.compact ? 34 : 56;
@@ -569,7 +580,9 @@ void display_draw_ui(bool gpsFix,
       gfx->fillRect(rightZoneX, layout.headerY + 2, rightZoneW, layout.headerH - 4, COLOR_PANEL);
     }
 
-    int modeLen = static_cast<int>(strlen(modeLabel));
+    const bool hasSticky = stickyLabel[0] != '\0';
+    const char* badgeLabel = hasSticky ? stickyLabel : (simMode ? "SIM LIVE" : modeLabel);
+    int modeLen = static_cast<int>(strlen(badgeLabel));
     int badgePadX = layout.compact ? 6 : 8;
     int minBadgeW = layout.compact ? 40 : 64;
     int reserveLeft = layout.compact ? 124 : 120;
@@ -579,11 +592,18 @@ void display_draw_ui(bool gpsFix,
     int badgeX = layout.headerX + layout.headerW - badgeW - 8;
     int badgeY = layout.headerY + (layout.headerH - badgeH) / 2;
     uint16_t badgeColor = mode_color(modeLabel);
+    if (hasSticky) {
+      if (strstr(stickyLabel, "FAIL")) {
+        badgeColor = COLOR_WARNING;
+      } else {
+        badgeColor = COLOR_ACCENT;
+      }
+    }
     gfx->fillRoundRect(badgeX, badgeY, badgeW, badgeH, 6, badgeColor);
     gfx->setTextColor((badgeColor == COLOR_SILVER) ? COLOR_TEXT_DARK : COLOR_WHITE);
     gfx->setTextSize(1);
     gfx->setCursor(badgeX + badgePadX, badgeY + (layout.compact ? 3 : 6));
-    gfx->print(modeLabel);
+    gfx->print(badgeLabel);
 
     int gpsTextX = layout.headerX + (layout.compact ? 88 : 124);
     int gpsTextW = layout.compact ? 34 : 64;
@@ -708,7 +728,11 @@ void display_draw_ui(bool gpsFix,
       gfx->setTextSize(1);
       gfx->setCursor(layout.rightX + 6, card3Y + 4);
       gfx->setCursor(layout.rightX + 6, card3Y + 15);
-      gfx->printf("%.1fm", dist);
+      if (simMode) {
+        gfx->printf("%.2fm", dist);
+      } else {
+        gfx->printf("%.1fm", dist);
+      }
     } else {
       if (fullInit) {
         gfx->setTextColor(COLOR_TEXT_DARK);
@@ -720,7 +744,11 @@ void display_draw_ui(bool gpsFix,
       gfx->setTextColor(COLOR_TEXT_DARK);
       gfx->setTextSize(2);
       gfx->setCursor(layout.rightX + 8, card3Y + 26);
-      gfx->printf("%.1fm", dist);
+      if (simMode) {
+        gfx->printf("%.2fm", dist);
+      } else {
+        gfx->printf("%.1fm", dist);
+      }
     }
     dirty = true;
   }
@@ -745,7 +773,11 @@ void display_draw_ui(bool gpsFix,
       gfx->fillRect(col2, footerValueY, 52, footerValueH, COLOR_PANEL);
       gfx->fillRect(col3, footerValueY, 72, footerValueH, COLOR_PANEL);
       gfx->setCursor(col1, footerY);
-      gfx->printf("D%.1f", dist);
+      if (simMode) {
+        gfx->printf("D%.2f", dist);
+      } else {
+        gfx->printf("D%.1f", dist);
+      }
       gfx->setTextColor(errAbs > 20.0f ? COLOR_WARNING : COLOR_TEXT_DARK);
       gfx->setCursor(col2, footerY);
       gfx->printf("E%+.0f", err);
@@ -761,7 +793,11 @@ void display_draw_ui(bool gpsFix,
       gfx->fillRect(col2, footerValueY, 74, footerValueH, COLOR_PANEL);
       gfx->fillRect(col3, footerValueY, 84, footerValueH, COLOR_PANEL);
       gfx->setCursor(col1, footerY);
-      gfx->printf("DIST %.1fm", dist);
+      if (simMode) {
+        gfx->printf("DIST %.2fm", dist);
+      } else {
+        gfx->printf("DIST %.1fm", dist);
+      }
 
       gfx->setTextColor(errAbs > 20.0f ? COLOR_WARNING : COLOR_TEXT_DARK);
       gfx->setCursor(col2, footerY);
@@ -788,6 +824,7 @@ void display_draw_ui(bool gpsFix,
   lastHeadingValid = headingValid;
   lastHeadingFromPhone = headingFromPhone;
   lastMode = modeLabel;
+  lastStickyBadge = stickyLabel;
 
   if (dirty) {
     display_flush();

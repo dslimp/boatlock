@@ -3,17 +3,60 @@
 #include <algorithm>
 #include <cstring>
 
+namespace {
+bool startsWith(const std::string& text, const char* prefix) {
+    return text.rfind(prefix, 0) == 0;
+}
+} // namespace
+
 // --- Server callbacks ---
 class BLEBoatLock::ServerCallbacks : public NimBLEServerCallbacks {
     BLEBoatLock* parent;
 public:
     ServerCallbacks(BLEBoatLock* p) : parent(p) {}
-    void onConnect(NimBLEServer*, NimBLEConnInfo& connInfo) override {
-        if (parent) parent->bleStatus = CONNECTED;
-        logMessage("[BLE] Client connected! Address: %s\n", connInfo.getAddress().toString().c_str());
+    void onConnect(NimBLEServer* server, NimBLEConnInfo& connInfo) override {
+        if (parent) {
+            parent->bleStatus = CONNECTED;
+            parent->dataNotifyEnabled = false;
+            parent->logNotifyEnabled = false;
+            parent->lastDataNotifyMs = 0;
+            parent->lastLogNotifyMs = 0;
+            parent->lastConnParamReqMs = 0;
+            parent->connEstablishedMs = millis();
+        }
+
+        // Request stable params for control traffic.
+        // Units: interval 1.25ms, timeout 10ms.
+        // 24..48 => 30..60ms interval, timeout 300 => 3s.
+        server->updateConnParams(connInfo.getConnHandle(), 24, 48, 0, 300);
+        server->setDataLen(connInfo.getConnHandle(), 251);
+        logMessage("[BLE] Client connected! Address: %s mtu=%u int=%u timeout=%u\n",
+            connInfo.getAddress().toString().c_str(),
+            connInfo.getMTU(),
+            connInfo.getConnInterval(),
+            connInfo.getConnTimeout());
     }
+
+    void onMTUChange(uint16_t mtu, NimBLEConnInfo& connInfo) override {
+        NimBLEDevice::getServer()->updateConnParams(connInfo.getConnHandle(), 24, 48, 0, 300);
+        logMessage("[BLE] MTU updated: %u\n", mtu);
+    }
+
+    void onConnParamsUpdate(NimBLEConnInfo& connInfo) override {
+        logMessage("[BLE] Conn params updated: int=%u lat=%u timeout=%u\n",
+            connInfo.getConnInterval(),
+            connInfo.getConnLatency(),
+            connInfo.getConnTimeout());
+    }
+
     void onDisconnect(NimBLEServer*, NimBLEConnInfo& connInfo, int reason) override {
-        if (parent) parent->bleStatus = ADVERTISING;
+        if (parent) {
+            parent->bleStatus = ADVERTISING;
+            parent->dataNotifyEnabled = false;
+            parent->logNotifyEnabled = false;
+            parent->lastConnParamReqMs = 0;
+            parent->connEstablishedMs = 0;
+        }
         logMessage("[BLE] Client disconnected! Address: %s, Reason: %d\n",
             connInfo.getAddress().toString().c_str(), reason);
         NimBLEDevice::getAdvertising()->start();
@@ -33,14 +76,34 @@ public:
     }
 };
 
+// --- Track CCCD subscription state for notify characteristics ---
+class BLEBoatLock::NotifyCallbacks : public NimBLECharacteristicCallbacks {
+    BLEBoatLock* parent;
+    bool isLog;
+public:
+    NotifyCallbacks(BLEBoatLock* p, bool logChar) : parent(p), isLog(logChar) {}
+
+    void onSubscribe(NimBLECharacteristic*, NimBLEConnInfo&, uint16_t subValue) override {
+        const bool enabled = (subValue & 0x01) || (subValue & 0x02);
+        if (!parent) return;
+        if (isLog) {
+            parent->logNotifyEnabled = enabled;
+        } else {
+            parent->dataNotifyEnabled = enabled;
+        }
+        logMessage("[BLE] subscribe %s=%d sub=0x%04X\n", isLog ? "log" : "data", enabled ? 1 : 0, subValue);
+    }
+};
+
 BLEBoatLock::BLEBoatLock() {}
 
 void BLEBoatLock::begin() {
     NimBLEDevice::init("BoatLock");
     NimBLEDevice::setSecurityAuth(true, true, true);
     logMessage("[BLE] init name=BoatLock service=12ab data=34cd cmd=56ef log=78ab\n");
-    // allow sending larger JSON blobs
-    NimBLEDevice::setMTU(512);
+    // Large MTU (512) was unstable with CoreBluetooth under high traffic.
+    NimBLEDevice::setMTU(247);
+    NimBLEDevice::setPower(9);
     pServer = NimBLEDevice::createServer();
     pServer->setCallbacks(new ServerCallbacks(this));
     pService = pServer->createService("12ab");
@@ -49,10 +112,11 @@ void BLEBoatLock::begin() {
     pDataChar = pService->createCharacteristic(
         "34cd", NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::READ
     );
+    pDataChar->setCallbacks(new NotifyCallbacks(this, false));
 
     // Command char: получение запроса на параметр
     pCmdChar = pService->createCharacteristic(
-        "56ef", NIMBLE_PROPERTY::WRITE
+        "56ef", NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR
     );
     pCmdChar->setCallbacks(new CmdCallbacks(this));
 
@@ -60,11 +124,16 @@ void BLEBoatLock::begin() {
     pLogChar = pService->createCharacteristic(
         "78ab", NIMBLE_PROPERTY::NOTIFY
     );
+    pLogChar->setCallbacks(new NotifyCallbacks(this, true));
 
     pService->start();
     NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(pService->getUUID());
     pAdvertising->setName("BoatLock");
+    pAdvertising->setMinInterval(80);
+    pAdvertising->setMaxInterval(160);
+    pAdvertising->setPreferredParams(24, 48);
+    pAdvertising->enableScanResponse(true);
     const bool advOk = pAdvertising->start();
     bleStatus = ADVERTISING;
     logMessage("[BLE] advertising %s\n", advOk ? "started" : "failed");
@@ -73,6 +142,12 @@ void BLEBoatLock::begin() {
         cmdQueue = xQueueCreate(kCmdQueueLen, kCmdMaxLen);
         if (!cmdQueue) {
             logMessage("[BLE] command queue create failed\n");
+        }
+    }
+    if (!logQueue) {
+        logQueue = xQueueCreate(kLogQueueLen, kLogMaxLen);
+        if (!logQueue) {
+            logMessage("[BLE] log queue create failed\n");
         }
     }
 
@@ -92,38 +167,33 @@ void BLEBoatLock::setCommandHandler(CommandHandler handler) {
 
 void BLEBoatLock::loop() {
     processQueuedCommands();
+    maintainConnParams();
+    processQueuedLogs();
 }
 
 void BLEBoatLock::handleParamRequest(const std::string& param) {
     // Если пришёл специальный запрос "all" — отправляем все параметры JSON-ом
     if (param == "all") {
         std::string all = collectAllParams();
-        if (pDataChar) {
-            pDataChar->setValue(all);
-            if (bleStatus == CONNECTED)
-                pDataChar->notify();
-        }
+        notifyDataValue(all);
         return;
     }
+
     // Если в paramMap есть такой параметр — отдаём его значение
     auto it = paramMap.find(param);
     if (it != paramMap.end()) {
-        std::string val = it->second();
-        if (pDataChar) {
-            pDataChar->setValue(val);
-            if (bleStatus == CONNECTED)
-                pDataChar->notify();
-        }
+        notifyDataValue(it->second());
         return;
     }
-    // Неизвестный параметр
-    if (pDataChar) {
-        pDataChar->setValue("N/A");
-        if (bleStatus == CONNECTED)
-            pDataChar->notify();
+
+    if (likelyCommand(param)) {
+        // Handle SET_*/SIM_*/control commands from the main loop context.
+        enqueueCommand(param);
+        return;
     }
-    // Handle SET_* commands from the main loop context, not NimBLE callback context.
-    enqueueCommand(param);
+
+    // Unknown read-like request.
+    notifyDataValue("N/A");
 }
 
 void BLEBoatLock::enqueueCommand(const std::string& cmd) {
@@ -153,6 +223,113 @@ void BLEBoatLock::processQueuedCommands() {
     }
 }
 
+void BLEBoatLock::enqueueLogLine(const char* line) {
+    if (!line || !logQueue) {
+        return;
+    }
+
+    char payload[kLogMaxLen];
+    memset(payload, 0, sizeof(payload));
+    const size_t n = std::min(strlen(line), kLogMaxLen - 1);
+    memcpy(payload, line, n);
+
+    if (xQueueSend(logQueue, payload, 0) == pdTRUE) {
+        return;
+    }
+
+    // Queue full: drop oldest and keep most recent logs.
+    char dropped[kLogMaxLen];
+    if (xQueueReceive(logQueue, dropped, 0) == pdTRUE) {
+        (void)xQueueSend(logQueue, payload, 0);
+    }
+}
+
+void BLEBoatLock::processQueuedLogs() {
+    if (!logQueue || !pLogChar || bleStatus != CONNECTED || !logNotifyEnabled) {
+        return;
+    }
+
+    const unsigned long now = millis();
+    if (now - lastLogNotifyMs < kMinLogNotifyGapMs) {
+        return;
+    }
+
+    char payload[kLogMaxLen];
+    if (xQueueReceive(logQueue, payload, 0) != pdTRUE) {
+        return;
+    }
+
+    pLogChar->setValue(payload);
+    if (pLogChar->notify()) {
+        lastLogNotifyMs = now;
+    }
+}
+
+void BLEBoatLock::maintainConnParams() {
+    if (!pServer || bleStatus != CONNECTED || pServer->getConnectedCount() == 0) {
+        return;
+    }
+
+    const unsigned long now = millis();
+    const unsigned long sinceConnect = (connEstablishedMs > 0 && now >= connEstablishedMs)
+                                           ? (now - connEstablishedMs)
+                                           : 0UL;
+    const unsigned long reqGapMs = (sinceConnect < 5000UL) ? 250UL : 1500UL;
+    if (now - lastConnParamReqMs < reqGapMs) {
+        return;
+    }
+    lastConnParamReqMs = now;
+
+    NimBLEConnInfo conn = pServer->getPeerInfo((uint8_t)0);
+    if (conn.getConnTimeout() >= 200) {
+        return;
+    }
+
+    // Keep asking for a safer supervision timeout (3s) if central negotiated too low.
+    pServer->updateConnParams(conn.getConnHandle(), 24, 48, 0, 300);
+    logMessage("[BLE] Conn params re-request: int=%u timeout=%u -> timeout=300\n",
+               conn.getConnInterval(), conn.getConnTimeout());
+}
+
+bool BLEBoatLock::notifyDataValue(const std::string& payload) {
+    if (!pDataChar || bleStatus != CONNECTED || !dataNotifyEnabled) {
+        return false;
+    }
+
+    const unsigned long now = millis();
+    if (now - lastDataNotifyMs < kMinDataNotifyGapMs) {
+        return false;
+    }
+
+    pDataChar->setValue(payload);
+    if (pDataChar->notify()) {
+        lastDataNotifyMs = now;
+        return true;
+    }
+    return false;
+}
+
+bool BLEBoatLock::likelyCommand(const std::string& text) {
+    if (text.empty()) {
+        return false;
+    }
+
+    if (text.find(':') != std::string::npos || text.find('=') != std::string::npos) {
+        return true;
+    }
+
+    return startsWith(text, "SET_") ||
+           startsWith(text, "SIM_") ||
+           startsWith(text, "AUTH_") ||
+           startsWith(text, "PAIR_") ||
+           startsWith(text, "SEC_CMD:") ||
+           startsWith(text, "ANCHOR_") ||
+           startsWith(text, "MANUAL_") ||
+           startsWith(text, "NUDGE_") ||
+           text == "STOP" ||
+           text == "HEARTBEAT";
+}
+
 std::string BLEBoatLock::collectAllParams() {
     std::string json = "{";
     bool first = true;
@@ -166,18 +343,11 @@ std::string BLEBoatLock::collectAllParams() {
 }
 
 void BLEBoatLock::notifyAll() {
-    if (pDataChar && bleStatus == CONNECTED) {
-        std::string all = collectAllParams();
-        pDataChar->setValue(all);
-        pDataChar->notify();
-    }
+    notifyDataValue(collectAllParams());
 }
 
 void BLEBoatLock::sendLog(const char* line) {
-    if (pLogChar && bleStatus == CONNECTED) {
-        pLogChar->setValue(line);
-        pLogChar->notify();
-    }
+    enqueueLogLine(line);
 }
 
 const char* BLEBoatLock::statusString() const {

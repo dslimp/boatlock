@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <math.h>
 #include <stdint.h>
 #include "ControlInterfaces.h"
@@ -159,12 +160,16 @@ public:
     lastTickMs_ = 0;
     lastThrust_ = 0.0f;
     lastThrustMs_ = 0;
+    thrustBias_ = 0.0f;
     maxThrustSinceMs_ = 0;
     maxThrustEventSent_ = false;
     prevFixValid_ = false;
     prevFixX_ = 0.0f;
     prevFixY_ = 0.0f;
     prevFixMs_ = 0;
+    filtFixValid_ = false;
+    filtFixX_ = 0.0f;
+    filtFixY_ = 0.0f;
     lastTelemetry_ = {};
     applyStop();
   }
@@ -257,8 +262,35 @@ public:
     t.commandOutOfRange = false;
 
     if (anchorActive_ && !safeStop_ && gnssGood && headingFinite) {
-      const float errM = hypotf(anchorX - fix.xM, anchorY - fix.yM);
+      const bool newFixSample = (fix.ageMs == 0);
+      if (!filtFixValid_) {
+        filtFixX_ = fix.xM;
+        filtFixY_ = fix.yM;
+        filtFixValid_ = true;
+      } else if (newFixSample) {
+        const float a = 0.25f;
+        filtFixX_ += (fix.xM - filtFixX_) * a;
+        filtFixY_ += (fix.yM - filtFixY_) * a;
+      }
+
+      const float ctrlX = filtFixValid_ ? filtFixX_ : fix.xM;
+      const float ctrlY = filtFixValid_ ? filtFixY_ : fix.yM;
+      const float errM = hypotf(anchorX - ctrlX, anchorY - ctrlY);
       float targetThrust = 0.0f;
+
+      float dtSecBias = 0.0f;
+      if (lastThrustMs_ != 0 && now > lastThrustMs_) {
+        dtSecBias = (now - lastThrustMs_) / 1000.0f;
+      }
+      dtSecBias = clampf(dtSecBias, 0.0f, 0.25f);
+      const float errAbove = std::max(0.0f, errM - cfg_.deadbandM);
+      if (errAbove > 0.0f) {
+        thrustBias_ += errAbove * 0.22f * dtSecBias;
+      } else {
+        thrustBias_ -= 0.02f * dtSecBias;
+      }
+      thrustBias_ = clampf(thrustBias_, 0.0f, cfg_.maxThrust * 0.8f);
+
       if (errM > cfg_.deadbandM) {
         if (errM >= cfg_.reacquireRadiusM) {
           targetThrust = cfg_.maxThrust;
@@ -270,6 +302,10 @@ public:
           const float r = clampf((errM - cfg_.deadbandM) / span, 0.0f, 1.0f);
           targetThrust = cfg_.minThrust + r * (cfg_.maxThrust - cfg_.minThrust);
         }
+        targetThrust = std::max(targetThrust, thrustBias_);
+      } else if (thrustBias_ > 0.02f) {
+        // Keep a small feedforward thrust against steady current while close.
+        targetThrust = thrustBias_ * 0.95f;
       }
 
       if (lastThrustMs_ == 0) {
@@ -295,13 +331,10 @@ public:
       }
       lastThrust_ = thrust;
 
-      const float desiredBrg = bearingDeg(fix.xM, fix.yM, anchorX, anchorY);
+      const float desiredBrg = bearingDeg(ctrlX, ctrlY, anchorX, anchorY);
       const float diff = wrap180f(desiredBrg - hdg.headingDeg);
-      const float maxSteer = cfg_.maxTurnRateDegS * dtSec;
-      float steer = diff;
-      if (maxSteer > 0.0f) {
-        steer = clampf(diff, -maxSteer, maxSteer);
-      }
+      const float maxSteer = clampf(cfg_.maxTurnRateDegS, 1.0f, 180.0f);
+      const float steer = clampf(diff, -maxSteer, maxSteer);
 
       cmd.stop = (thrust <= 0.0f);
       cmd.thrust = thrust;
@@ -369,11 +402,18 @@ private:
     if (newFixSample && prevFixValid_ && now > prevFixMs_) {
       const float jump = hypotf(fix.xM - prevFixX_, fix.yM - prevFixY_);
       if (jump > cfg_.maxPositionJumpM) {
+        // Advance reference even on rejected sample to avoid endless jump storms
+        // after a long GNSS-quality outage.
+        prevFixX_ = fix.xM;
+        prevFixY_ = fix.yM;
+        prevFixMs_ = now;
         emitEvent(now, "POSITION_JUMP_DETECTED", "GPS_POSITION_JUMP");
         return GnssReason::POSITION_JUMP;
       }
       const float dt = (now - prevFixMs_) / 1000.0f;
-      if (dt > 0.0f) {
+      // Speed sanity from position deltas is too noisy on short GNSS periods
+      // (e.g. 5 Hz with ~1 m sigma). Validate speed only on >=1s baseline.
+      if (dt >= 1.0f) {
         const float speed = jump / dt;
         if (speed > cfg_.speedSanityMaxMps) {
           return GnssReason::SPEED_INVALID;
@@ -435,6 +475,7 @@ private:
   unsigned long lastTickMs_ = 0;
   float lastThrust_ = 0.0f;
   unsigned long lastThrustMs_ = 0;
+  float thrustBias_ = 0.0f;
   unsigned long maxThrustSinceMs_ = 0;
   bool maxThrustEventSent_ = false;
 
@@ -442,6 +483,9 @@ private:
   float prevFixX_ = 0.0f;
   float prevFixY_ = 0.0f;
   unsigned long prevFixMs_ = 0;
+  bool filtFixValid_ = false;
+  float filtFixX_ = 0.0f;
+  float filtFixY_ = 0.0f;
 
   ControllerTelemetry lastTelemetry_;
 };

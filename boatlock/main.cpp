@@ -38,7 +38,7 @@ constexpr size_t EEPROM_SIZE =
 BLEBoatLock bleBoatLock;
 
 namespace cfg {
-constexpr char kFirmwareVersion[] = "0.1.0";
+constexpr char kFirmwareVersion[] = "0.2.0";
 
 #if defined(BOATLOCK_BOARD_JC4832W535)
 constexpr int kStepIn1Pin = 11;
@@ -85,6 +85,7 @@ constexpr float kStepperDeadbandMaxDeg = 9.0f;
 constexpr float kStepperDeadbandHystDeg = 0.9f;
 constexpr float kMotorHeadingHystDeg = 2.0f;
 constexpr unsigned long kSafetyReasonHoldMs = 15000;
+constexpr unsigned long kSimResultBannerMs = 15000;
 } // namespace cfg
 
 HardwareSerial gpsSerial(1);
@@ -182,6 +183,7 @@ namespace {
 TaskHandle_t stepperTaskHandle = nullptr;
 
 unsigned long lastGpsDebugMs = 0;
+unsigned long lastGpsJumpRejectLogMs = 0;
 unsigned long lastBleNotifyMs = 0;
 unsigned long lastUiRefreshMs = 0;
 unsigned long lastStepperCheckMs = 0;
@@ -195,6 +197,9 @@ bool stopPairingActionDone = false;
 bool gpsUartSeen = false;
 bool gpsNoDataWarned = false;
 unsigned long bootMs = 0;
+bool simRunLatched = false;
+unsigned long simResultBannerUntilMs = 0;
+char simResultBadge[24] = {0};
 
 const char* fixTypeSourceString(FixTypeSource src) {
   switch (src) {
@@ -426,6 +431,7 @@ float correctedCompassHeading(float headingDeg) {
 }
 
 const char* currentModeLabel() {
+  if (hilSim.isRunning()) return "SIM";
   if (manualMode) return "MANUAL";
   if (settings.get("AnchorEnabled") == 1) return "ANCHOR";
   return "IDLE";
@@ -707,7 +713,11 @@ void updateGpsFromSerial() {
       if (isfinite(jumpM) && jumpM > maxPosJumpM) {
         currentPosJumpRejected = true;
         currentGpsAgeMs = gps.location.age();
-        logMessage("[EVENT] GPS_JUMP_REJECTED jump=%.2f max=%.2f\n", jumpM, maxPosJumpM);
+        const unsigned long now = millis();
+        if (now - lastGpsJumpRejectLogMs >= 1000UL) {
+          logMessage("[EVENT] GPS_JUMP_REJECTED jump=%.2f max=%.2f\n", jumpM, maxPosJumpM);
+          lastGpsJumpRejectLogMs = now;
+        }
         return;
       }
     }
@@ -956,29 +966,60 @@ void publishBleAndUi(unsigned long now,
                      bool hasHeading,
                      bool hasBearing,
                      float heading,
-                     float diffDeg) {
+                     float diffDeg,
+                     const char* stickyBadge) {
   const char* mode = currentModeLabel();
-  const float displayHeading = hasHeading ? heading : fallbackHeading;
-  const float displayBearing = hasBearing ? bearing : fallbackBearing;
-  const int compassQuality = compassReady ? compass.getHeadingQuality() : 0;
-  const int motorPwmPercent = motor.pwmPercent();
-  const bool headingFromPhone = false;
+  bool uiGpsFix = gpsFix;
+  int uiSatellites = currentSatellites;
+  bool uiGpsFromPhone = gpsSourcePhone;
+  float uiGpsHdop = currentGpsHdop;
+  float uiSpeedKmh = currentSpeedKmh;
+  bool uiHeadingValid = hasHeading;
+  float uiHeading = hasHeading ? heading : fallbackHeading;
+  bool uiHeadingFromPhone = false;
+  int uiCompassQuality = compassReady ? compass.getHeadingQuality() : 0;
+  float uiBearing = hasBearing ? bearing : fallbackBearing;
+  float uiDistance = dist;
+  float uiDiffDeg = diffDeg;
+  int uiMotorPwmPercent = motor.pwmPercent();
+
+  if (hilSim.isRunning()) {
+    hilsim::HilScenarioRunner::LiveTelemetry simLive;
+    if (hilSim.liveTelemetry(&simLive) && simLive.valid) {
+      uiGpsFix = simLive.gnss.valid;
+      uiSatellites = simLive.gnss.sats;
+      uiGpsFromPhone = false;
+      uiGpsHdop = simLive.gnss.hdop;
+      uiSpeedKmh = simLive.speedMps * 3.6f;
+      uiHeadingValid = simLive.heading.valid &&
+                       isfinite(simLive.heading.headingDeg) &&
+                       !isnan(simLive.heading.headingDeg);
+      uiHeading = uiHeadingValid ? simLive.heading.headingDeg : fallbackHeading;
+      uiHeadingFromPhone = false;
+      uiCompassQuality = uiHeadingValid ? 3 : 0;
+      uiBearing = simLive.bearingDeg;
+      uiDistance = simLive.errTrueM;
+      uiDiffDeg = uiHeadingValid ? normalizeDiffDeg(uiBearing, uiHeading) : 0.0f;
+      uiMotorPwmPercent = constrain((int)lroundf(simLive.command.thrust * 100.0f), 0, 100);
+    }
+  }
 
   if (now - lastUiRefreshMs >= cfg::kUiRefreshIntervalMs) {
-    display_draw_ui(gpsFix,
-                    currentSatellites,
-                    gpsSourcePhone,
-                    currentGpsHdop,
-                    currentSpeedKmh,
-                    displayHeading,
-                    hasHeading,
-                    headingFromPhone,
-                    compassQuality,
-                    displayBearing,
-                    dist,
-                    diffDeg,
+    display_draw_ui(uiGpsFix,
+                    uiSatellites,
+                    uiGpsFromPhone,
+                    uiGpsHdop,
+                    uiSpeedKmh,
+                    uiHeading,
+                    uiHeadingValid,
+                    uiHeadingFromPhone,
+                    uiCompassQuality,
+                    uiBearing,
+                    uiDistance,
+                    uiDiffDeg,
                     mode,
-                    motorPwmPercent);
+                    stickyBadge,
+                    uiMotorPwmPercent);
     lastUiRefreshMs = now;
   }
 
@@ -1509,6 +1550,7 @@ void loop() {
       (simLastWallMs == 0 || wallNowMs < simLastWallMs) ? 0 : (wallNowMs - simLastWallMs);
   simLastWallMs = wallNowMs;
   hilSim.loop(wallDtMs);
+  bleBoatLock.loop();
 
   updateGpsFromSerial();
   handleBootButton();
@@ -1580,6 +1622,33 @@ void loop() {
   const bool hasBearing = autoControlActive && anchorBearingAvailable;
   const float diff = (hasHeading && hasBearing) ? normalizeDiffDeg(bearing, heading) : 0.0f;
 
+  const bool simRunningNow = hilSim.isRunning();
+  if (simRunningNow) {
+    simRunLatched = true;
+    simResultBannerUntilMs = 0;
+    simResultBadge[0] = '\0';
+  } else if (simRunLatched) {
+    simRunLatched = false;
+    std::string sid = hilSim.currentScenarioId();
+    const size_t us = sid.find('_');
+    if (us != std::string::npos) {
+      sid = sid.substr(0, us);
+    }
+    if (sid.empty()) {
+      sid = "SIM";
+    }
+    const int pass = hilSim.lastPass();
+    const char* verdict = (pass == 1) ? "PASS" : ((pass == 0) ? "FAIL" : "ABRT");
+    snprintf(simResultBadge, sizeof(simResultBadge), "SIM %s %s", sid.c_str(), verdict);
+    simResultBannerUntilMs = now + cfg::kSimResultBannerMs;
+  }
+  const bool bannerActive =
+      (simResultBadge[0] != '\0') && ((long)(simResultBannerUntilMs - now) > 0);
+  if (!bannerActive) {
+    simResultBadge[0] = '\0';
+  }
+  const char* stickyBadge = bannerActive ? simResultBadge : nullptr;
+
   applyMotionControl(now, autoControlActive, hasHeading, hasBearing, heading, diff);
   const AnchorDiagnostics::Events diag = anchorDiagnostics.update(
       now,
@@ -1598,7 +1667,7 @@ void loop() {
   if (diag.sensorTimeout) {
     logMessage("[EVENT] SENSOR_TIMEOUT\n");
   }
-  publishBleAndUi(now, hasHeading, hasBearing, heading, diff);
+  publishBleAndUi(now, hasHeading, hasBearing, heading, diff, stickyBadge);
 
   bleBoatLock.loop();
 }

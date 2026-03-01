@@ -11,9 +11,12 @@ anchoring and thruster control. Major capabilities include:
 - automatically holding position near the saved anchor
 - manual rudder and motor control from the app
 - onboard BNO08x heading diagnostics and persistent heading offset
+- on-device deterministic HIL simulation scenarios (`SIM_*`, `S0..S19`) for regression checks without external sensors
 
 The app and firmware communicate through a simple text protocol; see
 [docs/BLE_PROTOCOL.md](docs/BLE_PROTOCOL.md) for the full command list.
+
+Current firmware release: `0.2.0`
 
 ## Photos
 

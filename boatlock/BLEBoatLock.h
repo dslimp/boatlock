@@ -34,15 +34,25 @@ public:
 
 private:
     static constexpr size_t kCmdMaxLen = 192;
-    static constexpr size_t kCmdQueueLen = 8;
+    static constexpr size_t kCmdQueueLen = 16;
+    static constexpr size_t kLogMaxLen = 244;
+    static constexpr size_t kLogQueueLen = 32;
+    static constexpr unsigned long kMinDataNotifyGapMs = 40;
+    static constexpr unsigned long kMinLogNotifyGapMs = 12;
     NimBLEServer* pServer = nullptr;
     NimBLEService* pService = nullptr;
     NimBLECharacteristic* pDataChar = nullptr;
     NimBLECharacteristic* pCmdChar = nullptr;
     NimBLECharacteristic* pLogChar = nullptr;
 
-    unsigned long lastNotify = 0;
+    unsigned long lastDataNotifyMs = 0;
+    unsigned long lastLogNotifyMs = 0;
+    unsigned long lastConnParamReqMs = 0;
+    unsigned long connEstablishedMs = 0;
     QueueHandle_t cmdQueue = nullptr;
+    QueueHandle_t logQueue = nullptr;
+    bool dataNotifyEnabled = false;
+    bool logNotifyEnabled = false;
 
     std::map<std::string, ParamGetter> paramMap;
     CommandHandler cmdHandler = nullptr;
@@ -50,13 +60,20 @@ private:
     // Колбэки BLE
     class ServerCallbacks;
     class CmdCallbacks;
+    class NotifyCallbacks;
     friend class ServerCallbacks;
     friend class CmdCallbacks;
+    friend class NotifyCallbacks;
 
     // Обработка запроса параметра по имени
     void handleParamRequest(const std::string& param);
     void enqueueCommand(const std::string& cmd);
     void processQueuedCommands();
+    void enqueueLogLine(const char* line);
+    void processQueuedLogs();
+    void maintainConnParams();
+    bool notifyDataValue(const std::string& payload);
+    static bool likelyCommand(const std::string& text);
     std::string collectAllParams();
 
     // Для примера: фиктивные значения параметров

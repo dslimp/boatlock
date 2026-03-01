@@ -19,6 +19,7 @@ void display_draw_ui(bool gpsFix,
                      float distanceMeters,
                      float errorDeg,
                      const char* mode,
+                     const char* stickyBadge,
                      int motorPwmPercent,
                      bool force = false);
 void display_draw_debug(const String &msg, int y = 48);

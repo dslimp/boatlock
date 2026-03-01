@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2026-03-02
+### Added
+- Deterministic on-device HIL simulation loop (`SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, `SIM_ABORT`) with virtual clock and seeded PRNG.
+- Extended built-in scenario pack from `S0..S9` to `S0..S19`, including random-current/noisy-GNSS profiles and hardware-failure emulation:
+  - compass loss/restore
+  - power loss/restore
+  - display loss/restore
+  - actuator derate windows
+- Sticky simulation status badge on device UI (`SIM LIVE` during run, result banner after completion).
+- Expanded HIL unit coverage, including required-failsafe scenarios and full default-scenario pass sweep.
+
+### Changed
+- BLE link handling hardened for CoreBluetooth (stable MTU/connection params, notify subscription tracking, queued command/log processing).
+- HIL report generation now memory-bounded (event truncation + counters) and robust to long event streams.
+- Scenario-specific control tuning for hard-current case (`S2`) using max-thrust override.
+- `S9` policy aligned with safety intent: expected NaN-triggered failsafe is treated as pass.
+
+### Fixed
+- Firmware reboot under heavy `SIM_REPORT` payloads (`bad_alloc`/abort in report serialization path).
+- Repeated GNSS jump-event storms after quality degradation windows.
+- BLE write/notify instability under high traffic (`Resources are insufficient`, disconnect churn on repeated report pulls).
+
 ## [0.1.0] - 2026-03-01
 ### Removed
 - Route subsystem from firmware, BLE protocol, and Flutter UI (`SET_ROUTE`, `START_ROUTE`, `STOP_ROUTE` and route pages).
