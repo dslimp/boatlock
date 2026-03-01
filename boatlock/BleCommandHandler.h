@@ -6,14 +6,14 @@
 #include "StepperControl.h"
 #include "MotorControl.h"
 #include "Logger.h"
-#include "HMC5883Compass.h"
+#include "BNO08xCompass.h"
 
 extern AnchorControl anchor;
 extern PathControl pathControl;
 extern StepperControl stepperControl;
 extern MotorControl motor;
 extern Settings settings;
-extern HMC5883Compass compass;
+extern BNO08xCompass compass;
 extern float emuHeading;
 extern bool compassReady;
 extern bool manualMode;
@@ -54,7 +54,19 @@ inline void handleBleCommand(const std::string& cmd) {
     } else if (cmd == "STOP_ROUTE") {
         pathControl.stop();
     } else if (cmd == "CALIB_COMPASS") {
+        // For BNO08x this is kept as compatibility command.
         startCompassCalibration();
+    } else if (cmd.rfind("SET_COMPASS_OFFSET:",0) == 0) {
+        float off = atof(cmd.c_str() + 19);
+        compass.setHeadingOffsetDeg(off);
+        settings.set("MagOffX", compass.getHeadingOffsetDeg());
+        settings.save();
+        logMessage("[BLE] CompassOffset set to %.1f deg\n", compass.getHeadingOffsetDeg());
+    } else if (cmd == "RESET_COMPASS_OFFSET") {
+        compass.setHeadingOffsetDeg(0.0f);
+        settings.set("MagOffX", 0.0f);
+        settings.save();
+        logMessage("[BLE] CompassOffset reset\n");
     } else if (cmd.rfind("SET_HEADING:",0) == 0) {
         setPhoneHeading(atof(cmd.c_str() + 12));
     } else if (cmd.rfind("SET_PHONE_GPS:", 0) == 0) {

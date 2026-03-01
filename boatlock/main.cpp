@@ -17,7 +17,7 @@
 #include "MotorControl.h"
 #include "StepperControl.h"
 #include "display.h"
-#include "HMC5883Compass.h"
+#include "BNO08xCompass.h"
 #include "PathControl.h"
 #include "BleCommandHandler.h"
 #include "BLEBoatLock.h"
@@ -59,6 +59,12 @@ constexpr unsigned long kStepperCheckIntervalMs = 3000;
 constexpr unsigned long kHardwareGpsMaxAgeMs = 2000;
 constexpr unsigned long kPhoneGpsTimeoutMs = 5000;
 constexpr unsigned long kPhoneHeadingTimeoutMs = 3000;
+constexpr unsigned long kCompassRetryIntervalMs = 5000;
+constexpr float kGpsCorrMinSpeedKmh = 3.0f;
+constexpr float kGpsCorrMinMoveM = 4.0f;
+constexpr float kGpsCorrAlpha = 0.18f;
+constexpr float kGpsCorrMaxAbsDeg = 90.0f;
+constexpr unsigned long kGpsCorrMaxAgeMs = 180000;
 
 constexpr const char* kRouteLogPath = "/route.csv";
 } // namespace cfg
@@ -70,7 +76,7 @@ HardwareSerial gpsSerial(1);
 TinyGPSPlus gps;
 StepperControl stepperControl(cfg::kStepPin, cfg::kDirPin);
 
-HMC5883Compass compass;
+BNO08xCompass compass;
 AnchorControl anchor;
 MotorControl motor;
 PathControl pathControl;
@@ -95,6 +101,12 @@ unsigned long phoneHeadingUpdatedMs = 0;
 bool phoneHeadingValid = false;
 bool gpsSourcePhone = false;
 float emuHeading = 0.0f;
+float gpsHeadingCorrDeg = 0.0f;
+unsigned long gpsHeadingCorrUpdatedMs = 0;
+bool gpsHeadingCorrValid = false;
+float gpsCorrRefLat = 0.0f;
+float gpsCorrRefLon = 0.0f;
+bool gpsCorrRefValid = false;
 
 bool manualMode = false;
 int manualDir = -1;
@@ -108,13 +120,16 @@ void setPhoneHeading(float headingDeg);
 
 namespace {
 TaskHandle_t stepperTaskHandle = nullptr;
-TaskHandle_t compassCalibTaskHandle = nullptr;
 
 unsigned long lastGpsDebugMs = 0;
 unsigned long lastBleNotifyMs = 0;
 unsigned long lastUiRefreshMs = 0;
 unsigned long lastStepperCheckMs = 0;
+unsigned long lastCompassRetryMs = 0;
 bool lastBootButton = HIGH;
+bool gpsUartSeen = false;
+bool gpsNoDataWarned = false;
+unsigned long bootMs = 0;
 
 struct GpsFilterState {
   float latBuf[cfg::kMaxGpsFilterWindow] = {0};
@@ -162,11 +177,113 @@ struct GpsFilterState {
 
 GpsFilterState gpsFilter;
 
+void logI2cInventory() {
+  uint8_t found[32] = {0};
+  size_t count = 0;
+
+  for (uint8_t addr = 1; addr < 127 && count < sizeof(found); ++addr) {
+    Wire.beginTransmission(addr);
+    if (Wire.endTransmission() == 0) {
+      found[count++] = addr;
+    }
+  }
+
+  logMessage("[I2C] SDA=%d SCL=%d devices=%u",
+             cfg::kI2cSdaPin,
+             cfg::kI2cSclPin,
+             static_cast<unsigned>(count));
+  if (count == 0) {
+    logMessage(": none\n");
+    return;
+  }
+
+  logMessage(":");
+  for (size_t i = 0; i < count; ++i) {
+    const uint8_t addr = found[i];
+    logMessage(" 0x%02X", addr);
+    if (addr == 0x4A || addr == 0x4B) {
+      logMessage("(BNO08x)");
+    } else if (addr == 0x6B || addr == 0x7E) {
+      logMessage("(imu)");
+    } else if (addr == 0x41) {
+      logMessage("(display/other)");
+    }
+  }
+  logMessage("\n");
+}
+
 float normalizeDiffDeg(float targetDeg, float currentDeg) {
   float diff = targetDeg - currentDeg;
   if (diff > 180.0f) diff -= 360.0f;
   if (diff < -180.0f) diff += 360.0f;
   return diff;
+}
+
+float normalize360Deg(float deg) {
+  while (deg < 0.0f) deg += 360.0f;
+  while (deg >= 360.0f) deg -= 360.0f;
+  return deg;
+}
+
+float normalize180Deg(float deg) {
+  while (deg > 180.0f) deg -= 360.0f;
+  while (deg < -180.0f) deg += 360.0f;
+  return deg;
+}
+
+void maybeUpdateGpsHeadingCorrection(float lat, float lon, float speedKmh) {
+  if (!compassReady || settings.get("EmuCompass") == 1) {
+    gpsCorrRefValid = false;
+    return;
+  }
+  if (!isfinite(lat) || !isfinite(lon) || !isfinite(speedKmh) ||
+      speedKmh < cfg::kGpsCorrMinSpeedKmh) {
+    return;
+  }
+
+  if (!gpsCorrRefValid) {
+    gpsCorrRefLat = lat;
+    gpsCorrRefLon = lon;
+    gpsCorrRefValid = true;
+    return;
+  }
+
+  const float movedM =
+      TinyGPSPlus::distanceBetween(gpsCorrRefLat, gpsCorrRefLon, lat, lon);
+  if (!isfinite(movedM) || movedM < cfg::kGpsCorrMinMoveM) {
+    return;
+  }
+
+  const float gpsCourse =
+      TinyGPSPlus::courseTo(gpsCorrRefLat, gpsCorrRefLon, lat, lon);
+  gpsCorrRefLat = lat;
+  gpsCorrRefLon = lon;
+
+  const float compassHeading = compass.getAzimuth();
+  float targetCorr = normalize180Deg(gpsCourse - compassHeading);
+  targetCorr = constrain(targetCorr, -cfg::kGpsCorrMaxAbsDeg, cfg::kGpsCorrMaxAbsDeg);
+
+  if (!gpsHeadingCorrValid) {
+    gpsHeadingCorrDeg = targetCorr;
+  } else {
+    const float delta = normalize180Deg(targetCorr - gpsHeadingCorrDeg);
+    gpsHeadingCorrDeg = normalize180Deg(gpsHeadingCorrDeg + delta * cfg::kGpsCorrAlpha);
+  }
+
+  gpsHeadingCorrDeg =
+      constrain(gpsHeadingCorrDeg, -cfg::kGpsCorrMaxAbsDeg, cfg::kGpsCorrMaxAbsDeg);
+  gpsHeadingCorrUpdatedMs = millis();
+  gpsHeadingCorrValid = true;
+}
+
+float correctedCompassHeading(float headingDeg) {
+  if (!gpsHeadingCorrValid) {
+    return normalize360Deg(headingDeg);
+  }
+  if (millis() - gpsHeadingCorrUpdatedMs > cfg::kGpsCorrMaxAgeMs) {
+    return normalize360Deg(headingDeg);
+  }
+  return normalize360Deg(headingDeg + gpsHeadingCorrDeg);
 }
 
 const char* currentModeLabel() {
@@ -187,7 +304,7 @@ float currentHeadingValue() {
     return emuHeading;
   }
   if (compassReady) {
-    return compass.getAzimuth();
+    return correctedCompassHeading(compass.getAzimuth());
   }
   return 0.0f;
 }
@@ -204,25 +321,6 @@ bool headingSourceIsPhone() {
       phoneHeadingValid &&
       (millis() - phoneHeadingUpdatedMs <= cfg::kPhoneHeadingTimeoutMs);
   return (settings.get("EmuCompass") == 1) || (!compassReady && phoneHeadingFresh);
-}
-
-void drawDebug(const String& msg, int y = 48) {
-  display_draw_debug(msg, y);
-}
-
-void calibrateCompassAndSave() {
-  if (!compassReady) {
-    return;
-  }
-  drawDebug("Calibrating compass");
-  compass.calibrate();
-  drawDebug("Calib done");
-}
-
-void compassCalibTask(void*) {
-  calibrateCompassAndSave();
-  compassCalibTaskHandle = nullptr;
-  vTaskDelete(nullptr);
 }
 
 void stepperTask(void*) {
@@ -246,6 +344,56 @@ void registerBleParams() {
   bleBoatLock.registerParam("heading", makeFloatParam([&]() {
     return currentHeadingValue();
   }, "%.1f"));
+
+  bleBoatLock.registerParam("headingRaw", makeFloatParam([&]() {
+    return compassReady ? compass.getRawAzimuth() : 0.0f;
+  }, "%.1f"));
+
+  bleBoatLock.registerParam("compassOffset", makeFloatParam([&]() {
+    return compassReady ? compass.getHeadingOffsetDeg() : settings.get("MagOffX");
+  }, "%.1f"));
+
+  bleBoatLock.registerParam("gpsHdgCorr", makeFloatParam([&]() {
+    if (!gpsHeadingCorrValid) {
+      return 0.0f;
+    }
+    if (millis() - gpsHeadingCorrUpdatedMs > cfg::kGpsCorrMaxAgeMs) {
+      return 0.0f;
+    }
+    return gpsHeadingCorrDeg;
+  }, "%.1f"));
+
+  bleBoatLock.registerParam("compassQ", makeFloatParam([&]() {
+    return compassReady ? (float)compass.getHeadingQuality() : 0.0f;
+  }, "%.0f"));
+
+  bleBoatLock.registerParam("rvAcc", makeFloatParam([&]() {
+    return compassReady ? compass.getRvAccuracyDeg() : 0.0f;
+  }, "%.2f"));
+
+  bleBoatLock.registerParam("magNorm", makeFloatParam([&]() {
+    return compassReady ? compass.getMagNormUT() : 0.0f;
+  }, "%.2f"));
+
+  bleBoatLock.registerParam("gyroNorm", makeFloatParam([&]() {
+    return compassReady ? compass.getGyroNormDps() : 0.0f;
+  }, "%.2f"));
+
+  bleBoatLock.registerParam("magQ", makeFloatParam([&]() {
+    return compassReady ? (float)compass.getMagQuality() : 0.0f;
+  }, "%.0f"));
+
+  bleBoatLock.registerParam("gyroQ", makeFloatParam([&]() {
+    return compassReady ? (float)compass.getGyroQuality() : 0.0f;
+  }, "%.0f"));
+
+  bleBoatLock.registerParam("pitch", makeFloatParam([&]() {
+    return compassReady ? compass.getPitchDeg() : 0.0f;
+  }, "%.2f"));
+
+  bleBoatLock.registerParam("roll", makeFloatParam([&]() {
+    return compassReady ? compass.getRollDeg() : 0.0f;
+  }, "%.2f"));
 
   bleBoatLock.registerParam("anchorLat", makeFloatParam([&]() {
     return isnan(anchor.anchorLat) ? 0.0 : anchor.anchorLat;
@@ -293,8 +441,22 @@ void registerBleParams() {
 }
 
 void updateGpsFromSerial() {
+  size_t bytesRead = 0;
   while (gpsSerial.available()) {
     gps.encode(gpsSerial.read());
+    ++bytesRead;
+  }
+
+  if (bytesRead > 0 && !gpsUartSeen) {
+    gpsUartSeen = true;
+    logMessage("[GPS] UART data detected RX=%d TX=%d baud=9600\n",
+               cfg::kGpsRxPin,
+               cfg::kGpsTxPin);
+  }
+
+  if (!gpsUartSeen && !gpsNoDataWarned && millis() - bootMs > 6000) {
+    gpsNoDataWarned = true;
+    logMessage("[GPS] no UART bytes on RX=%d (check wiring/baud/power)\n", cfg::kGpsRxPin);
   }
 
   if (settings.get("DebugGps") == 1 && millis() - lastGpsDebugMs >= 1000) {
@@ -325,6 +487,7 @@ void updateGpsFromSerial() {
     currentSatellites = max(0, (int)gps.satellites.value());
     gpsSourcePhone = false;
     gpsFix = true;
+    maybeUpdateGpsHeadingCorrection(lastLat, lastLon, currentSpeedKmh);
     return;
   }
 
@@ -336,6 +499,7 @@ void updateGpsFromSerial() {
     currentSatellites = max(0, phoneSatellites);
     gpsSourcePhone = true;
     gpsFix = true;
+    maybeUpdateGpsHeadingCorrection(lastLat, lastLon, currentSpeedKmh);
     return;
   }
 
@@ -343,6 +507,7 @@ void updateGpsFromSerial() {
   currentSatellites = 0;
   gpsSourcePhone = false;
   gpsFix = false;
+  gpsCorrRefValid = false;
 }
 
 void appendRouteLogIfNeeded() {
@@ -442,10 +607,11 @@ void publishBleAndUi(unsigned long now,
                      bool hasHeading,
                      bool hasBearing,
                      float heading,
-                     float errorDeg) {
+                     float diffDeg) {
   const char* mode = currentModeLabel();
   const float displayHeading = hasHeading ? heading : fallbackHeading;
   const float displayBearing = hasBearing ? bearing : fallbackBearing;
+  const int compassQuality = compassReady ? compass.getHeadingQuality() : 0;
   const int batteryPercent = 0;
   const bool headingFromPhone = hasHeading && headingSourceIsPhone();
 
@@ -457,9 +623,10 @@ void publishBleAndUi(unsigned long now,
                     displayHeading,
                     hasHeading,
                     headingFromPhone,
+                    compassQuality,
                     displayBearing,
                     dist,
-                    errorDeg,
+                    diffDeg,
                     mode,
                     batteryPercent);
     lastUiRefreshMs = now;
@@ -513,29 +680,29 @@ void setPhoneHeading(float headingDeg) {
 }
 
 void startCompassCalibration() {
-  if (compassCalibTaskHandle == nullptr && compassReady) {
-    xTaskCreatePinnedToCore(compassCalibTask,
-                            "compassCalib",
-                            4096,
-                            nullptr,
-                            1,
-                            &compassCalibTaskHandle,
-                            1);
-  }
+  logMessage("[COMPASS] explicit calibration command ignored (BNO08x dynamic calibration in use)\n");
 }
 
 void setup() {
   Serial.begin(115200);
   logMessage("\n[BoatLock] ESP32 start, firmware: %s\n", cfg::kFirmwareVersion);
+  bootMs = millis();
 
   pinMode(cfg::kBootPin, INPUT_PULLUP);
 
   Wire.begin(cfg::kI2cSdaPin, cfg::kI2cSclPin);
+  Wire.setTimeOut(20);
+  delay(250);
+  logI2cInventory();
   compassReady = compass.init();
-
-  if (!display_init()) {
-    logMessage("Display init failed\n");
+  logMessage("[COMPASS] ready=%d source=%s", (int)compassReady, compass.sourceName());
+  if (compassReady) {
+    logMessage(" addr=0x%02X", compass.bnoI2cAddress());
   }
+  logMessage("\n");
+
+  const bool displayReady = display_init();
+  logMessage("[DISPLAY] ready=%d\n", (int)displayReady);
 
   randomSeed(micros());
   fallbackHeading = random(0, 360);
@@ -554,6 +721,7 @@ void setup() {
   compass.attachSettings(&settings);
   if (compassReady) {
     compass.loadCalibrationFromSettings();
+    logMessage("[COMPASS] heading offset=%.1f\n", compass.getHeadingOffsetDeg());
   }
 
   anchor.attachSettings(&settings);
@@ -587,6 +755,20 @@ void loop() {
   appendRouteLogIfNeeded();
   handleBootButton();
 
+  if (!compassReady && millis() - lastCompassRetryMs >= cfg::kCompassRetryIntervalMs) {
+    lastCompassRetryMs = millis();
+    compassReady = compass.init();
+    logMessage("[COMPASS] retry ready=%d source=%s", (int)compassReady, compass.sourceName());
+    if (compassReady) {
+      logMessage(" addr=0x%02X", compass.bnoI2cAddress());
+    }
+    logMessage("\n");
+    if (compassReady) {
+      compass.loadCalibrationFromSettings();
+      logMessage("[COMPASS] heading offset=%.1f\n", compass.getHeadingOffsetDeg());
+    }
+  }
+
   if (compassReady) {
     compass.read();
   }
@@ -599,11 +781,10 @@ void loop() {
   const bool hasHeading = headingAvailable();
   const bool hasBearing = gpsFix && autoControlActive;
   const float diff = (hasHeading && hasBearing) ? normalizeDiffDeg(bearing, heading) : 0.0f;
-  const float errorDeg = (hasHeading && hasBearing) ? fabsf(diff) : 0.0f;
 
   const unsigned long now = millis();
   applyMotionControl(now, autoControlActive, hasHeading, hasBearing, heading, diff);
-  publishBleAndUi(now, hasHeading, hasBearing, heading, errorDeg);
+  publishBleAndUi(now, hasHeading, hasBearing, heading, diff);
 
   bleBoatLock.loop();
 }

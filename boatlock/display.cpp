@@ -107,6 +107,10 @@ Arduino_GFX *display_gfx() {
   return gfx;
 }
 
+void display_flush_now() {
+  display_flush();
+}
+
 bool display_init() {
   pinMode(kLcdBacklightPin, OUTPUT);
   digitalWrite(kLcdBacklightPin, HIGH);
@@ -323,7 +327,8 @@ static void draw_rotating_compass_card(float headingDeg,
   int tickStep = layout.compact ? 15 : 10;
   int majorStep = layout.compact ? 45 : 30;
   for (int worldDeg = 0; worldDeg < 360; worldDeg += tickStep) {
-    float screenDeg = worldDeg - headingDeg;
+    // Match BNO heading sign used by the validated north-arrow test sketch.
+    float screenDeg = worldDeg + headingDeg;
     float rad = (screenDeg - 90.0f) * DEG_TO_RAD;
     int outer = (worldDeg % majorStep == 0) ? layout.compassR + 1 : layout.compassR - 3;
     int inner = (worldDeg % majorStep == 0) ? layout.compassR - 9 : layout.compassR - 6;
@@ -340,7 +345,7 @@ static void draw_rotating_compass_card(float headingDeg,
   gfx->setTextSize(1);
   gfx->setTextColor(labelColor);
   for (int i = 0; i < 4; ++i) {
-    float screenDeg = kCardDeg[i] - headingDeg;
+    float screenDeg = kCardDeg[i] + headingDeg;
     float rad = (screenDeg - 90.0f) * DEG_TO_RAD;
     int lx = layout.compassCx + static_cast<int>(labelRadius * cos(rad)) - 3;
     int ly = layout.compassCy + static_cast<int>(labelRadius * sin(rad)) - 3;
@@ -357,11 +362,12 @@ static void draw_compass_dynamic(float heading,
                                  uint16_t labelColor,
                                  uint16_t anchorColor) {
   int dynR = compass_dynamic_radius(layout);
+  // Course-up: bow fixed at top, compass rose rotates by heading.
   float cardHeading = headingValid ? heading : 0.0f;
   draw_rotating_compass_card(cardHeading, layout, tickColor, labelColor);
   if (headingValid) {
-    // Course-up logic: bow is fixed at top (0 deg), arrow shows anchor direction relative to bow.
-    float rel = anchorBearing - heading;
+    // Red arrow points to anchor relative to bow with the same sign convention.
+    float rel = anchorBearing + heading;
     while (rel < 0.0f) rel += 360.0f;
     while (rel >= 360.0f) rel -= 360.0f;
     draw_arrow(rel, layout.compassCx, layout.compassCy, dynR, anchorColor);
@@ -379,6 +385,7 @@ void display_draw_ui(bool gpsFix,
                      float heading,
                      bool headingValid,
                      bool headingFromPhone,
+                     int compassQuality,
                      float anchorBearing,
                      float distanceMeters,
                      float errorDeg,
@@ -399,6 +406,7 @@ void display_draw_ui(bool gpsFix,
   static float lastSpeed = -1000.0f;
   static float lastDist = -1000.0f;
   static float lastErr = -1000.0f;
+  static int lastCompassQuality = -1;
   static bool lastHeadingValid = false;
   static bool lastHeadingFromPhone = false;
   static String lastMode;
@@ -410,9 +418,11 @@ void display_draw_ui(bool gpsFix,
   float hdg = sanitize_signed(heading);
   float brg = sanitize_signed(anchorBearing);
   float dist = sanitize_non_negative(distanceMeters);
-  float err = fabsf(sanitize_signed(errorDeg));
+  float err = sanitize_signed(errorDeg);
+  float errAbs = fabsf(err);
   int hdgDeg = normalize_deg(hdg);
   int brgDeg = normalize_deg(brg);
+  int compQ = constrain(compassQuality, 0, 3);
 
   Layout layout = display_layout();
   int card1Y = layout.rightY;
@@ -446,6 +456,7 @@ void display_draw_ui(bool gpsFix,
     lastSpeed = -1000.0f;
     lastDist = -1000.0f;
     lastErr = -1000.0f;
+    lastCompassQuality = -1;
     lastHeadingValid = !headingValid;
     lastHeadingFromPhone = !headingFromPhone;
     lastMode = "";
@@ -478,7 +489,8 @@ void display_draw_ui(bool gpsFix,
 
   bool headingSourceChanged = fullInit ||
                               headingValid != lastHeadingValid ||
-                              headingFromPhone != lastHeadingFromPhone;
+                              headingFromPhone != lastHeadingFromPhone ||
+                              compQ != lastCompassQuality;
   if (headingSourceChanged) {
     int srcX = hdgX + hdgW + 2;
     int srcY = layout.headerY + (layout.compact ? 6 : 9);
@@ -492,6 +504,24 @@ void display_draw_ui(bool gpsFix,
       gfx->print("--");
     } else {
       gfx->print(headingFromPhone ? "PH" : "HW");
+    }
+
+    int qx = srcX + srcW + 8;
+    int qy = layout.headerY + (layout.compact ? 5 : 7);
+    int segW = layout.compact ? 6 : 9;
+    int segH = layout.compact ? 8 : 12;
+    int segGap = 3;
+    int qAreaW = 3 * segW + 2 * segGap;
+    gfx->fillRect(qx - 10, qy, qAreaW + 12, segH, COLOR_PANEL);
+    gfx->setTextColor(COLOR_TEXT_DARK);
+    gfx->setTextSize(1);
+    gfx->setCursor(qx - 9, qy + (layout.compact ? 1 : 3));
+    gfx->print("Q");
+    for (int i = 0; i < 3; ++i) {
+      bool on = headingValid && (compQ >= (i + 1));
+      int sx = qx + i * (segW + segGap);
+      gfx->fillRect(sx, qy, segW, segH, on ? COLOR_ACCENT : COLOR_SILVER);
+      gfx->drawRect(sx, qy, segW, segH, COLOR_TEXT_DARK);
     }
     dirty = true;
   }
@@ -702,9 +732,9 @@ void display_draw_ui(bool gpsFix,
       gfx->fillRect(col3, footerValueY, 72, footerValueH, COLOR_PANEL);
       gfx->setCursor(col1, footerY);
       gfx->printf("D%.1f", dist);
-      gfx->setTextColor(err > 20.0f ? COLOR_WARNING : COLOR_TEXT_DARK);
+      gfx->setTextColor(errAbs > 20.0f ? COLOR_WARNING : COLOR_TEXT_DARK);
       gfx->setCursor(col2, footerY);
-      gfx->printf("E%.0f", err);
+      gfx->printf("E%+.0f", err);
       gfx->setTextColor(COLOR_TEXT_DARK);
       gfx->setCursor(col3, footerY);
       if (gpsFix) {
@@ -719,9 +749,9 @@ void display_draw_ui(bool gpsFix,
       gfx->setCursor(col1, footerY);
       gfx->printf("DIST %.1fm", dist);
 
-      gfx->setTextColor(err > 20.0f ? COLOR_WARNING : COLOR_TEXT_DARK);
+      gfx->setTextColor(errAbs > 20.0f ? COLOR_WARNING : COLOR_TEXT_DARK);
       gfx->setCursor(col2, footerY);
-      gfx->printf("ERR %.0f%c", err, 176);
+      gfx->printf("ERR %+.0f%c", err, 176);
 
       gfx->setTextColor(COLOR_TEXT_DARK);
       gfx->setCursor(col3, footerY);
@@ -739,6 +769,7 @@ void display_draw_ui(bool gpsFix,
   lastSpeed = speed;
   lastDist = dist;
   lastErr = err;
+  lastCompassQuality = compQ;
   lastHeadingValid = headingValid;
   lastHeadingFromPhone = headingFromPhone;
   lastMode = modeLabel;

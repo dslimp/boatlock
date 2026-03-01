@@ -4,6 +4,7 @@
 
 Arduino_GFX *display_gfx();
 bool display_init();
+void display_flush_now();
 void display_clear();
 void display_draw_ui(bool gpsFix,
                      int satellites,
@@ -12,6 +13,7 @@ void display_draw_ui(bool gpsFix,
                      float heading,
                      bool headingValid,
                      bool headingFromPhone,
+                     int compassQuality,
                      float anchorBearing,
                      float distanceMeters,
                      float errorDeg,

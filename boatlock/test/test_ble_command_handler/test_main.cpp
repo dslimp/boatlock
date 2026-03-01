@@ -6,7 +6,7 @@ PathControl pathControl;
 StepperControl stepperControl;
 MotorControl motor;
 Settings settings;
-HMC5883Compass compass;
+BNO08xCompass compass;
 float emuHeading = 0;
 bool compassReady = false;
 bool manualMode = false;
@@ -144,6 +144,15 @@ void test_set_heading_updates_phone_heading() {
   TEST_ASSERT_EQUAL_FLOAT(123.4f, lastPhoneHeading);
 }
 
+void test_set_compass_offset() {
+  handleBleCommand("SET_COMPASS_OFFSET:12.5");
+  TEST_ASSERT_EQUAL_FLOAT(12.5f, compass.getHeadingOffsetDeg());
+  TEST_ASSERT_EQUAL_FLOAT(12.5f, settings.get("MagOffX"));
+  handleBleCommand("RESET_COMPASS_OFFSET");
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, compass.getHeadingOffsetDeg());
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("MagOffX"));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_set_hold_heading);
@@ -159,5 +168,6 @@ int main() {
   RUN_TEST(test_set_phone_gps_without_speed);
   RUN_TEST(test_set_phone_gps_with_satellites);
   RUN_TEST(test_set_heading_updates_phone_heading);
+  RUN_TEST(test_set_compass_offset);
   return UNITY_END();
 }
