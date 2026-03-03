@@ -507,10 +507,10 @@ bool readSimBleSnapshot(SimBleSnapshot* out) {
     out->speedKmh = simLive.speedMps * 3.6f;
   }
   out->motorPwm = constrain((int)lroundf(simLive.command.thrust * 100.0f), 0, 100);
-  out->stepperDeg = constrain(simLive.command.steerDeg,
+  out->stepperDeg = constrain(simLive.stepperDeg,
                               -StepperControl::MAX_RELATIVE_STEER_DEG,
                               StepperControl::MAX_RELATIVE_STEER_DEG);
-  out->motorReverse = false;
+  out->motorReverse = simLive.motorReverse;
 
   const float fallbackLat = gpsFix && isfinite(lastLat) ? lastLat : 0.0f;
   const float fallbackLon = gpsFix && isfinite(lastLon) ? lastLon : 0.0f;
@@ -1329,10 +1329,10 @@ void publishBleAndUi(unsigned long now,
         navHeading = simLive.heading.headingDeg;
         navHeadingRaw = simLive.heading.headingDeg;
       }
-      navStepperDeg = constrain(simLive.command.steerDeg,
+      navStepperDeg = constrain(simLive.stepperDeg,
                                 -StepperControl::MAX_RELATIVE_STEER_DEG,
                                 StepperControl::MAX_RELATIVE_STEER_DEG);
-      navMotorReverse = false;
+      navMotorReverse = simLive.motorReverse;
     }
     char navJson[296];
     snprintf(navJson,
@@ -2018,7 +2018,7 @@ void loop() {
     hilsim::HilScenarioRunner::LiveTelemetry simLive;
     if (hilSim.liveTelemetry(&simLive) && simLive.valid) {
       logMessage(
-          "[SIM_TRACE] id=%s mode=%s t=%lu err=%.2f x=%.2f y=%.2f v=%.2f thrust=%.2f steer=%.1f stop=%d "
+          "[SIM_TRACE] id=%s mode=%s t=%lu err=%.2f x=%.2f y=%.2f v=%.2f thrust=%.2f steer=%.1f stepper=%.1f rev=%d stop=%d "
           "anchor=%d gnssGood=%d safeStop=%d gnssFix=%d gnssAge=%lu sats=%d hdop=%.2f hdgValid=%d hdg=%.1f "
           "hdgAge=%lu stopReason=%s rampViol=%d\n",
           hilSim.currentScenarioId().c_str(),
@@ -2030,6 +2030,8 @@ void loop() {
           isfinite(simLive.speedMps) ? simLive.speedMps : -1.0f,
           isfinite(simLive.command.thrust) ? simLive.command.thrust : -1.0f,
           isfinite(simLive.command.steerDeg) ? simLive.command.steerDeg : 0.0f,
+          isfinite(simLive.stepperDeg) ? simLive.stepperDeg : 0.0f,
+          simLive.motorReverse ? 1 : 0,
           simLive.command.stop ? 1 : 0,
           simLive.anchorActive ? 1 : 0,
           simLive.gnssGood ? 1 : 0,

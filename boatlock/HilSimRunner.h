@@ -30,6 +30,24 @@ inline bool inWindow(unsigned long nowMs, unsigned long atMs, unsigned long dura
   return nowMs < (atMs + durationMs);
 }
 
+inline void mapSteerToHardware(float steerDeg, float* stepperDeg, bool* motorReverse) {
+  float steer = clampf(steerDeg, -180.0f, 180.0f);
+  bool reverse = false;
+  if (steer > 90.0f) {
+    steer -= 180.0f;
+    reverse = true;
+  } else if (steer < -90.0f) {
+    steer += 180.0f;
+    reverse = true;
+  }
+  if (stepperDeg) {
+    *stepperDeg = clampf(steer, -90.0f, 90.0f);
+  }
+  if (motorReverse) {
+    *motorReverse = reverse;
+  }
+}
+
 class XorShift32 {
 public:
   explicit XorShift32(uint32_t seed = 1) : state_(seed == 0 ? 0x9E3779B9u : seed) {}
@@ -426,6 +444,8 @@ public:
     float errTrueM = 0.0f;
     float bearingDeg = 0.0f;
     float speedMps = 0.0f;
+    float stepperDeg = 0.0f;
+    bool motorReverse = false;
   };
 
   HilScenarioRunner()
@@ -530,6 +550,7 @@ public:
               ? simctl::wrap360f(controller_.config().anchorHeadingDeg)
               : simctl::bearingDeg(st.xM, st.yM, scenario_.anchorXM, scenario_.anchorYM);
       live_.speedMps = hypotf(st.vxBody + current.x, st.vyBody + current.y);
+      mapSteerToHardware(live_.command.steerDeg, &live_.stepperDeg, &live_.motorReverse);
     }
     return true;
   }
@@ -696,6 +717,7 @@ public:
                            ? simctl::wrap360f(controller_.config().anchorHeadingDeg)
                            : simctl::bearingDeg(st.xM, st.yM, scenario_.anchorXM, scenario_.anchorYM);
     live_.speedMps = hypotf(st.vxBody + current.x, st.vyBody + current.y);
+    mapSteerToHardware(live_.command.steerDeg, &live_.stepperDeg, &live_.motorReverse);
 
     clock_.advance(dtMs);
     simMs_ += dtMs;
