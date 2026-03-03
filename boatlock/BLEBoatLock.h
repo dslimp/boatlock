@@ -25,6 +25,7 @@ public:
 
     // Быстро отдать notify с JSON-строкой (например, все параметры)
     void notifyAll();
+    bool notifyJson(const std::string& payload);
 
     // Отправить логовую строку клиенту
     void sendLog(const char* line);
@@ -33,6 +34,7 @@ public:
     const char* statusString() const;
 
 private:
+    static constexpr uint8_t kTargetBleClients = 2;
     static constexpr size_t kCmdMaxLen = 192;
     static constexpr size_t kCmdQueueLen = 16;
     static constexpr size_t kLogMaxLen = 244;
@@ -53,6 +55,8 @@ private:
     QueueHandle_t logQueue = nullptr;
     bool dataNotifyEnabled = false;
     bool logNotifyEnabled = false;
+    std::map<uint16_t, bool> dataNotifyByConn;
+    std::map<uint16_t, bool> logNotifyByConn;
 
     std::map<std::string, ParamGetter> paramMap;
     CommandHandler cmdHandler = nullptr;
@@ -73,6 +77,11 @@ private:
     void processQueuedLogs();
     void maintainConnParams();
     bool notifyDataValue(const std::string& payload);
+    void setNotifySubscription(bool isLog, uint16_t connHandle, bool enabled);
+    void clearConnectionSubscriptions(uint16_t connHandle);
+    bool hasAnySubscribers(bool isLog) const;
+    void updateBleStatusFromConnections();
+    void ensureAdvertisingForMultiClient();
     static bool likelyCommand(const std::string& text);
     std::string collectAllParams();
 

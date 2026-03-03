@@ -16,13 +16,12 @@ public:
     ServerCallbacks(BLEBoatLock* p) : parent(p) {}
     void onConnect(NimBLEServer* server, NimBLEConnInfo& connInfo) override {
         if (parent) {
-            parent->bleStatus = CONNECTED;
-            parent->dataNotifyEnabled = false;
-            parent->logNotifyEnabled = false;
+            parent->updateBleStatusFromConnections();
             parent->lastDataNotifyMs = 0;
             parent->lastLogNotifyMs = 0;
             parent->lastConnParamReqMs = 0;
             parent->connEstablishedMs = millis();
+            parent->ensureAdvertisingForMultiClient();
         }
 
         // Request stable params for control traffic.
@@ -30,11 +29,12 @@ public:
         // 24..48 => 30..60ms interval, timeout 300 => 3s.
         server->updateConnParams(connInfo.getConnHandle(), 24, 48, 0, 300);
         server->setDataLen(connInfo.getConnHandle(), 251);
-        logMessage("[BLE] Client connected! Address: %s mtu=%u int=%u timeout=%u\n",
+        logMessage("[BLE] Client connected! Address: %s mtu=%u int=%u timeout=%u peers=%u\n",
             connInfo.getAddress().toString().c_str(),
             connInfo.getMTU(),
             connInfo.getConnInterval(),
-            connInfo.getConnTimeout());
+            connInfo.getConnTimeout(),
+            (unsigned)server->getConnectedCount());
     }
 
     void onMTUChange(uint16_t mtu, NimBLEConnInfo& connInfo) override {
@@ -49,18 +49,16 @@ public:
             connInfo.getConnTimeout());
     }
 
-    void onDisconnect(NimBLEServer*, NimBLEConnInfo& connInfo, int reason) override {
+    void onDisconnect(NimBLEServer* server, NimBLEConnInfo& connInfo, int reason) override {
         if (parent) {
-            parent->bleStatus = ADVERTISING;
-            parent->dataNotifyEnabled = false;
-            parent->logNotifyEnabled = false;
+            parent->clearConnectionSubscriptions(connInfo.getConnHandle());
+            parent->updateBleStatusFromConnections();
             parent->lastConnParamReqMs = 0;
             parent->connEstablishedMs = 0;
+            parent->ensureAdvertisingForMultiClient();
         }
-        logMessage("[BLE] Client disconnected! Address: %s, Reason: %d\n",
-            connInfo.getAddress().toString().c_str(), reason);
-        NimBLEDevice::getAdvertising()->start();
-        logMessage("[BLE] Restart advertising\n");
+        logMessage("[BLE] Client disconnected! Address: %s, Reason: %d peers=%u\n",
+            connInfo.getAddress().toString().c_str(), reason, (unsigned)server->getConnectedCount());
     }
 };
 
@@ -83,15 +81,15 @@ class BLEBoatLock::NotifyCallbacks : public NimBLECharacteristicCallbacks {
 public:
     NotifyCallbacks(BLEBoatLock* p, bool logChar) : parent(p), isLog(logChar) {}
 
-    void onSubscribe(NimBLECharacteristic*, NimBLEConnInfo&, uint16_t subValue) override {
+    void onSubscribe(NimBLECharacteristic*, NimBLEConnInfo& connInfo, uint16_t subValue) override {
         const bool enabled = (subValue & 0x01) || (subValue & 0x02);
         if (!parent) return;
-        if (isLog) {
-            parent->logNotifyEnabled = enabled;
-        } else {
-            parent->dataNotifyEnabled = enabled;
-        }
-        logMessage("[BLE] subscribe %s=%d sub=0x%04X\n", isLog ? "log" : "data", enabled ? 1 : 0, subValue);
+        parent->setNotifySubscription(isLog, connInfo.getConnHandle(), enabled);
+        logMessage("[BLE] subscribe %s=%d sub=0x%04X conn=%u\n",
+                   isLog ? "log" : "data",
+                   enabled ? 1 : 0,
+                   subValue,
+                   (unsigned)connInfo.getConnHandle());
     }
 };
 
@@ -169,6 +167,57 @@ void BLEBoatLock::loop() {
     processQueuedCommands();
     maintainConnParams();
     processQueuedLogs();
+}
+
+void BLEBoatLock::setNotifySubscription(bool isLog, uint16_t connHandle, bool enabled) {
+    if (isLog) {
+        logNotifyByConn[connHandle] = enabled;
+        logNotifyEnabled = hasAnySubscribers(true);
+        return;
+    }
+    dataNotifyByConn[connHandle] = enabled;
+    dataNotifyEnabled = hasAnySubscribers(false);
+}
+
+void BLEBoatLock::clearConnectionSubscriptions(uint16_t connHandle) {
+    dataNotifyByConn.erase(connHandle);
+    logNotifyByConn.erase(connHandle);
+    dataNotifyEnabled = hasAnySubscribers(false);
+    logNotifyEnabled = hasAnySubscribers(true);
+}
+
+bool BLEBoatLock::hasAnySubscribers(bool isLog) const {
+    const auto& m = isLog ? logNotifyByConn : dataNotifyByConn;
+    for (const auto& kv : m) {
+        if (kv.second) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void BLEBoatLock::updateBleStatusFromConnections() {
+    if (pServer && pServer->getConnectedCount() > 0) {
+        bleStatus = CONNECTED;
+    } else {
+        bleStatus = ADVERTISING;
+    }
+}
+
+void BLEBoatLock::ensureAdvertisingForMultiClient() {
+    NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
+    if (!adv) return;
+
+    const size_t peers = pServer ? pServer->getConnectedCount() : 0;
+    if (peers >= kTargetBleClients) {
+        return;
+    }
+    const bool started = adv->start();
+    if (started) {
+        logMessage("[BLE] advertising active peers=%u/%u\n",
+                   (unsigned)peers,
+                   (unsigned)kTargetBleClients);
+    }
 }
 
 void BLEBoatLock::handleParamRequest(const std::string& param) {
@@ -344,6 +393,10 @@ std::string BLEBoatLock::collectAllParams() {
 
 void BLEBoatLock::notifyAll() {
     notifyDataValue(collectAllParams());
+}
+
+bool BLEBoatLock::notifyJson(const std::string& payload) {
+    return notifyDataValue(payload);
 }
 
 void BLEBoatLock::sendLog(const char* line) {

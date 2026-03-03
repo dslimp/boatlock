@@ -109,6 +109,8 @@ struct ControllerConfig {
   float minThrust = 0.08f;
   float thrustRampPerS = 0.35f;
   float maxTurnRateDegS = 120.0f;
+  bool holdHeadingMode = false;
+  float anchorHeadingDeg = 0.0f;
 
   // Safety.
   unsigned long controlLoopTimeoutMs = 200;
@@ -331,7 +333,10 @@ public:
       }
       lastThrust_ = thrust;
 
-      const float desiredBrg = bearingDeg(ctrlX, ctrlY, anchorX, anchorY);
+      const float desiredBrg =
+          (cfg_.holdHeadingMode && errM <= cfg_.holdRadiusM)
+              ? wrap360f(cfg_.anchorHeadingDeg)
+              : bearingDeg(ctrlX, ctrlY, anchorX, anchorY);
       const float diff = wrap180f(desiredBrg - hdg.headingDeg);
       const float maxSteer = clampf(cfg_.maxTurnRateDegS, 1.0f, 180.0f);
       const float steer = clampf(diff, -maxSteer, maxSteer);

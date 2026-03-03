@@ -17,8 +17,8 @@ class BleBoatLock {
   BluetoothCharacteristic? _logChar;
   final BoatDataCallback onData;
   final LogCallback? onLog;
+  final VoidCallback? onConnectionChanged;
   BoatData? _lastData;
-  Map<String, dynamic>? _lastRaw;
   int _lastRssi = 0;
   bool _secPaired = false;
   bool _secAuth = false;
@@ -35,10 +35,18 @@ class BleBoatLock {
   StreamSubscription<List<int>>? _logSub;
   Timer? _reconnectTimer;
   Timer? _heartbeatTimer;
+  Timer? _fallbackPollTimer;
   bool _isConnecting = false;
+  bool _isConnected = false;
+  String _notifyBuffer = '';
   DateTime? _lastDataLogAt;
+  DateTime? _lastDataAt;
+  DateTime? _lastRawPreviewLogAt;
+  DateTime? _lastRssiReadAt;
 
-  BleBoatLock({required this.onData, this.onLog});
+  bool get isConnected => _isConnected;
+
+  BleBoatLock({required this.onData, this.onLog, this.onConnectionChanged});
 
   Future<void> connectAndListen() async {
     _log('connectAndListen()');
@@ -54,6 +62,7 @@ class BleBoatLock {
   Future<void> _disconnectCurrentDevice() async {
     _reconnectTimer?.cancel();
     _heartbeatTimer?.cancel();
+    _fallbackPollTimer?.cancel();
     await _scanResultsSub?.cancel();
     _scanResultsSub = null;
     await _connectionSub?.cancel();
@@ -68,6 +77,7 @@ class BleBoatLock {
       } catch (_) {}
     }
     _clearCharacteristics();
+    _setConnected(false);
   }
 
   Future<void> sendCustomCommand(String cmd) async {
@@ -96,7 +106,25 @@ class BleBoatLock {
   Future<void> _scanAndConnect() async {
     _log('_scanAndConnect()');
     if (_isConnecting) return;
+    if (_isConnected && _device?.isConnected == true) {
+      _log('already connected, skip scan');
+      return;
+    }
     _isConnecting = true;
+
+    final adapterReady = await _waitForAdapterPoweredOn();
+    if (!adapterReady) {
+      _log('Bluetooth adapter is not ready yet, retry in 3s');
+      _isConnecting = false;
+      _scheduleReconnect();
+      return;
+    }
+
+    final systemConnected = await _connectFromSystemDevices();
+    if (systemConnected) {
+      _isConnecting = false;
+      return;
+    }
 
     await FlutterBluePlus.stopScan();
     await _scanResultsSub?.cancel();
@@ -104,7 +132,7 @@ class BleBoatLock {
 
     bool found = false;
     final scanDone = Completer<void>();
-    _scanResultsSub = FlutterBluePlus.scanResults.listen((results) async {
+    _scanResultsSub = FlutterBluePlus.onScanResults.listen((results) async {
       if (found) return;
       for (var r in results) {
         _log(
@@ -128,11 +156,18 @@ class BleBoatLock {
     });
 
     try {
-      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 6));
+      await FlutterBluePlus.startScan(
+        timeout: const Duration(seconds: 4),
+        withServices: [Guid('12ab')],
+        withKeywords: const ['boatlock'],
+      );
       await Future.any([
         scanDone.future,
-        Future.delayed(const Duration(seconds: 7)),
+        Future.delayed(const Duration(seconds: 5)),
       ]);
+    } catch (e) {
+      _log('startScan failed: $e');
+      _scheduleReconnect();
     } finally {
       await FlutterBluePlus.stopScan();
       await _scanResultsSub?.cancel();
@@ -141,9 +176,37 @@ class BleBoatLock {
     }
 
     if (!found) {
+      final systemRetry = await _connectFromSystemDevices();
+      if (systemRetry) {
+        return;
+      }
       _log('BoatLock not found, retry scan in 3s');
       _scheduleReconnect();
     }
+  }
+
+  Future<bool> _connectFromSystemDevices() async {
+    try {
+      final devices = await FlutterBluePlus.systemDevices([Guid('12ab')]);
+      if (devices.length == 1) {
+        _log('single system device candidate: ${devices.first.remoteId}');
+        _device = devices.first;
+        await _connectToDevice();
+        return true;
+      }
+      for (final d in devices) {
+        final name = d.platformName.trim().toLowerCase();
+        if (name == 'boatlock' || name.contains('boatlock')) {
+          _log('BoatLock found in systemDevices: ${d.remoteId}');
+          _device = d;
+          await _connectToDevice();
+          return true;
+        }
+      }
+    } catch (e) {
+      _log('systemDevices lookup failed: $e');
+    }
+    return false;
   }
 
   Future<void> _connectToDevice() async {
@@ -153,9 +216,18 @@ class BleBoatLock {
       return;
     }
     _isConnecting = true;
+    _reconnectTimer?.cancel();
 
     try {
-      await _device!.connect(timeout: const Duration(seconds: 20));
+      if (_device!.isConnected) {
+        _log('device already connected to app');
+      } else {
+        await _device!.connect(
+          timeout: Platform.isMacOS
+              ? const Duration(seconds: 8)
+              : const Duration(seconds: 20),
+        );
+      }
       _log('Connected to device');
       _connectionSub?.cancel();
       _connectionSub = _device!.connectionState.listen((state) {
@@ -163,6 +235,7 @@ class BleBoatLock {
         if (state == BluetoothConnectionState.disconnected) {
           _heartbeatTimer?.cancel();
           _clearCharacteristics();
+          _setConnected(false);
           _scheduleReconnect();
         }
       });
@@ -177,7 +250,7 @@ class BleBoatLock {
             _dataChar = c;
             await _dataChar!.setNotifyValue(true);
             _dataSub?.cancel();
-            _dataSub = _dataChar!.lastValueStream.listen(_onNotify);
+            _dataSub = _dataChar!.onValueReceived.listen(_onNotify);
           }
           if (c.uuid.toString().toLowerCase().contains("56ef")) {
             _cmdChar = c;
@@ -190,10 +263,17 @@ class BleBoatLock {
           }
         }
       }
-      await requestAllParams();
       _startHeartbeat();
+      _startFallbackPolling();
+      final ready = _dataChar != null && _cmdChar != null;
+      _setConnected(ready);
+      if (ready) {
+        _reconnectTimer?.cancel();
+        unawaited(_primeInitialDataRequest());
+      }
     } catch (e) {
       _log('connect failed: $e');
+      _setConnected(false);
       _scheduleReconnect();
     }
     _isConnecting = false;
@@ -202,22 +282,46 @@ class BleBoatLock {
   void _startHeartbeat() {
     _heartbeatTimer?.cancel();
     if (_cmdChar == null) return;
-    _heartbeatTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
       if (_cmdChar == null) return;
       try {
-        await _cmdChar!.write(
-          utf8.encode('HEARTBEAT'),
-          withoutResponse: false,
-        );
+        await _cmdChar!.write(utf8.encode('HEARTBEAT'), withoutResponse: false);
       } catch (_) {
         // reconnect flow handles link issues
       }
     });
   }
 
+  void _startFallbackPolling() {
+    _fallbackPollTimer?.cancel();
+    if (_cmdChar == null) return;
+    _fallbackPollTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      await _pollFallbackSnapshot();
+    });
+    unawaited(_pollFallbackSnapshot(forceExtended: true));
+  }
+
+  Future<void> _pollFallbackSnapshot({bool forceExtended = false}) async {
+    if (_cmdChar == null) return;
+    final now = DateTime.now();
+    final stale =
+        _lastDataAt == null ||
+        now.difference(_lastDataAt!).inMilliseconds >= 5000;
+    if (!forceExtended && !stale) {
+      return;
+    }
+    try {
+      await requestAllParams();
+    } catch (_) {
+      // reconnect flow handles link issues
+    }
+  }
+
   void _scheduleReconnect() {
+    if (_isConnected || _device?.isConnected == true) return;
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(const Duration(seconds: 3), () async {
+      if (_isConnected || _device?.isConnected == true) return;
       await _scanAndConnect();
     });
   }
@@ -228,34 +332,203 @@ class BleBoatLock {
     }
   }
 
-  void _onNotify(List<int> value) async {
-    final jsonString = utf8.decode(value);
-    if (jsonString.trim().isEmpty) return;
-    try {
-      final data = jsonDecode(jsonString);
-      if (data is Map<String, dynamic>) {
-        _lastRaw = data;
-        _secPaired = int.tryParse(data['secPaired']?.toString() ?? '0') == 1;
-        _secAuth = int.tryParse(data['secAuth']?.toString() ?? '0') == 1;
-        _secNonce = int.tryParse(data['secNonce']?.toString() ?? '0') ?? 0;
+  Future<void> _primeInitialDataRequest() async {
+    if (_cmdChar == null) return;
+    const delaysMs = [2500];
+    for (final delayMs in delaysMs) {
+      if (_cmdChar == null) return;
+      if (delayMs > 0) {
+        await Future.delayed(Duration(milliseconds: delayMs));
       }
       try {
-        _lastRssi = await _device?.readRssi() ?? _lastRssi;
-      } catch (_) {}
-      _lastData = BoatData.fromJson(data, rssi: _lastRssi);
-      onData(_lastData);
-      final now = DateTime.now();
-      if (_lastDataLogAt == null ||
-          now.difference(_lastDataLogAt!).inSeconds >= 2) {
-        _lastDataLogAt = now;
-        _log(
-          'data mode=${_lastData!.mode} '
-          'lat=${_lastData!.lat.toStringAsFixed(6)} lon=${_lastData!.lon.toStringAsFixed(6)}',
-        );
+        await requestAllParams();
+      } catch (_) {
+        // Fallback polling will populate values even if "all" fails.
       }
-    } catch (_) {
-      // ignore parse errors for noise
     }
+  }
+
+  void _onNotify(List<int> value) async {
+    final chunk = _sanitizeJsonChunk(value);
+    if (chunk.isEmpty) return;
+    final now = DateTime.now();
+    if (_lastRawPreviewLogAt == null ||
+        now.difference(_lastRawPreviewLogAt!).inMilliseconds >= 1500) {
+      _lastRawPreviewLogAt = now;
+      final preview = chunk.length > 80
+          ? '${chunk.substring(0, 80)}...'
+          : chunk;
+      _log('raw34cd len=${chunk.length} preview=$preview');
+    }
+    _notifyBuffer += chunk;
+    if (_notifyBuffer.length > 32768) {
+      _notifyBuffer = _notifyBuffer.substring(_notifyBuffer.length - 8192);
+    }
+
+    final payloads = _extractJsonPayloads();
+    for (final jsonString in payloads) {
+      try {
+        final data = jsonDecode(jsonString);
+        if (data is Map<String, dynamic>) {
+          _secPaired = int.tryParse(data['secPaired']?.toString() ?? '0') == 1;
+          _secAuth = int.tryParse(data['secAuth']?.toString() ?? '0') == 1;
+          _secNonce = int.tryParse(data['secNonce']?.toString() ?? '0') ?? 0;
+        }
+        final nowRssi = DateTime.now();
+        final shouldReadRssi =
+            _lastRssiReadAt == null ||
+            nowRssi.difference(_lastRssiReadAt!).inMilliseconds >= 5000;
+        if (shouldReadRssi) {
+          _lastRssiReadAt = nowRssi;
+          try {
+            _lastRssi = await _device?.readRssi() ?? _lastRssi;
+          } catch (_) {}
+        }
+        _lastData = _composeBoatData(data);
+        _lastDataAt = DateTime.now();
+        onData(_lastData);
+        final now = _lastDataAt!;
+        if (_lastDataLogAt == null ||
+            now.difference(_lastDataLogAt!).inSeconds >= 2) {
+          _lastDataLogAt = now;
+          _log(
+            'data mode=${_lastData!.mode} '
+            'lat=${_lastData!.lat.toStringAsFixed(6)} lon=${_lastData!.lon.toStringAsFixed(6)}',
+          );
+        }
+      } catch (_) {
+        // ignore parse errors for noise
+      }
+    }
+  }
+
+  String _sanitizeJsonChunk(List<int> value) {
+    var s = utf8.decode(value, allowMalformed: true);
+    final nullPos = s.indexOf('\u0000');
+    if (nullPos >= 0) {
+      s = s.substring(0, nullPos);
+    }
+    return s.trim();
+  }
+
+  BoatData _composeBoatData(Map<String, dynamic> patch) {
+    final prev = _lastData;
+    final mode = (patch['mode']?.toString() ?? prev?.mode ?? '').toUpperCase();
+    final simMode = mode == 'SIM';
+
+    double pickDouble(String key, double fallback) {
+      final v = patch[key];
+      if (v == null) return fallback;
+      if (v is num) return v.toDouble();
+      return double.tryParse(v.toString()) ?? fallback;
+    }
+
+    double pickDoubleStableInSim(String key, double fallback) {
+      final next = pickDouble(key, fallback);
+      if (!simMode) return next;
+      if (!patch.containsKey(key)) return fallback;
+      if (next == 0.0 && fallback != 0.0) return fallback;
+      return next;
+    }
+
+    int pickInt(String key, int fallback) {
+      final v = patch[key];
+      if (v == null) return fallback;
+      if (v is int) return v;
+      if (v is num) return v.round();
+      return int.tryParse(v.toString()) ?? fallback;
+    }
+
+    int pickIntStableInSim(String key, int fallback) {
+      final next = pickInt(key, fallback);
+      if (!simMode) return next;
+      if (!patch.containsKey(key)) return fallback;
+      if (next == 0 && fallback != 0) return fallback;
+      return next;
+    }
+
+    String pickString(String key, String fallback) {
+      final v = patch[key];
+      if (v == null) return fallback;
+      final s = v.toString();
+      return s.isEmpty ? fallback : s;
+    }
+
+    return BoatData(
+      lat: pickDouble('lat', prev?.lat ?? 0),
+      lon: pickDouble('lon', prev?.lon ?? 0),
+      anchorLat: pickDouble('anchorLat', prev?.anchorLat ?? 0),
+      anchorLon: pickDouble('anchorLon', prev?.anchorLon ?? 0),
+      anchorHeading: pickDouble('anchorHead', prev?.anchorHeading ?? 0),
+      distance: pickDouble('distance', prev?.distance ?? 0),
+      heading: pickDouble('heading', prev?.heading ?? 0),
+      speedKmh: pickDouble('speedKmh', prev?.speedKmh ?? 0),
+      motorPwm: pickInt('motorPwm', prev?.motorPwm ?? 0),
+      battery: pickInt('battery', prev?.battery ?? 0),
+      status: pickString('status', prev?.status ?? ''),
+      mode: pickString('mode', prev?.mode ?? ''),
+      rssi: _lastRssi != 0 ? _lastRssi : (prev?.rssi ?? 0),
+      holdHeading:
+          pickInt('holdHeading', (prev?.holdHeading ?? false) ? 1 : 0) == 1,
+      stepSpr: pickInt('stepSpr', prev?.stepSpr ?? 4096),
+      stepMaxSpd: pickDouble('stepMaxSpd', prev?.stepMaxSpd ?? 1000),
+      stepAccel: pickDouble('stepAccel', prev?.stepAccel ?? 500),
+      stepperDeg: pickDouble('stepperDeg', prev?.stepperDeg ?? 0),
+      motorReverse:
+          pickInt('motorReverse', (prev?.motorReverse ?? false) ? 1 : 0) == 1,
+      headingRaw: pickDouble('headingRaw', prev?.headingRaw ?? 0),
+      compassOffset: pickDouble('compassOffset', prev?.compassOffset ?? 0),
+      compassQ: pickIntStableInSim('compassQ', prev?.compassQ ?? 0),
+      magQ: pickIntStableInSim('magQ', prev?.magQ ?? 0),
+      gyroQ: pickIntStableInSim('gyroQ', prev?.gyroQ ?? 0),
+      rvAcc: pickDoubleStableInSim('rvAcc', prev?.rvAcc ?? 0),
+      magNorm: pickDoubleStableInSim('magNorm', prev?.magNorm ?? 0),
+      gyroNorm: pickDoubleStableInSim('gyroNorm', prev?.gyroNorm ?? 0),
+      pitch: pickDoubleStableInSim('pitch', prev?.pitch ?? 0),
+      roll: pickDoubleStableInSim('roll', prev?.roll ?? 0),
+    );
+  }
+
+  List<String> _extractJsonPayloads() {
+    final out = <String>[];
+    if (_notifyBuffer.isEmpty) return out;
+
+    int depth = 0;
+    int start = -1;
+    int consumed = 0;
+    for (int i = 0; i < _notifyBuffer.length; i++) {
+      final c = _notifyBuffer[i];
+      if (c == '{') {
+        if (depth == 0) {
+          start = i;
+        }
+        depth++;
+      } else if (c == '}') {
+        if (depth > 0) {
+          depth--;
+          if (depth == 0 && start >= 0) {
+            out.add(_notifyBuffer.substring(start, i + 1));
+            consumed = i + 1;
+            start = -1;
+          }
+        }
+      }
+    }
+
+    if (consumed > 0) {
+      _notifyBuffer = _notifyBuffer.substring(consumed);
+    } else if (depth > 0) {
+      if (start > 0) {
+        _notifyBuffer = _notifyBuffer.substring(start);
+      }
+      // Recovery for malformed/incomplete JSON that would otherwise stall parsing forever.
+      if (_notifyBuffer.length > 2048) {
+        _notifyBuffer = '';
+      }
+    } else if (_notifyBuffer.length > 2048) {
+      _notifyBuffer = '';
+    }
+    return out;
   }
 
   void _onLogNotify(List<int> value) {
@@ -360,10 +633,7 @@ class BleBoatLock {
 
   Future<void> clearPairing() async {
     if (_cmdChar == null) return;
-    await _cmdChar!.write(
-      utf8.encode('PAIR_CLEAR'),
-      withoutResponse: false,
-    );
+    await _cmdChar!.write(utf8.encode('PAIR_CLEAR'), withoutResponse: false);
     _sessionKey = 0;
     _secCounter = 0;
   }
@@ -382,7 +652,10 @@ class BleBoatLock {
     if (_secNonce == 0) return false;
 
     final proof = buildAuthProofHex(code, _secNonce);
-    await _cmdChar!.write(utf8.encode('AUTH_PROVE:$proof'), withoutResponse: false);
+    await _cmdChar!.write(
+      utf8.encode('AUTH_PROVE:$proof'),
+      withoutResponse: false,
+    );
     await Future.delayed(const Duration(milliseconds: 120));
     await requestAllParams();
     await Future.delayed(const Duration(milliseconds: 120));
@@ -463,7 +736,10 @@ class BleBoatLock {
     return 'NUDGE_DIR:$dir,${meters.toStringAsFixed(1)}';
   }
 
-  static String? buildNudgeBearingCommand(double bearingDeg, {double meters = 1.0}) {
+  static String? buildNudgeBearingCommand(
+    double bearingDeg, {
+    double meters = 1.0,
+  }) {
     if (!bearingDeg.isFinite) return null;
     if (!meters.isFinite || meters < 1.0 || meters > 5.0) return null;
     var norm = bearingDeg % 360.0;
@@ -530,14 +806,22 @@ class BleBoatLock {
     _logSub?.cancel();
     _reconnectTimer?.cancel();
     _heartbeatTimer?.cancel();
+    _fallbackPollTimer?.cancel();
     _device?.disconnect();
     _clearCharacteristics();
+    _setConnected(false);
   }
 
   void _clearCharacteristics() {
     _dataChar = null;
     _cmdChar = null;
     _logChar = null;
+  }
+
+  void _setConnected(bool value) {
+    if (_isConnected == value) return;
+    _isConnected = value;
+    onConnectionChanged?.call();
   }
 
   void _log(String msg) {
@@ -559,6 +843,22 @@ class BleBoatLock {
     );
 
     return nameMatch || serviceMatch;
+  }
+
+  Future<bool> _waitForAdapterPoweredOn() async {
+    try {
+      if (FlutterBluePlus.adapterStateNow == BluetoothAdapterState.on) {
+        return true;
+      }
+      await FlutterBluePlus.adapterState
+          .where((state) => state == BluetoothAdapterState.on)
+          .first
+          .timeout(const Duration(seconds: 2));
+      return true;
+    } catch (e) {
+      _log('adapter wait timeout/error: $e');
+      return false;
+    }
   }
 
   Future<bool> _ensurePermissions() async {

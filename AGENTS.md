@@ -2,6 +2,20 @@
 
 This file captures non-obvious project behavior that must stay stable unless explicitly changed.
 
+## Agent Workflow Requirements
+
+- At the start of every coding/test session, read this file first and follow it as source-of-truth runbook.
+- Before HIL simulation, explicitly confirm active anchor mode and log it (`POSITION` or `POSITION_HEADING`).
+- If instructions conflict with earlier chat assumptions, this file has priority until user explicitly changes behavior.
+- For Codex sessions: include `AGENTS.md instructions for /Users/user/Documents/boatlock` in the prompt so the file is loaded in context on turn start.
+
+## Python Environment Policy
+
+- Use a single persistent virtual environment at repo root: `/Users/user/Documents/boatlock/.venv`.
+- Do not create per-task/per-run virtual environments.
+- Install Python tooling/libraries for agent scripts only into this `.venv`.
+- Reuse the same `.venv` across sessions to reduce network traffic and speed up repeated runs.
+
 ## Hardware Baseline
 
 - Compass: only `BNO08x` is supported in main firmware.
@@ -26,10 +40,12 @@ Notes:
 
 ## Heading Source Priority
 
-1. If `EmuCompass=1`, always use phone heading from `SET_HEADING`.
-2. Else if onboard compass is ready, use BNO08x heading (+ optional GPS correction).
-3. Else use fresh phone heading fallback if age `< 3000 ms`.
-4. Else heading is unavailable.
+1. Use onboard compass (BNO08x) when ready (+ optional GPS correction).
+2. Otherwise heading is unavailable.
+
+Notes:
+- Phone compass emulation is not used in main firmware.
+- Compatibility commands `SET_HEADING` / `EMU_COMPASS` must not alter heading source in production logic.
 
 Related params exposed over BLE:
 - `heading`, `headingRaw`, `compassOffset`, `gpsHdgCorr`, `compassQ`, `rvAcc`, `magNorm`, `gyroNorm`, `magQ`, `gyroQ`, `pitch`, `roll`.
@@ -40,7 +56,6 @@ Purpose: reduce constant yaw bias using movement-based GPS course.
 
 Active only when:
 - onboard compass is ready
-- `EmuCompass=0`
 - speed `>= 3.0 km/h`
 - movement since reference point `>= 4.0 m`
 
@@ -105,3 +120,58 @@ In `boatlock_ui/lib/ble/ble_boatlock.dart`:
 - Main firmware build in `boatlock/platformio.ini` uses `build_src_filter = +<*.cpp>`.
   - This means only top-level `boatlock/*.cpp` is built for production firmware.
   - Files in `boatlock/debug/` are for manual testing and must not silently replace main logic.
+
+## On-Hardware HIL Simulation Runbook
+
+Use this when running `S0..S19` on a real ESP32 board with the UI connected over BLE.
+
+1. Build and flash firmware:
+   - `cd boatlock`
+   - `pio run -e esp32s3 -t upload --upload-port /dev/cu.usbmodem2101`
+2. Start UI (second terminal):
+   - `cd boatlock_ui`
+   - `flutter run -d macos`
+3. Connect a second BLE client for simulation commands (Python/bleak or similar):
+   - write commands to characteristic `56ef`
+   - read telemetry from `34cd` and/or logs from `78ab`
+4. Useful simulation commands:
+   - `SET_ANCHOR_MODE:POSITION`
+   - `SET_ANCHOR_MODE:POSITION_HEADING`
+   - `SIM_LIST`
+   - `SIM_RUN:<scenario_id>,0` for accelerated mode (`0` = fastest)
+   - `SIM_RUN:<scenario_id>,1` for realtime mode (`1` = realtime)
+   - `SIM_STATUS`
+   - `SIM_REPORT`
+   - `SIM_ABORT`
+
+Notes:
+- Run order for full sweep: `S0_hold_still_good` ... `S19_random_emergency_mix`.
+- Run full sweep in both modes:
+  - pass 1: `SET_ANCHOR_MODE:POSITION`, then `S0..S19`
+  - pass 2: `SET_ANCHOR_MODE:POSITION_HEADING`, then `S0..S19`
+- Before starting sweep, ensure exactly one BLE runner is active:
+  - stop stale `bleak`/Python runners
+  - send `SIM_ABORT`
+  - verify `SIM_STATUS` returns `IDLE`
+- With UI connected, avoid flooding `SIM_STATUS`; keep polling around `1 Hz` (or slower).
+  Too frequent polling can overflow firmware command queue and produce:
+  `[BLE] command queue full, dropped: ...`
+- If queue overflow appears, stop runners, reset/reflash, and continue with lower command rate.
+- BLE server is configured for practical multi-client usage (UI + one control client).
+
+## HIL Acceptance Checklist (Do Not Skip)
+
+- Collect and keep artifacts for every run:
+  - boot log with `[I2C]` inventory and `[BLE] init/advertising`
+  - serial runtime log
+  - BLE command/log stream
+  - per-scenario summary JSON
+- Treat `SIM_REPORT pass=true` as necessary but not sufficient.
+  Always review:
+  - `max_error_m`, `p95_error_m`
+  - `FAILSAFE_TRIGGERED` reasons and timing
+  - long drift after failsafe (especially `> 50 m`, critical `> 100 m`)
+- Validate both anchor behavior modes when relevant:
+  - `POSITION_HEADING` (bearing lock)
+  - `POSITION` (position hold without heading lock)
+- If investigating reverse/steering behavior, watch `[EVENT] STEER_CLAMP ...` in logs.

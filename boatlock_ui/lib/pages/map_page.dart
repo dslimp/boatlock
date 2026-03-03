@@ -54,9 +54,9 @@ class _MapPageState extends State<MapPage> {
     if (ok == true) {
       await ble.stopAll();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('STOP отправлен')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('STOP отправлен')));
     }
   }
 
@@ -117,6 +117,10 @@ class _MapPageState extends State<MapPage> {
             }
           }
         });
+      },
+      onConnectionChanged: () {
+        if (!mounted) return;
+        setState(() {});
       },
     );
     _bootstrap();
@@ -193,6 +197,31 @@ class _MapPageState extends State<MapPage> {
     if (_history.length > 500) _history.removeAt(0);
   }
 
+  static double _normalizeDeg(double deg) {
+    var v = deg % 360.0;
+    if (v < 0) v += 360.0;
+    return v;
+  }
+
+  static LatLng _projectPoint(LatLng base, double bearingDeg, double meters) {
+    const earthR = 6378137.0;
+    final br = bearingDeg * math.pi / 180.0;
+    final d = meters / earthR;
+    final lat1 = base.latitude * math.pi / 180.0;
+    final lon1 = base.longitude * math.pi / 180.0;
+    final sinLat2 =
+        math.sin(lat1) * math.cos(d) +
+        math.cos(lat1) * math.sin(d) * math.cos(br);
+    final lat2 = math.asin(sinLat2);
+    final lon2 =
+        lon1 +
+        math.atan2(
+          math.sin(br) * math.sin(d) * math.cos(lat1),
+          math.cos(d) - math.sin(lat1) * math.sin(lat2),
+        );
+    return LatLng(lat2 * 180.0 / math.pi, lon2 * 180.0 / math.pi);
+  }
+
   @override
   Widget build(BuildContext context) {
     final boatPos =
@@ -206,9 +235,18 @@ class _MapPageState extends State<MapPage> {
         ? LatLng(boatData!.anchorLat, boatData!.anchorLon)
         : null;
     final center = boatPos ?? phonePos ?? anchorPos ?? const LatLng(0, 0);
-    final boatDirectionDeg = anchorPos != null
-        ? boatData?.anchorHeading ?? 0
-        : boatData?.heading ?? 0;
+    final boatDirectionDeg = boatData?.heading ?? 0;
+    final stepperDeg = boatData?.stepperDeg ?? 0.0;
+    final reverseOn = boatData?.motorReverse ?? false;
+    final thrustDirectionDeg = _normalizeDeg(
+      boatDirectionDeg + stepperDeg + (reverseOn ? 180.0 : 0.0),
+    );
+    final thrustVectorEnd = boatPos != null
+        ? _projectPoint(boatPos, thrustDirectionDeg, 12.0)
+        : null;
+    final waitingText = ble.isConnected
+        ? 'BLE подключен, ожидаю данные от BoatLock…'
+        : 'Поиск устройства BoatLock…';
 
     return Scaffold(
       appBar: AppBar(
@@ -284,6 +322,16 @@ class _MapPageState extends State<MapPage> {
                     ),
                   ],
                 ),
+              if (boatPos != null && thrustVectorEnd != null)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: [boatPos, thrustVectorEnd],
+                      color: Colors.deepOrange,
+                      strokeWidth: 4,
+                    ),
+                  ],
+                ),
               MarkerLayer(
                 markers: [
                   if (boatPos != null)
@@ -297,6 +345,20 @@ class _MapPageState extends State<MapPage> {
                           Icons.directions_boat,
                           color: Colors.blue,
                           size: 36,
+                        ),
+                      ),
+                    ),
+                  if (thrustVectorEnd != null)
+                    Marker(
+                      point: thrustVectorEnd,
+                      width: 24,
+                      height: 24,
+                      child: Transform.rotate(
+                        angle: thrustDirectionDeg * math.pi / 180,
+                        child: const Icon(
+                          Icons.navigation,
+                          color: Colors.deepOrange,
+                          size: 20,
                         ),
                       ),
                     ),
@@ -335,14 +397,14 @@ class _MapPageState extends State<MapPage> {
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
-                    children: const [
+                    children: [
                       SizedBox(
                         width: 16,
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),
-                      SizedBox(width: 8),
-                      Text('Поиск устройства BoatLock…'),
+                      const SizedBox(width: 8),
+                      Text(waitingText),
                     ],
                   ),
                 ),
@@ -354,6 +416,14 @@ class _MapPageState extends State<MapPage> {
             left: 0,
             right: 0,
             child: StatusPanel(data: boatData),
+          ),
+          Positioned(
+            top: 84,
+            left: 8,
+            child: _StepperGaugeCard(
+              stepperDeg: boatData?.stepperDeg ?? 0.0,
+              reverseOn: boatData?.motorReverse ?? false,
+            ),
           ),
           Positioned(
             top: 80,
@@ -541,5 +611,158 @@ class _MapPageState extends State<MapPage> {
         ],
       ),
     );
+  }
+}
+
+class _StepperGaugeCard extends StatelessWidget {
+  final double stepperDeg;
+  final bool reverseOn;
+
+  const _StepperGaugeCard({required this.stepperDeg, required this.reverseOn});
+
+  @override
+  Widget build(BuildContext context) {
+    final clamped = stepperDeg.clamp(-90.0, 90.0);
+    return Container(
+      width: 170,
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [BoxShadow(blurRadius: 8, color: Colors.black12)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Stepper',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            width: 150,
+            height: 86,
+            child: CustomPaint(
+              painter: _StepperGaugePainter(stepperDeg: clamped.toDouble()),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Угол ${clamped.toStringAsFixed(1)}°  |  REV ${reverseOn ? 'ON' : 'OFF'}',
+            style: TextStyle(
+              fontSize: 11,
+              color: reverseOn ? Colors.red.shade700 : Colors.black87,
+              fontWeight: reverseOn ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StepperGaugePainter extends CustomPainter {
+  final double stepperDeg;
+
+  _StepperGaugePainter({required this.stepperDeg});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height);
+    final radius = math.min(size.width / 2 - 6, size.height - 10);
+
+    final basePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 10
+      ..strokeCap = StrokeCap.round
+      ..color = const Color(0xFFDBE3EA);
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      math.pi,
+      math.pi,
+      false,
+      basePaint,
+    );
+
+    final zonePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 10
+      ..strokeCap = StrokeCap.round
+      ..color = const Color(0xFF6EA7D6);
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      math.pi,
+      math.pi,
+      false,
+      zonePaint,
+    );
+
+    final tickPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..color = const Color(0xFF2C3E50);
+    for (final deg in const [-90.0, 0.0, 90.0]) {
+      final a = math.pi * (1 - ((deg + 90.0) / 180.0));
+      final p1 = Offset(
+        center.dx + math.cos(a) * (radius - 14),
+        center.dy + math.sin(a) * (radius - 14),
+      );
+      final p2 = Offset(
+        center.dx + math.cos(a) * (radius + 2),
+        center.dy + math.sin(a) * (radius + 2),
+      );
+      canvas.drawLine(p1, p2, tickPaint);
+    }
+
+    final needleDeg = stepperDeg.clamp(-90.0, 90.0);
+    final needleAngle = math.pi * (1 - ((needleDeg + 90.0) / 180.0));
+    final needleEnd = Offset(
+      center.dx + math.cos(needleAngle) * (radius - 4),
+      center.dy + math.sin(needleAngle) * (radius - 4),
+    );
+    final needlePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round
+      ..color = const Color(0xFF0F5C99);
+    canvas.drawLine(center, needleEnd, needlePaint);
+    canvas.drawCircle(center, 4, Paint()..color = const Color(0xFF0F5C99));
+
+    final tpStyle = TextStyle(
+      color: Colors.blueGrey.shade800,
+      fontSize: 10,
+      fontWeight: FontWeight.w600,
+    );
+    _drawText(
+      canvas,
+      '-90°',
+      Offset(center.dx - radius - 2, center.dy - 18),
+      tpStyle,
+    );
+    _drawText(
+      canvas,
+      '0°',
+      Offset(center.dx - 8, center.dy - radius - 14),
+      tpStyle,
+    );
+    _drawText(
+      canvas,
+      '+90°',
+      Offset(center.dx + radius - 26, center.dy - 18),
+      tpStyle,
+    );
+  }
+
+  void _drawText(Canvas canvas, String text, Offset at, TextStyle style) {
+    final tp = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, at);
+  }
+
+  @override
+  bool shouldRepaint(covariant _StepperGaugePainter oldDelegate) {
+    return oldDelegate.stepperDeg != stepperDeg;
   }
 }

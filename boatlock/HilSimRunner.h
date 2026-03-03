@@ -260,6 +260,10 @@ struct SimEvent {
   std::string details;
 };
 
+inline const char* simAnchorModeStr(bool holdHeadingMode) {
+  return holdHeadingMode ? "POSITION_HEADING" : "POSITION";
+}
+
 class SimSensorHub : public IGnssSource, public IHeadingSource {
 public:
   void configure(const SensorConfig& cfg) {
@@ -415,6 +419,10 @@ public:
     ActuatorCmd command;
     bool anchorActive = false;
     bool gnssGood = false;
+    bool safeStop = false;
+    simctl::GnssReason gnssReason = simctl::GnssReason::NONE;
+    simctl::StopReason stopReason = simctl::StopReason::NONE;
+    bool rampViolation = false;
     float errTrueM = 0.0f;
     float bearingDeg = 0.0f;
     float speedMps = 0.0f;
@@ -451,7 +459,7 @@ public:
     events_.push_back(ev);
   }
 
-  bool start(const SimScenario& scenario) {
+  bool start(const SimScenario& scenario, bool holdHeadingMode = false) {
     if (state_ == State::RUNNING) {
       return false;
     }
@@ -470,6 +478,9 @@ public:
     if (scenario.maxThrustOverride > 0.0f) {
       cfg.maxThrust = clampf(scenario.maxThrustOverride, 0.1f, 1.0f);
     }
+    holdHeadingMode_ = holdHeadingMode;
+    cfg.holdHeadingMode = holdHeadingMode_;
+    cfg.anchorHeadingDeg = scenario.initialHeadingDeg;
     controller_.setConfig(cfg);
     controller_.reset();
     controller_.requestAnchor(true);
@@ -509,8 +520,15 @@ public:
       live_.command = actuator_.last();
       live_.anchorActive = false;
       live_.gnssGood = fix.valid;
+      live_.safeStop = false;
+      live_.gnssReason = simctl::GnssReason::NONE;
+      live_.stopReason = simctl::StopReason::NONE;
+      live_.rampViolation = false;
       live_.errTrueM = hypotf(st.xM - scenario_.anchorXM, st.yM - scenario_.anchorYM);
-      live_.bearingDeg = simctl::bearingDeg(st.xM, st.yM, scenario_.anchorXM, scenario_.anchorYM);
+      live_.bearingDeg =
+          (holdHeadingMode_ && live_.errTrueM <= controller_.config().holdRadiusM)
+              ? simctl::wrap360f(controller_.config().anchorHeadingDeg)
+              : simctl::bearingDeg(st.xM, st.yM, scenario_.anchorXM, scenario_.anchorYM);
       live_.speedMps = hypotf(st.vxBody + current.x, st.vyBody + current.y);
     }
     return true;
@@ -590,6 +608,8 @@ public:
       tele.anchorActive = false;
       tele.gnssGood = false;
       tele.safeStop = true;
+      tele.gnssReason = simctl::GnssReason::DATA_STALE;
+      tele.stopReason = simctl::StopReason::GPS_DATA_STALE;
     } else {
       controller_.step(scenario_.anchorXM, scenario_.anchorYM);
       tele = controller_.telemetry();
@@ -667,8 +687,14 @@ public:
     live_.command = cmd;
     live_.anchorActive = tele.anchorActive;
     live_.gnssGood = tele.gnssGood;
+    live_.safeStop = tele.safeStop;
+    live_.gnssReason = tele.gnssReason;
+    live_.stopReason = tele.stopReason;
+    live_.rampViolation = tele.rampViolation;
     live_.errTrueM = errTrue;
-    live_.bearingDeg = simctl::bearingDeg(st.xM, st.yM, scenario_.anchorXM, scenario_.anchorYM);
+    live_.bearingDeg = (holdHeadingMode_ && errTrue <= controller_.config().holdRadiusM)
+                           ? simctl::wrap360f(controller_.config().anchorHeadingDeg)
+                           : simctl::bearingDeg(st.xM, st.yM, scenario_.anchorXM, scenario_.anchorYM);
     live_.speedMps = hypotf(st.vxBody + current.x, st.vyBody + current.y);
 
     clock_.advance(dtMs);
@@ -694,13 +720,14 @@ public:
     snprintf(buf,
              sizeof(buf),
              "{\"id\":\"%s\",\"state\":\"%s\",\"progress_pct\":%.2f,"
-             "\"sim_ms\":%lu,\"duration_ms\":%lu,\"dt_ms\":%lu}",
+             "\"sim_ms\":%lu,\"duration_ms\":%lu,\"dt_ms\":%lu,\"anchor_mode\":\"%s\"}",
              scenario_.id.c_str(),
              stateStr(state_),
              progressPct_,
              (unsigned long)simMs_,
              (unsigned long)scenario_.durationMs,
-             (unsigned long)lastAppliedDtMs_);
+             (unsigned long)lastAppliedDtMs_,
+             simAnchorModeStr(holdHeadingMode_));
     return std::string(buf);
   }
 
@@ -709,9 +736,10 @@ public:
     char line[256];
     snprintf(line,
              sizeof(line),
-             "{\"id\":\"%s\",\"state\":\"%s\",\"pass\":%s,\"reason\":\"%s\",",
+             "{\"id\":\"%s\",\"state\":\"%s\",\"anchor_mode\":\"%s\",\"pass\":%s,\"reason\":\"%s\",",
              scenario_.id.c_str(),
              stateStr(state_),
+             simAnchorModeStr(holdHeadingMode_),
              result_.pass ? "true" : "false",
              result_.reason.c_str());
     out += line;
@@ -1018,6 +1046,7 @@ private:
   int prevSteerSign_ = 0;
   unsigned long badGnssAnchorSinceMs_ = 0;
   unsigned long maxBadGnssAnchorMs_ = 0;
+  bool holdHeadingMode_ = false;
 };
 
 inline SimScenario makeBaseScenario(const char* id, float currentX, float posSigmaM) {
@@ -1397,6 +1426,10 @@ class HilSimManager {
 public:
   HilSimManager() : scenarios_(defaultScenarios()) {}
 
+  void setAnchorMode(bool holdHeadingMode) { holdHeadingMode_ = holdHeadingMode; }
+  bool holdHeadingMode() const { return holdHeadingMode_; }
+  const char* anchorModeStr() const { return simAnchorModeStr(holdHeadingMode_); }
+
   bool startRun(const std::string& scenarioId, int speedupMode, std::string* err) {
     if (runner_.isRunning()) {
       if (err) *err = "already running";
@@ -1409,7 +1442,7 @@ public:
     }
     speedupMode_ = (speedupMode == 1) ? 1 : 0;
     wallAccumMs_ = 0;
-    if (!runner_.start(*s)) {
+    if (!runner_.start(*s, holdHeadingMode_)) {
       if (err) *err = "start failed";
       return false;
     }
@@ -1502,6 +1535,7 @@ private:
   int speedupMode_ = 0;
   unsigned long wallAccumMs_ = 0;
   std::string lastReportJson_;
+  bool holdHeadingMode_ = false;
 };
 
 } // namespace hilsim

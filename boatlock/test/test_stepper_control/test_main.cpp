@@ -44,6 +44,24 @@ void test_direction_flip_preempts_old_target() {
   TEST_ASSERT_TRUE(second > 0);
 }
 
+void test_point_to_bearing_clamps_to_plus_minus_90_deg() {
+  StepperControl c(2, 4, 6, 16);
+  c.stepsPerRev = 4096;
+
+  c.pointToBearing(200.0f, 0.0f);
+  const long first = c.stepper.distanceToGo();
+  TEST_ASSERT_EQUAL_INT(1024, abs((int)first));
+
+  c.stepper.moveTo(c.stepper.currentPosition());
+  while (c.stepper.distanceToGo() != 0) {
+    c.stepper.run();
+  }
+
+  c.pointToBearing(170.0f, 0.0f);
+  const long second = c.stepper.distanceToGo();
+  TEST_ASSERT_EQUAL_INT(1024, abs((int)second));
+}
+
 void test_run_releases_coils_after_idle_timeout() {
   StepperControl c(2, 4, 6, 16);
   c.outputsEnabled = true;
@@ -61,6 +79,7 @@ int main() {
   RUN_TEST(test_normalize180_wraps_into_signed_range);
   RUN_TEST(test_point_to_bearing_uses_shortest_path);
   RUN_TEST(test_direction_flip_preempts_old_target);
+  RUN_TEST(test_point_to_bearing_clamps_to_plus_minus_90_deg);
   RUN_TEST(test_run_releases_coils_after_idle_timeout);
   return UNITY_END();
 }

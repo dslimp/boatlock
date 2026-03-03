@@ -11,6 +11,7 @@ public:
     static constexpr int DIRECTION_SIGN = -1;
     static constexpr unsigned long COIL_RELEASE_DELAY_MS = 1200;
     static constexpr long MIN_COMMAND_STEPS = 4;
+    static constexpr float MAX_RELATIVE_STEER_DEG = 90.0f;
     AccelStepper stepper;
     Settings* settings;
     int stepsPerRev;
@@ -20,6 +21,7 @@ public:
     long bowZeroSteps = 0;
     bool outputsEnabled = true;
     unsigned long idleSinceMs = 0;
+    unsigned long lastClampLogMs = 0;
 
     // 28BYJ-48 + ULN2003 (HALF4WIRE). Pin order IN1, IN3, IN2, IN4 for AccelStepper.
     StepperControl(int in1Pin, int in2Pin, int in3Pin, int in4Pin)
@@ -82,7 +84,19 @@ public:
             return;
         }
 
-        const float relativeDeg = normalize180(bearing - heading);
+        const float relativeDegRaw = normalize180(bearing - heading);
+        const float relativeDeg =
+            constrain(relativeDegRaw, -MAX_RELATIVE_STEER_DEG, MAX_RELATIVE_STEER_DEG);
+        if (fabsf(relativeDegRaw - relativeDeg) > 0.01f) {
+            const unsigned long nowMs = millis();
+            if (lastClampLogMs == 0 || nowMs - lastClampLogMs >= 1000UL) {
+                logMessage("[EVENT] STEER_CLAMP raw=%.1f clamped=%.1f limit=%.1f\n",
+                           relativeDegRaw,
+                           relativeDeg,
+                           MAX_RELATIVE_STEER_DEG);
+                lastClampLogMs = nowMs;
+            }
+        }
         const long relativeSteps =
             lroundf(relativeDeg / 360.0f * stepsPerRev) * DIRECTION_SIGN;
         const long targetNorm = normalizeSteps(bowZeroSteps + relativeSteps);
@@ -188,6 +202,20 @@ public:
                 outputsEnabled = false;
             }
         }
+    }
+
+    float relativeSteerDeg() {
+        if (stepsPerRev <= 0) return 0.0f;
+        const long currentNorm = normalizeSteps(stepper.currentPosition());
+        long delta = currentNorm - bowZeroSteps;
+        const long half = stepsPerRev / 2;
+        if (delta > half) {
+            delta -= stepsPerRev;
+        } else if (delta < -half) {
+            delta += stepsPerRev;
+        }
+        const float deg = ((float)delta * 360.0f / (float)stepsPerRev) / (float)DIRECTION_SIGN;
+        return constrain(deg, -MAX_RELATIVE_STEER_DEG, MAX_RELATIVE_STEER_DEG);
     }
 
 private:

@@ -23,6 +23,9 @@ public:
     static constexpr float AUTO_APPROACH_DAMP_MAX = 0.7f;
     static constexpr unsigned long AUTO_MIN_ON_MS = 1200;
     static constexpr unsigned long AUTO_MIN_OFF_MS = 900;
+    static constexpr float AUTO_NEAR_SOFT_ZONE_M = 2.5f;
+    static constexpr float AUTO_NEAR_RAMP_PCT_PER_SEC = 18.0f;
+    static constexpr unsigned long DIRECTION_SWITCH_STOP_MS = 450;
 
     MotorControl() : pwmChannel(0), dirPin1(-1), dirPin2(-1), pwmRaw(0) {}
 
@@ -55,6 +58,9 @@ public:
     unsigned long autoThrustStateChangedMs = 0;
     unsigned long autoRampUpdatedMs = 0;
     int autoPwmRaw = 0;
+    bool directionKnown = false;
+    bool directionForward = true;
+    unsigned long directionSwitchReadyMs = 0;
 
     void setupPWM(int pin, int channel, int freq, int res) {
         pwmChannel = channel;
@@ -62,12 +68,15 @@ public:
         ledcAttachPin(pin, pwmChannel);
         ledcWrite(pwmChannel, 0);
         pwmRaw = 0;
+        directionSwitchReadyMs = 0;
     }
 
     void setDirPin(int pin) {
         dirPin1 = pin;
         dirPin2 = -1;
         pinMode(pin, OUTPUT);
+        directionKnown = false;
+        directionSwitchReadyMs = 0;
     }
 
     void setDirPins(int pin1, int pin2) {
@@ -75,6 +84,8 @@ public:
         dirPin2 = pin2;
         pinMode(pin1, OUTPUT);
         pinMode(pin2, OUTPUT);
+        directionKnown = false;
+        directionSwitchReadyMs = 0;
     }
 
     void loadPIDfromSettings() {
@@ -184,14 +195,13 @@ public:
         // Управление мотором
         int pwmValue = constrain((int)fabs(output), 0, 255);
         bool forward = output >= 0;
-        if (dirPin2 >= 0) {
-            digitalWrite(dirPin1, forward ? HIGH : LOW);
-            digitalWrite(dirPin2, forward ? LOW : HIGH);
-        } else if (dirPin1 >= 0) {
-            digitalWrite(dirPin1, forward ? HIGH : LOW);
+        if (!ensureDirectionReady(forward, now)) {
+            return;
         }
         ledcWrite(pwmChannel, pwmValue);
         pwmRaw = pwmValue;
+        autoPwmRaw = pwmValue;
+        autoRampUpdatedMs = now;
     }
 
     void stop() {
@@ -202,6 +212,7 @@ public:
         filteredDistanceRateValid = false;
         filteredDistanceUpdatedMs = 0;
         filteredDistanceRateMps = 0.0f;
+        directionSwitchReadyMs = 0;
     }
 
     void resetPidState() {
@@ -223,7 +234,8 @@ public:
                          bool allowThrust,
                          float deadbandMeters = AUTO_DEADBAND_M,
                          int maxThrustPct = AUTO_MAX_PWM_PCT,
-                         float rampPctPerSec = AUTO_RAMP_PCT_PER_SEC) {
+                         float rampPctPerSec = AUTO_RAMP_PCT_PER_SEC,
+                         bool reverseThrust = false) {
         const unsigned long now = millis();
         const float holdRadius = max(0.5f, holdRadiusMeters);
         const float deadband = constrain(deadbandMeters, 0.2f, 10.0f);
@@ -312,7 +324,11 @@ public:
         autoRampUpdatedMs = now;
 
         const float safeRampPctPerSec = constrain(rampPctPerSec, 1.0f, 100.0f);
-        const float rampRawPerSec = (safeRampPctPerSec / 100.0f) * 255.0f;
+        float effectiveRampPctPerSec = safeRampPctPerSec;
+        if (over <= AUTO_NEAR_SOFT_ZONE_M) {
+            effectiveRampPctPerSec = min(effectiveRampPctPerSec, AUTO_NEAR_RAMP_PCT_PER_SEC);
+        }
+        const float rampRawPerSec = (effectiveRampPctPerSec / 100.0f) * 255.0f;
         int maxDelta = (int)lroundf(rampRawPerSec * dtSec);
         if (maxDelta < 1) {
             maxDelta = 1;
@@ -323,11 +339,9 @@ public:
             autoPwmRaw = max(autoPwmRaw - maxDelta, targetPwm);
         }
 
-        if (dirPin2 >= 0) {
-            digitalWrite(dirPin1, HIGH);
-            digitalWrite(dirPin2, LOW);
-        } else if (dirPin1 >= 0) {
-            digitalWrite(dirPin1, HIGH);
+        const bool forward = !reverseThrust;
+        if (!ensureDirectionReady(forward, now)) {
+            return;
         }
 
         ledcWrite(pwmChannel, autoPwmRaw);
@@ -335,6 +349,7 @@ public:
     }
 
     void driveManual(int speed) {
+        const unsigned long now = millis();
         autoThrustActive = false;
         filteredAnchorDistanceValid = false;
         filteredDistanceRateValid = false;
@@ -342,15 +357,66 @@ public:
         filteredDistanceUpdatedMs = 0;
         bool forward = speed >= 0;
         int pwmValue = constrain(abs(speed), 0, 255);
+        if (pwmValue == 0) {
+            ledcWrite(pwmChannel, 0);
+            pwmRaw = 0;
+            autoPwmRaw = 0;
+            autoRampUpdatedMs = now;
+            return;
+        }
+
+        if (!ensureDirectionReady(forward, now)) {
+            return;
+        }
+        ledcWrite(pwmChannel, pwmValue);
+        pwmRaw = pwmValue;
+        autoPwmRaw = pwmValue;
+        autoRampUpdatedMs = now;
+    }
+
+private:
+    static bool timeReached(unsigned long now, unsigned long atMs) {
+        return ((long)(now - atMs) >= 0);
+    }
+
+    void writeDirectionPins(bool forward) {
         if (dirPin2 >= 0) {
             digitalWrite(dirPin1, forward ? HIGH : LOW);
             digitalWrite(dirPin2, forward ? LOW : HIGH);
         } else if (dirPin1 >= 0) {
             digitalWrite(dirPin1, forward ? HIGH : LOW);
         }
-        ledcWrite(pwmChannel, pwmValue);
-        pwmRaw = pwmValue;
-        autoPwmRaw = pwmValue;
-        autoRampUpdatedMs = millis();
+    }
+
+    bool ensureDirectionReady(bool forward, unsigned long now) {
+        if (!directionKnown) {
+            directionKnown = true;
+            directionForward = forward;
+            directionSwitchReadyMs = 0;
+            writeDirectionPins(forward);
+            return true;
+        }
+
+        if (directionForward != forward) {
+            directionForward = forward;
+            writeDirectionPins(forward);
+            directionSwitchReadyMs = now + DIRECTION_SWITCH_STOP_MS;
+            ledcWrite(pwmChannel, 0);
+            pwmRaw = 0;
+            autoPwmRaw = 0;
+            autoRampUpdatedMs = now;
+            return false;
+        }
+
+        if (directionSwitchReadyMs != 0 && !timeReached(now, directionSwitchReadyMs)) {
+            ledcWrite(pwmChannel, 0);
+            pwmRaw = 0;
+            autoPwmRaw = 0;
+            autoRampUpdatedMs = now;
+            return false;
+        }
+
+        directionSwitchReadyMs = 0;
+        return true;
     }
 };

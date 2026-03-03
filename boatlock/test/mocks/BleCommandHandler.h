@@ -127,6 +127,21 @@ inline void handleBleCommand(const std::string &cmd) {
     settings.set("HoldHeading", val);
     settings.save();
     logMessage("[BLE] HoldHeading set to %d\n", val);
+  } else if (command.rfind("SET_ANCHOR_MODE:", 0) == 0) {
+    const char* payload = command.c_str() + 16;
+    int holdHeading = settings.get("HoldHeading") == 1 ? 1 : 0;
+    if (strcmp(payload, "POSITION") == 0 || strcmp(payload, "0") == 0) {
+      holdHeading = 0;
+    } else if (strcmp(payload, "POSITION_HEADING") == 0 || strcmp(payload, "1") == 0) {
+      holdHeading = 1;
+    } else {
+      logMessage("[BLE] SET_ANCHOR_MODE rejected: invalid payload '%s'\n", payload);
+      return;
+    }
+    settings.set("HoldHeading", holdHeading);
+    settings.save();
+    logMessage("[BLE] AnchorMode set to %s\n",
+               holdHeading ? "POSITION_HEADING" : "POSITION");
   } else if (command.rfind("SET_ANCHOR_PROFILE:", 0) == 0) {
     AnchorProfileId profile = AnchorProfileId::NORMAL;
     const char* payload = command.c_str() + 19;

@@ -58,3 +58,5 @@ app.*.map.json
 # Generated simulator reports
 /tools/sim/report.json
 /tools/sim/soak_report.json
+.venv-hil/
+boatlock_ui/dist/

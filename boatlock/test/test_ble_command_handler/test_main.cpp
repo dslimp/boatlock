@@ -146,6 +146,18 @@ void test_set_hold_heading() {
   TEST_ASSERT_EQUAL_FLOAT(1.0f, settings.get("HoldHeading"));
 }
 
+void test_set_anchor_mode_position() {
+  settings.set("HoldHeading", 1.0f);
+  handleBleCommand("SET_ANCHOR_MODE:POSITION");
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("HoldHeading"));
+}
+
+void test_set_anchor_mode_position_heading() {
+  settings.set("HoldHeading", 0.0f);
+  handleBleCommand("SET_ANCHOR_MODE:POSITION_HEADING");
+  TEST_ASSERT_EQUAL_FLOAT(1.0f, settings.get("HoldHeading"));
+}
+
 void test_set_step_spr() {
   handleBleCommand("SET_STEP_SPR:400");
   TEST_ASSERT_EQUAL_FLOAT(4096.0f, settings.get("StepSpr"));
@@ -395,6 +407,8 @@ void test_non_sim_command_still_runs_when_sim_handler_declines() {
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_set_hold_heading);
+  RUN_TEST(test_set_anchor_mode_position);
+  RUN_TEST(test_set_anchor_mode_position_heading);
   RUN_TEST(test_set_step_spr);
   RUN_TEST(test_manual_on_cancels_stepper_move);
   RUN_TEST(test_manual_off);

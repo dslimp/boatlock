@@ -148,6 +148,68 @@ void test_anchor_auto_reduces_pwm_on_fast_approach() {
   TEST_ASSERT_TRUE(nearPwm < highPwm);
 }
 
+void test_anchor_auto_near_hold_uses_soft_ramp() {
+  MotorControl motor;
+  motor.setupPWM(7, 0, 5000, 8);
+  motor.setDirPins(5, 10);
+
+  mockSetMillis(1000);
+  motor.driveAnchorAuto(5.0f, 2.0f, true, 1.5f, 100, 100.0f, false);
+  const int first = motor.pwmRaw;
+
+  mockSetMillis(2000);
+  motor.driveAnchorAuto(5.0f, 2.0f, true, 1.5f, 100, 100.0f, false);
+  const int second = motor.pwmRaw;
+
+  TEST_ASSERT_TRUE(second >= first);
+  TEST_ASSERT_TRUE((second - first) <= 46);
+}
+
+void test_manual_reverse_requires_stop_window() {
+  MotorControl motor;
+  motor.setupPWM(7, 0, 5000, 8);
+  motor.setDirPins(5, 10);
+
+  mockSetMillis(1000);
+  motor.driveManual(180);
+  TEST_ASSERT_EQUAL(180, motor.pwmRaw);
+
+  mockSetMillis(1100);
+  motor.driveManual(-180);
+  TEST_ASSERT_EQUAL(0, motor.pwmRaw);
+  TEST_ASSERT_EQUAL(0, g_lastLedcValue);
+
+  mockSetMillis(1100 + MotorControl::DIRECTION_SWITCH_STOP_MS - 10);
+  motor.driveManual(-180);
+  TEST_ASSERT_EQUAL(0, motor.pwmRaw);
+
+  mockSetMillis(1100 + MotorControl::DIRECTION_SWITCH_STOP_MS + 10);
+  motor.driveManual(-180);
+  TEST_ASSERT_EQUAL(180, motor.pwmRaw);
+  TEST_ASSERT_EQUAL(10, g_lastDigitalPin);
+  TEST_ASSERT_EQUAL(HIGH, g_lastDigitalValue);
+}
+
+void test_anchor_auto_reverse_requires_stop_window() {
+  MotorControl motor;
+  motor.setupPWM(7, 0, 5000, 8);
+  motor.setDirPins(5, 10);
+
+  mockSetMillis(1000);
+  motor.driveAnchorAuto(30.0f, 2.0f, true, 1.5f, 70, 35.0f, false);
+  mockAdvanceMillis(200);
+  motor.driveAnchorAuto(30.0f, 2.0f, true, 1.5f, 70, 35.0f, false);
+  TEST_ASSERT_TRUE(motor.pwmRaw > 0);
+
+  mockSetMillis(1400);
+  motor.driveAnchorAuto(30.0f, 2.0f, true, 1.5f, 70, 35.0f, true);
+  TEST_ASSERT_EQUAL(0, motor.pwmRaw);
+
+  mockSetMillis(1400 + MotorControl::DIRECTION_SWITCH_STOP_MS + 10);
+  motor.driveAnchorAuto(30.0f, 2.0f, true, 1.5f, 70, 35.0f, true);
+  TEST_ASSERT_TRUE(motor.pwmRaw > 0);
+}
+
 void test_pid_anti_windup_blocks_integral_growth_when_saturated() {
   MotorControl motor;
   motor.setupPWM(7, 0, 5000, 8);
@@ -176,6 +238,9 @@ int main() {
   RUN_TEST(test_anchor_auto_anti_hunt_min_on_off_windows);
   RUN_TEST(test_anchor_auto_low_passes_distance_rate);
   RUN_TEST(test_anchor_auto_reduces_pwm_on_fast_approach);
+  RUN_TEST(test_anchor_auto_near_hold_uses_soft_ramp);
+  RUN_TEST(test_manual_reverse_requires_stop_window);
+  RUN_TEST(test_anchor_auto_reverse_requires_stop_window);
   RUN_TEST(test_pid_anti_windup_blocks_integral_growth_when_saturated);
   return UNITY_END();
 }

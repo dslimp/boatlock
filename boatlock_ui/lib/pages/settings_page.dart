@@ -41,7 +41,11 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  static const String _modePosition = 'POSITION';
+  static const String _modePositionHeading = 'POSITION_HEADING';
+
   late bool holdHeading;
+  late String anchorMode;
   late int stepSpr;
   late double stepMaxSpd;
   late double stepAccel;
@@ -60,6 +64,7 @@ class _SettingsPageState extends State<SettingsPage> {
   void initState() {
     super.initState();
     holdHeading = widget.holdHeading;
+    anchorMode = holdHeading ? _modePositionHeading : _modePosition;
     stepSpr = widget.stepSpr;
     stepMaxSpd = widget.stepMaxSpd;
     stepAccel = widget.stepAccel;
@@ -75,10 +80,17 @@ class _SettingsPageState extends State<SettingsPage> {
     isConnected = widget.isConnected;
   }
 
-  void _toggleHoldHeading(bool v) {
+  void _setAnchorMode(String mode) {
     if (!isConnected) return;
-    setState(() => holdHeading = v);
-    widget.ble.sendCustomCommand('SET_HOLD_HEADING:${v ? 1 : 0}');
+    if (mode != _modePosition && mode != _modePositionHeading) return;
+    final hold = mode == _modePositionHeading;
+    setState(() {
+      anchorMode = mode;
+      holdHeading = hold;
+    });
+    widget.ble.sendCustomCommand('SET_ANCHOR_MODE:$mode');
+    // Backward compatibility with older firmware revisions.
+    widget.ble.sendCustomCommand('SET_HOLD_HEADING:${hold ? 1 : 0}');
   }
 
   Future<void> _editCompassOffset() async {
@@ -194,10 +206,29 @@ class _SettingsPageState extends State<SettingsPage> {
       appBar: AppBar(title: const Text('Настройки')),
       body: ListView(
         children: [
-          SwitchListTile(
-            title: const Text('Поддерживать курс носа'),
-            value: holdHeading,
-            onChanged: isConnected ? _toggleHoldHeading : null,
+          ListTile(
+            title: const Text('Режим удержания'),
+            subtitle: const Text('Позиция или Позиция + Курс'),
+          ),
+          RadioListTile<String>(
+            title: const Text('Только позиция (якорь)'),
+            value: _modePosition,
+            groupValue: anchorMode,
+            onChanged: isConnected && mounted
+                ? (v) {
+                    if (v != null) _setAnchorMode(v);
+                  }
+                : null,
+          ),
+          RadioListTile<String>(
+            title: const Text('Позиция + курс'),
+            value: _modePositionHeading,
+            groupValue: anchorMode,
+            onChanged: isConnected && mounted
+                ? (v) {
+                    if (v != null) _setAnchorMode(v);
+                  }
+                : null,
           ),
           ListTile(
             title: const Text('Шагов за оборот'),

@@ -6,6 +6,8 @@ class BoatData {
   final double anchorHeading;
   final double distance;
   final double heading;
+  final double speedKmh;
+  final int motorPwm;
   final int battery;
   final String status;
   final String mode;
@@ -14,6 +16,8 @@ class BoatData {
   final int stepSpr;
   final double stepMaxSpd;
   final double stepAccel;
+  final double stepperDeg;
+  final bool motorReverse;
   final double headingRaw;
   final double compassOffset;
   final int compassQ;
@@ -33,6 +37,8 @@ class BoatData {
     required this.anchorHeading,
     required this.distance,
     required this.heading,
+    required this.speedKmh,
+    required this.motorPwm,
     required this.battery,
     required this.status,
     required this.mode,
@@ -41,6 +47,8 @@ class BoatData {
     required this.stepSpr,
     required this.stepMaxSpd,
     required this.stepAccel,
+    required this.stepperDeg,
+    required this.motorReverse,
     required this.headingRaw,
     required this.compassOffset,
     required this.compassQ,
@@ -62,6 +70,8 @@ class BoatData {
       anchorHeading: double.tryParse(json['anchorHead']?.toString() ?? '') ?? 0,
       distance: double.tryParse(json['distance']?.toString() ?? '') ?? 0,
       heading: double.tryParse(json['heading']?.toString() ?? '') ?? 0,
+      speedKmh: double.tryParse(json['speedKmh']?.toString() ?? '') ?? 0,
+      motorPwm: int.tryParse(json['motorPwm']?.toString() ?? '') ?? 0,
       battery: int.tryParse(json['battery']?.toString() ?? '') ?? 0,
       status: json['status']?.toString() ?? '',
       mode: json['mode']?.toString() ?? '',
@@ -70,6 +80,8 @@ class BoatData {
       stepSpr: int.tryParse(json['stepSpr']?.toString() ?? '') ?? 4096,
       stepMaxSpd: double.tryParse(json['stepMaxSpd']?.toString() ?? '') ?? 1000,
       stepAccel: double.tryParse(json['stepAccel']?.toString() ?? '') ?? 500,
+      stepperDeg: double.tryParse(json['stepperDeg']?.toString() ?? '') ?? 0,
+      motorReverse: int.tryParse(json['motorReverse']?.toString() ?? '') == 1,
       headingRaw: double.tryParse(json['headingRaw']?.toString() ?? '') ?? 0,
       compassOffset:
           double.tryParse(json['compassOffset']?.toString() ?? '') ?? 0,

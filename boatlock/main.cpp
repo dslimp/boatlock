@@ -69,7 +69,8 @@ constexpr int kPwmResolution = 8;
 constexpr int kPwmChannel = 0;
 
 constexpr int kMaxGpsFilterWindow = 20;
-constexpr unsigned long kBleNotifyIntervalMs = 1000;
+constexpr unsigned long kBleNavNotifyIntervalMs = 180;
+constexpr unsigned long kBleDiagNotifyIntervalMs = 700;
 constexpr unsigned long kUiRefreshIntervalMs = 120;
 constexpr unsigned long kStepperCheckIntervalMs = 250;
 constexpr unsigned long kPhoneGpsTimeoutMs = 5000;
@@ -84,8 +85,11 @@ constexpr float kStepperDeadbandBaseDeg = 2.2f;
 constexpr float kStepperDeadbandMaxDeg = 9.0f;
 constexpr float kStepperDeadbandHystDeg = 0.9f;
 constexpr float kMotorHeadingHystDeg = 2.0f;
+constexpr float kReverseEngageDeg = 95.0f;
+constexpr float kReverseReleaseDeg = 85.0f;
 constexpr unsigned long kSafetyReasonHoldMs = 15000;
 constexpr unsigned long kSimResultBannerMs = 15000;
+constexpr unsigned long kSimTraceIntervalMs = 1000;
 } // namespace cfg
 
 HardwareSerial gpsSerial(1);
@@ -160,6 +164,12 @@ int manualDir = -1;
 int manualSpeed = 0;
 hilsim::HilSimManager hilSim;
 unsigned long simLastWallMs = 0;
+bool simGeoRefValid = false;
+std::string simGeoRefScenarioId;
+float simGeoRefLat = 0.0f;
+float simGeoRefLon = 0.0f;
+float simGeoRefXM = 0.0f;
+float simGeoRefYM = 0.0f;
 
 void setPhoneGpsFix(float lat, float lon, float speedKmh, int satellites);
 void captureStepperBowZero();
@@ -184,12 +194,14 @@ TaskHandle_t stepperTaskHandle = nullptr;
 
 unsigned long lastGpsDebugMs = 0;
 unsigned long lastGpsJumpRejectLogMs = 0;
-unsigned long lastBleNotifyMs = 0;
+unsigned long lastBleNavNotifyMs = 0;
+unsigned long lastBleDiagNotifyMs = 0;
 unsigned long lastUiRefreshMs = 0;
 unsigned long lastStepperCheckMs = 0;
 unsigned long lastCompassRetryMs = 0;
 bool stepperTrackingActive = false;
 bool motorHeadingAligned = false;
+bool motorReverseActive = false;
 bool lastBootButton = HIGH;
 bool lastStopButton = HIGH;
 unsigned long stopButtonDownSinceMs = 0;
@@ -200,6 +212,7 @@ unsigned long bootMs = 0;
 bool simRunLatched = false;
 unsigned long simResultBannerUntilMs = 0;
 char simResultBadge[24] = {0};
+unsigned long lastSimTraceMs = 0;
 
 const char* fixTypeSourceString(FixTypeSource src) {
   switch (src) {
@@ -375,6 +388,141 @@ float normalize180Deg(float deg) {
   return deg;
 }
 
+bool projectLatLon(float baseLat,
+                   float baseLon,
+                   float bearingDeg,
+                   float meters,
+                   float* outLat,
+                   float* outLon) {
+  if (!outLat || !outLon) {
+    return false;
+  }
+  if (!isfinite(baseLat) || !isfinite(baseLon) || !isfinite(bearingDeg) || !isfinite(meters) ||
+      baseLat < -90.0f || baseLat > 90.0f || baseLon < -180.0f || baseLon > 180.0f ||
+      meters < 0.0f) {
+    return false;
+  }
+
+  const double lat1 = baseLat * (M_PI / 180.0);
+  const double lon1 = baseLon * (M_PI / 180.0);
+  const double brg = normalize360Deg(bearingDeg) * (M_PI / 180.0);
+  const double distRatio = meters / 6378137.0;
+
+  const double sinLat2 =
+      sin(lat1) * cos(distRatio) + cos(lat1) * sin(distRatio) * cos(brg);
+  const double lat2 = asin(sinLat2);
+  const double lon2 = lon1 + atan2(sin(brg) * sin(distRatio) * cos(lat1),
+                                   cos(distRatio) - sin(lat1) * sin(lat2));
+
+  *outLat = (float)(lat2 * 180.0 / M_PI);
+  *outLon = (float)(lon2 * 180.0 / M_PI);
+  return true;
+}
+
+void resetSimGeoRef() {
+  simGeoRefValid = false;
+  simGeoRefScenarioId.clear();
+  simGeoRefLat = 0.0f;
+  simGeoRefLon = 0.0f;
+  simGeoRefXM = 0.0f;
+  simGeoRefYM = 0.0f;
+}
+
+bool simBoatLatLonFromLive(const hilsim::HilScenarioRunner::LiveTelemetry& simLive,
+                           float fallbackLat,
+                           float fallbackLon,
+                           float* outLat,
+                           float* outLon) {
+  if (!simLive.valid || !simLive.gnss.valid || !isfinite(simLive.world.xM) ||
+      !isfinite(simLive.world.yM)) {
+    return false;
+  }
+
+  const std::string sid = hilSim.currentScenarioId();
+  if (!simGeoRefValid || simGeoRefScenarioId != sid) {
+    if (hasAnchorPoint() && isfinite(simLive.errTrueM) && isfinite(simLive.bearingDeg) &&
+        simLive.errTrueM >= 0.0f) {
+      const float brgRad = normalize360Deg(simLive.bearingDeg) * (M_PI / 180.0f);
+      const float dxToAnchor = simLive.errTrueM * sinf(brgRad);
+      const float dyToAnchor = simLive.errTrueM * cosf(brgRad);
+      simGeoRefXM = simLive.world.xM + dxToAnchor;
+      simGeoRefYM = simLive.world.yM + dyToAnchor;
+      simGeoRefLat = anchor.anchorLat;
+      simGeoRefLon = anchor.anchorLon;
+    } else if (isfinite(fallbackLat) && isfinite(fallbackLon) &&
+               !(fallbackLat == 0.0f && fallbackLon == 0.0f)) {
+      simGeoRefXM = simLive.world.xM;
+      simGeoRefYM = simLive.world.yM;
+      simGeoRefLat = fallbackLat;
+      simGeoRefLon = fallbackLon;
+    } else {
+      return false;
+    }
+    simGeoRefScenarioId = sid;
+    simGeoRefValid = true;
+  }
+
+  const float dx = simLive.world.xM - simGeoRefXM;
+  const float dy = simLive.world.yM - simGeoRefYM;
+  const float distM = hypotf(dx, dy);
+  const float bearing = normalize360Deg(atan2f(dx, dy) * 57.2957795f);
+  return projectLatLon(simGeoRefLat, simGeoRefLon, bearing, distM, outLat, outLon);
+}
+
+struct SimBleSnapshot {
+  bool valid = false;
+  bool gpsFix = false;
+  float lat = 0.0f;
+  float lon = 0.0f;
+  float heading = 0.0f;
+  float headingRaw = 0.0f;
+  float distance = 0.0f;
+  float speedKmh = 0.0f;
+  int motorPwm = 0;
+  float stepperDeg = 0.0f;
+  bool motorReverse = false;
+};
+
+bool readSimBleSnapshot(SimBleSnapshot* out) {
+  if (!out) return false;
+  *out = {};
+  if (!hilSim.isRunning()) return false;
+
+  hilsim::HilScenarioRunner::LiveTelemetry simLive;
+  if (!hilSim.liveTelemetry(&simLive) || !simLive.valid) {
+    return false;
+  }
+
+  out->valid = true;
+  out->gpsFix = simLive.gnss.valid;
+  if (simLive.heading.valid && isfinite(simLive.heading.headingDeg) &&
+      !isnan(simLive.heading.headingDeg)) {
+    out->heading = simLive.heading.headingDeg;
+    out->headingRaw = simLive.heading.headingDeg;
+  }
+  if (isfinite(simLive.errTrueM)) {
+    out->distance = simLive.errTrueM;
+  }
+  if (isfinite(simLive.speedMps)) {
+    out->speedKmh = simLive.speedMps * 3.6f;
+  }
+  out->motorPwm = constrain((int)lroundf(simLive.command.thrust * 100.0f), 0, 100);
+  out->stepperDeg = constrain(simLive.command.steerDeg,
+                              -StepperControl::MAX_RELATIVE_STEER_DEG,
+                              StepperControl::MAX_RELATIVE_STEER_DEG);
+  out->motorReverse = false;
+
+  const float fallbackLat = gpsFix && isfinite(lastLat) ? lastLat : 0.0f;
+  const float fallbackLon = gpsFix && isfinite(lastLon) ? lastLon : 0.0f;
+  float simLat = 0.0f;
+  float simLon = 0.0f;
+  if (simBoatLatLonFromLive(simLive, fallbackLat, fallbackLon, &simLat, &simLon)) {
+    out->lat = simLat;
+    out->lon = simLon;
+  }
+  return true;
+}
+
 void maybeUpdateGpsHeadingCorrection(float lat, float lon, float speedKmh) {
   if (!compassReady) {
     gpsCorrRefValid = false;
@@ -478,18 +626,26 @@ void registerBleParams() {
   bleBoatLock.setCommandHandler(handleBleCommand);
 
   bleBoatLock.registerParam("lat", makeFloatParam([&]() {
+    SimBleSnapshot sim;
+    if (readSimBleSnapshot(&sim) && sim.gpsFix) return sim.lat;
     return gpsFix ? lastLat : 0.0f;
   }, "%.6f"));
 
   bleBoatLock.registerParam("lon", makeFloatParam([&]() {
+    SimBleSnapshot sim;
+    if (readSimBleSnapshot(&sim) && sim.gpsFix) return sim.lon;
     return gpsFix ? lastLon : 0.0f;
   }, "%.6f"));
 
   bleBoatLock.registerParam("heading", makeFloatParam([&]() {
+    SimBleSnapshot sim;
+    if (readSimBleSnapshot(&sim) && isfinite(sim.heading)) return sim.heading;
     return currentHeadingValue();
   }, "%.1f"));
 
   bleBoatLock.registerParam("headingRaw", makeFloatParam([&]() {
+    SimBleSnapshot sim;
+    if (readSimBleSnapshot(&sim) && isfinite(sim.headingRaw)) return sim.headingRaw;
     return compassReady ? compass.getRawAzimuth() : 0.0f;
   }, "%.1f"));
 
@@ -555,6 +711,10 @@ void registerBleParams() {
     return settings.get("HoldHeading");
   }, "%.0f"));
 
+  bleBoatLock.registerParam("anchorModeName", [&]() {
+    return std::string(settings.get("HoldHeading") == 1 ? "POSITION_HEADING" : "POSITION");
+  });
+
   bleBoatLock.registerParam("stepSpr", makeFloatParam([&]() {
     return settings.get("StepSpr");
   }, "%.0f"));
@@ -567,8 +727,28 @@ void registerBleParams() {
     return settings.get("StepAccel");
   }, "%.0f"));
 
+  bleBoatLock.registerParam("stepperDeg", makeFloatParam([&]() {
+    SimBleSnapshot sim;
+    if (readSimBleSnapshot(&sim)) return sim.stepperDeg;
+    return stepperControl.relativeSteerDeg();
+  }, "%.1f"));
+
+  bleBoatLock.registerParam("motorReverse", makeFloatParam([&]() {
+    SimBleSnapshot sim;
+    if (readSimBleSnapshot(&sim)) return sim.motorReverse ? 1.0f : 0.0f;
+    return motorReverseActive ? 1.0f : 0.0f;
+  }, "%.0f"));
+
   bleBoatLock.registerParam("distance", makeFloatParam([&]() {
+    SimBleSnapshot sim;
+    if (readSimBleSnapshot(&sim) && isfinite(sim.distance)) return sim.distance;
     return dist;
+  }, "%.2f"));
+
+  bleBoatLock.registerParam("speedKmh", makeFloatParam([&]() {
+    SimBleSnapshot sim;
+    if (readSimBleSnapshot(&sim) && isfinite(sim.speedKmh)) return sim.speedKmh;
+    return currentSpeedKmh;
   }, "%.2f"));
 
   bleBoatLock.registerParam("driftSpeed", makeFloatParam([&]() {
@@ -588,6 +768,8 @@ void registerBleParams() {
   }, "%.0f"));
 
   bleBoatLock.registerParam("motorPwm", makeFloatParam([&]() {
+    SimBleSnapshot sim;
+    if (readSimBleSnapshot(&sim)) return (float)sim.motorPwm;
     return (float)motor.pwmPercent();
   }, "%.0f"));
 
@@ -711,14 +893,27 @@ void updateGpsFromSerial() {
           TinyGPSPlus::distanceBetween(lastLat, lastLon, rawLat, rawLon);
       currentPosJumpM = isfinite(jumpM) ? jumpM : 0.0f;
       if (isfinite(jumpM) && jumpM > maxPosJumpM) {
-        currentPosJumpRejected = true;
+        const bool anchorEnabled = settings.get("AnchorEnabled") == 1;
         currentGpsAgeMs = gps.location.age();
         const unsigned long now = millis();
         if (now - lastGpsJumpRejectLogMs >= 1000UL) {
-          logMessage("[EVENT] GPS_JUMP_REJECTED jump=%.2f max=%.2f\n", jumpM, maxPosJumpM);
+          if (anchorEnabled) {
+            logMessage("[EVENT] GPS_JUMP_REJECTED jump=%.2f max=%.2f anchor=1\n",
+                       jumpM,
+                       maxPosJumpM);
+          } else {
+            logMessage("[EVENT] GPS_JUMP_ALLOWED jump=%.2f max=%.2f anchor=0\n",
+                       jumpM,
+                       maxPosJumpM);
+          }
           lastGpsJumpRejectLogMs = now;
         }
-        return;
+        if (anchorEnabled) {
+          currentPosJumpRejected = true;
+          return;
+        }
+        // In non-anchor mode keep UI position live even with noisy GNSS.
+        gpsFilter.reset(requestedWindow);
       }
     }
 
@@ -836,21 +1031,17 @@ void handleStopButton() {
 
 void updateDistanceAndBearing() {
   if (!manualMode && settings.get("AnchorEnabled") == 1) {
-    if (settings.get("HoldHeading") == 1) {
-      bearing = anchor.anchorHeading;
-      dist = gpsFix
-                 ? TinyGPSPlus::distanceBetween(lastLat, lastLon, anchor.anchorLat, anchor.anchorLon)
-                 : 0.0f;
-      return;
-    }
-
     if (gpsFix) {
       dist = TinyGPSPlus::distanceBetween(lastLat, lastLon, anchor.anchorLat, anchor.anchorLon);
       const float computedBearing =
           TinyGPSPlus::courseTo(lastLat, lastLon, anchor.anchorLat, anchor.anchorLon);
       if (isfinite(computedBearing)) {
-        bearing = computedBearing;
-        anchorBearingCacheDeg = computedBearing;
+        const bool holdHeadingMode = (settings.get("HoldHeading") == 1);
+        const float holdRadiusMeters = max(0.5f, settings.get("HoldRadius"));
+        bearing = (holdHeadingMode && isfinite(dist) && dist <= holdRadiusMeters)
+                      ? anchor.anchorHeading
+                      : computedBearing;
+        anchorBearingCacheDeg = bearing;
         anchorBearingCacheUpdatedMs = millis();
         anchorBearingCacheValid = true;
       } else if (anchorBearingCacheValid &&
@@ -892,6 +1083,7 @@ void applyMotionControl(unsigned long now,
   if (manualMode) {
     stepperTrackingActive = false;
     motorHeadingAligned = false;
+    motorReverseActive = false;
     if (manualDir == 0) {
       stepperControl.startManual(-1);
     } else if (manualDir == 1) {
@@ -906,9 +1098,28 @@ void applyMotionControl(unsigned long now,
   stepperControl.stopManual();
 
   bool motorCanRun = false;
+  float steerBearing = bearing;
+  if (hasHeading && hasBearing) {
+    const float absAnchorDiff = fabsf(diff);
+    if (motorReverseActive) {
+      if (absAnchorDiff <= cfg::kReverseReleaseDeg) {
+        motorReverseActive = false;
+      }
+    } else if (absAnchorDiff >= cfg::kReverseEngageDeg) {
+      motorReverseActive = true;
+    }
+    if (motorReverseActive) {
+      steerBearing = normalize360Deg(bearing + 180.0f);
+    }
+  } else {
+    motorReverseActive = false;
+  }
+
+  const float steerDiff =
+      (hasHeading && hasBearing) ? normalizeDiffDeg(steerBearing, heading) : 0.0f;
   if (autoControlActive) {
     if (hasHeading && hasBearing) {
-      const float absDiff = fabsf(diff);
+      const float absDiff = fabsf(steerDiff);
       const float deadband = currentStepperDeadbandDeg();
       const float engageBand = deadband + cfg::kStepperDeadbandHystDeg;
 
@@ -922,7 +1133,7 @@ void applyMotionControl(unsigned long now,
 
       if (stepperTrackingActive &&
           now - lastStepperCheckMs >= cfg::kStepperCheckIntervalMs) {
-        stepperControl.pointToBearing(bearing, heading);
+        stepperControl.pointToBearing(steerBearing, heading);
         lastStepperCheckMs = now;
       } else if (!stepperTrackingActive) {
         stepperControl.cancelMove();
@@ -941,11 +1152,13 @@ void applyMotionControl(unsigned long now,
     } else {
       stepperTrackingActive = false;
       motorHeadingAligned = false;
+      motorReverseActive = false;
       stepperControl.cancelMove();
     }
   } else {
     stepperTrackingActive = false;
     motorHeadingAligned = false;
+    motorReverseActive = false;
     stepperControl.cancelMove();
   }
 
@@ -959,7 +1172,8 @@ void applyMotionControl(unsigned long now,
                         allowThrust,
                         deadbandMeters,
                         maxThrustPctAnchor,
-                        thrustRampPctPerS);
+                        thrustRampPctPerS,
+                        motorReverseActive);
 }
 
 void publishBleAndUi(unsigned long now,
@@ -969,6 +1183,8 @@ void publishBleAndUi(unsigned long now,
                      float diffDeg,
                      const char* stickyBadge) {
   const char* mode = currentModeLabel();
+  hilsim::HilScenarioRunner::LiveTelemetry simLive;
+  bool simLiveOk = false;
   bool uiGpsFix = gpsFix;
   int uiSatellites = currentSatellites;
   bool uiGpsFromPhone = gpsSourcePhone;
@@ -984,8 +1200,8 @@ void publishBleAndUi(unsigned long now,
   int uiMotorPwmPercent = motor.pwmPercent();
 
   if (hilSim.isRunning()) {
-    hilsim::HilScenarioRunner::LiveTelemetry simLive;
-    if (hilSim.liveTelemetry(&simLive) && simLive.valid) {
+    simLiveOk = hilSim.liveTelemetry(&simLive) && simLive.valid;
+    if (simLiveOk) {
       uiGpsFix = simLive.gnss.valid;
       uiSatellites = simLive.gnss.sats;
       uiGpsFromPhone = false;
@@ -1002,9 +1218,12 @@ void publishBleAndUi(unsigned long now,
       uiDiffDeg = uiHeadingValid ? normalizeDiffDeg(uiBearing, uiHeading) : 0.0f;
       uiMotorPwmPercent = constrain((int)lroundf(simLive.command.thrust * 100.0f), 0, 100);
     }
+  } else if (simGeoRefValid) {
+    resetSimGeoRef();
   }
 
   if (now - lastUiRefreshMs >= cfg::kUiRefreshIntervalMs) {
+    const bool forceUiRedraw = hilSim.isRunning();
     display_draw_ui(uiGpsFix,
                     uiSatellites,
                     uiGpsFromPhone,
@@ -1019,62 +1238,163 @@ void publishBleAndUi(unsigned long now,
                     uiDiffDeg,
                     mode,
                     stickyBadge,
-                    uiMotorPwmPercent);
+                    uiMotorPwmPercent,
+                    forceUiRedraw);
     lastUiRefreshMs = now;
   }
 
-  if (now - lastBleNotifyMs >= cfg::kBleNotifyIntervalMs) {
-    std::string err;
+  std::string err;
+  if (hilSim.isRunning()) {
+    if (!uiGpsFix) {
+      err = "NO_GPS";
+    }
+  } else {
     if (!gps.location.isValid() && !gpsFix) {
       err = "NO_GPS";
     } else if (!gpsQualityGoodForAnchorOn()) {
       err = currentGnssFailReason();
     }
-    if (!hasHeading) {
-      if (!err.empty()) {
-        err += ",";
-      }
-      err += "NO_COMPASS";
-    }
-    if (driftFailActive) {
-      if (!err.empty()) {
-        err += ",";
-      }
-      err += "DRIFT_FAIL";
-    } else if (driftAlertActive) {
-      if (!err.empty()) {
-        err += ",";
-      }
-      err += "DRIFT_ALERT";
-    }
-    if (settings.get("AnchorEnabled") != 1 && lastAnchorDeniedReason != AnchorDeniedReason::NONE) {
-      if (!err.empty()) {
-        err += ",";
-      }
-      err += currentAnchorDeniedReason();
-    }
-    if (lastFailsafeReason != FailsafeReason::NONE) {
-      if (!err.empty()) {
-        err += ",";
-      }
-      err += currentFailsafeReason();
-    }
-    const std::string safety = activeSafetyReason(now);
-    if (!safety.empty()) {
-      if (!err.empty()) {
-        err += ",";
-      }
-      err += safety;
-    }
-
-    std::string status = std::string(bleBoatLock.statusString()) + ":" + mode;
+  }
+  if (!uiHeadingValid) {
     if (!err.empty()) {
-      status += ":" + err;
+      err += ",";
     }
+    err += "NO_COMPASS";
+  }
+  if (driftFailActive) {
+    if (!err.empty()) {
+      err += ",";
+    }
+    err += "DRIFT_FAIL";
+  } else if (driftAlertActive) {
+    if (!err.empty()) {
+      err += ",";
+    }
+    err += "DRIFT_ALERT";
+  }
+  if (settings.get("AnchorEnabled") != 1 && lastAnchorDeniedReason != AnchorDeniedReason::NONE) {
+    if (!err.empty()) {
+      err += ",";
+    }
+    err += currentAnchorDeniedReason();
+  }
+  if (lastFailsafeReason != FailsafeReason::NONE) {
+    if (!err.empty()) {
+      err += ",";
+    }
+    err += currentFailsafeReason();
+  }
+  const std::string safety = activeSafetyReason(now);
+  if (!safety.empty()) {
+    if (!err.empty()) {
+      err += ",";
+    }
+    err += safety;
+  }
 
-    bleBoatLock.setStatus(status);
-    bleBoatLock.notifyAll();
-    lastBleNotifyMs = now;
+  std::string status = std::string(bleBoatLock.statusString()) + ":" + mode;
+  if (!err.empty()) {
+    status += ":" + err;
+  }
+  bleBoatLock.setStatus(status);
+
+  if (now - lastBleNavNotifyMs >= cfg::kBleNavNotifyIntervalMs) {
+    const float safeLat = gpsFix && isfinite(lastLat) ? lastLat : 0.0f;
+    const float safeLon = gpsFix && isfinite(lastLon) ? lastLon : 0.0f;
+    float navLat = safeLat;
+    float navLon = safeLon;
+    if (hilSim.isRunning() && simLiveOk) {
+      float simLat = 0.0f;
+      float simLon = 0.0f;
+      if (simBoatLatLonFromLive(simLive, safeLat, safeLon, &simLat, &simLon)) {
+        navLat = simLat;
+        navLon = simLon;
+      }
+    }
+    const float safeAnchorLat = isfinite(anchor.anchorLat) ? anchor.anchorLat : 0.0f;
+    const float safeAnchorLon = isfinite(anchor.anchorLon) ? anchor.anchorLon : 0.0f;
+    float navDist = isfinite(dist) ? dist : 0.0f;
+    float navHeading = hasHeading && isfinite(heading) ? heading : 0.0f;
+    float navHeadingRaw = compassReady && isfinite(compass.getRawAzimuth())
+                              ? compass.getRawAzimuth()
+                              : 0.0f;
+    float navStepperDeg = stepperControl.relativeSteerDeg();
+    bool navMotorReverse = motorReverseActive;
+    if (hilSim.isRunning() && simLiveOk) {
+      if (isfinite(simLive.errTrueM)) {
+        navDist = simLive.errTrueM;
+      }
+      if (simLive.heading.valid && isfinite(simLive.heading.headingDeg) &&
+          !isnan(simLive.heading.headingDeg)) {
+        navHeading = simLive.heading.headingDeg;
+        navHeadingRaw = simLive.heading.headingDeg;
+      }
+      navStepperDeg = constrain(simLive.command.steerDeg,
+                                -StepperControl::MAX_RELATIVE_STEER_DEG,
+                                StepperControl::MAX_RELATIVE_STEER_DEG);
+      navMotorReverse = false;
+    }
+    char navJson[296];
+    snprintf(navJson,
+             sizeof(navJson),
+             "{\"lat\":%.6f,\"lon\":%.6f,\"anchorLat\":%.6f,\"anchorLon\":%.6f,"
+             "\"distance\":%.2f,\"heading\":%.1f,\"headingRaw\":%.1f,"
+             "\"speedKmh\":%.2f,\"motorPwm\":%d,\"stepperDeg\":%.1f,\"motorReverse\":%d,\"mode\":\"%s\"}",
+             navLat,
+             navLon,
+             safeAnchorLat,
+             safeAnchorLon,
+             navDist,
+             navHeading,
+             navHeadingRaw,
+             uiSpeedKmh,
+             uiMotorPwmPercent,
+             navStepperDeg,
+             navMotorReverse ? 1 : 0,
+             mode);
+    bleBoatLock.notifyJson(navJson);
+    lastBleNavNotifyMs = now;
+  }
+
+  if (now - lastBleDiagNotifyMs >= cfg::kBleDiagNotifyIntervalMs) {
+    std::string statusShort = status;
+    if (statusShort.size() > 80) {
+      statusShort = statusShort.substr(0, 80);
+    }
+    const int compassQ = compassReady ? compass.getHeadingQuality() : 0;
+    const int magQ = compassReady ? compass.getMagQuality() : 0;
+    const int gyroQ = compassReady ? compass.getGyroQuality() : 0;
+    const float rvAcc = compassReady && isfinite(compass.getRvAccuracyDeg())
+                            ? compass.getRvAccuracyDeg()
+                            : 0.0f;
+    const float magNorm = compassReady && isfinite(compass.getMagNormUT())
+                              ? compass.getMagNormUT()
+                              : 0.0f;
+    const float gyroNorm = compassReady && isfinite(compass.getGyroNormDps())
+                               ? compass.getGyroNormDps()
+                               : 0.0f;
+    const float pitch = compassReady && isfinite(compass.getPitchDeg())
+                            ? compass.getPitchDeg()
+                            : 0.0f;
+    const float roll = compassReady && isfinite(compass.getRollDeg())
+                           ? compass.getRollDeg()
+                           : 0.0f;
+    char diagJson[236];
+    snprintf(diagJson,
+             sizeof(diagJson),
+             "{\"status\":\"%s\",\"compassQ\":%d,\"magQ\":%d,\"gyroQ\":%d,"
+             "\"rvAcc\":%.2f,\"magNorm\":%.2f,\"gyroNorm\":%.2f,\"pitch\":%.2f,\"roll\":%.2f}",
+             statusShort.c_str(),
+             compassQ,
+             magQ,
+             gyroQ,
+             rvAcc,
+             magNorm,
+             gyroNorm,
+             pitch,
+             roll);
+    bleBoatLock.notifyJson(diagJson);
+    lastBleDiagNotifyMs = now;
   }
 }
 
@@ -1268,13 +1588,18 @@ bool handleSimCommand(const std::string& command) {
     stopAllMotionNow();
     setLastFailsafeReason(FailsafeReason::NONE);
     setLastAnchorDeniedReason(AnchorDeniedReason::NONE);
+    const bool holdHeadingMode = (settings.get("HoldHeading") == 1);
+    hilSim.setAnchorMode(holdHeadingMode);
     std::string err;
     if (!hilSim.startRun(scenarioId, speedup, &err)) {
       logMessage("[SIM] RUN failed id=%s err=%s\n", scenarioId.c_str(), err.c_str());
       return true;
     }
     simLastWallMs = millis();
-    logMessage("[SIM] RUN started id=%s speedup=%d\n", scenarioId.c_str(), speedup);
+    logMessage("[SIM] RUN started id=%s speedup=%d mode=%s\n",
+               scenarioId.c_str(),
+               speedup,
+               hilSim.anchorModeStr());
     return true;
   }
 
@@ -1327,6 +1652,7 @@ void stopAllMotionNow() {
   manualSpeed = 0;
   stepperTrackingActive = false;
   motorHeadingAligned = false;
+  motorReverseActive = false;
   stepperControl.stopManual();
   stepperControl.cancelMove();
   motor.stop();
@@ -1344,6 +1670,7 @@ void disableAnchorAndStop(const char* reason) {
   settings.save();
   stepperTrackingActive = false;
   motorHeadingAligned = false;
+  motorReverseActive = false;
   stepperControl.cancelMove();
   motor.stop();
   setSafetyReason(reason);
@@ -1395,17 +1722,36 @@ void applySupervisorDecision(const AnchorSupervisor::Decision& decision) {
     manualSpeed = 0;
     stepperTrackingActive = false;
     motorHeadingAligned = false;
+    motorReverseActive = false;
     stepperControl.stopManual();
     stepperControl.cancelMove();
     motor.stop();
     setSafetyReason(reason);
-    logMessage("[EVENT] FAILSAFE_TRIGGERED reason=%s action=MANUAL\n", reason);
+    logMessage("[EVENT] FAILSAFE_TRIGGERED reason=%s action=MANUAL dist=%.2f gpsFix=%d sats=%d hdop=%.2f softened=%d obsMs=%lu thrMs=%lu mode=%s\n",
+               reason,
+               isfinite(dist) ? dist : -1.0f,
+               gpsFix ? 1 : 0,
+               currentSatellites,
+               isfinite(currentGpsHdop) ? currentGpsHdop : -1.0f,
+               decision.softened ? 1 : 0,
+               (unsigned long)decision.observedMs,
+               (unsigned long)decision.thresholdMs,
+               currentModeLabel());
     return;
   }
 
   stopAllMotionNow();
   setSafetyReason(reason);
-  logMessage("[EVENT] FAILSAFE_TRIGGERED reason=%s action=STOP\n", reason);
+  logMessage("[EVENT] FAILSAFE_TRIGGERED reason=%s action=STOP dist=%.2f gpsFix=%d sats=%d hdop=%.2f softened=%d obsMs=%lu thrMs=%lu mode=%s\n",
+             reason,
+             isfinite(dist) ? dist : -1.0f,
+             gpsFix ? 1 : 0,
+             currentSatellites,
+             isfinite(currentGpsHdop) ? currentGpsHdop : -1.0f,
+             decision.softened ? 1 : 0,
+             (unsigned long)decision.observedMs,
+             (unsigned long)decision.thresholdMs,
+             currentModeLabel());
 }
 
 bool nudgeAnchorBearing(float bearingDeg, float meters) {
@@ -1425,20 +1771,12 @@ bool nudgeAnchorBearing(float bearingDeg, float meters) {
     logMessage("[EVENT] NUDGE_DENIED reason=NO_ANCHOR_POINT\n");
     return false;
   }
-
-  const double lat1 = anchor.anchorLat * (M_PI / 180.0);
-  const double lon1 = anchor.anchorLon * (M_PI / 180.0);
-  const double brg = normalize360Deg(bearingDeg) * (M_PI / 180.0);
-  const double distRatio = meters / 6378137.0;
-
-  const double sinLat2 =
-      sin(lat1) * cos(distRatio) + cos(lat1) * sin(distRatio) * cos(brg);
-  const double lat2 = asin(sinLat2);
-  const double lon2 = lon1 + atan2(sin(brg) * sin(distRatio) * cos(lat1),
-                                   cos(distRatio) - sin(lat1) * sin(lat2));
-
-  const float newLat = (float)(lat2 * 180.0 / M_PI);
-  const float newLon = (float)(lon2 * 180.0 / M_PI);
+  float newLat = 0.0f;
+  float newLon = 0.0f;
+  if (!projectLatLon(anchor.anchorLat, anchor.anchorLon, bearingDeg, meters, &newLat, &newLon)) {
+    logMessage("[EVENT] NUDGE_DENIED reason=PROJECT_FAIL\n");
+    return false;
+  }
   anchor.saveAnchor(newLat, newLon, anchor.anchorHeading, true);
   setSafetyReason("NUDGE_OK");
   logMessage("[EVENT] NUDGE_APPLIED bearing=%.1f meters=%.2f lat=%.6f lon=%.6f\n",
@@ -1586,12 +1924,16 @@ void loop() {
   AnchorSupervisor::Config supCfg;
   supCfg.commTimeoutMs =
       static_cast<unsigned long>(constrain(settings.get("CommToutMs"), 500.0f, 60000.0f));
+  supCfg.linkLossGraceMs = std::max(800UL, supCfg.commTimeoutMs / 2UL);
   supCfg.controlLoopTimeoutMs =
       static_cast<unsigned long>(constrain(settings.get("CtrlLoopMs"), 100.0f, 10000.0f));
   supCfg.sensorTimeoutMs =
       static_cast<unsigned long>(constrain(settings.get("SensorTout"), 300.0f, 30000.0f));
   supCfg.gpsWeakGraceMs =
       static_cast<unsigned long>(constrain(settings.get("GpsWeakHys"), 0.5f, 60.0f) * 1000.0f);
+  supCfg.nonExtremeExtraMs = 1800;
+  supCfg.softeningDistanceM = std::max(8.0f, settings.get("HoldRadius") * 3.0f);
+  supCfg.softeningMaxThrustPct = 45;
   supCfg.maxCommandThrustPct = 100;
   supCfg.failsafeAction =
       ((int)settings.get("FailAct") == 1) ? AnchorSupervisor::SafeAction::MANUAL
@@ -1609,6 +1951,9 @@ void loop() {
   supIn.hasNaN = (!isfinite(dist) || !isfinite(bearing));
   supIn.controlLoopDtMs = loopDtMs;
   supIn.commandThrustPct = motor.pwmPercent();
+  supIn.distanceM = isfinite(dist) ? dist : -1.0f;
+  supIn.driftAlertActive = driftAlertActive;
+  supIn.driftFailActive = driftFailActive;
   applySupervisorDecision(anchorSupervisor.update(supCfg, supIn));
 
   const bool autoControlActive = !manualMode && (settings.get("AnchorEnabled") == 1);
@@ -1668,6 +2013,39 @@ void loop() {
     logMessage("[EVENT] SENSOR_TIMEOUT\n");
   }
   publishBleAndUi(now, hasHeading, hasBearing, heading, diff, stickyBadge);
+
+  if (hilSim.isRunning() && now - lastSimTraceMs >= cfg::kSimTraceIntervalMs) {
+    hilsim::HilScenarioRunner::LiveTelemetry simLive;
+    if (hilSim.liveTelemetry(&simLive) && simLive.valid) {
+      logMessage(
+          "[SIM_TRACE] id=%s mode=%s t=%lu err=%.2f x=%.2f y=%.2f v=%.2f thrust=%.2f steer=%.1f stop=%d "
+          "anchor=%d gnssGood=%d safeStop=%d gnssFix=%d gnssAge=%lu sats=%d hdop=%.2f hdgValid=%d hdg=%.1f "
+          "hdgAge=%lu stopReason=%s rampViol=%d\n",
+          hilSim.currentScenarioId().c_str(),
+          hilSim.anchorModeStr(),
+          (unsigned long)simLive.simMs,
+          isfinite(simLive.errTrueM) ? simLive.errTrueM : -1.0f,
+          isfinite(simLive.world.xM) ? simLive.world.xM : -1.0f,
+          isfinite(simLive.world.yM) ? simLive.world.yM : -1.0f,
+          isfinite(simLive.speedMps) ? simLive.speedMps : -1.0f,
+          isfinite(simLive.command.thrust) ? simLive.command.thrust : -1.0f,
+          isfinite(simLive.command.steerDeg) ? simLive.command.steerDeg : 0.0f,
+          simLive.command.stop ? 1 : 0,
+          simLive.anchorActive ? 1 : 0,
+          simLive.gnssGood ? 1 : 0,
+          simLive.safeStop ? 1 : 0,
+          simLive.gnss.valid ? 1 : 0,
+          (unsigned long)simLive.gnss.ageMs,
+          simLive.gnss.sats,
+          isfinite(simLive.gnss.hdop) ? simLive.gnss.hdop : -1.0f,
+          simLive.heading.valid ? 1 : 0,
+          isfinite(simLive.heading.headingDeg) ? simLive.heading.headingDeg : -1.0f,
+          (unsigned long)simLive.heading.ageMs,
+          simctl::stopReasonStr(simLive.stopReason),
+          simLive.rampViolation ? 1 : 0);
+      lastSimTraceMs = now;
+    }
+  }
 
   bleBoatLock.loop();
 }

@@ -11,6 +11,8 @@ BoatData _data({required double lat, required double lon}) {
     anchorHeading: 0,
     distance: 0,
     heading: 0,
+    speedKmh: 0,
+    motorPwm: 0,
     battery: 0,
     status: '',
     mode: '',
@@ -19,6 +21,8 @@ BoatData _data({required double lat, required double lon}) {
     stepSpr: 200,
     stepMaxSpd: 1000,
     stepAccel: 500,
+    stepperDeg: 0,
+    motorReverse: false,
     headingRaw: 0,
     compassOffset: 0,
     compassQ: 0,
@@ -52,9 +56,18 @@ void main() {
   });
 
   test('buildSetAnchorCommandFromCoords validates ranges', () {
-    expect(BleBoatLock.buildSetAnchorCommandFromCoords(59.1, 30.2), 'SET_ANCHOR:59.100000,30.200000');
-    expect(BleBoatLock.buildSetAnchorCommandFromCoords(double.nan, 30.2), isNull);
-    expect(BleBoatLock.buildSetAnchorCommandFromCoords(59.1, double.infinity), isNull);
+    expect(
+      BleBoatLock.buildSetAnchorCommandFromCoords(59.1, 30.2),
+      'SET_ANCHOR:59.100000,30.200000',
+    );
+    expect(
+      BleBoatLock.buildSetAnchorCommandFromCoords(double.nan, 30.2),
+      isNull,
+    );
+    expect(
+      BleBoatLock.buildSetAnchorCommandFromCoords(59.1, double.infinity),
+      isNull,
+    );
     expect(BleBoatLock.buildSetAnchorCommandFromCoords(-95.0, 30.0), isNull);
     expect(BleBoatLock.buildSetAnchorCommandFromCoords(59.0, 181.0), isNull);
   });
@@ -82,22 +95,43 @@ void main() {
   });
 
   test('buildNudgeDirCommand validates direction and distance', () {
-    expect(BleBoatLock.buildNudgeDirCommand('left', meters: 2.0), 'NUDGE_DIR:LEFT,2.0');
+    expect(
+      BleBoatLock.buildNudgeDirCommand('left', meters: 2.0),
+      'NUDGE_DIR:LEFT,2.0',
+    );
     expect(BleBoatLock.buildNudgeDirCommand('foo', meters: 2.0), isNull);
     expect(BleBoatLock.buildNudgeDirCommand('RIGHT', meters: 0.5), isNull);
     expect(BleBoatLock.buildNudgeDirCommand('RIGHT', meters: 6.0), isNull);
   });
 
-  test('buildNudgeBearingCommand normalizes bearing and validates distance', () {
-    expect(BleBoatLock.buildNudgeBearingCommand(450.0, meters: 3.0), 'NUDGE_BRG:90.0,3.0');
-    expect(BleBoatLock.buildNudgeBearingCommand(-10.0, meters: 1.0), 'NUDGE_BRG:350.0,1.0');
-    expect(BleBoatLock.buildNudgeBearingCommand(double.nan, meters: 2.0), isNull);
-    expect(BleBoatLock.buildNudgeBearingCommand(120.0, meters: 0.9), isNull);
-  });
+  test(
+    'buildNudgeBearingCommand normalizes bearing and validates distance',
+    () {
+      expect(
+        BleBoatLock.buildNudgeBearingCommand(450.0, meters: 3.0),
+        'NUDGE_BRG:90.0,3.0',
+      );
+      expect(
+        BleBoatLock.buildNudgeBearingCommand(-10.0, meters: 1.0),
+        'NUDGE_BRG:350.0,1.0',
+      );
+      expect(
+        BleBoatLock.buildNudgeBearingCommand(double.nan, meters: 2.0),
+        isNull,
+      );
+      expect(BleBoatLock.buildNudgeBearingCommand(120.0, meters: 0.9), isNull);
+    },
+  );
 
   test('buildSetAnchorProfileCommand validates profile values', () {
-    expect(BleBoatLock.buildSetAnchorProfileCommand('quiet'), 'SET_ANCHOR_PROFILE:quiet');
-    expect(BleBoatLock.buildSetAnchorProfileCommand(' CURRENT '), 'SET_ANCHOR_PROFILE:current');
+    expect(
+      BleBoatLock.buildSetAnchorProfileCommand('quiet'),
+      'SET_ANCHOR_PROFILE:quiet',
+    );
+    expect(
+      BleBoatLock.buildSetAnchorProfileCommand(' CURRENT '),
+      'SET_ANCHOR_PROFILE:current',
+    );
     expect(BleBoatLock.buildSetAnchorProfileCommand('storm'), isNull);
     expect(BleBoatLock.buildSetAnchorProfileCommand(''), isNull);
   });
