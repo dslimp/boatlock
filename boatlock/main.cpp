@@ -74,6 +74,8 @@ constexpr unsigned long kUiRefreshIntervalMs = 120;
 constexpr unsigned long kStepperCheckIntervalMs = 250;
 constexpr unsigned long kPhoneGpsTimeoutMs = 5000;
 constexpr unsigned long kCompassRetryIntervalMs = 5000;
+constexpr unsigned long kGpsUartStaleRestartMs = 6000;
+constexpr unsigned long kGpsUartRestartCooldownMs = 4000;
 constexpr float kGpsCorrMinSpeedKmh = 3.0f;
 constexpr float kGpsCorrMinMoveM = 4.0f;
 constexpr float kGpsCorrAlpha = 0.18f;
@@ -196,7 +198,10 @@ unsigned long stopButtonDownSinceMs = 0;
 bool stopPairingActionDone = false;
 bool gpsUartSeen = false;
 bool gpsNoDataWarned = false;
+bool gpsUartStaleLogged = false;
 unsigned long bootMs = 0;
+unsigned long lastGpsByteMs = 0;
+unsigned long lastGpsUartRestartMs = 0;
 bool simRunLatched = false;
 unsigned long simResultBannerUntilMs = 0;
 char simResultBadge[24] = {0};
@@ -674,10 +679,39 @@ void updateGpsFromSerial() {
                cfg::kGpsRxPin,
                cfg::kGpsTxPin);
   }
+  if (bytesRead > 0) {
+    lastGpsByteMs = millis();
+    gpsUartStaleLogged = false;
+  }
 
   if (!gpsUartSeen && !gpsNoDataWarned && millis() - bootMs > 6000) {
     gpsNoDataWarned = true;
     logMessage("[GPS] no UART bytes on RX=%d (check wiring/baud/power)\n", cfg::kGpsRxPin);
+  }
+
+  const unsigned long now = millis();
+  if (gpsUartSeen &&
+      lastGpsByteMs > 0 &&
+      now > lastGpsByteMs &&
+      (now - lastGpsByteMs) >= cfg::kGpsUartStaleRestartMs) {
+    if (!gpsUartStaleLogged) {
+      gpsUartStaleLogged = true;
+      logMessage("[GPS] UART stream stale (%lu ms), restarting serial\n",
+                 (unsigned long)(now - lastGpsByteMs));
+    }
+    if (lastGpsUartRestartMs == 0 ||
+        now - lastGpsUartRestartMs >= cfg::kGpsUartRestartCooldownMs) {
+      lastGpsUartRestartMs = now;
+      gpsSerial.end();
+      delay(20);
+      gpsSerial.begin(9600, SERIAL_8N1, cfg::kGpsRxPin, cfg::kGpsTxPin);
+      gps = TinyGPSPlus();
+      gpsUartSeen = false;
+      gpsNoDataWarned = false;
+      logMessage("[GPS] UART restarted RX=%d TX=%d baud=9600\n",
+                 cfg::kGpsRxPin,
+                 cfg::kGpsTxPin);
+    }
   }
 
   if (settings.get("DebugGps") == 1 && millis() - lastGpsDebugMs >= 1000) {
@@ -1502,6 +1536,9 @@ void setup() {
   fallbackBearing = random(0, 360);
 
   gpsSerial.begin(9600, SERIAL_8N1, cfg::kGpsRxPin, cfg::kGpsTxPin);
+  lastGpsByteMs = millis();
+  lastGpsUartRestartMs = 0;
+  gpsUartStaleLogged = false;
 
   EEPROM.begin(EEPROM_SIZE);
   settings.load();
@@ -1558,7 +1595,17 @@ void loop() {
 
   if (!compassReady && millis() - lastCompassRetryMs >= cfg::kCompassRetryIntervalMs) {
     lastCompassRetryMs = millis();
+    Wire.begin(cfg::kI2cSdaPin, cfg::kI2cSclPin);
+    Wire.setTimeOut(20);
+    delay(120);
     compassReady = compass.init();
+    if (!compassReady) {
+      // Second attempt after short I2C reset helps recover some BNO08x boot races.
+      Wire.begin(cfg::kI2cSdaPin, cfg::kI2cSclPin);
+      Wire.setTimeOut(20);
+      delay(120);
+      compassReady = compass.init();
+    }
     logMessage("[COMPASS] retry ready=%d source=%s", (int)compassReady, compass.sourceName());
     if (compassReady) {
       logMessage(" addr=0x%02X", compass.bnoI2cAddress());
@@ -1567,6 +1614,8 @@ void loop() {
     if (compassReady) {
       compass.loadCalibrationFromSettings();
       logMessage("[COMPASS] heading offset=%.1f\n", compass.getHeadingOffsetDeg());
+    } else {
+      logI2cInventory();
     }
   }
 

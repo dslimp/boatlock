@@ -21,6 +21,7 @@ public:
         magNormUT = 0.0f;
         gyroNormDps = 0.0f;
         bnoAddress = 0;
+        lastEventMs = 0;
 
         if (initBno(0x4B) || initBno(0x4A)) {
             sh2_setCalConfig(SH2_CAL_ACCEL | SH2_CAL_GYRO | SH2_CAL_MAG);
@@ -54,9 +55,12 @@ public:
 
     float getHeadingOffsetDeg() const { return headingOffsetDeg; }
 
-    void read() {
+    bool read() {
+        bool gotAnyEvent = false;
         sh2_SensorValue_t event;
         while (bno08x.getSensorEvent(&event)) {
+            gotAnyEvent = true;
+            lastEventMs = millis();
             if (event.sensorId == SH2_ROTATION_VECTOR) {
                 const float qw = event.un.rotationVector.real;
                 const float qx = event.un.rotationVector.i;
@@ -96,6 +100,7 @@ public:
                 gyroQuality = (event.status & 0x03);
             }
         }
+        return gotAnyEvent;
     }
 
     float getAzimuth() const { return headingDeg; }
@@ -108,6 +113,12 @@ public:
     uint8_t getGyroQuality() const { return gyroQuality; }
     float getPitchDeg() const { return pitchDeg; }
     float getRollDeg() const { return rollDeg; }
+    unsigned long lastEventAgeMs(unsigned long nowMs) const {
+        if (lastEventMs == 0 || nowMs < lastEventMs) {
+            return 0xFFFFFFFFUL;
+        }
+        return nowMs - lastEventMs;
+    }
 
     // Legacy command kept to avoid breaking BLE API; BNO calibrates itself.
     void calibrate() {}
@@ -133,6 +144,7 @@ private:
     Settings* settings = nullptr;
     Adafruit_BNO08x bno08x{-1};
     uint8_t bnoAddress = 0;
+    unsigned long lastEventMs = 0;
 
     float headingDeg = 0.0f;
     float headingRawDeg = 0.0f;

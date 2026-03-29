@@ -1,0 +1,7 @@
+interface:
+  display_name: "BoatLock"
+  short_description: "BoatLock firmware, BLE, UI, and HIL guardrails"
+  default_prompt: "Use $boatlock to work in the BoatLock repo without breaking firmware, BLE, UI, security, or HIL invariants."
+
+policy:
+  allow_implicit_invocation: true

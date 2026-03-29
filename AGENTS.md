@@ -1,107 +1,136 @@
 # BoatLock Agent Notes
 
-This file captures non-obvious project behavior that must stay stable unless explicitly changed.
+## Repo Skill
 
-## Hardware Baseline
+- Use the repo-local skill at `skills/boatlock/SKILL.md` for any BoatLock task.
+- Load only the reference file you need:
+  - firmware/runtime/hardware: `skills/boatlock/references/firmware.md`
+  - BLE/UI/security: `skills/boatlock/references/ble-ui.md`
+  - build/test/release workflow: `skills/boatlock/references/validation.md`
 
-- Compass: only `BNO08x` is supported in main firmware.
-- Legacy `HMC5883` support is removed and must not be reintroduced.
-- BNO08x I2C addresses: `0x4B` (primary), `0x4A` (fallback).
+## Canonical Sources
 
-## I2C Pins
+- Treat code as the source of truth when prose docs disagree.
+- Runtime, pinout, source selection, safety, and BLE params:
+  - `boatlock/main.cpp`
+  - `boatlock/BNO08xCompass.h`
+  - `boatlock/display.cpp`
+  - `boatlock/Settings.h`
+- BLE transport and accepted command surface:
+  - `boatlock/BLEBoatLock.cpp`
+  - `boatlock/BleCommandHandler.h`
+- Flutter BLE client and parsing:
+  - `boatlock_ui/lib/ble/ble_boatlock.dart`
+  - `boatlock_ui/lib/models/boat_data.dart`
+- Protocol and schema docs:
+  - `docs/BLE_PROTOCOL.md`
+  - `docs/CONFIG_SCHEMA.md`
+- Known stale areas:
+  - historical compass/phone-heading notes may lag the current code
+  - the HC 160A direction pin snippet in `README.md` is not the current source of truth; trust `boatlock/main.cpp`
 
-- Default firmware (`esp32s3`): `SDA=47`, `SCL=48`.
-- `BOATLOCK_BOARD_JC4832W535`: `SDA=4`, `SCL=8` because LCD QSPI occupies `47/48`.
-- On boot firmware prints I2C inventory (`[I2C] ...`) and should list found devices.
+## Repo Layout
 
-## GPS Source Priority
+- `boatlock/`: ESP32-S3 firmware built with PlatformIO
+- `boatlock_ui/`: Flutter mobile/desktop client
+- `docs/`: BLE protocol, config schema, manual control, release notes
+- `tools/sim/`: offline Python anchor simulation harness
+- `tools/ci/`: version/schema/release-note checks and shell lint helpers
 
-1. Use hardware GPS when location is valid and age `< 2000 ms`.
-2. Otherwise use phone GPS (`SET_PHONE_GPS`) if fresh `< 5000 ms`.
-3. Otherwise GPS fix is considered unavailable.
+## Hardware And Runtime Invariants
 
-Notes:
-- Hardware GPS path applies moving-average filter with window from setting `GpsFWin` (`1..20`).
-- `gpsFromPhone` is set only when phone GPS fallback is active.
+- Compass support in main firmware is `BNO08x` only.
+- Do not reintroduce `HMC5883`, phone-heading fallback, route subsystem, or removed log-export flows unless the task explicitly restores them end-to-end.
+- Current firmware pinout in `boatlock/main.cpp`:
+  - default board:
+    - I2C `SDA=47`, `SCL=48`
+    - GPS `RX=17`, `TX=18`
+    - motor `PWM=7`, direction pins `5/10`
+    - BOOT button `0`
+    - STOP button `15`
+  - `BOATLOCK_BOARD_JC4832W535`:
+    - I2C `SDA=4`, `SCL=8` because LCD QSPI occupies `47/48`
+    - stepper pins `11/12/13/14`
+- BNO08x probing order is `0x4B`, then `0x4A`.
+- Firmware enables BNO runtime calibration and DCD autosave.
+- On boot and on failed compass retries, firmware prints I2C inventory as `[I2C] ...`.
+- Production firmware build compiles only top-level `boatlock/*.cpp`.
+- Files under `boatlock/debug/` are manual test sketches and must not silently replace production logic.
+- USB CDC is enabled in `boatlock/platformio.ini`; only one process can own `/dev/cu.usbmodem2101` at a time.
 
-## Heading Source Priority
+## GPS, Heading, And Control Rules
 
-1. If `EmuCompass=1`, always use phone heading from `SET_HEADING`.
-2. Else if onboard compass is ready, use BNO08x heading (+ optional GPS correction).
-3. Else use fresh phone heading fallback if age `< 3000 ms`.
-4. Else heading is unavailable.
+- GPS source priority:
+  1. hardware GPS when `gps.location.isValid()` and age is below `MaxGpsAgeMs`
+  2. phone GPS from `SET_PHONE_GPS` while age is `<= 5000 ms`
+  3. otherwise no fix
+- `MaxGpsAgeMs` is a setting, not a hard-coded constant. Default is `1500 ms`; allowed range is `300..20000`.
+- Hardware GPS path applies moving-average filtering via `GpsFWin` (`1..20`) and rejects jumps above `MaxPosJumpM`.
+- Heading comes from onboard BNO08x only. `headingAvailable()` is true only when `compassReady`.
+- Commands such as `SET_HEADING`, `EMU_COMPASS`, and `CALIB_COMPASS` are removed/no-op territory in the current product surface.
+- GPS-to-compass yaw correction is active only when:
+  - compass is ready
+  - speed is `>= 3.0 km/h`
+  - movement since reference point is `>= 4.0 m`
+- GPS heading correction behavior:
+  - target correction is clamped to `[-90, +90]`
+  - smoothing `alpha=0.18`
+  - correction expires after `180000 ms` without updates
+- `SET_ANCHOR` stores the current heading if compass is ready, otherwise `0`.
+- `HoldHeading=1` makes anchor bearing come from stored anchor heading.
+- Otherwise anchor bearing comes from GNSS course to anchor, with a `120 s` cache if GNSS temporarily drops.
+- `fallbackHeading` and `fallbackBearing` are UI placeholders only, not real sensor fallbacks.
 
-Related params exposed over BLE:
-- `heading`, `headingRaw`, `compassOffset`, `gpsHdgCorr`, `compassQ`, `rvAcc`, `magNorm`, `gyroNorm`, `magQ`, `gyroQ`, `pitch`, `roll`.
+## Display, BLE, And Security
 
-## GPS-to-Compass Heading Correction
-
-Purpose: reduce constant yaw bias using movement-based GPS course.
-
-Active only when:
-- onboard compass is ready
-- `EmuCompass=0`
-- speed `>= 3.0 km/h`
-- movement since reference point `>= 4.0 m`
-
-Behavior:
-- target correction = `wrap180(gpsCourse - compassHeading)`
-- clamp correction to `[-90, +90]` deg
-- smooth with `alpha=0.18`
-- correction expires after `180000 ms` without updates
-
-Do not remove this logic without verifying open-water heading behavior.
-
-## Compass Calibration / Offset
-
-- BNO08x runs dynamic calibration; `CALIB_COMPASS` is compatibility-only (no active procedure).
-- Firmware enables BNO runtime calibration and DCD auto-save (`sh2_setDcdAutoSave(true)`).
-- User yaw mounting offset is persisted via setting `MagOffX` and applied as heading offset.
-
-## Display Compass Convention (Firmware Screen)
-
-- Boat nose is fixed at top of the screen.
-- Compass card (N/E/S/W) rotates with heading using validated sign convention:
-  - card rotation uses `worldDeg + heading`.
-- Anchor arrow is drawn in boat frame with same sign convention:
-  - relative arrow uses `anchorBearing + heading`.
-
-If changing sign/math, validate on real hardware (rotate board physically and confirm north/anchor behavior).
-
-## BLE Contract (Firmware)
-
-- Device name: `BoatLock`
-- Service UUID: `12ab`
-- Characteristics:
-  - `34cd`: data notify/read
-  - `56ef`: command write
-  - `78ab`: log notify
-- Boot logs must include BLE init/advertising status:
+- Display convention:
+  - boat nose is fixed at the top of the screen
+  - compass card rotation uses `worldDeg + heading`
+  - anchor arrow uses `anchorBearing + heading`
+- BLE identity is fixed:
+  - device name `BoatLock`
+  - service `12ab`
+  - data `34cd`
+  - command `56ef`
+  - log `78ab`
+- Boot logs should include:
   - `[BLE] init ...`
   - `[BLE] advertising started|failed`
+- Flutter device match is true when:
+  - advertised or platform name equals/contains `boatlock`, or
+  - advertised service UUID contains `12ab`
+- Flutter stops scanning before connect and retries scan/reconnect every `3 s`.
+- App heartbeat is sent every `2 s` once connected.
+- Security flow:
+  - hardware STOP long-press `3 s` opens pairing window
+  - pairing window duration is `120 s`
+  - pairing uses `PAIR_SET`
+  - auth flow is `AUTH_HELLO` -> read `secNonce` -> `AUTH_PROVE`
+  - when `secPaired=1`, control/write commands must be wrapped in `SEC_CMD`
+- `SET_STEP_SPR` is compatibility-only and remains fixed at `4096`.
 
-## Mobile BLE Discovery Rules
+## Simulation And Validation
 
-In `boatlock_ui/lib/ble/ble_boatlock.dart`:
-- Device match is true if:
-  - adv/device name equals or contains `boatlock`, OR
-  - advertised service UUID contains `12ab`.
-- If scan cycle finds nothing, app schedules reconnect/scan retry after `3 s`.
-- On successful find, scanning is stopped immediately before connect.
+- On-device HIL scenarios `S0..S19` are part of the product surface and regression suite.
+- `SIM_*` commands are handled in the normal BLE command path.
+- Offline anchor simulation lives in `tools/sim/`.
+- Native firmware tests live under `boatlock/test/`.
+- If you change BLE commands, telemetry keys, settings schema, or simulation behavior, update code, tests, and docs together.
 
-## Serial/Monitor Practical Notes
+## Local Commands
 
-- USB CDC serial is enabled in `platformio.ini`:
-  - `-DARDUINO_USB_MODE=1`
-  - `-DARDUINO_USB_CDC_ON_BOOT=1`
-- Only one process can own `/dev/cu.usbmodem2101` at a time.
-  - Close `pio device monitor` before flashing or opening another serial reader.
-
-## Debug/Test Sketches
-
-- Compass debug sketches are kept under `boatlock/debug/`:
-  - `boatlock/debug/bno_compass_test/bno_calib_test.cpp`
-  - `boatlock/debug/compass_north_lock_test.cpp`
-- Main firmware build in `boatlock/platformio.ini` uses `build_src_filter = +<*.cpp>`.
-  - This means only top-level `boatlock/*.cpp` is built for production firmware.
-  - Files in `boatlock/debug/` are for manual testing and must not silently replace main logic.
+- Firmware build:
+  - `cd boatlock && pio run -e esp32s3`
+- Alt-board build:
+  - `cd boatlock && pio run -e jc4832w535`
+- Native firmware tests:
+  - `cd boatlock && platformio test -e native`
+- Flutter tests:
+  - `cd boatlock_ui && flutter test`
+- Offline simulation:
+  - `python3 tools/sim/test_sim_core.py`
+  - `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json`
+- CI/version helpers:
+  - `python3 tools/ci/check_firmware_version.py`
+  - `python3 tools/ci/check_config_schema_version.py`
+  - `pytest tools/ci/test_*.py`
