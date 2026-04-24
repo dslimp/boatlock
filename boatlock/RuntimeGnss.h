@@ -23,6 +23,7 @@ public:
     NONE = 0,
     APPLIED,
     JUMP_REJECTED,
+    INVALID_FIX,
   };
 
   struct HardwareFixInput {
@@ -80,6 +81,18 @@ public:
                    float speedKmh,
                    int satellites,
                    unsigned long nowMs) {
+    if (!validPosition(lat, lon)) {
+      phoneLat_ = 0.0f;
+      phoneLon_ = 0.0f;
+      phoneSpeedKmh_ = 0.0f;
+      phoneSatellites_ = 0;
+      phoneGpsUpdatedMs_ = nowMs;
+      phoneGpsValid_ = false;
+      if (gpsSourcePhone_) {
+        clearFix();
+      }
+      return;
+    }
     phoneLat_ = lat;
     phoneLon_ = lon;
     phoneSpeedKmh_ = speedKmh;
@@ -93,6 +106,12 @@ public:
                                bool compassReady,
                                float compassHeadingDeg,
                                unsigned long nowMs) {
+    if (!validPosition(input.lat, input.lon)) {
+      clearFix();
+      currentGpsAgeMs_ = input.ageMs;
+      return ApplyResult::INVALID_FIX;
+    }
+
     const int requestedWindow =
         constrain((int)settings.get("GpsFWin"), 1, kMaxFilterWindow);
     if (requestedWindow != gpsFilter_.window) {
@@ -185,6 +204,7 @@ public:
     gpsSourcePhone_ = false;
     gpsFix_ = false;
     gpsCorrRefValid_ = false;
+    lastGnssFailReason_ = GnssQualityFailReason::NO_FIX;
   }
 
   bool gpsQualityGoodForAnchorOn(Settings& settings) {
@@ -330,6 +350,16 @@ public:
       wrapped += 360.0f;
     }
     return wrapped;
+  }
+
+  static bool validPosition(float lat, float lon) {
+    return isfinite(lat) &&
+           isfinite(lon) &&
+           lat >= -90.0f &&
+           lat <= 90.0f &&
+           lon >= -180.0f &&
+           lon <= 180.0f &&
+           !(lat == 0.0f && lon == 0.0f);
   }
 
   bool fix() const { return gpsFix_; }

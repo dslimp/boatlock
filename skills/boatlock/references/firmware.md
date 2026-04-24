@@ -80,6 +80,7 @@
   2. phone GPS from `SET_PHONE_GPS` while age `<= 5000 ms`
   3. otherwise no fix
 - Control GNSS is hardware-only. Phone GPS fallback is a UI/telemetry fallback and must not pass anchor quality gate, save BOOT anchor points, or reuse hardware HDOP/sentence metrics.
+- Hardware and phone GNSS inputs must validate coordinates at the `RuntimeGnss` boundary; `NaN`, out-of-range, and `0/0` must not become a live fix.
 - `MaxGpsAgeMs` is configurable. Default is `1500 ms`; range is `300..20000`.
 - Hardware GPS path:
   - applies moving-average filter window `GpsFWin` (`1..20`)

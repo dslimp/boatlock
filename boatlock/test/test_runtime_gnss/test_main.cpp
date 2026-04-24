@@ -30,6 +30,19 @@ void test_phone_fix_expires_after_timeout() {
   TEST_ASSERT_FALSE(gnss.applyPhoneFallback(false, 0.0f, 7001));
 }
 
+void test_invalid_phone_fix_is_not_kept_as_fallback() {
+  RuntimeGnss gnss;
+  gnss.setPhoneFix(59.9386f, 30.3141f, 2.0f, 5, 1000);
+
+  TEST_ASSERT_TRUE(gnss.applyPhoneFallback(false, 0.0f, 1200));
+  TEST_ASSERT_TRUE(gnss.fix());
+  TEST_ASSERT_TRUE(gnss.gpsSourcePhone());
+
+  gnss.setPhoneFix(NAN, 30.3141f, 2.0f, 5, 1500);
+  TEST_ASSERT_FALSE(gnss.applyPhoneFallback(false, 0.0f, 1600));
+  TEST_ASSERT_FALSE(gnss.fix());
+}
+
 void test_cached_anchor_bearing_survives_brief_gps_loss() {
   Settings settings;
   settings.reset();
@@ -83,6 +96,36 @@ void test_jump_rejection_keeps_previous_fix() {
   TEST_ASSERT_FLOAT_WITHIN(0.000001f, prevLat, gnss.lastLat());
   TEST_ASSERT_FLOAT_WITHIN(0.000001f, prevLon, gnss.lastLon());
   TEST_ASSERT_TRUE(gnss.currentPosJumpRejected());
+}
+
+void test_invalid_hardware_fix_clears_control_fix() {
+  Settings settings;
+  settings.reset();
+
+  RuntimeGnss gnss;
+  RuntimeGnss::HardwareFixInput fix;
+  fix.lat = 59.9386f;
+  fix.lon = 30.3141f;
+  fix.speedKmh = 2.0f;
+  fix.satellites = 10;
+  fix.hdop = 1.0f;
+  fix.ageMs = 100;
+  TEST_ASSERT_EQUAL((int)RuntimeGnss::ApplyResult::APPLIED,
+                    (int)gnss.applyHardwareFix(fix, settings, false, 0.0f, 1000));
+  TEST_ASSERT_TRUE(gnss.controlGpsAvailable());
+
+  fix.lat = NAN;
+  TEST_ASSERT_EQUAL((int)RuntimeGnss::ApplyResult::INVALID_FIX,
+                    (int)gnss.applyHardwareFix(fix, settings, false, 0.0f, 1500));
+  TEST_ASSERT_FALSE(gnss.fix());
+  TEST_ASSERT_FALSE(gnss.controlGpsAvailable());
+  TEST_ASSERT_EQUAL((int)GnssQualityFailReason::NO_FIX,
+                    (int)gnss.lastGnssFailReason());
+
+  fix.lat = 0.0f;
+  fix.lon = 0.0f;
+  TEST_ASSERT_EQUAL((int)RuntimeGnss::ApplyResult::INVALID_FIX,
+                    (int)gnss.applyHardwareFix(fix, settings, false, 0.0f, 2000));
 }
 
 void test_gnss_quality_level_reevaluates_current_sample() {
@@ -228,8 +271,10 @@ int main() {
   UNITY_BEGIN();
   RUN_TEST(test_phone_fix_is_not_control_fix);
   RUN_TEST(test_phone_fix_expires_after_timeout);
+  RUN_TEST(test_invalid_phone_fix_is_not_kept_as_fallback);
   RUN_TEST(test_cached_anchor_bearing_survives_brief_gps_loss);
   RUN_TEST(test_jump_rejection_keeps_previous_fix);
+  RUN_TEST(test_invalid_hardware_fix_clears_control_fix);
   RUN_TEST(test_gnss_quality_level_reevaluates_current_sample);
   RUN_TEST(test_phone_fallback_quality_sample_does_not_reuse_hardware_metrics);
   RUN_TEST(test_hardware_accel_uses_zero_timestamp_sample);

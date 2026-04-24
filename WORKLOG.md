@@ -3148,3 +3148,37 @@ Self-review:
 
 Promote to skill:
 - GNSS quality gates must reject invalid/non-finite config and sample evidence at the gate boundary; never rely only on upstream settings clamps for auto-mode admission.
+
+### 2026-04-25 Stage 97: Runtime GNSS coordinate boundary validation
+
+Scope:
+- Continue the navigation/anchor batch with `RuntimeGnss`.
+- Harden the live GNSS state boundary so raw hardware/parser or phone/app validity flags cannot place invalid coordinates into runtime fix state.
+- This is module `3/5`; hardware and Android acceptance are deferred to module five because this does not touch pins, drivers, BLE command shape, phone install/reconnect, or UI behavior.
+
+External baseline:
+- ArduPilot GPS-dependent modes are blocked by pre-arm/pre-enable checks when GPS quality evidence is bad, including GPS glitch and high HDOP, instead of trusting a single validity flag: <https://ardupilot.org/copter/docs/common-prearm-safety-checks.html>.
+- ArduPilot glitch protection compares new GPS positions against predicted motion before accepting them as good measurements: <https://ardupilot.org/copter/docs/gps-failsafe-glitch-protection.html>.
+- PX4 position-loss failsafe invalidates position when aiding data is stale or position accuracy is outside acceptable limits for position-dependent modes: <https://docs.px4.io/main/en/config/safety>.
+
+Key outcomes:
+- Added `RuntimeGnss::validPosition()` for finite, range-checked coordinates and explicit `0/0` rejection.
+- `applyHardwareFix()` now returns `INVALID_FIX`, clears live control fix, and resets GNSS fail reason to `NO_FIX` when coordinate input is invalid.
+- `setPhoneFix()` now rejects invalid phone/app positions and clears active phone fallback if it was the live source.
+- Added native coverage for invalid hardware coordinate rejection, `0/0` rejection, and invalid phone fallback clearing.
+- Promoted the runtime GNSS coordinate boundary rule into `skills/boatlock/references/firmware.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because command shape and phone-visible status schema did not change.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_gnss -f test_gnss_quality_gate -f test_runtime_buttons -f test_runtime_status -f test_ble_command_handler` -> passed (`62/62`).
+- `cd boatlock && platformio test -e native` -> passed (`280/280`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `697853` bytes.
+- `git diff --check` -> clean.
+
+Self-review:
+- The change tightens only invalid-coordinate handling; normal valid hardware fixes, phone fallback telemetry, jump rejection, bearing cache, and heading correction remain unchanged.
+- `INVALID_FIX` is internal to `RuntimeGnss`; no BLE/status enum expansion was introduced.
+- Remaining risk is real GNSS multipath and receiver-specific behavior, which still requires bench/on-water observation outside native tests.
+
+Promote to skill:
+- Runtime GNSS source handlers must validate coordinate values before updating live fix state; raw parser/app valid flags are not sufficient at the control boundary.

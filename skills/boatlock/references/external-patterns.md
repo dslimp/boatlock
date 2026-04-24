@@ -131,6 +131,7 @@ Implication for BoatLock:
 - Stepper idle-release timers should track active state separately from timestamp values; `0` is a valid `millis()` sample and must not prevent coil release.
 - GNSS quality checks should require fresh quality evidence and fail closed when evidence disappears.
 - Phone or app-provided positions are not equivalent to onboard GNSS for control. Keep fallback/display source state isolated from hardware-source filters, speed baselines, and jump baselines.
+- Runtime GNSS source handlers should validate coordinate values before updating live fix state; raw parser/app "valid" flags are not enough at the control boundary.
 - GNSS source transitions should reset stale hardware baselines rather than comparing a new hardware fix against old phone/no-fix state.
 - GNSS quality gates should reject invalid/non-finite thresholds and samples at the gate boundary; corrupted config or `NaN` sensor evidence must not loosen auto-mode entry checks.
 - Angle/heading normalization in safety paths must use bounded modulo-style math, not unbounded loops over input magnitude.
