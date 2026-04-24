@@ -69,12 +69,28 @@ void test_manual_control_deadman_survives_unsigned_millis_rollover() {
 void test_manual_control_refresh_extends_deadman() {
   ManualControl manual;
   TEST_ASSERT_TRUE(manual.apply(ManualControlSource::BLE_PHONE, 1, 10, 500, 1000));
-  TEST_ASSERT_TRUE(manual.apply(ManualControlSource::BLE_REMOTE, 0, 20, 500, 1300));
+  TEST_ASSERT_TRUE(manual.apply(ManualControlSource::BLE_PHONE, 0, 20, 500, 1300));
   TEST_ASSERT_FALSE(manual.update(1799));
   TEST_ASSERT_TRUE(manual.active());
-  TEST_ASSERT_EQUAL((int)ManualControlSource::BLE_REMOTE, (int)manual.source());
+  TEST_ASSERT_EQUAL((int)ManualControlSource::BLE_PHONE, (int)manual.source());
   TEST_ASSERT_TRUE(manual.update(1800));
   TEST_ASSERT_FALSE(manual.active());
+}
+
+void test_manual_control_rejects_competing_source_until_deadman_expires() {
+  ManualControl manual;
+  TEST_ASSERT_TRUE(manual.apply(ManualControlSource::BLE_PHONE, 1, 10, 500, 1000));
+  TEST_ASSERT_FALSE(manual.apply(ManualControlSource::BLE_REMOTE, -1, 30, 500, 1300));
+  TEST_ASSERT_TRUE(manual.active());
+  TEST_ASSERT_EQUAL((int)ManualControlSource::BLE_PHONE, (int)manual.source());
+  TEST_ASSERT_EQUAL(1, manual.steer());
+  TEST_ASSERT_EQUAL(10, manual.throttlePct());
+
+  TEST_ASSERT_TRUE(manual.apply(ManualControlSource::BLE_REMOTE, -1, 30, 500, 1500));
+  TEST_ASSERT_TRUE(manual.active());
+  TEST_ASSERT_EQUAL((int)ManualControlSource::BLE_REMOTE, (int)manual.source());
+  TEST_ASSERT_EQUAL(-1, manual.steer());
+  TEST_ASSERT_EQUAL(30, manual.throttlePct());
 }
 
 int main() {
@@ -86,5 +102,6 @@ int main() {
   RUN_TEST(test_manual_control_deadman_accepts_zero_timestamp);
   RUN_TEST(test_manual_control_deadman_survives_unsigned_millis_rollover);
   RUN_TEST(test_manual_control_refresh_extends_deadman);
+  RUN_TEST(test_manual_control_rejects_competing_source_until_deadman_expires);
   return UNITY_END();
 }

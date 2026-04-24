@@ -125,6 +125,7 @@ Implication for BoatLock:
 - Stop/zero output paths should put both PWM and direction pins into a known idle state.
 - Actuator tuning inputs must be finite before clamp/ramp math. If a tuning value is `NaN` or otherwise invalid, fail closed rather than deriving a motor output from undefined math.
 - Runtime motion arbitration must reject non-finite auto-control settings before heading alignment or thrust policy uses them.
+- Manual control must be an explicit source-owned deadman lease; competing sources must not overwrite a live lease.
 - Stepper/servo outputs should have explicit neutral/idle behavior. Release or reduce holding current when idle if holding torque is not required, and make re-enable behavior deliberate.
 - Stepper idle-release timers should track active state separately from timestamp values; `0` is a valid `millis()` sample and must not prevent coil release.
 - GNSS quality checks should require fresh quality evidence and fail closed when evidence disappears.

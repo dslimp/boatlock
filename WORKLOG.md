@@ -3002,3 +3002,37 @@ Self-review:
 
 Promote to skill:
 - Runtime motion arbitration must reject non-finite auto-control settings before heading alignment or thrust policy uses them.
+
+### 2026-04-25 Stage 93: Manual control source-owned lease
+
+Scope:
+- Continue the actuator/control batch with `ManualControl`.
+- Standardize manual mode for phone plus future BLE remote/joystick sources.
+- This is module `4/5`; hardware and Android acceptance are deferred to module five because this changes firmware lease arbitration only and the current phone app still uses the same single `BLE_PHONE` source.
+
+External baseline:
+- PX4 manual-control loss failsafe is tied to the selected manual control source and a timeout after the last setpoint, because the vehicle otherwise continues using the last stick position until the timeout: <https://docs.px4.io/main/en/config/safety>.
+- ArduPilot radio failsafe treats loss/corruption of RC input beyond a configured timeout as a failsafe condition rather than accepting stale pilot input indefinitely: <https://ardupilot.org/copter/docs/radio-failsafe.html>.
+
+Key outcomes:
+- `ManualControl::apply()` now treats manual mode as a source-owned deadman lease.
+- Same-source `MANUAL_SET` refreshes the TTL.
+- Competing sources are rejected while the current lease is live and can take over only after TTL expiry or explicit `MANUAL_OFF`/`STOP`.
+- Added native coverage for same-source refresh, competing-source rejection, and takeover after lease expiry.
+- Updated `docs/BLE_PROTOCOL.md` and `docs/MANUAL_CONTROL.md`; the latter was stale and still claimed manual control was not exposed in the main app flow.
+- Promoted the source-owned manual lease rule into `skills/boatlock/references/firmware.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because the shipped phone path remains a single `BLE_PHONE` source. Manual Android smoke is scheduled with the module-five hardware batch.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_manual_control -f test_ble_command_handler -f test_runtime_motion -f test_runtime_control` -> passed (`55/55`).
+- `cd boatlock && platformio test -e native` -> passed (`271/271`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `697309` bytes.
+- `git diff --check` -> clean.
+
+Self-review:
+- This intentionally changes future multi-controller behavior: no silent source fight while a live manual lease exists.
+- It does not remove manual control or alter the current phone command shape.
+- Remaining work for actual external BLE remote support is source identity at the BLE/session layer; current phone commands still enter as `BLE_PHONE`.
+
+Promote to skill:
+- Manual control must remain a source-owned deadman lease; do not let a second source overwrite a live lease without expiry or explicit stop.

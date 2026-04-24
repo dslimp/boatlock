@@ -25,6 +25,12 @@ public:
         !validTtlMs(ttlMs)) {
       return false;
     }
+    if (active_ && source_ != source) {
+      if ((unsigned long)(nowMs - updatedMs_) < ttlMs_) {
+        return false;
+      }
+      stop();
+    }
     source_ = source;
     steer_ = steer;
     throttlePct_ = throttlePct;

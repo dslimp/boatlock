@@ -51,7 +51,7 @@ Current built-in HIL groups:
 
 These commands correspond to the implementation in [`boatlock/BleCommandHandler.h`](../boatlock/BleCommandHandler.h) and are used by the mobile application.
 
-Manual control is intentionally a single atomic command instead of separate mode/direction/speed writes. Each `MANUAL_SET` refreshes the deadman TTL; if updates stop, firmware exits Manual mode and the normal quiet-output path stops motion. `MANUAL_SET` is a control command and must be wrapped in `SEC_CMD` when pairing/auth is enabled.
+Manual control is intentionally a single atomic command instead of separate mode/direction/speed writes. Each accepted `MANUAL_SET` refreshes the deadman TTL for the current controller source; a different source cannot take over until the lease expires or `MANUAL_OFF`/`STOP` clears it. If updates stop, firmware exits Manual mode and the normal quiet-output path stops motion. `MANUAL_SET` is a control command and must be wrapped in `SEC_CMD` when pairing/auth is enabled.
 
 ## Live State Frame
 
