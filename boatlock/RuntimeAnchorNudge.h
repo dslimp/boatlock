@@ -11,11 +11,17 @@ struct RuntimeAnchorNudgeTarget {
 static constexpr float kRuntimeAnchorNudgeMeters = 1.5f;
 
 inline float normalizeRuntimeAnchorNudgeBearing(float deg) {
+  if (!isfinite(deg)) {
+    return 0.0f;
+  }
   const float normalized = fmodf(deg, 360.0f);
   return normalized < 0.0f ? normalized + 360.0f : normalized;
 }
 
 inline float normalizeRuntimeAnchorNudgeLon(float lon) {
+  if (!isfinite(lon)) {
+    return NAN;
+  }
   const float normalized = fmodf(lon + 180.0f, 360.0f);
   const float wrapped = (normalized < 0.0f ? normalized + 360.0f : normalized) - 180.0f;
   return wrapped == -180.0f && lon > 0.0f ? 180.0f : wrapped;
@@ -73,7 +79,13 @@ inline bool projectRuntimeAnchorNudge(float lat,
   const double lon2 = lon1 + atan2(sin(bearingRad) * sin(distRatio) * cos(lat1),
                                    cos(distRatio) - sin(lat1) * sin(lat2));
 
-  target->lat = (float)(lat2 * 180.0 / M_PI);
-  target->lon = normalizeRuntimeAnchorNudgeLon((float)(lon2 * 180.0 / M_PI));
-  return runtimeAnchorNudgePointValid(target->lat, target->lon);
+  const float nextLat = (float)(lat2 * 180.0 / M_PI);
+  const float nextLon = normalizeRuntimeAnchorNudgeLon((float)(lon2 * 180.0 / M_PI));
+  if (!runtimeAnchorNudgePointValid(nextLat, nextLon)) {
+    return false;
+  }
+
+  target->lat = nextLat;
+  target->lon = nextLon;
+  return true;
 }

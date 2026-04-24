@@ -180,6 +180,7 @@ Implication for BoatLock:
 Implication for BoatLock:
 - Keep nudging/reposition as a first-class feature.
 - Keep jog/nudge distance fixed and small unless there is a tested product reason to expose distance control.
+- Anchor jog/nudge projection should be fail-atomic: compute and validate the whole next point before publishing or persisting it.
 - Expose distance/bearing-to-anchor in the main UX.
 - Keep heading hold separate from position hold in both UI and state model.
 - Surface calibration / sensor readiness as enable-blocking status, not hidden service detail.

@@ -148,6 +148,7 @@
 - `RuntimeSimLog` output must stay single-line and bounded. Sanitize CR/LF/TAB/NUL/control characters before forwarding SIM outcome fields into logs.
 - Keep anchor nudge math and cardinal bearing mapping in `RuntimeAnchorNudge`, not inline in `main.cpp`.
 - Nudge/jog uses a fixed small `1.5 m` step. Do not re-add arbitrary distance parameters without a product reason and tests.
+- Anchor nudge projection must be fail-atomic: rejected source/bearing/output values must not leave a partially updated target point.
 - Keep anchor enable denial precedence in `RuntimeAnchorGate`, not inline in `main.cpp`.
 - Keep control-input derivation in `RuntimeControlInputBuilder`, not as inline mode/heading/bearing glue in `loop()`.
 - Runtime control-input builders must validate numeric availability at the boundary; non-finite heading or bearing values become unavailable and zeroed before motion code sees them.

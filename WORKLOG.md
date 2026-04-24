@@ -3182,3 +3182,38 @@ Self-review:
 
 Promote to skill:
 - Runtime GNSS source handlers must validate coordinate values before updating live fix state; raw parser/app valid flags are not sufficient at the control boundary.
+
+### 2026-04-25 Stage 98: Anchor nudge fail-atomic projection
+
+Scope:
+- Continue the navigation/anchor batch with `RuntimeAnchorNudge`.
+- Keep the existing fixed small jog behavior while making nudge projection fail-atomic and explicit around non-finite math.
+- This is module `4/5`; hardware and Android acceptance are deferred to module five because command shape, phone UI behavior, pins, drivers, and BLE reconnect/install behavior did not change.
+
+External baseline:
+- Minn Kota Spot-Lock Jog moves the active spot in fixed 5 ft forward/back/left/right steps: <https://minnkota.johnsonoutdoors.com/us/learn/technology/spot-lock>.
+- Minn Kota Advanced GPS docs require Spot-Lock to be engaged and a heading sensor for Spot-Lock Jog, then move the active location by fixed 5 ft increments: <https://minnkota-help.johnsonoutdoors.com/hc/en-us/articles/23607178243991-Using-Advanced-GPS-Navigation-Features-and-Manual-2023-present>.
+- Garmin Force Current anchor-lock gesture controls jog the held position by 1.5 m / 5 ft in the selected direction: <https://www8.garmin.com/manuals/webhelp/GUID-91136105-7EB2-442E-8C25-7B4CF00FC466/EN-US/GUID-EBB86151-3235-4DF7-B466-988B71411E16.html>.
+
+Key outcomes:
+- Kept BoatLock's fixed `1.5 m` jog step and existing active-anchor/heading gates.
+- `normalizeRuntimeAnchorNudgeBearing()` now returns safe `0` for non-finite input, matching the repo's bounded-angle convention.
+- `normalizeRuntimeAnchorNudgeLon()` now explicitly returns `NaN` for non-finite longitude so validation rejects it.
+- `projectRuntimeAnchorNudge()` now computes and validates the full next point before writing to the caller's target.
+- Added native coverage for non-finite normalization and no target mutation on rejected projection.
+- Promoted the nudge fail-atomic projection rule into `skills/boatlock/references/firmware.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because the BLE command surface and app flow did not change.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_anchor_nudge -f test_ble_command_handler -f test_anchor_control -f test_runtime_ble_params` -> passed (`49/49`).
+- `cd boatlock && platformio test -e native` -> passed (`281/281`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `697897` bytes.
+- `git diff --check` -> clean.
+
+Self-review:
+- This does not change jog distance, direction mapping, active-anchor requirements, or persistence semantics.
+- The change only prevents rejected projection paths from exposing partially written target data.
+- Remaining risk is live operator UX and real drift/current response after repeated jogs, which requires hardware/on-water validation.
+
+Promote to skill:
+- Anchor nudge/jog projection must be fail-atomic: compute, validate, then publish/persist; never partially update output on rejection.
