@@ -40,9 +40,10 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
 3. Install and run the phone smoke flow:
    - `tools/android/run-smoke.sh`
 4. If it fails, inspect:
-   - device logcat around `BOATLOCK_SMOKE_RESULT`
-   - `tools/hw/nh02/monitor.sh`
-   - `tools/hw/nh02/status.sh`
+  - device logcat around `BOATLOCK_SMOKE_RESULT`
+  - `tools/hw/nh02/monitor.sh`
+  - `tools/hw/nh02/status.sh`
+  - `tools/hw/nh02/android-status.sh` when the phone is attached to `nh02` instead of the local workstation
 
 ## What Acceptance Proves
 
@@ -80,6 +81,8 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
   - `tools/hw/nh02/status.sh`
   - `tools/hw/nh02/monitor.sh`
 - Android:
+  - `tools/hw/nh02/android-install.sh`
+  - `tools/hw/nh02/android-status.sh`
   - `tools/android/status.sh`
   - `tools/android/build-smoke-apk.sh`
   - `tools/android/run-smoke.sh`
@@ -89,6 +92,7 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
 - Keep host-side ownership limited to `/opt/boatlock-hw` and the tracked RFC2217 service.
 - Prefer acceptance right after flashing so the boot path stays part of the same validation slice.
 - Preserve the documented order `install -> flash -> acceptance -> monitor/debug`; do not skip to a later step just because an earlier prerequisite is broken.
+- For phones attached to `nh02`, use the tracked `android-install.sh` and `android-status.sh` path before falling back to local `adb` assumptions.
 - Do not interrupt a live flash, build, acceptance run, or phone smoke while it is still making forward progress.
 - If a bench or phone wrapper fails, fix that wrapper before normalizing a manual fallback.
 - If a bench or phone wrapper returns stale, wrong, or ambiguous data, fix the wrapper or its guidance before trusting the result.

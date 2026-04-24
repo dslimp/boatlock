@@ -50,6 +50,8 @@
   - `pytest -q tools/hw/nh02/test_acceptance.py`
   - `tools/hw/nh02/monitor.sh`
   - `tools/hw/nh02/status.sh`
+  - `tools/hw/nh02/android-install.sh`
+  - `tools/hw/nh02/android-status.sh`
   - rerun `install.sh` after changing the tracked service unit or remote flash helper
 - Android USB + BLE smoke:
   - `tools/android/status.sh`

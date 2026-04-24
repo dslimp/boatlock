@@ -653,3 +653,29 @@ Self-review:
 
 Promote to skill:
 - Import the narrowest durable subset of shared workflow rules that actually matches the target repo; do not cargo-cult the full source policy.
+
+### 2026-04-24 Stage 30: NH02 remote Android USB path added
+
+Scope:
+- Add a tracked Android USB workflow for phones attached to `nh02`, then verify the currently connected phone through that path.
+
+Key outcomes:
+- Added tracked `nh02` Android helpers: `tools/hw/nh02/android-install.sh`, `tools/hw/nh02/android-status.sh`, and remote helper `tools/hw/nh02/remote/boatlock-ensure-android-tools.sh`.
+- Extended `tools/hw/nh02/install.sh` so the Android helper is synced into `/opt/boatlock-hw/bin` together with the existing flash/reset helpers.
+- Updated `docs/HARDWARE_NH02.md`, the hardware-acceptance skill, and Android reference notes so remote Android checks on `nh02` are part of the canonical workflow.
+- Verified that `nh02` sees the connected phone physically as `2717:ff40 Xiaomi Inc. Mi/Redmi series (MTP)`.
+- Installed `adb` on `nh02` through the tracked helper and verified `adb version` on the host.
+- Verified that `adb devices -l` on `nh02` is still empty, so the phone is connected physically but USB debugging is not enabled yet.
+
+Validation:
+- `bash -n tools/hw/nh02/install.sh tools/hw/nh02/android-install.sh tools/hw/nh02/android-status.sh tools/hw/nh02/common.sh tools/hw/nh02/remote/boatlock-ensure-android-tools.sh`
+- `./tools/hw/nh02/install.sh`
+- `./tools/hw/nh02/android-install.sh`
+- `./tools/hw/nh02/android-status.sh`
+
+Self-review:
+- This is worth keeping because it closes a real workflow gap: before this stage, the repo had Android smoke logic but no canonical way to work with a phone physically attached to `nh02`.
+- Current blocker is now correctly isolated to the phone state itself rather than the bench host: the USB path is alive, `adb` exists, but the phone is still exposing only MTP and not a debug transport.
+
+Promote to skill:
+- When the phone is attached to `nh02`, check physical USB enumeration and `adb devices -l` on `nh02` itself before assuming anything about the app, BLE, or cable path.
