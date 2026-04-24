@@ -2498,3 +2498,34 @@ Self-review:
 
 Promote to skill:
 - One-shot diagnostic/UI timers should follow the same start-plus-duration unsigned elapsed-time rule as runtime watchdog and cadence timers.
+
+### 2026-04-24 Stage 79: Batch hardware acceptance after modules 1-3
+
+Scope:
+- Close the three-module batch:
+  - `RuntimeStatus`
+  - BLE log text length handling
+  - `RuntimeSimBadge`
+- Prove the pushed `main` firmware and Android smoke APK on the `nh02` bench.
+
+Bench validation:
+- `./tools/hw/nh02/status.sh` -> RFC2217 service enabled/active, ESP32-S3 USB device present at `/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_98:88:E0:03:BA:5C-if00`, listener on port `4000`.
+- `./tools/hw/nh02/flash.sh` -> build success, flash success, app image write `697328` bytes, hard reset via RTS.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-batch-status-log-badge-60s.log --json-out /tmp/boatlock-batch-status-log-badge-60s.json` -> `[ACCEPT] PASS lines=76`.
+- Acceptance matched BNO08x-RVC ready, display ready, EEPROM loaded, security state, BLE init/advertising, stepper config, STOP button, GPS UART data, and fresh compass heading events.
+- Error scan over the 60-second log for panic/assert/Guru/config save or CRC errors/GPS stale/no data/compass loss/I2C errors/fail tokens -> no matches.
+
+Android BLE smoke validation:
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> first install attempt hit `INSTALL_FAILED_USER_RESTRICTED`, canonical retry returned `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --status --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"status_stop_alert_roundtrip",...,"lastDeviceLog":"[EVENT] FAILSAFE_TRIGGERED reason=STOP_CMD"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+
+Self-review:
+- Phone-smoke policy is now explicit: module-specific smoke is required for phone-visible behavior, and the full Android batch runs after every third low-risk module.
+- The MIUI install gate can still show a first-attempt `USER_RESTRICTED`, but the canonical retry succeeded and the wrapper produced terminal passing results.
+- This batch does not prove powered thrust, real on-water hold quality, or auth/session behavior.
+
+Promote to skill:
+- No new durable rule; existing hardware acceptance and phone-smoke cadence rules covered this batch.
