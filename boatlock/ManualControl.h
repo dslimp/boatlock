@@ -21,7 +21,8 @@ public:
              int throttlePct,
              unsigned long ttlMs,
              unsigned long nowMs) {
-    if (!validSteer(steer) || !validThrottlePct(throttlePct) || !validTtlMs(ttlMs)) {
+    if (!validSource(source) || !validSteer(steer) || !validThrottlePct(throttlePct) ||
+        !validTtlMs(ttlMs)) {
       return false;
     }
     source_ = source;
@@ -86,6 +87,10 @@ public:
   }
 
 private:
+  static bool validSource(ManualControlSource source) {
+    return source == ManualControlSource::BLE_PHONE || source == ManualControlSource::BLE_REMOTE;
+  }
+
   bool active_ = false;
   ManualControlSource source_ = ManualControlSource::NONE;
   int steer_ = 0;

@@ -1851,3 +1851,49 @@ Self-review:
 Promote to skill:
 - Drift/containment thresholds must sanitize non-finite input before comparisons.
 - Drift-speed telemetry must not survive long data gaps as stale motion evidence.
+
+### 2026-04-24 Stage 64: Manual control source and deadman hardening
+
+Scope:
+- Continue module-by-module refactor with `ManualControl`.
+- Keep phone and future BLE remote/joystick manual control behind explicit source validation and a rollover-safe deadman.
+
+External baseline:
+- ArduPilot Rover Manual Mode keeps manual control direct but still applies throttle slew, so manual input is not a bypass around actuator protection: <https://ardupilot.org/rover/docs/manual-mode.html>.
+- ArduPilot Rover failsafes require explicit operator action to retake manual control after link recovery: <https://ardupilot.org/rover/docs/rover-failsafes.html>.
+- PX4 manual control loss failsafe is based on time since the last valid setpoint and warns that timeout must stay short because the vehicle otherwise continues on the last stick position: <https://docs.px4.io/main/en/config/safety.html>.
+
+Key outcomes:
+- `ManualControl::apply()` now rejects `ManualControlSource::NONE`; only `BLE_PHONE` and `BLE_REMOTE` can activate manual mode.
+- Rejected manual packets do not refresh or replace an existing command, so malformed input cannot extend a live deadman lease.
+- Added native coverage for zero timestamp, unsigned `millis()` rollover, source rejection, and invalid-command non-refresh behavior.
+- No protocol compatibility shim was added; `MANUAL_SET` remains the one atomic manual command surface.
+
+Validation:
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native -f test_manual_control -f test_runtime_control -f test_runtime_motion -f test_ble_command_handler` -> `53/53` passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native` -> `220/220` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> `29/29` passed.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `git diff --check` -> clean.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio pio run -e esp32s3` -> success, flash size `695805` bytes.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter build apk --debug --no-pub` -> success.
+- `./tools/hw/nh02/status.sh` -> target ESP32-S3 `98:88:E0:03:BA:5C` visible and RFC2217 service active.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`; app image write `696176` bytes.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-manual-control-60s.log --json-out /tmp/boatlock-manual-control-60s.json` -> `PASS`, including EEPROM `ver=23`, RVC compass, display, BLE advertising, stepper, STOP, GPS UART data, and heading events.
+- Acceptance log scan found no panic/assert/Guru, Arduino `[E]`, `CONFIG_SAVE_FAILED`, `CONFIG_CRC_FAIL`, GPS UART stale/no-data warning, compass loss, compass retry failure, `Wire.cpp`, `i2cRead`, `error`, or `FAIL`.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+
+Self-review:
+- This is a small contract hardening, not a new multi-controller arbitration model.
+- Current policy remains "latest valid manual source wins"; if phone and BLE remote are both active later, we may need explicit priority/lease ownership, but that should be designed with the actual remote protocol.
+- Hardware smoke proves zero-throttle manual roundtrip only; non-zero manual actuation still needs a mechanically safe powered fixture.
+
+Promote to skill:
+- Manual control activation must require an explicit non-NONE source.
+- Invalid manual packets must not refresh the deadman lease.
+- Manual deadman tests must cover timestamp zero and unsigned rollover.

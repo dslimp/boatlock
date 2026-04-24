@@ -127,6 +127,7 @@ Implication for BoatLock:
   - keep live telemetry on notify/read characteristics
   - make manual actuation updates atomic instead of split mode/direction/speed writes
   - use a short deadman/lease on manual input so app crash, disconnect, or controller loss goes quiet
+  - reject invalid manual controller sources and do not refresh a deadman lease from malformed packets
   - map future BLE HID/HOGP joystick input into the same internal manual-control state instead of creating a second actuator path
 - For manual UI, avoid making actuation look like a primary one-tap FAB action. Use an explicit control surface such as a toolbar entry plus sheet/pad, and keep movement tied to press-and-hold/deadman semantics.
 

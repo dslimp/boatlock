@@ -143,6 +143,9 @@
 - Drift-speed telemetry must reset after long data gaps instead of surviving as stale motion evidence.
 - Manual mode cancels auto stepper tracking and drives stepper/motor through shared `ManualControl` state.
 - Manual control is entered/refreshed atomically and expires through a short deadman TTL; split mode/dir/speed state is not allowed.
+- Manual control activation must require an explicit source; `NONE` is never a valid live controller.
+- Invalid manual packets must not refresh the deadman lease.
+- Manual deadman behavior must be tested for timestamp zero and unsigned `millis()` rollover.
 - Motor output must stay bounded and deterministic. Do not reintroduce hidden runtime self-adaptive PID tuning or PID auto-persistence in the actuator path.
 - Manual and anchor-auto motor state must stay isolated. Manual PWM, timestamps, and ramp state must not seed anchor-auto output.
 - Motor stop/zero paths should drive PWM to zero and direction pins to a known idle state.

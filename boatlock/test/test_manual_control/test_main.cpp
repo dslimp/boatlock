@@ -18,10 +18,23 @@ void test_manual_control_accepts_atomic_command() {
 
 void test_manual_control_rejects_out_of_range_values() {
   ManualControl manual;
+  TEST_ASSERT_FALSE(manual.apply(ManualControlSource::NONE, 0, 0, 500, 1000));
   TEST_ASSERT_FALSE(manual.apply(ManualControlSource::BLE_PHONE, -2, 0, 500, 1000));
   TEST_ASSERT_FALSE(manual.apply(ManualControlSource::BLE_PHONE, 0, 101, 500, 1000));
   TEST_ASSERT_FALSE(manual.apply(ManualControlSource::BLE_PHONE, 0, 0, 99, 1000));
   TEST_ASSERT_FALSE(manual.apply(ManualControlSource::BLE_PHONE, 0, 0, 1001, 1000));
+  TEST_ASSERT_FALSE(manual.active());
+}
+
+void test_manual_control_reject_does_not_refresh_existing_command() {
+  ManualControl manual;
+  TEST_ASSERT_TRUE(manual.apply(ManualControlSource::BLE_PHONE, 1, 20, 500, 1000));
+  TEST_ASSERT_FALSE(manual.apply(ManualControlSource::NONE, 0, 0, 500, 1200));
+
+  TEST_ASSERT_TRUE(manual.active());
+  TEST_ASSERT_EQUAL(1, manual.steer());
+  TEST_ASSERT_EQUAL(20, manual.throttlePct());
+  TEST_ASSERT_TRUE(manual.update(1500));
   TEST_ASSERT_FALSE(manual.active());
 }
 
@@ -34,6 +47,23 @@ void test_manual_control_deadman_expires_to_zero() {
   TEST_ASSERT_FALSE(manual.active());
   TEST_ASSERT_EQUAL(-1, manual.stepperDir());
   TEST_ASSERT_EQUAL(0, manual.motorPwm());
+}
+
+void test_manual_control_deadman_accepts_zero_timestamp() {
+  ManualControl manual;
+  TEST_ASSERT_TRUE(manual.apply(ManualControlSource::BLE_PHONE, 1, 10, 500, 0));
+  TEST_ASSERT_FALSE(manual.update(499));
+  TEST_ASSERT_TRUE(manual.update(500));
+  TEST_ASSERT_FALSE(manual.active());
+}
+
+void test_manual_control_deadman_survives_unsigned_millis_rollover() {
+  ManualControl manual;
+  const unsigned long nearWrap = ~0UL - 200UL;
+  TEST_ASSERT_TRUE(manual.apply(ManualControlSource::BLE_PHONE, 1, 10, 500, nearWrap));
+  TEST_ASSERT_FALSE(manual.update(100));
+  TEST_ASSERT_TRUE(manual.update(400));
+  TEST_ASSERT_FALSE(manual.active());
 }
 
 void test_manual_control_refresh_extends_deadman() {
@@ -51,7 +81,10 @@ int main() {
   UNITY_BEGIN();
   RUN_TEST(test_manual_control_accepts_atomic_command);
   RUN_TEST(test_manual_control_rejects_out_of_range_values);
+  RUN_TEST(test_manual_control_reject_does_not_refresh_existing_command);
   RUN_TEST(test_manual_control_deadman_expires_to_zero);
+  RUN_TEST(test_manual_control_deadman_accepts_zero_timestamp);
+  RUN_TEST(test_manual_control_deadman_survives_unsigned_millis_rollover);
   RUN_TEST(test_manual_control_refresh_extends_deadman);
   return UNITY_END();
 }
