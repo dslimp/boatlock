@@ -88,6 +88,8 @@
 
 - Live telemetry is a fixed binary v2 frame, not JSON and not a parameter-read tunnel.
 - Firmware builds one typed `RuntimeBleLiveTelemetry` snapshot and encodes it through `RuntimeBleLiveFrame.h`.
+- Telemetry snapshot builders must validate coordinate pairs as pairs; if an anchor position is invalid/default, publish the whole anchor position and heading as neutral `0`.
+- Snapshot builders should sample volatile readiness predicates once per frame so related fields come from one consistent readiness state.
 - Flutter decodes `34cd` notifications through `ble_live_frame.dart`; `BoatData.fromJson()` remains only for model-level unit tests and non-BLE helpers.
 - Flutter `BoatData` currently receives these fields from the live frame:
   - `lat`, `lon`

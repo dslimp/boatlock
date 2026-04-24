@@ -37,6 +37,24 @@ struct RuntimeBleParamContext {
   std::function<const char*()> fixTypeSourceLabel;
 };
 
+inline void setRuntimeBleAnchorTelemetry(RuntimeBleLiveTelemetry* telemetry,
+                                         const AnchorControl& anchor) {
+  if (!telemetry || !AnchorControl::validAnchorPoint(anchor.anchorLat, anchor.anchorLon)) {
+    if (telemetry) {
+      telemetry->anchorLat = 0.0;
+      telemetry->anchorLon = 0.0;
+      telemetry->anchorHeadingDeg = 0.0f;
+    }
+    return;
+  }
+
+  telemetry->anchorLat = anchor.anchorLat;
+  telemetry->anchorLon = anchor.anchorLon;
+  telemetry->anchorHeadingDeg = isfinite(anchor.anchorHeading)
+                                    ? AnchorControl::normalizeHeading(anchor.anchorHeading)
+                                    : 0.0f;
+}
+
 inline void registerRuntimeBleParams(const RuntimeBleParamContext& context) {
   BLEBoatLock* ble = &context.ble;
   Settings* settings = &context.settings;
@@ -54,27 +72,27 @@ inline void registerRuntimeBleParams(const RuntimeBleParamContext& context) {
   ble->setCommandHandler(commandHandler);
   ble->setTelemetryProvider([=]() {
     RuntimeBleLiveTelemetry telemetry;
+    const bool compassReadyNow = compassReady();
     telemetry.lat = gnss->fix() ? gnss->lastLat() : 0.0;
     telemetry.lon = gnss->fix() ? gnss->lastLon() : 0.0;
-    telemetry.anchorLat = std::isnan(anchor->anchorLat) ? 0.0 : anchor->anchorLat;
-    telemetry.anchorLon = std::isnan(anchor->anchorLon) ? 0.0 : anchor->anchorLon;
-    telemetry.anchorHeadingDeg = anchor->anchorHeading;
+    setRuntimeBleAnchorTelemetry(&telemetry, *anchor);
     telemetry.distanceM = gnss->distanceM();
     telemetry.headingDeg = currentHeadingValue();
     telemetry.holdHeading = settings->get("HoldHeading") >= 0.5f;
     telemetry.stepSpr = (uint16_t)settings->get("StepSpr");
     telemetry.stepMaxSpd = (uint16_t)settings->get("StepMaxSpd");
     telemetry.stepAccel = (uint16_t)settings->get("StepAccel");
-    telemetry.headingRawDeg = compassReady() ? compass->getRawAzimuth() : 0.0f;
-    telemetry.compassOffsetDeg = compassReady() ? compass->getHeadingOffsetDeg() : settings->get("MagOffX");
-    telemetry.compassQ = compassReady() ? (uint8_t)compass->getHeadingQuality() : 0;
-    telemetry.magQ = compassReady() ? (uint8_t)compass->getMagQuality() : 0;
-    telemetry.gyroQ = compassReady() ? (uint8_t)compass->getGyroQuality() : 0;
-    telemetry.rvAccDeg = compassReady() ? compass->getRvAccuracyDeg() : 0.0f;
-    telemetry.magNorm = compassReady() ? compass->getMagNormUT() : 0.0f;
-    telemetry.gyroNorm = compassReady() ? compass->getGyroNormDps() : 0.0f;
-    telemetry.pitchDeg = compassReady() ? compass->getPitchDeg() : 0.0f;
-    telemetry.rollDeg = compassReady() ? compass->getRollDeg() : 0.0f;
+    telemetry.headingRawDeg = compassReadyNow ? compass->getRawAzimuth() : 0.0f;
+    telemetry.compassOffsetDeg =
+        compassReadyNow ? compass->getHeadingOffsetDeg() : settings->get("MagOffX");
+    telemetry.compassQ = compassReadyNow ? (uint8_t)compass->getHeadingQuality() : 0;
+    telemetry.magQ = compassReadyNow ? (uint8_t)compass->getMagQuality() : 0;
+    telemetry.gyroQ = compassReadyNow ? (uint8_t)compass->getGyroQuality() : 0;
+    telemetry.rvAccDeg = compassReadyNow ? compass->getRvAccuracyDeg() : 0.0f;
+    telemetry.magNorm = compassReadyNow ? compass->getMagNormUT() : 0.0f;
+    telemetry.gyroNorm = compassReadyNow ? compass->getGyroNormDps() : 0.0f;
+    telemetry.pitchDeg = compassReadyNow ? compass->getPitchDeg() : 0.0f;
+    telemetry.rollDeg = compassReadyNow ? compass->getRollDeg() : 0.0f;
     telemetry.secPaired = security->isPaired();
     telemetry.secAuth = security->sessionActive();
     telemetry.secPairWindowOpen = security->pairingWindowOpen(millis());

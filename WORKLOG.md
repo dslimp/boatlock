@@ -2280,3 +2280,42 @@ Decision:
 
 Promote to skill:
 - Batch low-risk refactors in groups of three for hardware acceptance.
+
+### 2026-04-24 Stage 73: BLE telemetry snapshot hardening
+
+Scope:
+- Continue module-by-module refactor with `RuntimeBleParams`.
+- Keep the live telemetry frame contract unchanged while hardening the typed snapshot that feeds it.
+- This is module `2/3` in the current low-risk batch; hardware acceptance is deferred until module `3/3` unless risk changes.
+
+External baseline:
+- Signal K treats position as an object-valued field because latitude and longitude only make sense as a pair: <https://signalk.org/specification/1.7.0/doc/data_model.html>.
+- Signal K invalid/missing data is represented explicitly instead of sending a misleading partial value: <https://signalk.org/specification/1.7.0/doc/data_model.html>.
+- Bluetooth Core GATT treats characteristic values as application/profile data; deterministic encoding remains the application responsibility: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-61/out/en/host/generic-attribute-profile--gatt-.html>.
+
+Key outcomes:
+- Added `setRuntimeBleAnchorTelemetry()` to validate anchor latitude/longitude as a pair before publishing them.
+- Invalid/default anchor coordinates now clear `anchorLat`, `anchorLon`, and `anchorHeading` in the BLE snapshot.
+- Non-finite persisted anchor heading now publishes as neutral `0`, while valid heading is normalized.
+- `compassReady()` is sampled once per telemetry snapshot so compass fields come from a consistent readiness state.
+- Added native coverage for valid anchor telemetry, invalid anchor-pair clearing, and non-finite heading clearing.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_params -f test_runtime_ble_live_frame -f test_runtime_status` -> `9/9` passed.
+- First targeted run failed because Unity double precision assertions were disabled; tests were corrected to use float-within assertions, then the same targeted suite passed.
+- `cd boatlock && platformio test -e native` -> `245/245` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> `29/29` passed.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `696785` bytes.
+- Hardware acceptance deferred by the new three-module cadence; this is module `2/3`.
+
+Self-review:
+- This does not change the BLE frame layout, Flutter decoder, command surface, or runtime control behavior.
+- The new native suite required small BLE/NimBLE mocks because `RuntimeBleParams.h` previously had no direct unit coverage.
+- The snapshot builder now follows the same pair-validation rule as `AnchorControl` load/save and the UI map logic.
+
+Promote to skill:
+- BLE telemetry snapshots must not publish partial coordinate pairs; invalid position-like pairs clear the whole pair.
+- Snapshot builders should sample volatile readiness predicates once per frame, not once per field.

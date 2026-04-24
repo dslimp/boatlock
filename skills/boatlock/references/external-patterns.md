@@ -79,6 +79,7 @@ Implication for BoatLock:
 Implication for BoatLock:
 - Keep safety logic authoritative on-device.
 - App should configure and visualize, not be the source of truth for monitoring.
+- Treat latitude/longitude telemetry as a pair. Do not publish one valid coordinate together with an invalid/default companion.
 - Add phase/state modeling instead of a binary `AnchorEnabled` worldview.
 - Preserve and expose anchor track history.
 - Support at least two severity zones:
