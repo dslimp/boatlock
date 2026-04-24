@@ -152,7 +152,7 @@
 - Keep anchor enable denial precedence in `RuntimeAnchorGate`, not inline in `main.cpp`.
 - Keep control-input derivation in `RuntimeControlInputBuilder`, not as inline mode/heading/bearing glue in `loop()`.
 - Runtime control-input builders must validate numeric availability at the boundary; non-finite heading or bearing values become unavailable and zeroed before motion code sees them.
-- Invalid distance input should be clamped to safe neutral telemetry/control input, not propagated as `NaN` or a negative distance.
+- Invalid distance input in auto-control mode should make control GPS unavailable and clamp distance to safe neutral; it must not be propagated as `NaN`, negative distance, or a fake zero-error fix.
 - Keep compass retry cadence in `RuntimeCompassRetry`, not as raw `millis()` gating in `main.cpp`.
 - Keep compass event freshness policy in `RuntimeCompassHealth`, not as loose age checks spread through runtime code.
 - Compass health timeouts must apply local fail-closed floors; zero or tiny timeout input must not disable first-event or stale-event detection.

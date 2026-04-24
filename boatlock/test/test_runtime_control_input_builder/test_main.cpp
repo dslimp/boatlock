@@ -66,6 +66,16 @@ void test_builder_sanitizes_invalid_distance() {
       6000, CoreMode::ANCHOR, -1, 0, true, true, 20.0f, true, 30.0f, true, 2.0f, 3, NAN);
 
   TEST_ASSERT_EQUAL_FLOAT(0.0f, state.input.distanceM);
+  TEST_ASSERT_FALSE(state.input.controlGpsAvailable);
+}
+
+void test_builder_keeps_manual_gps_flag_when_distance_is_invalid_outside_auto() {
+  const RuntimeControlState state = buildRuntimeControlState(
+      7000, CoreMode::MANUAL, 1, 50, true, true, 20.0f, true, 30.0f, true, 2.0f, 3, NAN);
+
+  TEST_ASSERT_FALSE(state.autoControlActive);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, state.input.distanceM);
+  TEST_ASSERT_TRUE(state.input.controlGpsAvailable);
 }
 
 int main() {
@@ -76,5 +86,6 @@ int main() {
   RUN_TEST(test_builder_rejects_nonfinite_heading_as_unavailable);
   RUN_TEST(test_builder_rejects_nonfinite_bearing_as_unavailable);
   RUN_TEST(test_builder_sanitizes_invalid_distance);
+  RUN_TEST(test_builder_keeps_manual_gps_flag_when_distance_is_invalid_outside_auto);
   return UNITY_END();
 }

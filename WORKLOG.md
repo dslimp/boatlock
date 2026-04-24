@@ -3217,3 +3217,37 @@ Self-review:
 
 Promote to skill:
 - Anchor nudge/jog projection must be fail-atomic: compute, validate, then publish/persist; never partially update output on rejection.
+
+### 2026-04-25 Stage 99: Runtime control input invalid distance gate
+
+Scope:
+- Close the five-module navigation/anchor batch with `RuntimeControlInputBuilder`.
+- Make invalid distance evidence unavailable for auto-control instead of turning it into a fake zero-error control fix.
+- This is module `5/5`; hardware acceptance and Android BLE smokes are scheduled immediately after commit/push.
+
+External baseline:
+- ArduPilot pre-arm checks block GPS-dependent modes on bad sensor data and GPS quality failures rather than treating partial evidence as usable: <https://ardupilot.org/copter/docs/common-prearm-safety-checks.html>.
+- ArduPilot GPS glitch protection treats bad position updates as rejected measurements, not harmless zero-error updates: <https://ardupilot.org/copter/docs/gps-failsafe-glitch-protection.html>.
+- PX4 position-loss failsafe triggers when the position estimate becomes invalid or position inaccuracy exceeds the allowed threshold for modes that need position: <https://docs.px4.io/main/en/config/safety>.
+
+Key outcomes:
+- `buildRuntimeControlState()` now computes distance validity once.
+- In auto-control modes, invalid distance clears `input.controlGpsAvailable` and clamps `input.distanceM` to `0` so motion code goes quiet through the existing no-control-GPS path.
+- Outside auto-control modes, the original `controlGpsAvailable` flag is preserved while invalid distance is still clamped away from downstream math.
+- Added native coverage for invalid auto distance clearing the control-GPS flag and for manual mode preserving the flag.
+- Promoted the invalid-distance-as-unavailable rule into `skills/boatlock/references/firmware.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no new Android smoke mode needed because command/status schema did not change. Full Android smoke package runs with this module-five hardware batch.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_control_input_builder -f test_runtime_motion -f test_anchor_supervisor -f test_anchor_control_loop -f test_runtime_status` -> passed (`43/43`).
+- `cd boatlock && platformio test -e native` -> passed (`282/282`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `697929` bytes.
+- `git diff --check` -> clean.
+
+Self-review:
+- This changes only invalid-distance auto behavior; valid anchor control input is unchanged.
+- The safe effect is conservative: bad distance evidence now disables auto thrust/stepper via the same path as missing control GPS.
+- Remaining validation risk is live sensor/dropout behavior, covered next by the scheduled hardware and Android batch.
+
+Promote to skill:
+- In auto/position-control modes, invalid distance/position evidence must disable the control input instead of masquerading as a zero-error measurement.

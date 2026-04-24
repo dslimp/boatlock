@@ -150,6 +150,7 @@ Implication for BoatLock:
 - One-shot UI/diagnostic banners follow the same timer rule: store the start timestamp and duration, then compare unsigned elapsed time. Do not store absolute expiry timestamps as the authority.
 - Do not auto-enter manual control from failsafe. After a fault clears, operator control must be an explicit new action.
 - Treat non-finite sensor/control values like unavailable inputs at module boundaries, not as values to normalize later inside actuator code.
+- In auto/position-control modes, invalid distance/position evidence should disable the control input rather than masquerade as a zero-error measurement.
 - Treat physical button input as an unsafe raw signal. Debounce it before edges, and reserve state-changing actions such as anchor save or pairing for stable long-press paths.
 - For BLE/manual control, keep GATT as a small transport and put safety in the app protocol:
   - use acknowledged writes for control commands where the client needs a write result

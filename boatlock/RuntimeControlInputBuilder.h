@@ -36,12 +36,14 @@ inline RuntimeControlState buildRuntimeControlState(unsigned long nowMs,
   state.hasBearing = state.autoControlActive && bearingAvailable && isfinite(bearingDeg);
   state.diffDeg =
       (state.hasHeading && state.hasBearing) ? RuntimeGnss::normalizeDiffDeg(bearingDeg, state.headingDeg) : 0.0f;
+  const bool distanceValid = isfinite(distanceM) && distanceM >= 0.0f;
+  const bool controlGpsUsable = controlGpsAvailable && (!state.autoControlActive || distanceValid);
 
   state.input.nowMs = nowMs;
   state.input.mode = mode;
   state.input.manualDir = manualDir;
   state.input.manualSpeed = manualSpeed;
-  state.input.controlGpsAvailable = controlGpsAvailable;
+  state.input.controlGpsAvailable = controlGpsUsable;
   state.input.hasHeading = state.hasHeading;
   state.input.hasBearing = state.hasBearing;
   state.input.bearingDeg = state.hasBearing ? bearingDeg : 0.0f;
@@ -50,6 +52,6 @@ inline RuntimeControlState buildRuntimeControlState(unsigned long nowMs,
   state.input.compassReady = compassReady;
   state.input.rvAccuracyDeg = rvAccuracyDeg;
   state.input.rvQuality = rvQuality;
-  state.input.distanceM = (isfinite(distanceM) && distanceM >= 0.0f) ? distanceM : 0.0f;
+  state.input.distanceM = distanceValid ? distanceM : 0.0f;
   return state;
 }
