@@ -78,6 +78,42 @@ void test_restart_cooldown_blocks_repeat_restart_until_window_passes() {
   TEST_ASSERT_TRUE(cooldownPassed.restartSerial);
 }
 
+void test_restart_opens_new_no_data_grace_window() {
+  RuntimeGpsUart uart;
+  uart.reset(0);
+  RuntimeGpsUartConfig config;
+  config.noDataWarnMs = 6000;
+  config.staleRestartMs = 1000;
+
+  uart.update(4, 100, config);
+  const RuntimeGpsUartActions restarted = uart.update(0, 1100, config);
+  const RuntimeGpsUartActions immediate = uart.update(0, 1101, config);
+  const RuntimeGpsUartActions boundary = uart.update(0, 7100, config);
+  const RuntimeGpsUartActions warned = uart.update(0, 7101, config);
+
+  TEST_ASSERT_TRUE(restarted.restartSerial);
+  TEST_ASSERT_FALSE(immediate.warnNoData);
+  TEST_ASSERT_FALSE(boundary.warnNoData);
+  TEST_ASSERT_TRUE(warned.warnNoData);
+}
+
+void test_restart_cooldown_does_not_use_zero_timestamp_as_sentinel() {
+  RuntimeGpsUart uart;
+  uart.reset(0);
+  RuntimeGpsUartConfig config;
+  config.staleRestartMs = 0;
+  config.restartCooldownMs = 4000;
+
+  const RuntimeGpsUartActions firstRestart = uart.update(4, 0, config);
+  const RuntimeGpsUartActions cooldownBlocked = uart.update(4, 10, config);
+  const RuntimeGpsUartActions cooldownPassed = uart.update(0, 4000, config);
+
+  TEST_ASSERT_TRUE(firstRestart.restartSerial);
+  TEST_ASSERT_TRUE(cooldownBlocked.warnStale);
+  TEST_ASSERT_FALSE(cooldownBlocked.restartSerial);
+  TEST_ASSERT_TRUE(cooldownPassed.restartSerial);
+}
+
 void test_timers_survive_unsigned_millis_wrap() {
   RuntimeGpsUart uart;
   RuntimeGpsUartConfig config;
@@ -104,6 +140,8 @@ int main() {
   RUN_TEST(test_stale_stream_warns_and_requests_restart);
   RUN_TEST(test_first_byte_at_zero_can_still_go_stale);
   RUN_TEST(test_restart_cooldown_blocks_repeat_restart_until_window_passes);
+  RUN_TEST(test_restart_opens_new_no_data_grace_window);
+  RUN_TEST(test_restart_cooldown_does_not_use_zero_timestamp_as_sentinel);
   RUN_TEST(test_timers_survive_unsigned_millis_wrap);
   return UNITY_END();
 }

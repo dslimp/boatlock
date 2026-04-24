@@ -2749,3 +2749,36 @@ Self-review:
 
 Promote to skill:
 - Added the durable `--anchor` smoke rule to `skills/boatlock-hardware-acceptance/SKILL.md`.
+
+### 2026-04-25 Stage 86: GPS UART watchdog restart window
+
+Scope:
+- Start the next three-module refactor batch with `RuntimeGpsUart`.
+- Keep the GPS UART watchdog small and deterministic while preserving current wiring/runtime behavior.
+- This is module `1/3`; hardware acceptance remains due after module `3/3`.
+
+External baseline:
+- PX4 position-loss failsafe is based on timeout since the last aiding sensor data was fused, not on the existence of an old position value: <https://docs.px4.io/main/en/config/safety#position-estimation-failsafes>.
+- ArduPilot pre-arm checks separate GPS configuration/data/fix/HDOP failures and keep GPS-dependent modes behind explicit checks: <https://ardupilot.org/copter/docs/common-prearm-safety-checks.html>.
+- u-blox UART guidance documents that UART bandwidth and message availability are real constraints; if output exceeds port bandwidth, messages can be dropped, so host-side byte-flow monitoring is valid: <https://content.u-blox.com/sites/default/files/products/documents/u-blox7-V14_ReceiverDescriptionProtocolSpec_%28GPS.G7-SW-12001%29_Public.pdf>.
+
+Key outcomes:
+- Replaced `lastRestartMs_ == 0` sentinel behavior with an explicit `restartSeen_` flag.
+- A GPS UART restart now resets the no-data baseline, so silence after a restart gets a fresh grace window instead of immediately reusing boot time.
+- Added native tests for restart grace-window behavior and restart cooldown when the first restart timestamp is `0`.
+- Promoted the durable watchdog rule into `skills/boatlock/references/firmware.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added for this module because it does not change BLE protocol, Flutter parsing, app flow, or phone-visible command behavior. Hardware batch remains scheduled after module `3/3`.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_gps_uart -f test_runtime_gnss` -> passed (`18/18`).
+- `cd boatlock && platformio test -e native` -> passed (`262/262`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `696897` bytes.
+- `git diff --check` -> clean.
+
+Self-review:
+- The change reduces sentinel ambiguity without widening the GPS feature surface.
+- It does alter warning timing after a GPS UART restart: this is intended because the restart is a new observation window.
+- Remaining risk is hardware timing under real GPS silence/recovery; that belongs in the three-module hardware acceptance batch unless a later module touches GPS driver setup directly.
+
+Promote to skill:
+- GPS UART restart must reset the no-data baseline and use explicit restart-seen state.

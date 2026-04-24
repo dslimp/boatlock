@@ -129,6 +129,8 @@
 - Keep UI refresh cadence and BLE notify cadence in `RuntimeTelemetryCadence`, not as loose timestamps in `main.cpp`.
 - Runtime cadence timers must share unsigned elapsed-time logic; interval `0` must have explicit behavior and rollover coverage.
 - Keep GPS UART no-data/stale/restart policy in `RuntimeGpsUart`, not as loose flags in `main.cpp`.
+- GPS UART restart must reset the no-data baseline so post-restart silence gets a fresh grace window instead of an immediate no-data warning.
+- GPS UART restart cooldown must use an explicit restart-seen flag; timestamp `0` is a valid restart time, not a sentinel.
 - Keep simulation result badge state in `RuntimeSimBadge`, not as loose latched strings in `main.cpp`.
 - Simulation result badge expiry uses start-time plus duration with unsigned elapsed-time math. Duration `0` means hidden, and rollover behavior must be covered by direct tests.
 - Keep anchor supervisor config/input assembly in `RuntimeSupervisorPolicy`, not as inline `settings.get(...)` policy code in `loop()`.

@@ -19,12 +19,13 @@ struct RuntimeGpsUartActions {
 class RuntimeGpsUart {
 public:
   void reset(unsigned long bootMs) {
-    bootMs_ = bootMs;
+    noDataBaselineMs_ = bootMs;
     seen_ = false;
     noDataWarned_ = false;
     staleLogged_ = false;
     lastByteMs_ = 0;
     lastRestartMs_ = 0;
+    restartSeen_ = false;
   }
 
   RuntimeGpsUartActions update(size_t bytesRead,
@@ -39,7 +40,8 @@ public:
       staleLogged_ = false;
     }
 
-    if (!seen_ && !noDataWarned_ && elapsedGreaterThan(nowMs, bootMs_, config.noDataWarnMs)) {
+    if (!seen_ && !noDataWarned_ &&
+        elapsedGreaterThan(nowMs, noDataBaselineMs_, config.noDataWarnMs)) {
       noDataWarned_ = true;
       actions.warnNoData = true;
     }
@@ -51,8 +53,10 @@ public:
         staleLogged_ = true;
         actions.warnStale = true;
       }
-      if (lastRestartMs_ == 0 || elapsedAtLeast(nowMs, lastRestartMs_, config.restartCooldownMs)) {
+      if (!restartSeen_ || elapsedAtLeast(nowMs, lastRestartMs_, config.restartCooldownMs)) {
         lastRestartMs_ = nowMs;
+        restartSeen_ = true;
+        noDataBaselineMs_ = nowMs;
         seen_ = false;
         noDataWarned_ = false;
         actions.restartSerial = true;
@@ -63,10 +67,11 @@ public:
   }
 
 private:
-  unsigned long bootMs_ = 0;
+  unsigned long noDataBaselineMs_ = 0;
   bool seen_ = false;
   bool noDataWarned_ = false;
   bool staleLogged_ = false;
+  bool restartSeen_ = false;
   unsigned long lastByteMs_ = 0;
   unsigned long lastRestartMs_ = 0;
 
