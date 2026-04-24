@@ -71,14 +71,16 @@ public:
                          int maxThrustPct = AUTO_MAX_PWM_PCT,
                          float rampPctPerSec = AUTO_RAMP_PCT_PER_SEC) {
         const unsigned long now = millis();
-        const float holdRadius = max(0.5f, holdRadiusMeters);
-        const float deadband = constrain(deadbandMeters, 0.2f, 10.0f);
-        const float idleRadius = holdRadius + deadband;
-
-        if (!allowThrust || !isfinite(distanceMeters) || distanceMeters <= 0.0f) {
+        if (!allowThrust || !isfinite(distanceMeters) || distanceMeters <= 0.0f ||
+            !isfinite(holdRadiusMeters) || !isfinite(deadbandMeters) ||
+            !isfinite(rampPctPerSec)) {
             stop();
             return;
         }
+
+        const float holdRadius = max(0.5f, holdRadiusMeters);
+        const float deadband = constrain(deadbandMeters, 0.2f, 10.0f);
+        const float idleRadius = holdRadius + deadband;
 
         if (!filteredAnchorDistanceValid) {
             filteredAnchorDistance = distanceMeters;

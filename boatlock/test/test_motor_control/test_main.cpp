@@ -232,6 +232,32 @@ void test_manual_drive_does_not_seed_anchor_auto_ramp() {
   TEST_ASSERT_LESS_THAN(MotorControl::AUTO_MIN_PWM, motor.pwmRaw);
 }
 
+void test_anchor_auto_rejects_nonfinite_tuning_without_output() {
+  MotorControl motor;
+  motor.setupPWM(7, 0, 5000, 8);
+  motor.setDirPins(5, 10);
+
+  mockSetMillis(1000);
+  motor.driveAnchorAuto(40.0f, 2.0f, true);
+  TEST_ASSERT_TRUE(motor.autoThrustActive);
+
+  mockSetMillis(1500);
+  motor.driveAnchorAuto(40.0f, NAN, true);
+  TEST_ASSERT_FALSE(motor.autoThrustActive);
+  TEST_ASSERT_EQUAL(0, motor.pwmRaw);
+  TEST_ASSERT_EQUAL(LOW, g_lastDigitalValue);
+
+  mockSetMillis(2000);
+  motor.driveAnchorAuto(40.0f, 2.0f, true, NAN);
+  TEST_ASSERT_FALSE(motor.autoThrustActive);
+  TEST_ASSERT_EQUAL(0, motor.pwmRaw);
+
+  mockSetMillis(2500);
+  motor.driveAnchorAuto(40.0f, 2.0f, true, MotorControl::AUTO_DEADBAND_M, 75, NAN);
+  TEST_ASSERT_FALSE(motor.autoThrustActive);
+  TEST_ASSERT_EQUAL(0, motor.pwmRaw);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_anchor_auto_stays_off_inside_hold_plus_deadband);
@@ -245,5 +271,6 @@ int main() {
   RUN_TEST(test_stop_clears_auto_thrust_state);
   RUN_TEST(test_manual_zero_is_quiet_idle_output);
   RUN_TEST(test_manual_drive_does_not_seed_anchor_auto_ramp);
+  RUN_TEST(test_anchor_auto_rejects_nonfinite_tuning_without_output);
   return UNITY_END();
 }

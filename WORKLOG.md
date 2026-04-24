@@ -2879,3 +2879,46 @@ Self-review:
 
 Promote to skill:
 - No new durable rule beyond the compass/GPS watchdog rules already promoted.
+
+### 2026-04-25 Stage 90: Motor auto-thrust finite input gate
+
+Scope:
+- Start the next actuator/control batch with `MotorControl`.
+- Keep motor output deterministic and quiet when runtime tuning inputs are invalid.
+- This is module `1/3`, but hardware acceptance ran immediately because this touches actuator safety.
+
+External baseline:
+- ArduPilot pre-arm checks block propulsion when configuration, calibration, or safety prerequisites are invalid: <https://ardupilot.ardupilot.org/copter/docs/common-prearm-safety-checks.html>.
+- ArduPilot motor range/calibration guidance treats motor start thresholds and low-throttle tests as explicit safety/tuning concerns, not incidental behavior: <https://ardupilot.org/copter/docs/set-motor-range.html>.
+- PX4 safety configuration treats actuator/failsafe behavior as explicit safety policy and supports preventing accidental vehicle use during safety/maintenance states: <https://docs.px4.io/main/en/config/safety.html>.
+
+Key outcomes:
+- `driveAnchorAuto()` now fails closed if `holdRadiusMeters`, `deadbandMeters`, or `rampPctPerSec` are non-finite.
+- This prevents `NaN` tuning values from reaching clamp/ramp math and producing undefined motor output.
+- Added native coverage proving non-finite tuning stops auto-thrust, writes zero PWM, and leaves direction pins in idle state.
+- Promoted the actuator finite-input rule into `skills/boatlock/references/firmware.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no new Android smoke mode needed because BLE protocol/app behavior did not change. Existing manual/status/anchor/sim/reconnect/reset smokes ran after flashing because actuator firmware changed.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_motor_control -f test_runtime_motion -f test_ble_command_handler` -> passed (`52/52`).
+- `cd boatlock && platformio test -e native` -> passed (`267/267`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `697005` bytes.
+- `./tools/hw/nh02/flash.sh` -> build success, flash success, app image write `697376` bytes, hard reset via RTS.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-motor-safety-60s.log --json-out /tmp/boatlock-motor-safety-60s.json` -> `[ACCEPT] PASS lines=80`.
+- Error scan over the 60-second log for panic/assert/Guru/config save or CRC errors/GPS stale/no data/compass loss/I2C errors/fail/error tokens -> no matches.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --status --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"status_stop_alert_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[EVENT] FAILSAFE_TRIGGERED reason=STOP_CMD"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --anchor --wait-secs 130` -> exact install `Success` after one canonical MIUI retry; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"anchor_denied_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[EVENT] ANCHOR_OFF reason=BLE_CMD"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --sim --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"sim_run_abort_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[SIM] ABORTED"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `git diff --check` -> clean.
+
+Self-review:
+- This is a small fail-closed input gate, not a retune of the controller.
+- Normal configured values are unchanged; only non-finite tuning values now force quiet output.
+- The bench smokes are zero-throttle/safety-path checks and do not prove powered thrust tuning or on-water hold behavior.
+
+Promote to skill:
+- Motor auto-thrust must reject non-finite distance/tuning input before clamp/ramp math and drive quiet output instead.

@@ -169,6 +169,7 @@
 - Invalid manual packets must not refresh the deadman lease.
 - Manual deadman behavior must be tested for timestamp zero and unsigned `millis()` rollover.
 - Motor output must stay bounded and deterministic. Do not reintroduce hidden runtime self-adaptive PID tuning or PID auto-persistence in the actuator path.
+- Motor auto-thrust must fail closed when distance or tuning inputs are non-finite; do not let `NaN` pass into clamp/ramp math.
 - Manual and anchor-auto motor state must stay isolated. Manual PWM, timestamps, and ramp state must not seed anchor-auto output.
 - Motor stop/zero paths should drive PWM to zero and direction pins to a known idle state.
 - Stepper control must fail closed on neutral/invalid manual input, use bounded angle normalization, and release coils after idle/cancel through a deterministic timer.
