@@ -13,7 +13,8 @@ public:
                      unsigned long bannerDurationMs) {
     if (simRunning) {
       runLatched_ = true;
-      bannerUntilMs_ = 0;
+      badgeStartedMs_ = 0;
+      badgeDurationMs_ = 0;
       badge_[0] = '\0';
       return nullptr;
     }
@@ -30,14 +31,16 @@ public:
       }
       const char* verdict = (lastPass == 1) ? "PASS" : ((lastPass == 0) ? "FAIL" : "ABRT");
       snprintf(badge_, sizeof(badge_), "SIM %s %s", shortId.c_str(), verdict);
-      bannerUntilMs_ = nowMs + bannerDurationMs;
+      badgeStartedMs_ = nowMs;
+      badgeDurationMs_ = bannerDurationMs;
     }
 
     return current(nowMs);
   }
 
   const char* current(unsigned long nowMs) {
-    const bool active = (badge_[0] != '\0') && ((long)(bannerUntilMs_ - nowMs) > 0);
+    const bool active = (badge_[0] != '\0') && (badgeDurationMs_ > 0) &&
+                        ((nowMs - badgeStartedMs_) < badgeDurationMs_);
     if (!active) {
       badge_[0] = '\0';
       return nullptr;
@@ -47,6 +50,7 @@ public:
 
 private:
   bool runLatched_ = false;
-  unsigned long bannerUntilMs_ = 0;
+  unsigned long badgeStartedMs_ = 0;
+  unsigned long badgeDurationMs_ = 0;
   char badge_[24] = {0};
 };

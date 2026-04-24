@@ -2462,3 +2462,39 @@ Self-review:
 
 Promote to skill:
 - BLE text/log characteristic payloads must be length-bounded at firmware and defensively decoded at the client boundary.
+
+### 2026-04-24 Stage 78: Simulation badge timer hardening
+
+Scope:
+- Finish the current low-risk three-module batch with `RuntimeSimBadge`.
+- Keep simulation result badge text and HIL behavior unchanged.
+- Remove absolute-expiry timer math from the badge display path.
+- This is module `3/3`; full `nh02` acceptance and Android smoke batch are due after this module is committed and flashed.
+
+External baseline:
+- Arduino's non-blocking timer examples use `currentMillis - previousMillis >= interval` instead of delay-style or absolute expiry checks: <https://docs.arduino.cc/built-in-examples/digital/BlinkWithoutDelay/>.
+- Arduino `millis()` guidance notes that rollover-safe logic should compare elapsed time, not `millis() >= previous + interval`: <https://arduinogetstarted.com/reference/arduino-millis>.
+
+Key outcomes:
+- `RuntimeSimBadge` now stores badge start time plus duration and checks unsigned elapsed time.
+- Duration `0` explicitly hides the badge instead of relying on signed expiry arithmetic.
+- Added native coverage for zero-duration badges and unsigned `millis()` rollover.
+- Phone-smoke decision: no module-specific Android smoke added because this module does not change BLE protocol, commands, telemetry keys, app parsing, reconnect, install, or UI behavior. It remains covered by local native tests and the full batch Android smokes after module `3/3`.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_sim_badge` -> initially exposed a bad 32-bit-only rollover test assumption in native; after changing the test to use `~0UL`, `6/6` passed.
+- `git diff --check` -> clean.
+- `cd boatlock && platformio test -e native` -> `254/254` passed.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `696969` bytes.
+- Hardware acceptance and Android smoke batch pending after commit/push because this closes module `3/3`.
+
+Self-review:
+- This is a timer-boundary cleanup, not a user-visible protocol change.
+- The refactor reduces timer ambiguity without adding new branches outside the module.
+- The native test failure was in the test's fixed 32-bit rollover assumption, not production logic; using `~0UL` now verifies the actual unsigned type semantics on both native and embedded builds.
+
+Promote to skill:
+- One-shot diagnostic/UI timers should follow the same start-plus-duration unsigned elapsed-time rule as runtime watchdog and cadence timers.
