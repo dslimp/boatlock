@@ -116,6 +116,7 @@
 - `main.cpp` should compose one `RuntimeControlInput` and pass it into `RuntimeMotion`.
 - `SET_ANCHOR` stores valid non-zero anchor coordinates plus current heading only if fresh heading is available, otherwise heading `0`.
 - Anchor-point persistence belongs in `AnchorControl`; saving a point must require an explicit `enableAnchor` argument and must reject invalid/non-finite coordinates instead of clamping them.
+- Anchor heading normalization must use bounded math; do not use repeated `while` loops that can hang on very large finite headings.
 - Anchor-point persistence must return failure when the settings commit fails, restore previous settings RAM values, and leave the live anchor point unchanged.
 - Loaded anchor coordinates must be validated as a pair; invalid/default coordinates clear the live anchor point and heading.
 - `ANCHOR_ON` must be denied unless anchor point exists, onboard heading is available, and GNSS quality gate passes.

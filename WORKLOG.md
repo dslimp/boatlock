@@ -3082,3 +3082,35 @@ Self-review:
 
 Promote to skill:
 - Supervisor timeout and command-limit values must be bounded/fail-closed at the policy boundary before the failsafe state machine uses them.
+
+### 2026-04-25 Stage 95: Anchor heading normalization bounded math
+
+Scope:
+- Start the next five-module navigation/anchor batch with `AnchorControl`.
+- Keep anchor-point persistence behavior unchanged, but remove input-magnitude-dependent heading normalization from the safety path.
+- This is module `1/5`; hardware and Android acceptance are deferred to module five because BLE protocol, phone app behavior, pins, and hardware drivers did not change.
+
+External baseline:
+- OpenCPN Auto Anchor keeps anchor monitoring as explicit anchor/watch state and depends on stable anchor position/state math rather than interactive correction loops: <https://opencpn.org/wiki/dokuwiki/doku.php?id=opencpn:manual_advanced:features:auto_anchor>.
+- Applied rule for BoatLock: safety-path angle normalization must be deterministic and bounded for any finite persisted/input value.
+
+Key outcomes:
+- `AnchorControl::normalizeHeading()` now rejects non-finite headings to `0` and uses `fmodf()` for bounded normalization into `[0, 360)`.
+- Removed repeated `while` normalization loops that could hang on very large finite headings.
+- Added native coverage for positive wrap, negative wrap, huge finite headings, and `NaN`.
+- Promoted the bounded heading-normalization rule into `skills/boatlock/references/firmware.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because command shape, telemetry shape, and app behavior did not change.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_anchor_control -f test_ble_command_handler -f test_runtime_ble_params -f test_runtime_anchor_gate` -> passed (`45/45`).
+- `cd boatlock && platformio test -e native` -> passed (`275/275`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `697465` bytes.
+- `git diff --check` -> clean.
+
+Self-review:
+- The change is intentionally narrow: invalid persisted heading still becomes safe heading `0`, and valid anchor coordinates are not modified.
+- No runtime mode, GNSS source, BLE, or motor behavior changed.
+- Remaining validation risk is real GNSS/on-water hold behavior, which this module does not exercise.
+
+Promote to skill:
+- Heading and angle normalization in safety-path code must use bounded modulo-style math and must treat non-finite input as a safe value.

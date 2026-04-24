@@ -93,8 +93,13 @@ public:
     }
 
     static float normalizeHeading(float heading) {
-        while (heading < 0.0f) heading += 360.0f;
-        while (heading >= 360.0f) heading -= 360.0f;
+        if (!isfinite(heading)) {
+            return 0.0f;
+        }
+        heading = fmodf(heading, 360.0f);
+        if (heading < 0.0f) {
+            heading += 360.0f;
+        }
         return heading;
     }
 

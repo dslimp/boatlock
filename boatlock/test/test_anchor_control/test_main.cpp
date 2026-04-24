@@ -112,6 +112,14 @@ void test_load_anchor_normalizes_or_clears_persisted_values() {
   TEST_ASSERT_EQUAL_FLOAT(0.0f, ac.anchorHeading);
 }
 
+void test_heading_normalization_is_bounded() {
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, AnchorControl::normalizeHeading(720.0f));
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 355.0f, AnchorControl::normalizeHeading(-725.0f));
+  TEST_ASSERT_TRUE(AnchorControl::normalizeHeading(1.0e20f) >= 0.0f);
+  TEST_ASSERT_TRUE(AnchorControl::normalizeHeading(1.0e20f) < 360.0f);
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, AnchorControl::normalizeHeading(NAN));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_save_and_load);
@@ -119,5 +127,6 @@ int main() {
   RUN_TEST(test_rejects_invalid_anchor_without_persisting_or_clamping);
   RUN_TEST(test_save_failure_does_not_replace_live_anchor);
   RUN_TEST(test_load_anchor_normalizes_or_clears_persisted_values);
+  RUN_TEST(test_heading_normalization_is_bounded);
   return UNITY_END();
 }
