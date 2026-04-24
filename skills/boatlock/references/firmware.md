@@ -83,6 +83,9 @@
   - applies moving-average filter window `GpsFWin` (`1..20`)
   - rejects jumps above `MaxPosJumpM`
   - updates speed, HDOP, accel, and sentence counters
+- Phone GPS fallback must never seed hardware GNSS filter, jump baseline, speed baseline, or acceleration baseline.
+- When GNSS leaves hardware source or loses fix, reset hardware motion/filter baselines so reacquisition starts from fresh trusted hardware data.
+- GNSS motion freshness must use explicit sample-valid flags. Timestamp `0` is a valid sample time, not a "no sample" sentinel.
 - Anchor pre-enable treats HDOP as a required quality metric. Missing, non-finite, or zero HDOP maps to `GPS_HDOP_MISSING`, not to a pass.
 - GNSS status reasons must preserve exact gate names end-to-end, including `GPS_DATA_STALE`, `GPS_POSITION_JUMP`, and `GPS_HDOP_MISSING`.
 - Heading is onboard BNO08x UART-RVC only.

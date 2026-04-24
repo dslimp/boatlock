@@ -69,6 +69,7 @@ public:
     currentAccelValid_ = false;
     speedSampleMs_ = 0;
     prevSpeedMps_ = NAN;
+    hasHardwareSpeedSample_ = false;
     hwFixSamplesCount_ = 0;
     lastGnssFailReason_ = GnssQualityFailReason::NO_FIX;
     gpsFix_ = false;
@@ -116,7 +117,7 @@ public:
     currentSpeedKmh_ =
         (isfinite(input.speedKmh) && input.speedKmh > 0.0f) ? input.speedKmh : 0.0f;
     currentSpeedMps_ = currentSpeedKmh_ / 3.6f;
-    if (speedSampleMs_ > 0 && isfinite(prevSpeedMps_)) {
+    if (hasHardwareSpeedSample_ && isfinite(prevSpeedMps_)) {
       const float dt = (nowMs - speedSampleMs_) / 1000.0f;
       if (isfinite(dt) && dt > 0.05f && dt < 5.0f) {
         currentAccelMps2_ = (currentSpeedMps_ - prevSpeedMps_) / dt;
@@ -129,6 +130,7 @@ public:
     }
     speedSampleMs_ = nowMs;
     prevSpeedMps_ = currentSpeedMps_;
+    hasHardwareSpeedSample_ = true;
     currentSatellites_ = max(0, input.satellites);
     currentGpsHdop_ = input.hdop;
     currentGpsAgeMs_ = input.ageMs;
@@ -154,7 +156,8 @@ public:
         (isfinite(phoneSpeedKmh_) && phoneSpeedKmh_ > 0.0f) ? phoneSpeedKmh_ : 0.0f;
     currentSpeedMps_ = currentSpeedKmh_ / 3.6f;
     currentAccelValid_ = false;
-    prevSpeedMps_ = currentSpeedMps_;
+    resetHardwareMotionBaseline();
+    gpsFilter_.reset(gpsFilter_.window);
     currentSatellites_ = max(0, phoneSatellites_);
     currentGpsHdop_ = NAN;
     currentGpsAgeMs_ = nowMs - phoneGpsUpdatedMs_;
@@ -172,7 +175,8 @@ public:
     currentSpeedMps_ = 0.0f;
     currentAccelMps2_ = 0.0f;
     currentAccelValid_ = false;
-    prevSpeedMps_ = NAN;
+    resetHardwareMotionBaseline();
+    gpsFilter_.reset(gpsFilter_.window);
     currentSatellites_ = 0;
     currentGpsHdop_ = NAN;
     currentGpsAgeMs_ = 999999;
@@ -306,22 +310,26 @@ public:
   }
 
   static float normalizeDiffDeg(float targetDeg, float currentDeg) {
-    float diff = targetDeg - currentDeg;
-    if (diff > 180.0f) diff -= 360.0f;
-    if (diff < -180.0f) diff += 360.0f;
-    return diff;
+    return normalize180Deg(targetDeg - currentDeg);
   }
 
   static float normalize360Deg(float deg) {
-    while (deg < 0.0f) deg += 360.0f;
-    while (deg >= 360.0f) deg -= 360.0f;
-    return deg;
+    float wrapped = fmodf(deg, 360.0f);
+    if (wrapped < 0.0f) {
+      wrapped += 360.0f;
+    }
+    return wrapped;
   }
 
   static float normalize180Deg(float deg) {
-    while (deg > 180.0f) deg -= 360.0f;
-    while (deg < -180.0f) deg += 360.0f;
-    return deg;
+    float wrapped = fmodf(deg, 360.0f);
+    if (wrapped > 180.0f) {
+      wrapped -= 360.0f;
+    }
+    if (wrapped < -180.0f) {
+      wrapped += 360.0f;
+    }
+    return wrapped;
   }
 
   bool fix() const { return gpsFix_; }
@@ -447,6 +455,12 @@ private:
     return normalize360Deg(headingDeg + gpsHeadingCorrDeg_);
   }
 
+  void resetHardwareMotionBaseline() {
+    speedSampleMs_ = 0;
+    prevSpeedMps_ = NAN;
+    hasHardwareSpeedSample_ = false;
+  }
+
   GpsFilterState gpsFilter_;
   float lastLat_ = 0.0f;
   float lastLon_ = 0.0f;
@@ -480,6 +494,7 @@ private:
   bool currentAccelValid_ = false;
   unsigned long speedSampleMs_ = 0;
   float prevSpeedMps_ = NAN;
+  bool hasHardwareSpeedSample_ = false;
   unsigned long hwFixSamplesCount_ = 0;
   GnssQualityFailReason lastGnssFailReason_ = GnssQualityFailReason::NO_FIX;
 };

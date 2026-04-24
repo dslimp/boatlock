@@ -145,6 +145,85 @@ void test_phone_fallback_quality_sample_does_not_reuse_hardware_metrics() {
                     (int)gnss.lastGnssFailReason());
 }
 
+void test_hardware_accel_uses_zero_timestamp_sample() {
+  Settings settings;
+  settings.reset();
+
+  RuntimeGnss gnss;
+  RuntimeGnss::HardwareFixInput fix;
+  fix.lat = 59.9386f;
+  fix.lon = 30.3141f;
+  fix.speedKmh = 0.0f;
+  fix.satellites = 10;
+  fix.hdop = 1.0f;
+  fix.ageMs = 100;
+  TEST_ASSERT_EQUAL((int)RuntimeGnss::ApplyResult::APPLIED,
+                    (int)gnss.applyHardwareFix(fix, settings, false, 0.0f, 0));
+  TEST_ASSERT_FALSE(gnss.currentAccelValid());
+
+  fix.lat = 59.93861f;
+  fix.speedKmh = 3.6f;
+  TEST_ASSERT_EQUAL((int)RuntimeGnss::ApplyResult::APPLIED,
+                    (int)gnss.applyHardwareFix(fix, settings, false, 0.0f, 1000));
+  TEST_ASSERT_TRUE(gnss.currentAccelValid());
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.0f, gnss.currentAccelMps2());
+}
+
+void test_phone_fallback_does_not_seed_hardware_accel() {
+  Settings settings;
+  settings.reset();
+
+  RuntimeGnss gnss;
+  RuntimeGnss::HardwareFixInput fix;
+  fix.lat = 59.9386f;
+  fix.lon = 30.3141f;
+  fix.speedKmh = 3.6f;
+  fix.satellites = 10;
+  fix.hdop = 1.0f;
+  fix.ageMs = 100;
+  TEST_ASSERT_EQUAL((int)RuntimeGnss::ApplyResult::APPLIED,
+                    (int)gnss.applyHardwareFix(fix, settings, false, 0.0f, 1000));
+
+  gnss.setPhoneFix(59.9387f, 30.3142f, 100.0f, 10, 1500);
+  TEST_ASSERT_TRUE(gnss.applyPhoneFallback(false, 0.0f, 2000));
+
+  fix.lat = 59.93862f;
+  fix.speedKmh = 7.2f;
+  TEST_ASSERT_EQUAL((int)RuntimeGnss::ApplyResult::APPLIED,
+                    (int)gnss.applyHardwareFix(fix, settings, false, 0.0f, 2500));
+  TEST_ASSERT_FALSE(gnss.currentAccelValid());
+}
+
+void test_hardware_reacquires_after_clear_fix_without_jump_lockout() {
+  Settings settings;
+  settings.reset();
+  settings.set("MaxPosJumpM", 5.0f);
+
+  RuntimeGnss gnss;
+  RuntimeGnss::HardwareFixInput fix;
+  fix.lat = 59.9386f;
+  fix.lon = 30.3141f;
+  fix.speedKmh = 3.6f;
+  fix.satellites = 10;
+  fix.hdop = 1.0f;
+  fix.ageMs = 100;
+  TEST_ASSERT_EQUAL((int)RuntimeGnss::ApplyResult::APPLIED,
+                    (int)gnss.applyHardwareFix(fix, settings, false, 0.0f, 1000));
+
+  gnss.clearFix();
+  fix.lat = 59.9486f;
+  TEST_ASSERT_EQUAL((int)RuntimeGnss::ApplyResult::APPLIED,
+                    (int)gnss.applyHardwareFix(fix, settings, false, 0.0f, 7000));
+}
+
+void test_angle_normalization_uses_bounded_math() {
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, RuntimeGnss::normalize360Deg(1080.0f));
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 270.0f, RuntimeGnss::normalize360Deg(-450.0f));
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 180.0f, RuntimeGnss::normalize180Deg(900.0f));
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, -180.0f, RuntimeGnss::normalize180Deg(-900.0f));
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, RuntimeGnss::normalizeDiffDeg(1080.0f, 0.0f));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_phone_fix_is_not_control_fix);
@@ -153,5 +232,9 @@ int main() {
   RUN_TEST(test_jump_rejection_keeps_previous_fix);
   RUN_TEST(test_gnss_quality_level_reevaluates_current_sample);
   RUN_TEST(test_phone_fallback_quality_sample_does_not_reuse_hardware_metrics);
+  RUN_TEST(test_hardware_accel_uses_zero_timestamp_sample);
+  RUN_TEST(test_phone_fallback_does_not_seed_hardware_accel);
+  RUN_TEST(test_hardware_reacquires_after_clear_fix_without_jump_lockout);
+  RUN_TEST(test_angle_normalization_uses_bounded_math);
   return UNITY_END();
 }

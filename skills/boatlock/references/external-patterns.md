@@ -110,6 +110,8 @@ Implication for BoatLock:
 - Keep actuator tuning explicit and evidence-based. Do not hide self-adaptive gain changes or gain persistence inside the runtime motor path.
 - Stepper/servo outputs should have explicit neutral/idle behavior. Release or reduce holding current when idle if holding torque is not required, and make re-enable behavior deliberate.
 - GNSS quality checks should require fresh quality evidence and fail closed when evidence disappears.
+- Phone or app-provided positions are not equivalent to onboard GNSS for control. Keep fallback/display source state isolated from hardware-source filters, speed baselines, and jump baselines.
+- GNSS source transitions should reset stale hardware baselines rather than comparing a new hardware fix against old phone/no-fix state.
 - Serial/GNSS watchdogs should be non-blocking and based on elapsed-time checks; direct `now > then` comparisons are not rollover-safe.
 - Compass/RVC watchdogs follow the same rule: track event presence separately from timestamps, then calculate age with unsigned subtraction. A timestamp value of `0` is a valid sample time.
 - Do not auto-enter manual control from failsafe. After a fault clears, operator control must be an explicit new action.
