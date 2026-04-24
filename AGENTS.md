@@ -199,9 +199,9 @@
 - Treat simplicity as the default. Prefer the smallest clear change that reduces code or branching without changing behavior unless the task explicitly requires a behavior change.
 - Before refactoring any module, do a targeted external best-practice pass from official/primary sources for that module, then record the applied baseline in `WORKLOG.md` and, when durable, `skills/boatlock/references/external-patterns.md`.
 - Do not start module code changes from intuition alone. If no useful external source applies, explicitly record that conclusion before editing.
-- Default module cadence is batches of three modules:
+- Default module cadence is batches of five modules:
   - for each module: external baseline, smallest refactor, local tests, worklog/self-review, commit, and push
-  - after every third module: run `nh02` flash, hardware acceptance, serial log scan, and Android BLE smokes
+  - after every fifth module: run `nh02` flash, hardware acceptance, serial log scan, and Android BLE smokes
   - run hardware earlier only for high-risk changes that touch hardware drivers, pinout, flashing/debug wrappers, actuator safety, BLE reconnect/install behavior, or any path where local tests cannot bound the risk
 - Fix blockers at the source before normalizing a workaround.
 - Do not continue through an alternate path, side probe, fallback data source, or partial workaround until the blocker is fixed or the user explicitly waives that fix.

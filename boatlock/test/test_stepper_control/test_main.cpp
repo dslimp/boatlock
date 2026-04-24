@@ -57,6 +57,20 @@ void test_run_releases_coils_after_idle_timeout() {
   TEST_ASSERT_FALSE(c.outputsEnabled);
 }
 
+void test_run_releases_coils_when_idle_starts_at_zero() {
+  StepperControl c(2, 4, 6, 16);
+  c.outputsEnabled = true;
+
+  mockSetMillis(0);
+  c.run();
+  TEST_ASSERT_TRUE(c.idleTimerActive);
+  TEST_ASSERT_EQUAL(0, c.idleSinceMs);
+
+  mockSetMillis(StepperControl::COIL_RELEASE_DELAY_MS);
+  c.run();
+  TEST_ASSERT_FALSE(c.outputsEnabled);
+}
+
 void test_cancel_move_starts_idle_release_timer() {
   StepperControl c(2, 4, 6, 16);
   c.outputsEnabled = true;
@@ -67,6 +81,20 @@ void test_cancel_move_starts_idle_release_timer() {
 
   TEST_ASSERT_EQUAL(100, c.idleSinceMs);
   mockAdvanceMillis(StepperControl::COIL_RELEASE_DELAY_MS + 1);
+  c.run();
+  TEST_ASSERT_FALSE(c.outputsEnabled);
+}
+
+void test_cancel_move_idle_timer_accepts_zero_timestamp() {
+  StepperControl c(2, 4, 6, 16);
+  c.outputsEnabled = true;
+
+  mockSetMillis(0);
+  c.cancelMove();
+  TEST_ASSERT_TRUE(c.idleTimerActive);
+  TEST_ASSERT_EQUAL(0, c.idleSinceMs);
+
+  mockSetMillis(StepperControl::COIL_RELEASE_DELAY_MS);
   c.run();
   TEST_ASSERT_FALSE(c.outputsEnabled);
 }
@@ -87,7 +115,9 @@ int main() {
   RUN_TEST(test_point_to_bearing_uses_shortest_path);
   RUN_TEST(test_direction_flip_preempts_old_target);
   RUN_TEST(test_run_releases_coils_after_idle_timeout);
+  RUN_TEST(test_run_releases_coils_when_idle_starts_at_zero);
   RUN_TEST(test_cancel_move_starts_idle_release_timer);
+  RUN_TEST(test_cancel_move_idle_timer_accepts_zero_timestamp);
   RUN_TEST(test_start_manual_zero_does_not_enable_outputs);
   return UNITY_END();
 }

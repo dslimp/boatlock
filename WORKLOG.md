@@ -2922,3 +2922,50 @@ Self-review:
 
 Promote to skill:
 - Motor auto-thrust must reject non-finite distance/tuning input before clamp/ramp math and drive quiet output instead.
+
+### 2026-04-25 Stage 91: Stepper idle-release timer state
+
+Scope:
+- Continue actuator/control refactor with `StepperControl`.
+- Fix idle coil release when the idle timer starts at `millis()==0`; zero is a valid timestamp and must not behave as "timer not started".
+- User updated the default cadence from three to five modules before hardware acceptance. `AGENTS.md`, `skills/boatlock/SKILL.md`, and `skills/boatlock-hardware-acceptance/SKILL.md` now say hardware runs after every fifth normal module.
+- This is actuator safety work, so hardware acceptance and Android BLE smokes still ran immediately instead of waiting for module five.
+
+External baseline:
+- AccelStepper documents `disableOutputs()`/`enableOutputs()` as the intended mechanism to disable motor pin outputs during low-power/idle states and re-enable before stepping: <https://www.airspayce.com/mikem/arduino/AccelStepper/classAccelStepper.html>.
+- The SureStep drive manual treats idle-current reduction as a normal stepper-drive feature to reduce power and heat while accepting reduced holding torque: <https://cdn.automationdirect.com/static/manuals/surestepmanual/ch5.pdf>.
+
+Key outcomes:
+- Replaced `idleSinceMs == 0` sentinel behavior with explicit `idleTimerActive` state.
+- Idle/cancel paths now release coils after `COIL_RELEASE_DELAY_MS` even when the first idle sample is timestamp `0`.
+- Motion/manual/start config paths clear the idle timer deliberately before driving outputs.
+- Added native tests for idle-at-zero and cancel-at-zero coil release.
+- Promoted the explicit idle-timer-state rule into `skills/boatlock/references/firmware.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no new Android smoke mode needed because BLE protocol/app behavior did not change. Existing smokes ran after flashing because stepper actuator firmware changed.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_stepper_control -f test_runtime_motion -f test_ble_command_handler` -> passed (`48/48`).
+- `cd boatlock && platformio test -e native` -> passed (`269/269`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `697057` bytes.
+- `./tools/hw/nh02/status.sh` -> target confirmed, RFC2217 service active, ESP32-S3 USB serial `98:88:e0:03:ba:5c`.
+- `./tools/hw/nh02/flash.sh` -> build success, flash success, app image write `697424` bytes, hard reset via RTS.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-stepper-idle-60s.log --json-out /tmp/boatlock-stepper-idle-60s.json` -> `[ACCEPT] PASS lines=79`.
+- Acceptance matched BNO08x-RVC ready, display ready, EEPROM loaded, security state, BLE init/advertising, stepper config, STOP button, GPS UART data, and fresh compass heading events.
+- Error scan over the 60-second log for panic/assert/Guru/config save or CRC errors/GPS stale/no data/compass loss/I2C errors/fail/error tokens -> no matches.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --status --wait-secs 130` -> first install hit `INSTALL_FAILED_USER_RESTRICTED`, canonical retry `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"status_stop_alert_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[EVENT] FAILSAFE_TRIGGERED reason=STOP_CMD"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --anchor --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"anchor_denied_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[EVENT] ANCHOR_OFF reason=BLE_CMD"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --sim --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"sim_run_abort_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[SIM] ABORTED"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `git diff --check` -> clean.
+
+Self-review:
+- This is a state-machine correction, not a retune of stepper speed, acceleration, or coil-release delay.
+- It removes a timestamp sentinel bug without widening command surface or changing normal non-zero runtime behavior.
+- The bench smokes prove boot, sensor readiness, BLE command safety paths, reconnect, and reset recovery; they do not measure stepper coil temperature or powered mechanical load.
+
+Promote to skill:
+- Default hardware cadence is five modules, with immediate hardware validation still required for actuator, driver, pinout, deploy/debug, BLE reconnect/install, and other high-risk paths.
+- Stepper idle timers must use explicit active state; do not use `0` as a timestamp sentinel.

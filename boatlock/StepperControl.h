@@ -20,6 +20,7 @@ public:
     long bowZeroSteps = 0;
     bool outputsEnabled = true;
     unsigned long idleSinceMs = 0;
+    bool idleTimerActive = false;
 
     // 28BYJ-48 + ULN2003 (HALF4WIRE). Pin order IN1, IN3, IN2, IN4 for AccelStepper.
     StepperControl(int in1Pin, int in2Pin, int in3Pin, int in4Pin)
@@ -58,6 +59,7 @@ public:
         // Legacy STEP/DIR support removed: 28BYJ is fixed at 4096 steps/rev.
         stepsPerRev = STEPS_PER_REV_28BYJ;
         ensureOutputsEnabled();
+        clearIdleTimer();
 
         bowZeroSteps = normalizeSteps(lroundf(settings->get("Encoder0")));
         logMessage("[STEP] cfg maxSpd=%.0f accel=%.0f spr=%d\n",
@@ -106,9 +108,7 @@ public:
                 stepper.moveTo(holdPos);
             }
             busy = false;
-            if (idleSinceMs == 0) {
-                idleSinceMs = millis();
-            }
+            startIdleTimerIfNeeded();
             return;
         }
 
@@ -123,7 +123,7 @@ public:
         const long targetAbs = basePos + delta;
         stepper.moveTo(targetAbs);
         busy = (stepper.distanceToGo() != 0);
-        idleSinceMs = 0;
+        clearIdleTimer();
     }
 
     void startManual(int dir) {
@@ -136,7 +136,7 @@ public:
         float spd = settings ? settings->get("StepMaxSpd") : 1000;
         manualSpd = (dir < 0 ? -spd : spd) * DIRECTION_SIGN;
         stepper.setSpeed(manualSpd);
-        idleSinceMs = 0;
+        clearIdleTimer();
     }
 
     void stopManual() {
@@ -149,7 +149,7 @@ public:
         const long nowPos = stepper.currentPosition();
         stepper.moveTo(nowPos);
         busy = false;
-        idleSinceMs = millis();
+        startIdleTimer();
     }
 
     void cancelMove() {
@@ -157,8 +157,8 @@ public:
         const long nowPos = stepper.currentPosition();
         stepper.moveTo(nowPos);
         busy = false;
-        if ((hadPendingTarget || outputsEnabled) && idleSinceMs == 0) {
-            idleSinceMs = millis();
+        if (hadPendingTarget || outputsEnabled) {
+            startIdleTimerIfNeeded();
         }
     }
 
@@ -166,27 +166,23 @@ public:
         if (manual) {
             ensureOutputsEnabled();
             stepper.runSpeed();
-            idleSinceMs = 0;
+            clearIdleTimer();
         } else {
             if (stepper.distanceToGo() != 0) {
                 ensureOutputsEnabled();
                 stepper.run();
                 if (stepper.distanceToGo() != 0) {
                     busy = true;
-                    idleSinceMs = 0;
+                    clearIdleTimer();
                     return;
                 }
                 busy = false;
-                if (idleSinceMs == 0) {
-                    idleSinceMs = millis();
-                }
+                startIdleTimerIfNeeded();
                 return;
             }
 
             busy = false;
-            if (idleSinceMs == 0) {
-                idleSinceMs = millis();
-            }
+            startIdleTimerIfNeeded();
             if (outputsEnabled && (millis() - idleSinceMs >= COIL_RELEASE_DELAY_MS)) {
                 stepper.disableOutputs();
                 outputsEnabled = false;
@@ -200,5 +196,21 @@ private:
             stepper.enableOutputs();
             outputsEnabled = true;
         }
+    }
+
+    void startIdleTimer() {
+        idleSinceMs = millis();
+        idleTimerActive = true;
+    }
+
+    void startIdleTimerIfNeeded() {
+        if (!idleTimerActive) {
+            startIdleTimer();
+        }
+    }
+
+    void clearIdleTimer() {
+        idleSinceMs = 0;
+        idleTimerActive = false;
     }
 };

@@ -116,7 +116,7 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
 ## Working Rules
 
 - Keep host-side ownership limited to `/opt/boatlock-hw` and the tracked RFC2217 service.
-- Default refactor cadence runs hardware acceptance after every third module, not after every low-risk module.
+- Default refactor cadence runs hardware acceptance after every fifth module, not after every low-risk module.
 - Run acceptance immediately when the module touches hardware drivers, pinout, deploy/debug wrappers, actuator safety, BLE reconnect/install behavior, or another path where local tests cannot bound the risk.
 - When acceptance is due, run it right after flashing so the boot path stays part of the same validation slice.
 - Preserve the documented order `install -> flash -> acceptance -> monitor/debug`; do not skip to a later step just because an earlier prerequisite is broken.
