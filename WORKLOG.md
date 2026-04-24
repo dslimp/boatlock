@@ -2678,6 +2678,28 @@ Self-review:
 Promote to skill:
 - No new durable rule beyond the SIM smoke requirement and single-line bounded SIM logs already promoted.
 
+### 2026-04-24 Stage 84: HIL environment input research triage
+
+Scope:
+- Triage the existing untracked `tools/sim/research/environment_inputs.*` artifacts after the HIL batch.
+- Keep them separate from the execution/log safety commits because they are scenario-input research, not runtime behavior.
+
+Key outcomes:
+- Kept `tools/sim/research/environment_inputs.md` as a human-readable source-backed research note for future HIL environment and motor classes.
+- Kept `tools/sim/research/environment_inputs.raw.json` as machine-readable raw data, explicitly marked as `raw_research_not_sim_schema`.
+- The artifact includes candidate future scenario seeds such as normal river current, Volga spring flow, Rybinsk fetch, Ladoga storm abort, and Baltic gulf drift.
+
+Validation:
+- `python3 -m json.tool tools/sim/research/environment_inputs.raw.json` -> parsed successfully.
+- Markdown review confirmed it is research input only, not a current simulator schema or runtime source of truth.
+
+Self-review:
+- This does not change firmware, Flutter, BLE, or acceptance behavior.
+- It should not be used to tune control constants directly until converted into explicit scenarios with tests.
+
+Promote to skill:
+- No new rule; keep raw environmental research separate from executable simulator schema until normalized.
+
 ### 2026-04-25 Stage 81: Environmental input research for future HIL scenarios
 
 Scope:

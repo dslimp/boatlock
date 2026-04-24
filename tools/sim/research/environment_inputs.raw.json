@@ -1,0 +1,343 @@
+{
+  "metadata": {
+    "date": "2026-04-25",
+    "purpose": "Raw source-backed environmental and motor ranges for future BoatLock simulator/HIL scenarios.",
+    "normalization_status": "raw_research_not_sim_schema",
+    "units": {
+      "current_velocity": "m/s",
+      "wind_speed": "m/s",
+      "wave_height": "m",
+      "thrust": "lbf",
+      "force_conversion": "1 lbf = 4.44822 N"
+    }
+  },
+  "motor_classes": [
+    {
+      "id": "m30_40_12v",
+      "thrust_lbf_range": [30, 40],
+      "voltage_v": 12,
+      "max_current_a_examples": [
+        {"model": "Newport NV 36", "max_current_a": 29}
+      ],
+      "typical_use": "very light boats, kayaks, protected water",
+      "sources": ["minnkota_endura_au", "newport_nv"]
+    },
+    {
+      "id": "m45_55_12v",
+      "thrust_lbf_range": [45, 55],
+      "voltage_v": 12,
+      "max_current_a_examples": [
+        {"model": "Minn Kota Endura Max 55", "max_current_a": 50},
+        {"model": "Newport NV 46", "max_current_a": 40},
+        {"model": "Newport NV 55", "max_current_a": 52}
+      ],
+      "typical_use": "common small-boat transom motor",
+      "sources": ["minnkota_endura_max_55", "newport_nv"]
+    },
+    {
+      "id": "m62_12v",
+      "thrust_lbf_range": [62, 62],
+      "voltage_v": 12,
+      "max_current_a_examples": [
+        {"model": "Newport NV 62", "max_current_a": 58}
+      ],
+      "typical_use": "upper end of single-battery brushed transom class",
+      "sources": ["newport_nv"]
+    },
+    {
+      "id": "m70_90_24v",
+      "thrust_lbf_range": [70, 90],
+      "voltage_v": 24,
+      "max_current_a_examples": [
+        {"model": "Newport NV 86", "max_current_a": 48},
+        {"model": "Garmin Force at 24 V", "max_current_a": 57, "thrust_lbf": 80}
+      ],
+      "typical_use": "medium boats, stronger wind/current",
+      "sources": ["minnkota_selection", "newport_nv", "garmin_force_current"]
+    },
+    {
+      "id": "m100_115_36v",
+      "thrust_lbf_range": [100, 115],
+      "voltage_v": 36,
+      "max_current_a_examples": [
+        {"model": "Minn Kota Riptide Terrova 112", "max_current_a": 52},
+        {"model": "Garmin Force at 36 V", "max_current_a": 54, "thrust_lbf": 100}
+      ],
+      "typical_use": "large boats, big lakes/reservoirs, rougher water",
+      "sources": ["minnkota_riptide_terrova_112", "garmin_force_current"]
+    }
+  ],
+  "motor_sizing_baseline": {
+    "rule_lbf_per_100lb_loaded_boat": 2,
+    "add_margin_for_wind_current": true,
+    "bands": [
+      {"boat_weight_lb_max": 1599, "boat_length_ft": "14", "thrust_lbf": "30-40", "voltage_v": 12},
+      {"boat_weight_lb_range": [1600, 2599], "boat_length_ft": "16-17", "thrust_lbf": "40-55", "voltage_v": 12},
+      {"boat_weight_lb_range": [2600, 3599], "boat_length_ft": "17-18", "thrust_lbf": "70-80", "voltage_v": 24},
+      {"boat_weight_lb_range": [3600, 4599], "boat_length_ft": "18-19", "thrust_lbf": "80-90", "voltage_v": 24},
+      {"boat_weight_lb_min": 4600, "boat_length_ft": "20+", "thrust_lbf": "112-115", "voltage_v": 36}
+    ],
+    "source": "minnkota_selection"
+  },
+  "wind_wave_baseline": [
+    {"id": "calm", "beaufort": "0-1", "wind_mps": [0, 2], "open_water_wave_m": [0, 0.1]},
+    {"id": "light_breeze", "beaufort": "2-3", "wind_mps": [2, 5], "open_water_wave_m": [0.2, 1.0]},
+    {"id": "moderate_breeze", "beaufort": "4", "wind_mps": [6, 8], "open_water_wave_m": [1.0, 1.5]},
+    {"id": "fresh_breeze", "beaufort": "5", "wind_mps": [9, 11], "open_water_wave_m": [2.0, 2.5]},
+    {"id": "strong_breeze", "beaufort": "6", "wind_mps": [11, 14], "open_water_wave_m": [3.0, 4.0]},
+    {"id": "near_gale", "beaufort": "7", "wind_mps": [14, 17], "open_water_wave_m": [4.0, 5.5]}
+  ],
+  "water_body_classes": [
+    {
+      "id": "protected_small_lake_or_cove",
+      "current_mps": [0, 0.05],
+      "wave_m": [0, 0.3],
+      "wind_mps": [0, 6],
+      "gust_mps": [8, 10],
+      "confidence": "scenario_heuristic"
+    },
+    {
+      "id": "lowland_river_normal",
+      "current_mps": [0.2, 0.7],
+      "wave_m": [0.1, 0.8],
+      "wind_mps": [0, 10],
+      "confidence": "medium_from_volga_ranges"
+    },
+    {
+      "id": "lowland_river_flood_or_dam_release",
+      "current_mps": [0.8, 1.7],
+      "wave_m": [0.3, 1.2],
+      "wind_mps": [5, 15],
+      "confidence": "medium_from_volga_flood_ranges"
+    },
+    {
+      "id": "large_reservoir_open_fetch",
+      "current_mps": [0.03, 0.3],
+      "storm_current_mps": [0.3, 0.8],
+      "wave_m": [0.5, 2.5],
+      "extreme_wave_m": [3, 5],
+      "wind_mps": [6, 20],
+      "confidence": "medium"
+    },
+    {
+      "id": "large_lake_ladoga_onega",
+      "current_mps": [0.05, 0.2],
+      "storm_current_mps": [0.5, 1.3],
+      "wave_m": [1.0, 3.5],
+      "extreme_wave_m": [4.5, 6.0],
+      "wind_mps": [6, 20],
+      "confidence": "medium"
+    },
+    {
+      "id": "baltic_gulf_or_brackish_sea",
+      "current_mps_common": [0.05, 0.15],
+      "storm_current_mps": [0.15, 0.5],
+      "strait_current_mps_gt": 1.0,
+      "wave_m": [0.5, 2.5],
+      "wind_to_current_factor": [0.01, 0.015],
+      "confidence": "high_for_baltic_class"
+    }
+  ],
+  "water_bodies": [
+    {
+      "id": "volga",
+      "type": "regulated_lowland_river_reservoir_cascade",
+      "length_km": 3530,
+      "basin_km2": 1380000,
+      "discharge_m3s_examples": [
+        {"location": "Tver", "value": 180},
+        {"location": "Yaroslavl", "value": 1100},
+        {"location": "Samara", "value": 7717},
+        {"location": "mouth", "value": 8055}
+      ],
+      "current_mps_source_ranges": [
+        {"condition": "upper_volga_summer_low_flow_deep", "range": [0.26, 0.32]},
+        {"condition": "upper_volga_summer_low_flow_shallow_bars", "range": [0.50, 0.70]},
+        {"condition": "upper_volga_spring_flood", "range": [1.50, 1.70]}
+      ],
+      "confidence": "medium",
+      "sources": ["britannica_volga", "sciencedirect_hydrological_regime"]
+    },
+    {
+      "id": "oka",
+      "type": "lowland_river_volga_tributary",
+      "length_km": 1500,
+      "basin_km2": 245000,
+      "current_mps_recommended_until_sourced": [0.2, 0.8],
+      "confidence": "low_for_current_high_for_size",
+      "research_gap": "Need hydropost or navigation-lotsiya velocity data by reach.",
+      "sources": ["britannica_oka"]
+    },
+    {
+      "id": "ladoga",
+      "type": "large_lake_freshwater_sea",
+      "area_km2": 17600,
+      "length_km": 219,
+      "mean_depth_m": 51,
+      "max_depth_m": 230,
+      "wave_m": {
+        "ordinary_storm": [1.0, 3.5],
+        "valaam_high": 4.5,
+        "south_east_extreme": 6.0,
+        "volgo_balt_forecast_example": [2.2, 2.8]
+      },
+      "wave_period_s": {"typical": 3.5, "max": 7.0},
+      "confidence": "medium_high",
+      "sources": ["britannica_ladoga", "ladoga_sailing", "volgobalt_ladoga_forecast_2025_07_04"]
+    },
+    {
+      "id": "onega",
+      "type": "large_lake_freshwater_sea",
+      "area_km2": 9720,
+      "length_km": 248,
+      "max_depth_m": 116,
+      "wave_m": {
+        "ordinary": [0.5, 1.5],
+        "storm": [2.5, 4.5]
+      },
+      "confidence": "medium",
+      "sources": ["britannica_onega"]
+    },
+    {
+      "id": "rybinsk_reservoir",
+      "type": "large_reservoir",
+      "area_km2_npu": 4550,
+      "volume_km3_npu": 25.42,
+      "wave_m": {
+        "common_max_public": 2.0,
+        "wind_20_mps_fetch_60km": [2.0, 2.5]
+      },
+      "confidence": "medium",
+      "sources": ["voda_rybinsk", "rybinsk_sail", "vunivere_rybinsk"]
+    },
+    {
+      "id": "kuibyshev_reservoir",
+      "type": "very_large_reservoir",
+      "area_km2_npu": 6150,
+      "volume_km3_npu": 58.0,
+      "wave_m": {
+        "ordinary": [0.5, 1.5],
+        "storm": [2.0, 3.0],
+        "localized_extreme_for_failsafe": 5.0
+      },
+      "confidence": "medium_low_for_waves",
+      "sources": ["voda_kuibyshev", "lukaonline_kuibyshev", "studopedia_kuibyshev"]
+    },
+    {
+      "id": "gorky_reservoir",
+      "type": "reservoir",
+      "area_km2_npu": 1591,
+      "volume_km3_npu": 8.815,
+      "recommended_class": "large_reservoir_open_fetch",
+      "confidence": "research_gap_for_waves_currents",
+      "sources": ["voda_gorky"]
+    },
+    {
+      "id": "saratov_reservoir",
+      "type": "reservoir",
+      "area_km2_npu": 1831,
+      "volume_km3_npu": 12.87,
+      "recommended_class": "large_reservoir_open_fetch",
+      "confidence": "research_gap_for_waves_currents",
+      "sources": ["voda_saratov"]
+    },
+    {
+      "id": "volgograd_reservoir",
+      "type": "reservoir",
+      "area_km2_npu": 3117,
+      "volume_km3_npu": 31.45,
+      "recommended_class": "large_reservoir_open_fetch",
+      "confidence": "research_gap_for_waves_currents",
+      "sources": ["voda_volgograd"]
+    },
+    {
+      "id": "gulf_of_finland_baltic",
+      "type": "brackish_sea_gulf",
+      "current_mps_common": [0.05, 0.15],
+      "current_mps_hard_storm": 0.5,
+      "current_mps_straits_gt": 1.0,
+      "wind_to_current_factor": [0.01, 0.015],
+      "wave_observation_note": "FMI reports significant wave height and highest individual wave separately.",
+      "confidence": "high",
+      "sources": ["fmi_baltic_currents", "fmi_wave_height", "sciencedirect_gulf_finland_drift", "helcom_wave_climate_2024"]
+    }
+  ],
+  "candidate_scenarios": [
+    {
+      "id": "river_oka_normal_55lb",
+      "motor_class": "m45_55_12v",
+      "current_mps": 0.35,
+      "wind_mps": 4,
+      "wave_m": 0.2,
+      "expected": "hold_for_light_boat_or_bounded_drift"
+    },
+    {
+      "id": "volga_spring_flow_80lb",
+      "motor_class": "m70_90_24v",
+      "current_mps": 1.2,
+      "wind_mps": 6,
+      "wave_m": 0.5,
+      "expected": "insufficient_thrust_or_clean_containment_breach"
+    },
+    {
+      "id": "rybinsk_fetch_55lb",
+      "motor_class": "m45_55_12v",
+      "current_mps": 0.1,
+      "wind_mps": 10,
+      "gust_mps": 14,
+      "wave_m": 1.5,
+      "wave_period_s": 3,
+      "expected": "no_twitch_thrash_likely_fail_or_bounded_correction"
+    },
+    {
+      "id": "ladoga_storm_abort",
+      "motor_class": "m100_115_36v",
+      "current_mps": 0.4,
+      "wind_mps": 18,
+      "wave_m": 3.0,
+      "expected": "fail_closed_quiet_state"
+    },
+    {
+      "id": "baltic_gulf_drift",
+      "motor_class": "m70_90_24v",
+      "wind_mps": 10,
+      "current_mps_formula": "0.015 * wind_mps",
+      "wave_m": 1.2,
+      "expected": "wind_driven_current_vector_change_test"
+    }
+  ],
+  "sources": {
+    "minnkota_selection": "https://minnkota.johnsonoutdoors.com/us/support/trolling-motor-installation-guides/motor-selection-boat-size-guide",
+    "minnkota_thrust_speed": "https://minnkota-help.johnsonoutdoors.com/hc/en-us/articles/4413536408343-Thrust-and-Speed",
+    "minnkota_endura_max_55": "https://minnkota.johnsonoutdoors.com/us/shop/freshwater-trolling-motors/endura-max/1352156m",
+    "minnkota_endura_au": "https://minnkota.com.au/product/endura/",
+    "minnkota_riptide_terrova_112": "https://minnkota.johnsonoutdoors.com/us/shop/saltwater-trolling-motors/riptide-terrova/1363792",
+    "newport_nv": "https://newportvessels.com/products/nv-series-saltwater-trolling-motor",
+    "garmin_force_current": "https://www8.garmin.com/manuals/webhelp/forcetrollingmotor/EN-GB/GUID-9BEB843E-2C2B-450E-B9B2-F4C9F29D0C2E.html",
+    "lowrance_ghost": "https://www.lowrance.com/lowrance/type/trolling-motor/ghost-47/",
+    "metoffice_beaufort": "https://weather.metoffice.gov.uk/guides/coast-and-sea/beaufort-scale",
+    "noaa_beaufort": "https://www.wpc.ncep.noaa.gov/html/beaufort.shtml",
+    "usgs_streamflow": "https://www.usgs.gov/water-science-school/science/how-streamflow-measured",
+    "usgs_index_velocity": "https://www.usgs.gov/hydroacoustics/index-velocity",
+    "britannica_volga": "https://www.britannica.com/place/Volga-River",
+    "britannica_oka": "https://www.britannica.com/place/Oka-River",
+    "sciencedirect_hydrological_regime": "https://www.sciencedirect.com/topics/earth-and-planetary-sciences/hydrological-regime",
+    "voda_rybinsk": "https://voda.gov.ru/reservoirs/7273/",
+    "voda_gorky": "https://voda.gov.ru/reservoirs/7272/",
+    "voda_kuibyshev": "https://voda.gov.ru/reservoirs/7337/",
+    "voda_saratov": "https://voda.gov.ru/reservoirs/7339/",
+    "voda_volgograd": "https://voda.gov.ru/reservoirs/7335/",
+    "britannica_ladoga": "https://www.britannica.com/place/Lake-Ladoga",
+    "ladoga_sailing": "https://ladoga-lake.ru/pages/artcl-ladoga-sailing-03.php",
+    "volgobalt_ladoga_forecast_2025_07_04": "https://www.volgo-balt.ru/opendata/putevaya-informatsiya/pogoda/shtorm-prognoz-pogody-po-rayonam-ladozhskogo-ozera-ot-18-00-4-iyulya-2025-g-do-06-00-5-iyulya-2025-g/",
+    "britannica_onega": "https://www.britannica.com/place/Lake-Onega",
+    "rybinsk_sail": "https://www.rybinsksail.ru/56",
+    "vunivere_rybinsk": "https://vunivere.ru/work92101/page13",
+    "lukaonline_kuibyshev": "https://lukaonline.ru/publications/putevoditel/587/",
+    "studopedia_kuibyshev": "https://studopedia.ru/5_162996_kuybishevskoe-vodohranilishche.html",
+    "fmi_baltic_currents": "https://en.ilmatieteenlaitos.fi/baltic-sea-currents",
+    "fmi_wave_height": "https://en.ilmatieteenlaitos.fi/wave-height",
+    "sciencedirect_gulf_finland_drift": "https://www.sciencedirect.com/science/article/pii/S0272771420308027",
+    "helcom_wave_climate_2024": "https://helcom.fi/publications/wave-climate-in-the-baltic-sea-2024/"
+  }
+}
