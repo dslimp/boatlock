@@ -12,6 +12,22 @@ bool smokeTelemetryLooksHealthy(BoatData? data) {
   return data.mode.trim().isNotEmpty && data.status.trim().isNotEmpty;
 }
 
+bool smokeStatusHasReason(BoatData data, String reason) {
+  return data.statusReasons
+      .split(',')
+      .map((value) => value.trim())
+      .where((value) => value.isNotEmpty)
+      .contains(reason);
+}
+
+bool smokeStatusStopAlertSeen(BoatData data) {
+  return data.status == 'ALERT' && smokeStatusHasReason(data, 'STOP_CMD');
+}
+
+bool smokeStatusRecoveredAfterStop(BoatData data) {
+  return data.mode != 'MANUAL' && data.status != 'ALERT';
+}
+
 Map<String, dynamic> buildSmokeResultPayload({
   required bool pass,
   required String reason,

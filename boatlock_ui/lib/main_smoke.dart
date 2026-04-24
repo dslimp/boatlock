@@ -21,6 +21,8 @@ BleSmokeMode _smokeModeFromString(String value) {
       return BleSmokeMode.reconnect;
     case 'manual':
       return BleSmokeMode.manual;
+    case 'status':
+      return BleSmokeMode.status;
     case 'basic':
     default:
       return BleSmokeMode.basic;

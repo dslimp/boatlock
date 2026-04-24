@@ -22,6 +22,10 @@ while [[ $# -gt 0 ]]; do
       SMOKE_MODE="manual"
       shift
       ;;
+    --status)
+      SMOKE_MODE="status"
+      shift
+      ;;
     --no-build)
       BUILD_FIRST=0
       shift

@@ -74,6 +74,7 @@ Implication for BoatLock:
   - warning
   - alarm
   - emergency
+- Informational operator acknowledgements should not be collapsed into warning/alarm health state.
 - Phone push should not be the only alarm path.
 
 Implication for BoatLock:
@@ -85,6 +86,7 @@ Implication for BoatLock:
 - Support at least two severity zones:
   - warning radius / drift alert
   - emergency containment breach
+- Keep health status severity separate from informational status reason tokens.
 
 ## What ArduPilot Gets Right
 

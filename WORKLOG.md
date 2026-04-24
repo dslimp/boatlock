@@ -1382,6 +1382,7 @@ Validation:
 - `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
 - `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
 - `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `bash -n tools/android/build-smoke-apk.sh tools/android/run-smoke.sh tools/hw/nh02/android-run-smoke.sh` -> clean.
 - `git diff --check` -> clean.
 - `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`.
 - `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-settings-dirty-60s.log --json-out /tmp/boatlock-settings-dirty-60s.json` -> `PASS`, including RVC compass, display, EEPROM `ver=22`, BLE advertising, stepper, STOP, GPS UART, and heading events.
@@ -2379,3 +2380,47 @@ Self-review:
 - This acceptance covered the flashed ESP32 boot path, sensor readiness, BLE advertising, Android install/update, telemetry receive, manual zero-throttle roundtrip, phone reconnect, and ESP32 reboot recovery.
 - The manual run's first MIUI install prompt did not block acceptance because the canonical retry succeeded and the wrapper returned terminal pass.
 - No new durable workflow lesson emerged beyond the existing MIUI retry rule already captured in the hardware acceptance skill.
+
+### 2026-04-24 Stage 76: Runtime status severity split
+
+Scope:
+- Start the next low-risk three-module batch with `RuntimeStatus`.
+- Keep `statusReasons` tokens and BLE frame layout unchanged.
+- Stop informational operator acknowledgements from becoming health warnings.
+
+External baseline:
+- Signal K notifications model separates states such as `alert`, `alarm`, and `emergency`, and devices/servers monitor and raise only real alarm conditions: <https://signalk.org/specification/1.7.0/doc/notifications.html>.
+- Signal K data model keeps semantic values structured so consumers do not infer severity from unrelated fields: <https://signalk.org/specification/1.7.0/doc/data_model.html>.
+
+Key outcomes:
+- Added explicit `runtimeStatusReasonIsInformational()` classification.
+- `NUDGE_OK` remains visible in `statusReasons`, but no longer elevates `status` from `OK` to `WARN` by itself.
+- Unknown safety reasons still elevate to `WARN` by default so new unclassified runtime notes fail visible, not hidden.
+- Added native coverage for informational and unknown safety reason summary behavior.
+- Added Android smoke mode `status` for phone-visible status/severity changes. It sends safe `STOP`, verifies `ALERT/STOP_CMD`, then clears through zero-throttle `MANUAL_SET` + `MANUAL_OFF`.
+- Updated the module cadence rule: every module must explicitly decide phone-smoke coverage; phone-visible behavior changes get a module-specific Android smoke path.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_status -f test_runtime_ble_live_frame -f test_runtime_ble_params` -> `11/11` passed.
+- `cd boatlock && platformio test -e native` -> `249/249` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub test/ble_smoke_logic_test.dart test/ble_live_frame_test.dart` -> passed.
+- `./tools/android/build-smoke-apk.sh --mode status` -> first sandbox run failed with Gradle `Operation not permitted`; reran host-side and built `app-debug.apk` successfully.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> full suite passed (`30/30`).
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `git diff --check` -> clean.
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `696841` bytes.
+- `./tools/hw/nh02/flash.sh` -> build success, flash success, app image write `697200` bytes, hard reset via RTS.
+- `./tools/hw/nh02/android-run-smoke.sh --status --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"status_stop_alert_roundtrip",...}`.
+- Full `nh02` acceptance remains deferred by the three-module cadence; this is module `1/3`, but module-specific phone smoke ran because status semantics are phone-visible.
+
+Self-review:
+- This is a status semantics fix, not a transport or command change.
+- It reduces false operator warning state after successful nudge without hiding unknown future reasons.
+- The new phone smoke uses only safe STOP and zero-throttle manual recovery; it does not prove powered thrust behavior.
+- Status smoke exposed NUL padding in `lastDeviceLog`; that is a separate BLE log parsing hygiene issue and should be handled as a follow-up module, not hidden in this status severity change.
+
+Promote to skill:
+- Keep health status severity separate from informational status reason tokens; status reasons are not automatically warnings.
+- Phone-visible BLE/status/UI changes need module-specific Android smoke coverage, not only the batch smoke after three modules.

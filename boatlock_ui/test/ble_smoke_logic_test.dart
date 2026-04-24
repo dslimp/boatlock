@@ -57,6 +57,33 @@ void main() {
     expect(smokeTelemetryLooksHealthy(null), isFalse);
   });
 
+  test('status smoke identifies STOP alert and recovery', () {
+    expect(
+      smokeStatusStopAlertSeen(
+        _data(status: 'ALERT', statusReasons: 'NO_GPS,STOP_CMD'),
+      ),
+      isTrue,
+    );
+    expect(
+      smokeStatusStopAlertSeen(
+        _data(status: 'WARN', statusReasons: 'STOP_CMD'),
+      ),
+      isFalse,
+    );
+    expect(
+      smokeStatusRecoveredAfterStop(
+        _data(mode: 'IDLE', status: 'WARN', statusReasons: 'NO_GPS'),
+      ),
+      isTrue,
+    );
+    expect(
+      smokeStatusRecoveredAfterStop(
+        _data(mode: 'MANUAL', status: 'WARN', statusReasons: 'NO_GPS'),
+      ),
+      isFalse,
+    );
+  });
+
   test('encodeSmokeResultLine serializes expected payload', () {
     final line = encodeSmokeResultLine(
       buildSmokeResultPayload(

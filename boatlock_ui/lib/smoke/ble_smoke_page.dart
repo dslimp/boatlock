@@ -8,7 +8,7 @@ import '../ble/ble_boatlock.dart';
 import '../models/boat_data.dart';
 import 'ble_smoke_logic.dart';
 
-enum BleSmokeMode { basic, reconnect, manual }
+enum BleSmokeMode { basic, reconnect, manual, status }
 
 class BleSmokePage extends StatefulWidget {
   const BleSmokePage({super.key, this.mode = BleSmokeMode.basic});
@@ -42,6 +42,11 @@ class _BleSmokePageState extends State<BleSmokePage> {
   bool _manualSetSent = false;
   bool _manualModeSeen = false;
   bool _manualOffSent = false;
+  bool _statusStopSent = false;
+  bool _statusAlertSeen = false;
+  bool _statusManualSetSent = false;
+  bool _statusManualModeSeen = false;
+  bool _statusManualOffSent = false;
 
   @override
   void initState() {
@@ -91,6 +96,10 @@ class _BleSmokePageState extends State<BleSmokePage> {
       }
       if (widget.mode == BleSmokeMode.manual) {
         _handleManualSmokeData(data);
+        return;
+      }
+      if (widget.mode == BleSmokeMode.status) {
+        _handleStatusSmokeData(data);
         return;
       }
       if (!_firstTelemetrySeen) {
@@ -152,6 +161,55 @@ class _BleSmokePageState extends State<BleSmokePage> {
     _finish(true, 'manual_roundtrip');
   }
 
+  void _handleStatusSmokeData(BoatData data) {
+    if (!_statusStopSent) {
+      _statusStopSent = true;
+      _appendEvent(encodeSmokeStageLine('status_stop'));
+      _sendStatusStop();
+      if (mounted) {
+        setState(() {
+          _phase = 'status';
+          _detail = 'waiting_for_stop_alert';
+        });
+      }
+      return;
+    }
+    if (!_statusAlertSeen) {
+      if (!smokeStatusStopAlertSeen(data)) {
+        return;
+      }
+      _statusAlertSeen = true;
+      _appendEvent(encodeSmokeStageLine('status_stop_alert_seen'));
+      _sendStatusManualSet();
+      if (mounted) {
+        setState(() {
+          _phase = 'status';
+          _detail = 'waiting_for_manual_recovery';
+        });
+      }
+      return;
+    }
+    if (!_statusManualModeSeen) {
+      if (!_statusManualSetSent || data.mode != 'MANUAL') {
+        return;
+      }
+      _statusManualModeSeen = true;
+      _appendEvent(encodeSmokeStageLine('status_manual_mode_seen'));
+      _sendStatusManualOff();
+      if (mounted) {
+        setState(() {
+          _phase = 'status';
+          _detail = 'waiting_for_alert_clear';
+        });
+      }
+      return;
+    }
+    if (!_statusManualOffSent || !smokeStatusRecoveredAfterStop(data)) {
+      return;
+    }
+    _finish(true, 'status_stop_alert_roundtrip');
+  }
+
   Future<void> _sendManualSet() async {
     final ok = await _ble.sendManualControl(
       steer: 0,
@@ -170,6 +228,33 @@ class _BleSmokePageState extends State<BleSmokePage> {
     _appendEvent('manual_off ok=$ok');
     if (!ok) {
       _finish(false, 'manual_off_failed');
+    }
+  }
+
+  Future<void> _sendStatusStop() async {
+    await _ble.stopAll();
+    _appendEvent('status_stop sent');
+  }
+
+  Future<void> _sendStatusManualSet() async {
+    final ok = await _ble.sendManualControl(
+      steer: 0,
+      throttlePct: 0,
+      ttlMs: 1000,
+    );
+    _statusManualSetSent = ok;
+    _appendEvent('status_manual_set_zero ok=$ok');
+    if (!ok) {
+      _finish(false, 'status_manual_set_failed');
+    }
+  }
+
+  Future<void> _sendStatusManualOff() async {
+    final ok = await _ble.manualOff();
+    _statusManualOffSent = ok;
+    _appendEvent('status_manual_off ok=$ok');
+    if (!ok) {
+      _finish(false, 'status_manual_off_failed');
     }
   }
 

@@ -51,6 +51,7 @@ Use this skill for any code, review, debugging, test, or docs task in the BoatLo
 
 - Work in batches of three modules by default.
 - For each module in the batch: run the targeted external baseline, make the smallest useful refactor, run local tests, record `WORKLOG.md` plus self-review, then commit and push.
+- For each module, explicitly decide phone-smoke coverage. If the module changes phone-visible BLE, status, command, reconnect, install, or UI behavior, add or update an Android smoke path for that behavior and run it in that module's validation slice.
 - Run `nh02` hardware acceptance and Android BLE smokes after every third module in the batch.
 - Do not wait for the third module when the change directly touches hardware drivers, pinout, deploy/debug wrappers, actuator safety, BLE reconnect/install behavior, or another path where local tests cannot bound the risk.
 

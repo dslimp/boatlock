@@ -21,6 +21,10 @@ inline bool runtimeStatusReasonPresent(const char* reason) {
   return reason && reason[0] != '\0' && strcmp(reason, "NONE") != 0;
 }
 
+inline bool runtimeStatusReasonIsInformational(const char* reason) {
+  return reason && strcmp(reason, "NUDGE_OK") == 0;
+}
+
 inline void appendRuntimeStatusReason(std::string* out, const char* reason) {
   if (!out || !runtimeStatusReasonPresent(reason)) {
     return;
@@ -54,12 +58,31 @@ inline std::string buildRuntimeStatusReasons(const RuntimeStatusInput& input) {
   return reasons;
 }
 
+inline bool runtimeStatusInputHasWarning(const RuntimeStatusInput& input,
+                                         const std::string& reasons) {
+  if (reasons.empty()) {
+    return false;
+  }
+  if (input.gpsUnavailable || input.gnssWeak || !input.headingAvailable ||
+      input.driftAlert || input.driftFail) {
+    return true;
+  }
+  if (!input.anchorActive && runtimeStatusReasonPresent(input.anchorDeniedReason)) {
+    return true;
+  }
+  if (runtimeStatusReasonPresent(input.failsafeReason)) {
+    return true;
+  }
+  return runtimeStatusReasonPresent(input.safetyReason) &&
+         !runtimeStatusReasonIsInformational(input.safetyReason);
+}
+
 inline const char* buildRuntimeStatusSummary(const RuntimeStatusInput& input,
                                              const std::string& reasons) {
   if (input.holdMode || input.driftFail || runtimeStatusReasonPresent(input.failsafeReason)) {
     return "ALERT";
   }
-  if (!reasons.empty()) {
+  if (runtimeStatusInputHasWarning(input, reasons)) {
     return "WARN";
   }
   return "OK";

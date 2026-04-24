@@ -124,6 +124,7 @@
   - `status`: `OK|WARN|ALERT`
   - `mode`: `IDLE|HOLD|ANCHOR|MANUAL|SIM`
   - `statusReasons`: comma-separated detail flags
+- `statusReasons` may include informational operator acknowledgements such as `NUDGE_OK`; those must not elevate `status` above `OK` without a real health warning.
 - Build UI-facing display state through `RuntimeUiSnapshot` before passing it into `display_draw_ui()`.
 - Keep UI refresh cadence and BLE notify cadence in `RuntimeTelemetryCadence`, not as loose timestamps in `main.cpp`.
 - Runtime cadence timers must share unsigned elapsed-time logic; interval `0` must have explicit behavior and rollover coverage.
