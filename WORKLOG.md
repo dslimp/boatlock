@@ -1578,3 +1578,44 @@ Self-review:
 Promote to skill:
 - Stepper code should use bounded angle math and fail closed on neutral/invalid manual input.
 - Cancel/STOP/failsafe paths should deterministically enter the idle coil-release path, not rely on incidental later movement state.
+
+### 2026-04-24 Stage 58: GPS UART watchdog rollover pass
+
+Scope:
+- Continue module-by-module refactor with `RuntimeGpsUart`.
+- Keep GPS UART no-data/stale detection reliable over long uptime and early boot edge cases.
+
+External baseline:
+- Arduino serial guidance exposes `available()`/`read()` as the byte-availability/read primitives for receive loops: <https://docs.arduino.cc/language-reference/en/functions/communication/serial/available/> and <https://docs.arduino.cc/language-reference/en/functions/communication/serial/read/>.
+- TinyGPS++ `FullExample` continuously feeds incoming serial bytes with `gps.encode(ss.read())` and separately checks for no GPS data: <https://github.com/mikalhart/TinyGPSPlus/blob/master/examples/FullExample/FullExample.ino>.
+- Embedded timer/watchdog practice relies on unsigned elapsed-time subtraction rather than direct `now > then` comparisons so wraparound does not break timeouts.
+
+Key outcomes:
+- Replaced direct `nowMs > lastMs` checks with unsigned elapsed-time helpers.
+- Stale detection now works even if the first GPS byte arrives at timestamp `0`.
+- Added native tests for first-byte-at-zero stale restart and unsigned `millis()` rollover behavior.
+
+Validation:
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native -f test_runtime_gps_uart -f test_runtime_gnss -f test_gnss_quality_gate -f test_anchor_supervisor` -> `28/28` passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native` -> `200/200` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> `29/29` passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio pio run -e esp32s3` -> success, flash size `695541` bytes.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter build apk --debug --no-pub` -> success.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `git diff --check` -> clean.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`; app image write `695904` bytes.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-gps-uart-rollover-60s.log --json-out /tmp/boatlock-gps-uart-rollover-60s.json` -> `PASS`, including EEPROM `ver=23`, RVC compass, display, BLE advertising, stepper, STOP, heading events, and GPS UART data.
+- Acceptance log scan found no panic/assert/Guru, Arduino `[E]`, `Wire.cpp`, `i2cRead`, compass loss, compass retry failure, GPS UART stale, or GPS no-data warning.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 100` -> two MIUI `USER_RESTRICTED` install retries, canonical retry succeeded, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip",...}`.
+
+Self-review:
+- This is a correctness hardening, not a behavior expansion.
+- Native rollover tests run on host `unsigned long`, so they test language-defined unsigned wrap rather than ESP32-specific 32-bit width; still catches the broken direct-comparison pattern.
+- Hardware acceptance proves normal GPS UART traffic still appears; it does not simulate a 49-day ESP32 uptime rollover on hardware.
+
+Promote to skill:
+- Runtime watchdogs must use unsigned elapsed-time checks and cover timestamp-zero/rollover edge cases in native tests.

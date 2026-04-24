@@ -129,6 +129,7 @@
 - Keep control-input derivation in `RuntimeControlInputBuilder`, not as inline mode/heading/bearing glue in `loop()`.
 - Keep compass retry cadence in `RuntimeCompassRetry`, not as raw `millis()` gating in `main.cpp`.
 - Keep compass event freshness policy in `RuntimeCompassHealth`, not as loose age checks spread through runtime code.
+- Runtime sensor watchdog timers must use unsigned elapsed-time math so `millis()` rollover does not disable stale/no-data detection.
 - `HoldHeading=1` makes bearing equal stored anchor heading.
 - Otherwise bearing is computed from GNSS course to anchor.
 - Firmware caches anchor bearing for `120000 ms` so auto mode can keep a bearing when GNSS drops briefly.

@@ -1,6 +1,7 @@
 #include "RuntimeGpsUart.h"
 
 #include <unity.h>
+#include <climits>
 
 void setUp() {}
 void tearDown() {}
@@ -44,6 +45,19 @@ void test_stale_stream_warns_and_requests_restart() {
   TEST_ASSERT_EQUAL(6000UL, stale.staleAgeMs);
 }
 
+void test_first_byte_at_zero_can_still_go_stale() {
+  RuntimeGpsUart uart;
+  uart.reset(0);
+  RuntimeGpsUartConfig config;
+
+  uart.update(8, 0, config);
+  const RuntimeGpsUartActions stale = uart.update(0, 6000, config);
+
+  TEST_ASSERT_TRUE(stale.warnStale);
+  TEST_ASSERT_TRUE(stale.restartSerial);
+  TEST_ASSERT_EQUAL(6000UL, stale.staleAgeMs);
+}
+
 void test_restart_cooldown_blocks_repeat_restart_until_window_passes() {
   RuntimeGpsUart uart;
   uart.reset(0);
@@ -64,11 +78,32 @@ void test_restart_cooldown_blocks_repeat_restart_until_window_passes() {
   TEST_ASSERT_TRUE(cooldownPassed.restartSerial);
 }
 
+void test_timers_survive_unsigned_millis_wrap() {
+  RuntimeGpsUart uart;
+  RuntimeGpsUartConfig config;
+  config.noDataWarnMs = 100;
+  config.staleRestartMs = 100;
+
+  const unsigned long boot = ULONG_MAX - 50UL;
+  uart.reset(boot);
+  TEST_ASSERT_TRUE(uart.update(0, boot + 101UL, config).warnNoData);
+
+  RuntimeGpsUart staleUart;
+  staleUart.reset(boot);
+  staleUart.update(1, boot + 10UL, config);
+  const RuntimeGpsUartActions stale = staleUart.update(0, boot + 110UL, config);
+  TEST_ASSERT_TRUE(stale.warnStale);
+  TEST_ASSERT_TRUE(stale.restartSerial);
+  TEST_ASSERT_EQUAL(100UL, stale.staleAgeMs);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_first_data_seen_fires_once);
   RUN_TEST(test_no_data_warning_fires_once_after_boot_threshold);
   RUN_TEST(test_stale_stream_warns_and_requests_restart);
+  RUN_TEST(test_first_byte_at_zero_can_still_go_stale);
   RUN_TEST(test_restart_cooldown_blocks_repeat_restart_until_window_passes);
+  RUN_TEST(test_timers_survive_unsigned_millis_wrap);
   return UNITY_END();
 }

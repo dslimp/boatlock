@@ -39,21 +39,19 @@ public:
       staleLogged_ = false;
     }
 
-    if (!seen_ && !noDataWarned_ && nowMs > bootMs_ && (nowMs - bootMs_) > config.noDataWarnMs) {
+    if (!seen_ && !noDataWarned_ && elapsedGreaterThan(nowMs, bootMs_, config.noDataWarnMs)) {
       noDataWarned_ = true;
       actions.warnNoData = true;
     }
 
     if (seen_ &&
-        lastByteMs_ > 0 &&
-        nowMs > lastByteMs_ &&
-        (nowMs - lastByteMs_) >= config.staleRestartMs) {
+        elapsedAtLeast(nowMs, lastByteMs_, config.staleRestartMs)) {
       actions.staleAgeMs = nowMs - lastByteMs_;
       if (!staleLogged_) {
         staleLogged_ = true;
         actions.warnStale = true;
       }
-      if (lastRestartMs_ == 0 || (nowMs - lastRestartMs_) >= config.restartCooldownMs) {
+      if (lastRestartMs_ == 0 || elapsedAtLeast(nowMs, lastRestartMs_, config.restartCooldownMs)) {
         lastRestartMs_ = nowMs;
         seen_ = false;
         noDataWarned_ = false;
@@ -71,4 +69,12 @@ private:
   bool staleLogged_ = false;
   unsigned long lastByteMs_ = 0;
   unsigned long lastRestartMs_ = 0;
+
+  static bool elapsedAtLeast(unsigned long nowMs, unsigned long sinceMs, unsigned long intervalMs) {
+    return nowMs - sinceMs >= intervalMs;
+  }
+
+  static bool elapsedGreaterThan(unsigned long nowMs, unsigned long sinceMs, unsigned long intervalMs) {
+    return nowMs - sinceMs > intervalMs;
+  }
 };
