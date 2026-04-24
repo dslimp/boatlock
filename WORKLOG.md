@@ -3251,3 +3251,39 @@ Self-review:
 
 Promote to skill:
 - In auto/position-control modes, invalid distance/position evidence must disable the control input instead of masquerading as a zero-error measurement.
+
+### 2026-04-25 Stage 100: Navigation batch hardware and Android acceptance
+
+Scope:
+- Run the scheduled hardware acceptance after the five-module navigation/anchor batch.
+- Validate the exact firmware flashed to the `nh02` ESP32-S3 bench and the Android USB/BLE smoke suite through canonical wrappers.
+
+Batch commits:
+- `8d529db` `Bound anchor heading normalization`
+- `bd10c3c` `Fail closed GNSS quality gate`
+- `2767319` `Validate runtime GNSS coordinates`
+- `a112946` `Make anchor nudge projection fail atomic`
+- `26487e8` `Gate auto control on valid distance`
+
+Validation:
+- `./tools/hw/nh02/status.sh` -> RFC2217 service active, ESP32-S3 USB serial `98:88:E0:03:BA:5C`, listener on port `4000`.
+- `./tools/hw/nh02/flash.sh` -> build success, flash success, app image write `698288` bytes, hard reset via RTS.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-nav-batch-60s.log --json-out /tmp/boatlock-nav-batch-60s.json` -> `[ACCEPT] PASS lines=70`.
+- Acceptance matched BNO08x-RVC ready on `rx=12 baud=115200`, display ready, EEPROM loaded `ver=23`, security state `paired=0`, BLE init and advertising, stepper config, STOP button, fresh compass heading events, and GPS UART data.
+- Error scan over `/tmp/boatlock-nav-batch-60s.log` for panic/assert/Guru/config save/CRC/GPS stale/no UART/compass loss/I2C/Arduino `[E]`/fail/error tokens -> no matches.
+- `./tools/hw/nh02/android-status.sh` -> Xiaomi `220333QNY`, adb state `device`, USB serial `68b657f0`.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> first install attempt hit `INSTALL_FAILED_USER_RESTRICTED`, canonical retry `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --status --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"status_stop_alert_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[EVENT] FAILSAFE_TRIGGERED reason=STOP_CMD"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --anchor --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"anchor_denied_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[EVENT] ANCHOR_OFF reason=BLE_CMD"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --sim --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"sim_run_abort_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[SIM] ABORTED"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+
+Self-review:
+- The batch is locally covered, flashed, boot-accepted, and covered by the current Android BLE smoke suite.
+- The one basic-smoke install policy hiccup was not a blocker because the canonical retry completed with `Success` and the wrapper returned a passing terminal result.
+- This still does not prove powered thrust, on-water hold quality, or real GNSS fix behavior; the bench is reporting `NO_GPS` in Android smokes.
+
+Promote to skill:
+- No new workflow rule needed; the existing canonical hardware and Android acceptance path worked as documented.
