@@ -66,10 +66,40 @@ void test_build_runtime_sim_log_lines_formats_report_and_unknown_command() {
   TEST_ASSERT_EQUAL_STRING("[SIM] unknown command: SIM_WAT", unknownLines[0].c_str());
 }
 
+void test_sim_log_fields_neutralize_control_characters() {
+  RuntimeSimExecutionOutcome unknown;
+  unknown.kind = RuntimeSimExecutionKind::UNKNOWN;
+  unknown.text = "SIM_WAT\n[EVENT] forged\r\tTAIL";
+  RuntimeSimExecutionOutcome failed;
+  failed.kind = RuntimeSimExecutionKind::RUN_REJECTED;
+  failed.scenarioId = "S9\nBAD";
+  failed.text = "start\rfailed";
+
+  const std::vector<std::string> unknownLines = buildRuntimeSimLogLines(unknown);
+  const std::vector<std::string> failedLines = buildRuntimeSimLogLines(failed);
+
+  TEST_ASSERT_EQUAL_STRING("[SIM] unknown command: SIM_WAT [EVENT] forged  TAIL", unknownLines[0].c_str());
+  TEST_ASSERT_EQUAL_STRING("[SIM] RUN failed id=S9 BAD err=start failed", failedLines[0].c_str());
+}
+
+void test_sim_log_fields_are_bounded() {
+  const std::string longText(200, 'A');
+  RuntimeSimExecutionOutcome unknown;
+  unknown.kind = RuntimeSimExecutionKind::UNKNOWN;
+  unknown.text = longText;
+
+  const std::vector<std::string> lines = buildRuntimeSimLogLines(unknown);
+
+  TEST_ASSERT_EQUAL(1, (int)lines.size());
+  TEST_ASSERT_EQUAL(143, (int)lines[0].size());
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_build_runtime_sim_log_lines_formats_simple_outcomes);
   RUN_TEST(test_build_runtime_sim_log_lines_formats_run_variants);
   RUN_TEST(test_build_runtime_sim_log_lines_formats_report_and_unknown_command);
+  RUN_TEST(test_sim_log_fields_neutralize_control_characters);
+  RUN_TEST(test_sim_log_fields_are_bounded);
   return UNITY_END();
 }

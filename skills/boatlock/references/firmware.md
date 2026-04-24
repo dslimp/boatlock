@@ -139,6 +139,7 @@
 - Keep `SIM_*` execution outcomes and report chunking in `RuntimeSimExecution`, not as mixed run/report policy inside `main.cpp`.
 - Failed or malformed `SIM_RUN` must not clear runtime failsafe/anchor-denial state or stop live motion; those state-clearing side effects are allowed only after a simulation run actually starts.
 - Keep `SIM_*` log line mapping in `RuntimeSimLog`, not as a switch full of formatted strings inside `main.cpp`.
+- `RuntimeSimLog` output must stay single-line and bounded. Sanitize CR/LF/TAB/NUL/control characters before forwarding SIM outcome fields into logs.
 - Keep anchor nudge math and cardinal bearing mapping in `RuntimeAnchorNudge`, not inline in `main.cpp`.
 - Nudge/jog uses a fixed small `1.5 m` step. Do not re-add arbitrary distance parameters without a product reason and tests.
 - Keep anchor enable denial precedence in `RuntimeAnchorGate`, not inline in `main.cpp`.

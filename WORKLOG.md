@@ -2611,6 +2611,73 @@ Self-review:
 Promote to skill:
 - Failed simulation commands must not mutate live runtime state; SIM smoke should prove run/abort end-to-end once execution behavior changes.
 
+### 2026-04-24 Stage 82: HIL log sanitizer
+
+Scope:
+- Finish the HIL/simulation batch with `RuntimeSimLog`.
+- Keep SIM log messages human-readable and compatible with the BLE log characteristic.
+- This is module `3/3`; full `nh02` serial acceptance and Android smoke batch are due after this module.
+
+External baseline:
+- OWASP Logging Cheat Sheet recommends validating/sanitizing event data from other trust zones, neutralizing CR/LF/delimiters, bounding field lengths, and testing logs for injection resistance: <https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html>.
+- OWASP Log Injection documents forged log entries through untrusted input containing line separators: <https://owasp.org/www-community/attacks/Log_Injection>.
+- CWE/OWASP CRLF guidance treats CR/LF as record separators that must be neutralized when user-controlled input reaches logs: <https://owasp.org/www-community/vulnerabilities/CRLF_Injection>.
+
+Key outcomes:
+- Added `sanitizeRuntimeSimLogField()` for SIM outcome fields before they are forwarded to log lines.
+- `RuntimeSimLog` now neutralizes CR/LF/TAB/NUL/control characters and bounds command-derived fields.
+- Added native coverage for forged multi-line input and bounded unknown-command logs.
+- Phone-smoke decision: no new standalone phone smoke for this module because Stage 81 already added and ran `--sim`; the full batch Android smoke will include `--sim` again after this module.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_sim_log -f test_runtime_sim_execution -f test_runtime_sim_command` -> `21/21` passed.
+- `git diff --check` -> clean.
+- `cd boatlock && platformio test -e native` -> `260/260` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> full suite passed (`31/31`).
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `696933` bytes.
+- Hardware acceptance and Android smoke batch pending below because this closes module `3/3`.
+
+Self-review:
+- This is log hygiene for the HIL interface, not a control-loop behavior change.
+- Report chunk content is still emitted as text chunks, but control characters are neutralized and chunks are bounded to the existing report chunk size.
+
+Promote to skill:
+- SIM logs are part of the test API and must stay single-line, bounded, and injection-resistant.
+
+### 2026-04-24 Stage 83: Batch hardware acceptance after HIL modules 1-3
+
+Scope:
+- Close the HIL/simulation three-module batch:
+  - `RuntimeSimCommand`
+  - `RuntimeSimExecution`
+  - `RuntimeSimLog`
+- Prove the firmware and Android smoke app on `nh02`, including the new SIM smoke path.
+
+Bench validation:
+- `./tools/hw/nh02/flash.sh` -> build success, flash success, app image write `697296` bytes, hard reset via RTS.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-batch-hil-log-60s.log --json-out /tmp/boatlock-batch-hil-log-60s.json` -> `[ACCEPT] PASS lines=73`.
+- Acceptance matched BNO08x-RVC ready, display ready, EEPROM loaded, security state, BLE init/advertising, stepper config, STOP button, GPS UART data, and fresh compass heading events.
+- Error scan over the 60-second log for panic/assert/Guru/config save or CRC errors/GPS stale/no data/compass loss/I2C errors/fail tokens -> no matches.
+
+Android BLE smoke validation:
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...,"mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --status --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"status_stop_alert_roundtrip",...,"lastDeviceLog":"[EVENT] FAILSAFE_TRIGGERED reason=STOP_CMD"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --sim --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"sim_run_abort_roundtrip","dataEvents":7,"deviceLogEvents":2,"mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[SIM] ABORTED"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+
+Self-review:
+- The batch now has end-to-end coverage for the HIL BLE surface through Android, not just native parser/execution tests.
+- SIM smoke uses realtime `S0` only long enough to observe `SIM`, then aborts and recovers through zero-throttle manual control; it does not prove powered actuator behavior.
+- The remaining HIL gap is scenario richness: the existing untracked `tools/sim/research/environment_inputs.*` looks relevant for future environmental scenario inputs and should be triaged as a separate research artifact, not mixed into this execution/log safety batch.
+
+Promote to skill:
+- No new durable rule beyond the SIM smoke requirement and single-line bounded SIM logs already promoted.
+
 ### 2026-04-25 Stage 81: Environmental input research for future HIL scenarios
 
 Scope:
