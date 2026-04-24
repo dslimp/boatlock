@@ -2969,3 +2969,36 @@ Self-review:
 Promote to skill:
 - Default hardware cadence is five modules, with immediate hardware validation still required for actuator, driver, pinout, deploy/debug, BLE reconnect/install, and other high-risk paths.
 - Stepper idle timers must use explicit active state; do not use `0` as a timestamp sentinel.
+
+### 2026-04-25 Stage 92: Runtime motion finite tuning gate
+
+Scope:
+- Continue the actuator/control batch with `RuntimeMotion`.
+- Keep mode arbitration fail-closed when auto-control tuning values are non-finite.
+- This is module `3/5` under the updated five-module cadence. Hardware acceptance is deferred because this cut changes software policy only, not drivers, pinout, BLE protocol, install/reconnect, or hardware wrappers.
+
+External baseline:
+- ArduPilot pre-arm checks block operation when configuration, sensors, storage, or safety prerequisites are invalid, and the docs warn against skipping those checks instead of fixing the source issue: <https://ardupilot.org/copter/docs/common-prearm-safety-checks.html>.
+- PX4 failsafe configuration treats safety as an explicit state machine with Hold/Disarm/Terminate actions and short manual-control/data-link loss timeouts rather than continuing on stale or invalid control assumptions: <https://docs.px4.io/main/en/config/safety>.
+
+Key outcomes:
+- `RuntimeMotion::applyControl()` now reads auto-control settings through one finite gate before heading alignment or thrust policy uses them.
+- Non-finite `HoldRadius`, `DeadbandM`, `MaxThrustA`, `ThrRampA`, or `AngTol` now quiets auto outputs and returns.
+- Valid settings still clamp to the existing schema ranges and preserve normal behavior.
+- Added native coverage proving a previously active anchor-auto thrust state is cleared when runtime tuning becomes non-finite.
+- Promoted the runtime tuning finite-gate rule into `skills/boatlock/references/firmware.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added or run because BLE protocol, app UI, reconnect, install, and telemetry shape did not change.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_motion -f test_runtime_control -f test_motor_control -f test_runtime_control_input_builder` -> passed (`32/32`).
+- `cd boatlock && platformio test -e native` -> passed (`270/270`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `697241` bytes.
+- `git diff --check` -> clean.
+
+Self-review:
+- This is not a controller retune; it only prevents invalid settings from feeding alignment or actuation.
+- Settings load/set paths already reject or sanitize invalid values, but this adds a local runtime guard at the actuation boundary.
+- Remaining risk is powered mechanical behavior under valid but poor tuning; that belongs to simulation/on-water tuning, not this finite-gate cut.
+
+Promote to skill:
+- Runtime motion arbitration must reject non-finite auto-control settings before heading alignment or thrust policy uses them.

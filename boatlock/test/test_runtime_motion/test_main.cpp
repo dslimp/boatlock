@@ -187,6 +187,47 @@ void test_anchor_without_control_gps_clears_auto_thrust_state() {
   TEST_ASSERT_EQUAL(0, motor.pwmPercent());
 }
 
+void test_anchor_with_nonfinite_runtime_tuning_quiets_outputs() {
+  Settings settings;
+  settings.reset();
+  settings.set("AnchorEnabled", 1.0f);
+
+  StepperControl stepper(1, 2, 3, 4);
+  stepper.attachSettings(&settings);
+  stepper.loadFromSettings();
+
+  MotorControl motor;
+  motor.setupPWM(7, 0, 5000, 8);
+  motor.setDirPins(5, 10);
+
+  DriftMonitor driftMonitor;
+  RuntimeMotion motion(settings, stepper, motor, driftMonitor);
+
+  RuntimeControlInput input;
+  input.nowMs = 1000;
+  input.mode = CoreMode::ANCHOR;
+  input.controlGpsAvailable = true;
+  input.hasHeading = true;
+  input.hasBearing = true;
+  input.headingDeg = 0.0f;
+  input.bearingDeg = 0.0f;
+  input.diffDeg = 0.0f;
+  input.distanceM = 20.0f;
+
+  mockSetMillis(1000);
+  motion.applyControl(input);
+  TEST_ASSERT_TRUE(motor.autoThrustActive);
+
+  settings.entries[settings.idxByKey("AngTol")].value = NAN;
+  input.nowMs = 1300;
+  mockSetMillis(1300);
+  motion.applyControl(input);
+
+  TEST_ASSERT_FALSE(motor.autoThrustActive);
+  TEST_ASSERT_FALSE(motor.filteredAnchorDistanceValid);
+  TEST_ASSERT_EQUAL(0, motor.pwmPercent());
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_stop_all_motion_disarms_and_clears_manual);
@@ -196,5 +237,6 @@ int main() {
   RUN_TEST(test_clear_safe_hold_returns_to_idle_state);
   RUN_TEST(test_safety_reason_expires);
   RUN_TEST(test_anchor_without_control_gps_clears_auto_thrust_state);
+  RUN_TEST(test_anchor_with_nonfinite_runtime_tuning_quiets_outputs);
   return UNITY_END();
 }

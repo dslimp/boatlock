@@ -108,6 +108,21 @@ public:
     stepperControl_.stopManual();
 
     const bool autoControlActive = coreModeUsesAnchorControl(input.mode);
+    float holdRadiusMeters = 2.5f;
+    float deadbandMeters = 1.5f;
+    int maxThrustPctAnchor = 60;
+    float thrustRampPctPerS = 35.0f;
+    float motorTol = 3.0f;
+    if (autoControlActive &&
+        !readAutoTuning(&holdRadiusMeters,
+                        &deadbandMeters,
+                        &maxThrustPctAnchor,
+                        &thrustRampPctPerS,
+                        &motorTol)) {
+      quietAutoOutputs();
+      return;
+    }
+
     if (autoControlActive && (!input.controlGpsAvailable || driftFailActive_)) {
       quietAutoOutputs();
       return;
@@ -137,7 +152,6 @@ public:
           stepperControl_.cancelMove();
         }
 
-        const float motorTol = max(2.0f, settings_.get("AngTol"));
         const float motorReleaseTol = motorTol + kMotorHeadingHystDeg;
         if (motorHeadingAligned_) {
           if (absDiff > motorReleaseTol) {
@@ -154,10 +168,6 @@ public:
       quietAutoOutputs();
     }
 
-    const float holdRadiusMeters = max(0.5f, settings_.get("HoldRadius"));
-    const float deadbandMeters = constrain(settings_.get("DeadbandM"), 0.2f, 10.0f);
-    const int maxThrustPctAnchor = constrain((int)settings_.get("MaxThrustA"), 10, 100);
-    const float thrustRampPctPerS = constrain(settings_.get("ThrRampA"), 1.0f, 100.0f);
     const bool allowThrust = autoControlActive && motorCanRun && !driftFailActive_;
     motor_.driveAnchorAuto(input.distanceM,
                            holdRadiusMeters,
@@ -293,5 +303,29 @@ private:
   void quietAllOutputs() {
     stepperControl_.stopManual();
     quietAutoOutputs();
+  }
+
+  bool readAutoTuning(float* holdRadiusMeters,
+                      float* deadbandMeters,
+                      int* maxThrustPctAnchor,
+                      float* thrustRampPctPerS,
+                      float* motorTol) const {
+    const float rawHoldRadius = settings_.get("HoldRadius");
+    const float rawDeadband = settings_.get("DeadbandM");
+    const float rawMaxThrust = settings_.get("MaxThrustA");
+    const float rawThrustRamp = settings_.get("ThrRampA");
+    const float rawMotorTol = settings_.get("AngTol");
+    if (!isfinite(rawHoldRadius) || !isfinite(rawDeadband) ||
+        !isfinite(rawMaxThrust) || !isfinite(rawThrustRamp) ||
+        !isfinite(rawMotorTol)) {
+      return false;
+    }
+
+    *holdRadiusMeters = constrain(rawHoldRadius, 0.5f, 20.0f);
+    *deadbandMeters = constrain(rawDeadband, 0.2f, 10.0f);
+    *maxThrustPctAnchor = (int)constrain(rawMaxThrust, 10.0f, 100.0f);
+    *thrustRampPctPerS = constrain(rawThrustRamp, 1.0f, 100.0f);
+    *motorTol = constrain(rawMotorTol, 2.0f, 180.0f);
+    return true;
   }
 };

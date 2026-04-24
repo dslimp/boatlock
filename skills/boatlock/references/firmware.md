@@ -172,6 +172,7 @@
 - Motor auto-thrust must fail closed when distance or tuning inputs are non-finite; do not let `NaN` pass into clamp/ramp math.
 - Manual and anchor-auto motor state must stay isolated. Manual PWM, timestamps, and ramp state must not seed anchor-auto output.
 - Motor stop/zero paths should drive PWM to zero and direction pins to a known idle state.
+- Runtime motion must validate auto-control settings as finite before using them for heading alignment, thrust limits, or ramp policy.
 - Stepper control must fail closed on neutral/invalid manual input, use bounded angle normalization, and release coils after idle/cancel through a deterministic timer.
 - Stepper idle release timing must use explicit active state; `idleSinceMs == 0` is a valid timestamp, not a sentinel.
 - Random `fallbackHeading` and `fallbackBearing` are UI placeholders only.
