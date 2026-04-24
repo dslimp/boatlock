@@ -2814,3 +2814,68 @@ Self-review:
 
 Promote to skill:
 - BNO08x UART-RVC frames must pass header/checksum and datasheet orientation ranges before updating live heading state.
+
+### 2026-04-25 Stage 88: Compass health timeout floors
+
+Scope:
+- Close the three-module sensor watchdog batch with `RuntimeCompassHealth`.
+- Make compass event-loss detection fail closed even if timeout inputs are accidentally zero or too small.
+- This is module `3/3`; hardware and Android acceptance ran after the module.
+
+External baseline:
+- ArduPilot pre-arm safety checks treat compass health as an explicit blocker and do not allow dependent modes to proceed when the compass is not healthy: <https://ardupilot.org/copter/docs/common-prearm-safety-checks.html>.
+- PX4 safety configuration treats position/sensor-aiding loss through timeout-based failsafes rather than assuming stale data remains valid: <https://docs.px4.io/main/en/config/safety#position-estimation-failsafes>.
+- BNO08x UART-RVC emits heading/accel packets at 100 Hz, so missing heading events are a watchdog condition, not a normal steady state: <https://docs.sparkfun.com/SparkFun_VR_IMU_Breakout_BNO086_QWIIC/assets/component_documentation/BNO080_085-Datasheet_v1.16.pdf>.
+
+Key outcomes:
+- Added local floors for first-heading-event timeout and stale-heading-event timeout.
+- Timeout values `0` or `1` no longer disable compass loss detection.
+- Added native coverage for zero/tiny timeout inputs and adjusted rollover coverage to test rollover above the floor.
+- Promoted the fail-closed compass timeout rule into `skills/boatlock/references/firmware.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no new Android smoke mode needed because this module changes onboard sensor health only, not BLE/app command behavior. Full Android batch ran because this was module `3/3` and firmware was flashed.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_compass_health -f test_bno08x_compass -f test_bno_rvc_frame` -> passed (`15/15`).
+- `cd boatlock && platformio test -e native` -> passed (`266/266`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `696977` bytes.
+- `git diff --check` -> clean.
+
+Self-review:
+- This narrows failure behavior without changing normal configured timings (`3000 ms` first event, `750 ms` stale event).
+- The chosen local floors are below current production constants, so they protect against bad inputs without making healthy runtime stricter.
+- Remaining risk is real sensor timing after the parser/health changes; covered by the hardware acceptance batch below.
+
+Promote to skill:
+- Compass health timeouts must apply local fail-closed floors; zero/tiny input must not disable heading-event loss detection.
+
+### 2026-04-25 Stage 89: Batch hardware acceptance after sensor watchdog modules
+
+Scope:
+- Close the three-module sensor/watchdog batch:
+  - `RuntimeGpsUart`
+  - `BnoRvcFrame`
+  - `RuntimeCompassHealth`
+- Prove firmware and Android BLE smoke paths on the `nh02` bench after flashing the new firmware.
+
+Bench validation:
+- `./tools/hw/nh02/flash.sh` -> build success, flash success, app image write `697344` bytes, hard reset via RTS.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-batch-sensor-60s.log --json-out /tmp/boatlock-batch-sensor-60s.json` -> `[ACCEPT] PASS lines=77`.
+- Acceptance matched BNO08x-RVC ready, display ready, EEPROM loaded, security state, BLE init/advertising, stepper config, STOP button, GPS UART data, and fresh compass heading events.
+- Error scan over the 60-second log for panic/assert/Guru/config save or CRC errors/GPS stale/no data/compass loss/I2C errors/fail/error tokens -> no matches.
+
+Android BLE smoke validation:
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> exact install `Success` after one canonical MIUI retry; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --status --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"status_stop_alert_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[EVENT] FAILSAFE_TRIGGERED reason=STOP_CMD"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --anchor --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"anchor_denied_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[EVENT] ANCHOR_OFF reason=BLE_CMD"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --sim --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"sim_run_abort_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[SIM] ABORTED"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success` after one canonical MIUI retry; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+
+Self-review:
+- This batch proves the new compass parser/health behavior still boots, receives fresh heading frames, and keeps BLE telemetry/control smokes stable on real hardware.
+- It does not prove real on-water hold quality or powered thrust behavior.
+- MIUI still occasionally requires the canonical retry path, but the wrapper terminal verdicts were successful and exact install was proven for each smoke.
+
+Promote to skill:
+- No new durable rule beyond the compass/GPS watchdog rules already promoted.

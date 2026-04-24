@@ -151,6 +151,7 @@
 - Invalid distance input should be clamped to safe neutral telemetry/control input, not propagated as `NaN` or a negative distance.
 - Keep compass retry cadence in `RuntimeCompassRetry`, not as raw `millis()` gating in `main.cpp`.
 - Keep compass event freshness policy in `RuntimeCompassHealth`, not as loose age checks spread through runtime code.
+- Compass health timeouts must apply local fail-closed floors; zero or tiny timeout input must not disable first-event or stale-event detection.
 - Runtime sensor watchdog timers must use unsigned elapsed-time math so `millis()` rollover does not disable stale/no-data detection.
 - Diagnostic timers must track event presence separately from timestamp values; `0` is a valid `millis()` sample.
 - Diagnostic saturation checks must reject invalid non-positive actuator limits before comparing output against the limit.

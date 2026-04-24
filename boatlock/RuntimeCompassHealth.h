@@ -1,6 +1,8 @@
 #pragma once
 
 constexpr unsigned long kRuntimeCompassNoEventAge = 0xFFFFFFFFUL;
+constexpr unsigned long kRuntimeCompassFirstEventTimeoutFloorMs = 1000UL;
+constexpr unsigned long kRuntimeCompassStaleEventFloorMs = 250UL;
 
 enum class RuntimeCompassLossReason {
   NONE,
@@ -21,21 +23,28 @@ inline bool elapsedAtLeast(unsigned long nowMs, unsigned long sinceMs, unsigned 
   return nowMs - sinceMs >= intervalMs;
 }
 
+inline unsigned long runtimeCompassTimeoutWithFloor(unsigned long value, unsigned long floorMs) {
+  return value < floorMs ? floorMs : value;
+}
+
 inline RuntimeCompassLossReason runtimeCompassLossReason(const RuntimeCompassHealthInput& input) {
   if (!input.compassReady) {
     return RuntimeCompassLossReason::NONE;
   }
 
+  const unsigned long firstEventTimeoutMs =
+      runtimeCompassTimeoutWithFloor(input.firstEventTimeoutMs,
+                                     kRuntimeCompassFirstEventTimeoutFloorMs);
+  const unsigned long staleEventMs =
+      runtimeCompassTimeoutWithFloor(input.staleEventMs, kRuntimeCompassStaleEventFloorMs);
+
   if (input.lastHeadingEventAgeMs == kRuntimeCompassNoEventAge) {
-    if (input.firstEventTimeoutMs == 0) {
-      return RuntimeCompassLossReason::NONE;
-    }
-    return elapsedAtLeast(input.nowMs, input.readySinceMs, input.firstEventTimeoutMs)
+    return elapsedAtLeast(input.nowMs, input.readySinceMs, firstEventTimeoutMs)
                ? RuntimeCompassLossReason::FIRST_EVENT_TIMEOUT
                : RuntimeCompassLossReason::NONE;
   }
 
-  if (input.staleEventMs > 0 && input.lastHeadingEventAgeMs >= input.staleEventMs) {
+  if (input.lastHeadingEventAgeMs >= staleEventMs) {
     return RuntimeCompassLossReason::EVENT_STALE;
   }
   return RuntimeCompassLossReason::NONE;
