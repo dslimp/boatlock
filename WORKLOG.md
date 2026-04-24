@@ -762,3 +762,35 @@ Self-review:
 
 Promote to skill:
 - Until explicitly overridden by the user, delete obsolete compatibility behavior from code across all components and keep the reason only in `WORKLOG.md`.
+
+### 2026-04-24 Stage 34: NH02 post-push BLE smoke verification
+
+Scope:
+- Verify the pushed `main` on the real `nh02` bench and the Android phone connected to that host.
+
+Key outcomes:
+- Proved targets before mutation:
+  - `nh02` RFC2217 bridge active on port `4000`
+  - ESP32-S3 USB serial present as Espressif USB JTAG serial debug unit
+  - Android phone visible via ADB as `68b657f0`, model `220333QNY`
+- Refreshed tracked `nh02` helpers with `./tools/hw/nh02/install.sh`.
+- Flashed current `main` with `./tools/hw/nh02/flash.sh`; esptool verified all written segments and hard-reset the ESP32-S3.
+- Ran serial boot acceptance and saved logs to `/tmp/boatlock-boot-latest.log` plus JSON verdict to `/tmp/boatlock-acceptance-latest.json`.
+- Full Android smoke with install attempted first, but MIUI blocked `adb install` with `INSTALL_FAILED_USER_RESTRICTED`; wrapper staged APK at `/sdcard/Download/boatlock-smoke.apk`.
+- BLE runtime was then checked with the already-installed app using `--no-install`; it received live telemetry from the flashed firmware.
+
+Validation:
+- `./tools/hw/nh02/acceptance.sh --seconds 15 --log-out /tmp/boatlock-boot-latest.log --json-out /tmp/boatlock-acceptance-latest.json` -> `PASS`
+- Acceptance matched I2C inventory, BNO08x ready, display ready, EEPROM loaded, BLE init/advertising, stepper config, STOP button, and GPS UART data.
+- Boot log scan for `panic|assert|abort|fatal|guru|backtrace|exception|failed|error|brownout|wdt|watchdog|rst:` -> no matches.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 100` -> blocked at install stage by MIUI `INSTALL_FAILED_USER_RESTRICTED`.
+- `./tools/hw/nh02/android-run-smoke.sh --no-install --wait-secs 100` -> `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received","dataEvents":1,"deviceLogEvents":0,"mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","secPaired":false,"secAuth":false,"rssi":-33,"lastDeviceLog":""}`
+- Android app logcat for the running app showed repeated `GATT_SUCCESS`, `onCharacteristicChanged chr: 34cd`, telemetry `mode=IDLE status=WARN`, and no `AndroidRuntime` or relevant BLE error lines.
+
+Self-review:
+- This proves the core BLE live path on the phone: scan/connect/subscription/control-point writes/notifications/binary telemetry decode.
+- It does not prove a fresh APK update on this Xiaomi without manual confirmation, because MIUI blocked `adb install`.
+- It does not yet cover auth, reconnect loops, secured command writes, or intentional actuation commands from the phone.
+
+Promote to skill:
+- Treat `--no-install` phone smoke as BLE-runtime proof only, not as proof that the exact just-built APK was installed.

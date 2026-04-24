@@ -98,6 +98,7 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
 - Preserve the documented order `install -> flash -> acceptance -> monitor/debug`; do not skip to a later step just because an earlier prerequisite is broken.
 - For phones attached to `nh02`, use the tracked `android-install.sh` and `android-status.sh` path before falling back to local `adb` assumptions.
 - Record whether failure is in first install policy, later `adb install -r` update, app launch, or BLE runtime; do not collapse those into one generic "Android smoke failed" verdict.
+- Treat `android-run-smoke.sh --no-install` as BLE-runtime proof only; it does not prove that the exact just-built APK was installed on the phone.
 - Do not interrupt a live flash, build, acceptance run, or phone smoke while it is still making forward progress.
 - If a bench or phone wrapper fails, fix that wrapper before normalizing a manual fallback.
 - If a bench or phone wrapper returns stale, wrong, or ambiguous data, fix the wrapper or its guidance before trusting the result.
