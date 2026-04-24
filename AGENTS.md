@@ -3,16 +3,21 @@
 ## Repo Skill
 
 - Use the repo-local skill at `skills/boatlock/SKILL.md` for any BoatLock task.
+- Use `skills/boatlock-hardware-acceptance/SKILL.md` for `nh02` bench acceptance, serial log validation, and Android USB/BLE smoke planning.
 - Load only the reference file you need:
   - firmware/runtime/hardware: `skills/boatlock/references/firmware.md`
   - BLE/UI/security: `skills/boatlock/references/ble-ui.md`
   - build/test/release workflow: `skills/boatlock/references/validation.md`
+  - comparative architecture / external research: `skills/boatlock/references/external-patterns.md`
 
 ## Canonical Sources
 
 - Treat code as the source of truth when prose docs disagree.
 - Runtime, pinout, source selection, safety, and BLE params:
   - `boatlock/main.cpp`
+  - `boatlock/RuntimeControl.h`
+  - `boatlock/RuntimeGnss.h`
+  - `boatlock/RuntimeMotion.h`
   - `boatlock/BNO08xCompass.h`
   - `boatlock/display.cpp`
   - `boatlock/Settings.h`
@@ -28,6 +33,8 @@
 - Known stale areas:
   - historical compass/phone-heading notes may lag the current code
   - the HC 160A direction pin snippet in `README.md` is not the current source of truth; trust `boatlock/main.cpp`
+  - `boatlock/TODO.md` is a backlog, not a runtime source of truth
+  - old threads that mention `boatlock.ino`, `boatlock.cpp`, or `boatlock/include` + `boatlock/src` describe earlier repo shapes, not the current layout
 
 ## Repo Layout
 
@@ -36,6 +43,32 @@
 - `docs/`: BLE protocol, config schema, manual control, release notes
 - `tools/sim/`: offline Python anchor simulation harness
 - `tools/ci/`: version/schema/release-note checks and shell lint helpers
+
+## Product Scope
+
+- Current target for `main`: the app and anchor-point hold.
+- `main` must stay releasable for:
+  - Flutter app connect/reconnect over BLE
+  - set anchor, enable anchor, disable anchor, emergency stop
+  - anchor hold based on GNSS + onboard BNO08x heading
+  - safety/failsafe behavior required for real operation
+  - minimal status needed to understand link, fix, heading, anchor, and safety state
+- Keep runtime orchestration simple:
+  - `main.cpp` should stay as setup/loop glue
+  - mode arbitration belongs in `boatlock/RuntimeControl.h`
+  - GNSS state and bearing cache belong in `boatlock/RuntimeGnss.h`
+  - motion, drift, and failsafe actuation belong in `boatlock/RuntimeMotion.h`
+- Supporting scope that stays in `main` even if it is not end-user UI:
+  - test and validation infrastructure
+  - offline simulation in `tools/sim/`
+  - native/unit tests and CI checks
+  - security/pairing/auth required for the shipping control path
+- Default out-of-scope for `main` unless explicitly requested and justified:
+  - manual rudder/thruster control as a normal user flow
+  - production-exposed dev/diagnostic BLE surfaces not needed for anchor operation
+  - broad tuning/calibration UI for non-essential runtime params
+  - experimental profiles and convenience features that widen the command surface
+- If a feature is useful but not core, keep it behind a dedicated dev/service path or move it to a feature branch before cutting it from `main`.
 
 ## Hardware And Runtime Invariants
 
@@ -77,8 +110,10 @@
   - smoothing `alpha=0.18`
   - correction expires after `180000 ms` without updates
 - `SET_ANCHOR` stores the current heading if compass is ready, otherwise `0`.
+- `ANCHOR_ON` requires all of: saved anchor point, onboard heading available, and GNSS quality gate pass.
 - `HoldHeading=1` makes anchor bearing come from stored anchor heading.
 - Otherwise anchor bearing comes from GNSS course to anchor, with a `120 s` cache if GNSS temporarily drops.
+- `DriftFail` is treated as a containment breach and must exit anchor into a quiet state.
 - `fallbackHeading` and `fallbackBearing` are UI placeholders only, not real sensor fallbacks.
 
 ## Display, BLE, And Security
@@ -100,12 +135,13 @@
   - advertised or platform name equals/contains `boatlock`, or
   - advertised service UUID contains `12ab`
 - Flutter stops scanning before connect and retries scan/reconnect every `3 s`.
-- App heartbeat is sent every `2 s` once connected.
+- App heartbeat is sent every `1 s` once connected.
 - Security flow:
   - hardware STOP long-press `3 s` opens pairing window
   - pairing window duration is `120 s`
-  - pairing uses `PAIR_SET`
+  - pairing uses `PAIR_SET:<ownerSecretHex>` with a 32-hex owner secret
   - auth flow is `AUTH_HELLO` -> read `secNonce` -> `AUTH_PROVE`
+  - `PAIR_CLEAR` is accepted only from owner session or while pairing window is physically open
   - when `secPaired=1`, control/write commands must be wrapped in `SEC_CMD`
 - `SET_STEP_SPR` is compatibility-only and remains fixed at `4096`.
 
@@ -115,7 +151,66 @@
 - `SIM_*` commands are handled in the normal BLE command path.
 - Offline anchor simulation lives in `tools/sim/`.
 - Native firmware tests live under `boatlock/test/`.
+- EEPROM/write-throttling work must consider all `settings.save()` call sites, not only PID persistence.
 - If you change BLE commands, telemetry keys, settings schema, or simulation behavior, update code, tests, and docs together.
+
+## Main Branch Policy
+
+- Treat `main` as the release branch, not as a parking lot for unfinished runtime features.
+- Before removing non-core runtime behavior, preserve it in a dedicated branch first.
+- Default extraction order:
+  - `feature/manual-control`
+  - `feature/runtime-tuning-and-diagnostics`
+  - `feature/on-device-hil-ble`
+- If one parking branch is simpler for now, use `feature/extended-runtime` and cut features from `main` incrementally.
+- Offline simulation, tests, and CI validation are not "extra functionality"; they stay in `main` as mandatory validation infrastructure.
+
+## Hard Review Bar
+
+- Safety and security beat convenience.
+- In this repo, safety review means first of all operational safety:
+  - no unintended motor or stepper actuation
+  - no unexpected auto-enable after reboot, reconnect, stale sensor recovery, or button glitches
+  - no control-loop behavior that can cause hunting, twitching, or repeated on/off thrash in normal noise conditions
+- Reject changes that expand actuation surface without a clear product reason.
+- No plaintext secret/code logging, no auth bypasses, no pairing-only-on-paper flows.
+- Security must work end-to-end from the shipped app, not only through hidden helper methods or manual command injection.
+- Any BLE command added to `main` must justify why it belongs in the release product surface.
+- Stability changes must preserve failsafe behavior, reconnect behavior, and GNSS/heading invariants.
+- When docs disagree with code, fix docs in the same change.
+
+## Review Deliverables
+
+- In full reviews, lead with P0/P1 findings around safety, security, bricking risk, silent control loss, or runtime instability.
+- Separate "keep in `main`" from "move out of `main`" recommendations.
+- Call out missing tests for every BLE/security/control behavior change.
+- Do not treat "tests pass" as proof of safety when tests only encode the current behavior.
+
+## Execution Flow
+
+- Treat simplicity as the default. Prefer the smallest clear change that reduces code or branching without changing behavior unless the task explicitly requires a behavior change.
+- Fix blockers at the source before normalizing a workaround.
+- Do not continue through an alternate path, side probe, fallback data source, or partial workaround until the blocker is fixed or the user explicitly waives that fix.
+- Do not start a second path just to go faster while the primary path is still running and making forward progress.
+- Do not classify a running build, flash, acceptance run, or device-side check as hung unless a concrete lack of progress is proven.
+- If a tracked wrapper, script, or documented workflow fails, fix that canonical path first unless the user explicitly waives the fix.
+- If a tracked wrapper returns wrong, stale, or ambiguous results, fix the wrapper or its guidance first instead of normalizing that defect downstream.
+- When a dedicated wrapper exists for BoatLock hardware or Android validation, use it instead of ad-hoc shell glue.
+- When validating a tracked deploy/debug/acceptance path, the result must come from that path itself. Do not replace a pending wrapper verdict with a locally reconstructed answer or manual log reading.
+- If a tracked validation run is still executing, either wait for terminal status or report that it is still in progress. Extra reads are blocker-debug context only.
+- If a detour already created the wrong artifact shape, reconcile that artifact through the canonical path in the same turn instead of leaving both paths alive.
+- Do not treat a cleanup-only or style-only request as permission to change semantics. If a correctness fix requires a behavior change, surface that as a separate change.
+- Preserve explicit workflow order when a skill or wrapper documents prerequisites; do not reorder steps just to make a later command pass.
+- For live writes to `nh02`, Android devices, or other attached hardware, prove the exact target first and keep the rollback/recovery path explicit before mutating it.
+- Prefer checked repo scripts and remote helpers over inline `ssh "..."` write commands or ad-hoc shell chains for hardware-side mutation.
+- If a connectivity or host-access failure appears only inside the sandbox, treat it as a sandbox artifact first and rerun the real probe host-side before calling it a target-side issue.
+
+## Durable Learning
+
+- Keep `WORKLOG.md` as the per-task trail for decisions, blockers, validation, and self-review.
+- If the user corrects a reusable workflow assumption, scope rule, or proof path, capture that correction immediately before continuing.
+- When a task reveals durable workflow knowledge or a corrected assumption, promote it into `AGENTS.md`, repo skills, or references in the same turn.
+- If no durable lesson emerged, say so and avoid documentation-only churn.
 
 ## Local Commands
 
@@ -130,6 +225,16 @@
 - Offline simulation:
   - `python3 tools/sim/test_sim_core.py`
   - `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json`
+- NH02 hardware bench:
+  - `tools/hw/nh02/install.sh`
+  - `tools/hw/nh02/flash.sh`
+  - `tools/hw/nh02/acceptance.sh`
+  - `tools/hw/nh02/monitor.sh`
+  - `tools/hw/nh02/status.sh`
+- Android USB + BLE smoke:
+  - `tools/android/status.sh`
+  - `tools/android/build-smoke-apk.sh`
+  - `tools/android/run-smoke.sh`
 - CI/version helpers:
   - `python3 tools/ci/check_firmware_version.py`
   - `python3 tools/ci/check_config_schema_version.py`

@@ -50,7 +50,7 @@ On boot:
 
 ### Safety supervisor
 
-- `CommToutMs` (`500..60000`)
+- `CommToutMs` (`3000..60000`)
 - `CtrlLoopMs` (`100..10000`)
 - `SensorTout` (`300..30000`)
 - `FailAct` (`0..1`, `0=STOP`, `1=Manual`)

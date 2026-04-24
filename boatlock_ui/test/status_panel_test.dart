@@ -14,7 +14,8 @@ void main() {
       distance: 12.3,
       heading: 45,
       battery: 50,
-      status: 'OK',
+      status: 'WARN',
+      statusReasons: 'NO_GPS,NO_COMPASS',
       mode: 'MANUAL',
       rssi: -63,
       holdHeading: true,
@@ -31,9 +32,14 @@ void main() {
       gyroNorm: 0,
       pitch: 0,
       roll: 0,
+      secPaired: false,
+      secAuth: false,
+      secPairWindowOpen: false,
+      secReject: 'NONE',
     );
     await tester.pumpWidget(MaterialApp(home: StatusPanel(data: data)));
-    expect(find.text('OK'), findsOneWidget);
+    expect(find.text('WARN'), findsOneWidget);
+    expect(find.text('NO_GPS,NO_COMPASS'), findsOneWidget);
     expect(find.text('59.123, 30.568'), findsOneWidget);
     expect(find.text('MANUAL'), findsOneWidget);
     expect(find.text('-63 дБ'), findsOneWidget);

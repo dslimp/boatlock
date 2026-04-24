@@ -12,17 +12,29 @@ void main() {
       'distance': '3.4',
       'heading': '90',
       'battery': '75',
-      'status': 'OK',
+      'status': 'WARN',
+      'statusReasons': 'NO_GPS',
+      'mode': 'HOLD',
       'holdHeading': '1',
       'stepSpr': '400',
       'stepMaxSpd': '1500',
       'stepAccel': '600',
+      'secPaired': '1',
+      'secAuth': '0',
+      'secPairWin': '1',
+      'secReject': 'AUTH_REQUIRED',
     });
     expect(data.lat, 1.23);
     expect(data.lon, 4.56);
     expect(data.anchorHeading, 123.4);
     expect(data.holdHeading, isTrue);
     expect(data.stepSpr, 400);
-    expect(data.status, 'OK');
+    expect(data.status, 'WARN');
+    expect(data.statusReasons, 'NO_GPS');
+    expect(data.mode, 'HOLD');
+    expect(data.secPaired, isTrue);
+    expect(data.secAuth, isFalse);
+    expect(data.secPairWindowOpen, isTrue);
+    expect(data.secReject, 'AUTH_REQUIRED');
   });
 }

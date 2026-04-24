@@ -1,0 +1,74 @@
+#pragma once
+
+#include <stddef.h>
+
+struct RuntimeGpsUartConfig {
+  unsigned long noDataWarnMs = 6000;
+  unsigned long staleRestartMs = 6000;
+  unsigned long restartCooldownMs = 4000;
+};
+
+struct RuntimeGpsUartActions {
+  bool firstDataSeen = false;
+  bool warnNoData = false;
+  bool warnStale = false;
+  bool restartSerial = false;
+  unsigned long staleAgeMs = 0;
+};
+
+class RuntimeGpsUart {
+public:
+  void reset(unsigned long bootMs) {
+    bootMs_ = bootMs;
+    seen_ = false;
+    noDataWarned_ = false;
+    staleLogged_ = false;
+    lastByteMs_ = 0;
+    lastRestartMs_ = 0;
+  }
+
+  RuntimeGpsUartActions update(size_t bytesRead,
+                               unsigned long nowMs,
+                               const RuntimeGpsUartConfig& config) {
+    RuntimeGpsUartActions actions;
+
+    if (bytesRead > 0) {
+      actions.firstDataSeen = !seen_;
+      seen_ = true;
+      lastByteMs_ = nowMs;
+      staleLogged_ = false;
+    }
+
+    if (!seen_ && !noDataWarned_ && nowMs > bootMs_ && (nowMs - bootMs_) > config.noDataWarnMs) {
+      noDataWarned_ = true;
+      actions.warnNoData = true;
+    }
+
+    if (seen_ &&
+        lastByteMs_ > 0 &&
+        nowMs > lastByteMs_ &&
+        (nowMs - lastByteMs_) >= config.staleRestartMs) {
+      actions.staleAgeMs = nowMs - lastByteMs_;
+      if (!staleLogged_) {
+        staleLogged_ = true;
+        actions.warnStale = true;
+      }
+      if (lastRestartMs_ == 0 || (nowMs - lastRestartMs_) >= config.restartCooldownMs) {
+        lastRestartMs_ = nowMs;
+        seen_ = false;
+        noDataWarned_ = false;
+        actions.restartSerial = true;
+      }
+    }
+
+    return actions;
+  }
+
+private:
+  unsigned long bootMs_ = 0;
+  bool seen_ = false;
+  bool noDataWarned_ = false;
+  bool staleLogged_ = false;
+  unsigned long lastByteMs_ = 0;
+  unsigned long lastRestartMs_ = 0;
+};

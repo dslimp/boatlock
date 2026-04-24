@@ -124,6 +124,28 @@ void test_load_sanitizes_nan_and_out_of_range_values() {
   TEST_ASSERT_EQUAL_FLOAT(8.0f, s.get("MinSats"));
 }
 
+void test_comm_timeout_floor_is_safe() {
+  Settings s;
+  s.reset();
+  TEST_ASSERT_EQUAL_FLOAT(4000.0f, s.get("CommToutMs"));
+  TEST_ASSERT_FALSE(s.setStrict("CommToutMs", 1200.0f));
+  TEST_ASSERT_EQUAL_FLOAT(4000.0f, s.get("CommToutMs"));
+
+  float values[count];
+  for (int i = 0; i < count; ++i) {
+    values[i] = defaultEntries[i].defaultValue;
+  }
+  values[s.idxByKey("CommToutMs")] = 1200.0f;
+
+  EEPROM.put(Settings::EEPROM_ADDR, Settings::VERSION);
+  EEPROM.put(Settings::VALUES_ADDR, values);
+  const uint32_t crc = crc32(reinterpret_cast<const uint8_t*>(values), Settings::VALUES_BYTES);
+  EEPROM.put(Settings::CRC_ADDR, crc);
+
+  s.load();
+  TEST_ASSERT_TRUE(s.get("CommToutMs") >= 3000.0f);
+}
+
 int main(int argc, char **argv) {
   UNITY_BEGIN();
   RUN_TEST(test_get_set);
@@ -134,5 +156,6 @@ int main(int argc, char **argv) {
   RUN_TEST(test_set_strict_rounds_integer_values);
   RUN_TEST(test_load_migrates_when_version_mismatch);
   RUN_TEST(test_load_sanitizes_nan_and_out_of_range_values);
+  RUN_TEST(test_comm_timeout_floor_is_safe);
   return UNITY_END();
 }

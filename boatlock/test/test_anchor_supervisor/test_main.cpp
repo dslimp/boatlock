@@ -57,6 +57,16 @@ void test_comm_timeout_when_link_lost() {
   TEST_ASSERT_EQUAL((int)AnchorSupervisor::Reason::COMM_TIMEOUT, (int)d.reason);
 }
 
+void test_containment_breach_exits_anchor_immediately() {
+  AnchorSupervisor s;
+  auto cfg = baseCfg();
+  auto in = baseIn();
+  in.containmentBreached = true;
+  auto d = s.update(cfg, in);
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::SafeAction::EXIT_ANCHOR, (int)d.action);
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::Reason::CONTAINMENT_BREACH, (int)d.reason);
+}
+
 void test_comm_timeout_after_control_activity_deadline() {
   AnchorSupervisor s;
   auto cfg = baseCfg();
@@ -132,6 +142,7 @@ int main() {
   UNITY_BEGIN();
   RUN_TEST(test_gps_weak_exits_anchor_after_hysteresis);
   RUN_TEST(test_comm_timeout_when_link_lost);
+  RUN_TEST(test_containment_breach_exits_anchor_immediately);
   RUN_TEST(test_comm_timeout_after_control_activity_deadline);
   RUN_TEST(test_control_loop_timeout_triggers_failsafe);
   RUN_TEST(test_sensor_timeout_triggers_failsafe);

@@ -31,8 +31,10 @@ bool nudgeCardinalResult = true;
 bool nudgeBearingResult = true;
 const char* gnssReasonStub = "GPS_HDOP_TOO_HIGH";
 AnchorDeniedReason gnssDeniedReasonStub = AnchorDeniedReason::GPS_HDOP_TOO_HIGH;
+AnchorDeniedReason anchorEnableDeniedReasonStub = AnchorDeniedReason::NONE;
 AnchorDeniedReason lastDeniedReason = AnchorDeniedReason::NONE;
 FailsafeReason lastFailsafeReason = FailsafeReason::NONE;
+int clearSafeHoldCalls = 0;
 bool securityForceReject = false;
 bool securityRequireWrapper = false;
 bool securitySessionActive = false;
@@ -66,9 +68,11 @@ bool nudgeAnchorBearing(float bearingDeg, float meters) {
   return nudgeBearingResult;
 }
 const char* currentGnssFailReason() { return gnssReasonStub; }
+AnchorDeniedReason currentAnchorEnableDeniedReason() { return anchorEnableDeniedReasonStub; }
 AnchorDeniedReason currentGnssDeniedReason() { return gnssDeniedReasonStub; }
 void setLastAnchorDeniedReason(AnchorDeniedReason reason) { lastDeniedReason = reason; }
 void setLastFailsafeReason(FailsafeReason reason) { lastFailsafeReason = reason; }
+void clearSafeHold() { ++clearSafeHoldCalls; }
 bool preprocessSecureCommand(const std::string& incoming, std::string* effective) {
   if (!effective) return false;
   if (securityForceReject) return false;
@@ -128,8 +132,10 @@ void setUp() {
   nudgeBearingResult = true;
   gnssReasonStub = "GPS_HDOP_TOO_HIGH";
   gnssDeniedReasonStub = AnchorDeniedReason::GPS_HDOP_TOO_HIGH;
+  anchorEnableDeniedReasonStub = AnchorDeniedReason::NONE;
   lastDeniedReason = AnchorDeniedReason::NONE;
   lastFailsafeReason = FailsafeReason::NONE;
+  clearSafeHoldCalls = 0;
   securityForceReject = false;
   securityRequireWrapper = false;
   securitySessionActive = false;
@@ -192,19 +198,32 @@ void test_set_anchor_saves_point_without_enabling_mode() {
 
 void test_anchor_on_rejected_without_anchor_point() {
   anchorPointPresent = false;
+  anchorEnableDeniedReasonStub = AnchorDeniedReason::NO_ANCHOR_POINT;
   settings.set("AnchorEnabled", 0.0f);
   handleBleCommand("ANCHOR_ON");
   TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
   TEST_ASSERT_EQUAL((int)AnchorDeniedReason::NO_ANCHOR_POINT, (int)lastDeniedReason);
+  TEST_ASSERT_EQUAL(0, clearSafeHoldCalls);
 }
 
 void test_anchor_on_rejected_on_bad_gnss() {
   anchorPointPresent = true;
   anchorEnableAllowed = false;
+  anchorEnableDeniedReasonStub = AnchorDeniedReason::GPS_HDOP_TOO_HIGH;
   settings.set("AnchorEnabled", 0.0f);
   handleBleCommand("ANCHOR_ON");
   TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
   TEST_ASSERT_EQUAL((int)AnchorDeniedReason::GPS_HDOP_TOO_HIGH, (int)lastDeniedReason);
+}
+
+void test_anchor_on_rejected_without_heading() {
+  anchorPointPresent = true;
+  anchorEnableAllowed = false;
+  anchorEnableDeniedReasonStub = AnchorDeniedReason::NO_HEADING;
+  settings.set("AnchorEnabled", 0.0f);
+  handleBleCommand("ANCHOR_ON");
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
+  TEST_ASSERT_EQUAL((int)AnchorDeniedReason::NO_HEADING, (int)lastDeniedReason);
 }
 
 void test_anchor_on_accepts_and_exits_manual_mode() {
@@ -213,6 +232,7 @@ void test_anchor_on_accepts_and_exits_manual_mode() {
   manualSpeed = 90;
   anchorPointPresent = true;
   anchorEnableAllowed = true;
+  anchorEnableDeniedReasonStub = AnchorDeniedReason::NONE;
   settings.set("AnchorEnabled", 0.0f);
   handleBleCommand("ANCHOR_ON");
   TEST_ASSERT_FALSE(manualMode);
@@ -220,6 +240,7 @@ void test_anchor_on_accepts_and_exits_manual_mode() {
   TEST_ASSERT_EQUAL(0, manualSpeed);
   TEST_ASSERT_EQUAL_FLOAT(1.0f, settings.get("AnchorEnabled"));
   TEST_ASSERT_EQUAL((int)AnchorDeniedReason::NONE, (int)lastDeniedReason);
+  TEST_ASSERT_EQUAL(1, clearSafeHoldCalls);
 }
 
 void test_anchor_off_always_disables_anchor_and_stops_drive() {
@@ -229,6 +250,17 @@ void test_anchor_off_always_disables_anchor_and_stops_drive() {
   TEST_ASSERT_TRUE(stepperControl.cancelCalled);
   TEST_ASSERT_TRUE(motor.stopCalled);
   TEST_ASSERT_EQUAL((int)FailsafeReason::NONE, (int)lastFailsafeReason);
+  TEST_ASSERT_EQUAL(1, clearSafeHoldCalls);
+}
+
+void test_manual_on_clears_safe_hold_and_failsafe_latch() {
+  lastDeniedReason = AnchorDeniedReason::GPS_HDOP_TOO_HIGH;
+  lastFailsafeReason = FailsafeReason::COMM_TIMEOUT;
+  handleBleCommand("MANUAL:1");
+  TEST_ASSERT_TRUE(manualMode);
+  TEST_ASSERT_EQUAL((int)AnchorDeniedReason::NONE, (int)lastDeniedReason);
+  TEST_ASSERT_EQUAL((int)FailsafeReason::NONE, (int)lastFailsafeReason);
+  TEST_ASSERT_EQUAL(1, clearSafeHoldCalls);
 }
 
 void test_stop_always_has_highest_priority() {
@@ -403,8 +435,10 @@ int main() {
   RUN_TEST(test_set_anchor_saves_point_without_enabling_mode);
   RUN_TEST(test_anchor_on_rejected_without_anchor_point);
   RUN_TEST(test_anchor_on_rejected_on_bad_gnss);
+  RUN_TEST(test_anchor_on_rejected_without_heading);
   RUN_TEST(test_anchor_on_accepts_and_exits_manual_mode);
   RUN_TEST(test_anchor_off_always_disables_anchor_and_stops_drive);
+  RUN_TEST(test_manual_on_clears_safe_hold_and_failsafe_latch);
   RUN_TEST(test_stop_always_has_highest_priority);
   RUN_TEST(test_heartbeat_marks_control_activity_without_state_change);
   RUN_TEST(test_nudge_dir_routes_to_cardinal_handler);

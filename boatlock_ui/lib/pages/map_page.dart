@@ -26,9 +26,6 @@ class _MapPageState extends State<MapPage> {
   final List<LatLng> _history = [];
   StreamSubscription<Position>? _posSub;
   bool _autoCenter = true;
-  bool _manualMode = false;
-  double _manualSpeed = 0;
-  DateTime? _lastPhoneGpsSentAt;
 
   Future<void> _confirmAndStopAll() async {
     if (boatData == null) return;
@@ -69,38 +66,6 @@ class _MapPageState extends State<MapPage> {
     }
   }
 
-  void _toggleManual(bool v) {
-    setState(() => _manualMode = v);
-    ble.setManualMode(v);
-  }
-
-  void _sendDirection(int dir) {
-    ble.sendManualDirection(dir);
-  }
-
-  void _setSpeed(double v) {
-    setState(() => _manualSpeed = v);
-    ble.sendManualSpeed(v.round());
-  }
-
-  Widget _holdBtn(IconData icon, int dir) => Padding(
-    padding: const EdgeInsets.all(4),
-    child: GestureDetector(
-      onTapDown: (_) => _sendDirection(dir),
-      onTapUp: (_) => _sendDirection(-1),
-      onTapCancel: () => _sendDirection(-1),
-      child: Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.primary,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Icon(icon, color: Colors.white),
-      ),
-    ),
-  );
-
   @override
   void initState() {
     super.initState();
@@ -108,7 +73,6 @@ class _MapPageState extends State<MapPage> {
       onData: (data) {
         setState(() {
           boatData = data;
-          _manualMode = data?.mode == 'MANUAL';
           if (data != null && data.lat != 0 && data.lon != 0) {
             final p = LatLng(data.lat, data.lon);
             _addToHistory(p);
@@ -160,32 +124,7 @@ class _MapPageState extends State<MapPage> {
               _mapController.move(p, _zoom);
             }
           });
-          _forwardPhoneGps(pos);
         });
-  }
-
-  void _forwardPhoneGps(Position pos) {
-    final now = DateTime.now();
-    if (_lastPhoneGpsSentAt != null &&
-        now.difference(_lastPhoneGpsSentAt!).inMilliseconds < 900) {
-      return;
-    }
-
-    final speedKmh = (pos.speed.isFinite && pos.speed > 0.0)
-        ? pos.speed * 3.6
-        : 0.0;
-    final raw = pos.toJson();
-    final satUsedInFix =
-        (raw['gnss_satellites_used_in_fix'] as num?)?.round() ?? 0;
-    final satCount = (raw['gnss_satellite_count'] as num?)?.round() ?? 0;
-    final satellites = satUsedInFix > 0 ? satUsedInFix : satCount;
-    _lastPhoneGpsSentAt = now;
-    ble.sendPhoneGps(
-      pos.latitude,
-      pos.longitude,
-      speedKmh: speedKmh,
-      satellites: satellites,
-    );
   }
 
   void _addToHistory(LatLng p) {
@@ -235,6 +174,10 @@ class _MapPageState extends State<MapPage> {
                   pitch: boatData?.pitch ?? 0.0,
                   roll: boatData?.roll ?? 0.0,
                   isConnected: boatData != null,
+                  secPaired: boatData?.secPaired ?? false,
+                  secAuth: boatData?.secAuth ?? false,
+                  secPairWindowOpen: boatData?.secPairWindowOpen ?? false,
+                  secReject: boatData?.secReject ?? 'NONE',
                 ),
               ),
             ),
@@ -450,66 +393,6 @@ class _MapPageState extends State<MapPage> {
                 ),
               ),
             ),
-          Positioned(
-            bottom: 150,
-            left: 0,
-            right: 0,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ElevatedButton.icon(
-                  icon: Icon(_manualMode ? Icons.toggle_on : Icons.toggle_off),
-                  label: const Text('Ручной режим'),
-                  onPressed: () => _toggleManual(!_manualMode),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _manualMode ? Colors.green : Colors.blue,
-                  ),
-                ),
-                if (_manualMode)
-                  Column(
-                    children: [
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.navigation),
-                        label: const Text('Сохранить "нос лодки"'),
-                        onPressed: () async {
-                          if (boatData == null) {
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Нет BLE-соединения'),
-                              ),
-                            );
-                            return;
-                          }
-                          await ble.setStepperBowZero();
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Ноль шаговика сохранен: текущее направление принято за нос лодки',
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _holdBtn(Icons.rotate_left, 0),
-                          _holdBtn(Icons.rotate_right, 1),
-                        ],
-                      ),
-                      Slider(
-                        min: -255,
-                        max: 255,
-                        value: _manualSpeed,
-                        onChanged: (v) => _setSpeed(v),
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-          ),
         ],
       ),
       floatingActionButton: Row(

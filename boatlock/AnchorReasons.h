@@ -5,6 +5,7 @@
 enum class AnchorDeniedReason : uint8_t {
   NONE = 0,
   NO_ANCHOR_POINT,
+  NO_HEADING,
   GPS_NO_FIX,
   GPS_DATA_STALE,
   GPS_SATS_TOO_LOW,
@@ -20,6 +21,7 @@ enum class FailsafeReason : uint8_t {
   NONE = 0,
   STOP_CMD,
   GPS_WEAK,
+  CONTAINMENT_BREACH,
   COMM_TIMEOUT,
   CONTROL_LOOP_TIMEOUT,
   SENSOR_TIMEOUT,
@@ -31,6 +33,8 @@ inline const char* anchorDeniedReasonString(AnchorDeniedReason reason) {
   switch (reason) {
     case AnchorDeniedReason::NO_ANCHOR_POINT:
       return "NO_ANCHOR_POINT";
+    case AnchorDeniedReason::NO_HEADING:
+      return "NO_HEADING";
     case AnchorDeniedReason::GPS_NO_FIX:
       return "GPS_NO_FIX";
     case AnchorDeniedReason::GPS_DATA_STALE:
@@ -61,6 +65,8 @@ inline const char* failsafeReasonString(FailsafeReason reason) {
       return "STOP_CMD";
     case FailsafeReason::GPS_WEAK:
       return "GPS_WEAK";
+    case FailsafeReason::CONTAINMENT_BREACH:
+      return "CONTAINMENT_BREACH";
     case FailsafeReason::COMM_TIMEOUT:
       return "COMM_TIMEOUT";
     case FailsafeReason::CONTROL_LOOP_TIMEOUT:

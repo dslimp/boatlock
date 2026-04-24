@@ -13,6 +13,7 @@ public:
   enum class Reason : uint8_t {
     NONE = 0,
     GPS_WEAK,
+    CONTAINMENT_BREACH,
     COMM_TIMEOUT,
     CONTROL_LOOP_TIMEOUT,
     SENSOR_TIMEOUT,
@@ -37,6 +38,7 @@ public:
     bool linkOk = true;
     bool sensorsOk = true;
     bool hasNaN = false;
+    bool containmentBreached = false;
     bool controlActivitySeen = false;
     unsigned long controlLoopDtMs = 0;
     int commandThrustPct = 0;
@@ -76,6 +78,13 @@ public:
       }
     } else {
       gpsWeakSinceMs_ = 0;
+    }
+
+    if (in.containmentBreached) {
+      Decision d;
+      d.action = SafeAction::EXIT_ANCHOR;
+      d.reason = Reason::CONTAINMENT_BREACH;
+      return d;
     }
 
     if (!in.linkOk) {
@@ -138,6 +147,8 @@ public:
     switch (reason) {
       case Reason::GPS_WEAK:
         return "GPS_WEAK";
+      case Reason::CONTAINMENT_BREACH:
+        return "CONTAINMENT_BREACH";
       case Reason::COMM_TIMEOUT:
         return "COMM_TIMEOUT";
       case Reason::CONTROL_LOOP_TIMEOUT:

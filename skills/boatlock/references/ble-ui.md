@@ -31,7 +31,7 @@
   - data char `34cd`
   - log char `78ab`
 - The app requests `"all"` params after connect.
-- Heartbeat is sent every `2 s` once connected.
+- Heartbeat is sent every `1 s` once connected.
 
 ## Command Surface
 
@@ -49,11 +49,12 @@
 
 - Pairing is opened only by holding the hardware STOP button for `3 s`.
 - Pairing window duration is `120 s`.
-- Pairing uses `PAIR_SET:<6-digit-code>`.
+- Pairing uses `PAIR_SET:<ownerSecretHex>` where the owner secret is 32 hex chars.
 - Owner authentication flow:
   1. `AUTH_HELLO`
   2. read `secNonce`
   3. `AUTH_PROVE:<proofHex>`
+- `PAIR_CLEAR` is accepted only from owner session or while the pairing window is still physically open.
 - When paired, control/write commands must be wrapped as:
   - `SEC_CMD:<counterHex>:<sigHex>:<payload>`
 - Flutter handles this in `_ensureSecureSession()`, `_writeCommand()`, and `buildSecureCommand()`.
@@ -64,19 +65,21 @@
   - `lat`, `lon`
   - `anchorLat`, `anchorLon`, `anchorHead`
   - `distance`, `heading`
-  - `battery`, `status`, `mode`, `rssi`
+  - `battery`, `status`, `statusReasons`, `mode`, `rssi`
   - `holdHeading`
   - `stepSpr`, `stepMaxSpd`, `stepAccel`
   - `headingRaw`, `compassOffset`
   - `compassQ`, `magQ`, `gyroQ`
   - `rvAcc`, `magNorm`, `gyroNorm`
   - `pitch`, `roll`
+  - `secPaired`, `secAuth`, `secPairWin`, `secReject`
 - Firmware also publishes more fields that are not fully modeled in `BoatData`, including:
   - `gnssQ`
   - `anchorProfile`, `anchorProfileName`
   - `anchorDeniedReason`, `failsafeReason`
-  - `secPaired`, `secAuth`, `secPairWin`, `secNonce`, `secReject`
+  - `secNonce`
   - `simState`, `simScenario`, `simProgress`, `simPass`
+- `status` is a short health summary (`OK|WARN|ALERT`), while `mode` is the runtime mode and `statusReasons` carries comma-separated detail flags.
 - If you add or rename telemetry, update firmware `registerBleParams()`, Flutter parsing, any affected widgets/tests, and `docs/BLE_PROTOCOL.md`.
 
 ## Manual UI Semantics

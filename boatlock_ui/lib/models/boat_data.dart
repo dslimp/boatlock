@@ -8,6 +8,7 @@ class BoatData {
   final double heading;
   final int battery;
   final String status;
+  final String statusReasons;
   final String mode;
   final int rssi;
   final bool holdHeading;
@@ -24,6 +25,10 @@ class BoatData {
   final double gyroNorm;
   final double pitch;
   final double roll;
+  final bool secPaired;
+  final bool secAuth;
+  final bool secPairWindowOpen;
+  final String secReject;
 
   BoatData({
     required this.lat,
@@ -35,6 +40,7 @@ class BoatData {
     required this.heading,
     required this.battery,
     required this.status,
+    required this.statusReasons,
     required this.mode,
     required this.rssi,
     required this.holdHeading,
@@ -51,6 +57,10 @@ class BoatData {
     required this.gyroNorm,
     required this.pitch,
     required this.roll,
+    required this.secPaired,
+    required this.secAuth,
+    required this.secPairWindowOpen,
+    required this.secReject,
   });
 
   factory BoatData.fromJson(Map<String, dynamic> json, {int rssi = 0}) {
@@ -64,6 +74,7 @@ class BoatData {
       heading: double.tryParse(json['heading']?.toString() ?? '') ?? 0,
       battery: int.tryParse(json['battery']?.toString() ?? '') ?? 0,
       status: json['status']?.toString() ?? '',
+      statusReasons: json['statusReasons']?.toString() ?? '',
       mode: json['mode']?.toString() ?? '',
       rssi: rssi,
       holdHeading: int.tryParse(json['holdHeading']?.toString() ?? '') == 1,
@@ -81,6 +92,11 @@ class BoatData {
       gyroNorm: double.tryParse(json['gyroNorm']?.toString() ?? '') ?? 0,
       pitch: double.tryParse(json['pitch']?.toString() ?? '') ?? 0,
       roll: double.tryParse(json['roll']?.toString() ?? '') ?? 0,
+      secPaired: int.tryParse(json['secPaired']?.toString() ?? '') == 1,
+      secAuth: int.tryParse(json['secAuth']?.toString() ?? '') == 1,
+      secPairWindowOpen:
+          int.tryParse(json['secPairWin']?.toString() ?? '') == 1,
+      secReject: json['secReject']?.toString() ?? 'NONE',
     );
   }
 }

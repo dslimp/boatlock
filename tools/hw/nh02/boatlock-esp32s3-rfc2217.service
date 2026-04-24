@@ -1,0 +1,15 @@
+[Unit]
+Description=BoatLock ESP32-S3 RFC2217 bridge
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/boatlock-hw
+ExecStart=/opt/boatlock-hw/.venv/bin/esp_rfc2217_server -p 4000 /dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_98:88:E0:03:BA:5C-if00
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

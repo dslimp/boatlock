@@ -9,12 +9,20 @@
 #include "Settings.h"
 
 class BleSecurity {
+private:
+  struct Stored {
+    uint8_t version = 0;
+    uint8_t paired = 0;
+    uint8_t ownerSecret[16] = {0};
+    uint32_t crc = 0;
+  };
+
 public:
   enum class RejectReason : uint8_t {
     NONE = 0,
     NOT_PAIRED,
     PAIRING_WINDOW_CLOSED,
-    INVALID_PAIR_CODE,
+    INVALID_OWNER_SECRET,
     AUTH_REQUIRED,
     AUTH_FAILED,
     BAD_FORMAT,
@@ -23,27 +31,31 @@ public:
     RATE_LIMIT,
   };
 
-  static constexpr uint8_t kStoreVersion = 1;
+  static constexpr uint8_t kStoreVersion = 2;
+  static constexpr size_t kOwnerSecretBytes = 16;
+  static constexpr size_t kOwnerSecretHexChars = kOwnerSecretBytes * 2;
   static constexpr unsigned long kPairingWindowMs = 120000;
   static constexpr unsigned long kRateWindowMs = 1000;
   static constexpr uint16_t kMaxCommandsPerWindow = 25;
   static constexpr int EEPROM_ADDR = Settings::CRC_ADDR + sizeof(uint32_t) + 64;
-  static constexpr int STORED_BYTES = 12;
+  static constexpr int STORED_BYTES = sizeof(Stored);
 
   void load() {
     Stored s{};
     EEPROM.get(EEPROM_ADDR, s);
     if (s.version != kStoreVersion || s.crc != calcCrc(s)) {
+      clearRuntimeState();
       paired_ = false;
-      ownerCode_ = 0;
+      memset(ownerSecret_, 0, sizeof(ownerSecret_));
       save();
       return;
     }
     paired_ = s.paired != 0;
-    ownerCode_ = s.ownerCode;
-    if (!validPairCode(ownerCode_)) {
+    memcpy(ownerSecret_, s.ownerSecret, sizeof(ownerSecret_));
+    clearRuntimeState();
+    if (paired_ && !ownerSecretValid()) {
       paired_ = false;
-      ownerCode_ = 0;
+      memset(ownerSecret_, 0, sizeof(ownerSecret_));
       save();
     }
   }
@@ -52,7 +64,7 @@ public:
     Stored s{};
     s.version = kStoreVersion;
     s.paired = paired_ ? 1 : 0;
-    s.ownerCode = ownerCode_;
+    memcpy(s.ownerSecret, ownerSecret_, sizeof(ownerSecret_));
     s.crc = calcCrc(s);
     EEPROM.put(EEPROM_ADDR, s);
     EEPROM.commit();
@@ -60,7 +72,7 @@ public:
 
   bool isPaired() const { return paired_; }
   bool sessionActive() const { return sessionActive_; }
-  uint32_t sessionNonce() const { return sessionNonce_; }
+  uint64_t sessionNonce() const { return sessionNonce_; }
   uint32_t lastRejectCode() const { return (uint32_t)lastReject_; }
   const char* lastRejectString() const { return rejectReasonString(lastReject_); }
 
@@ -77,21 +89,19 @@ public:
     return pairingWindowOpen_;
   }
 
-  bool setPairCode(uint32_t code, unsigned long nowMs) {
+  bool setOwnerSecretHex(const char* secretHex, unsigned long nowMs) {
     if (!pairingWindowOpen(nowMs)) {
       setReject(RejectReason::PAIRING_WINDOW_CLOSED);
       return false;
     }
-    if (!validPairCode(code)) {
-      setReject(RejectReason::INVALID_PAIR_CODE);
+    uint8_t parsed[kOwnerSecretBytes] = {0};
+    if (!parseHexBytes(secretHex, parsed, sizeof(parsed))) {
+      setReject(RejectReason::INVALID_OWNER_SECRET);
       return false;
     }
-    ownerCode_ = code;
+    memcpy(ownerSecret_, parsed, sizeof(ownerSecret_));
     paired_ = true;
-    sessionActive_ = false;
-    sessionNonce_ = 0;
-    sessionKey_ = 0;
-    lastCounter_ = 0;
+    clearRuntimeState();
     save();
     setReject(RejectReason::NONE);
     return true;
@@ -99,28 +109,29 @@ public:
 
   void clearPairing() {
     paired_ = false;
-    ownerCode_ = 0;
-    sessionActive_ = false;
-    sessionNonce_ = 0;
-    sessionKey_ = 0;
-    lastCounter_ = 0;
+    memset(ownerSecret_, 0, sizeof(ownerSecret_));
+    clearRuntimeState();
     save();
     setReject(RejectReason::NONE);
   }
 
-  uint32_t startAuth(unsigned long nowMs) {
+  uint64_t startAuth(unsigned long nowMs) {
     if (!paired_) {
       setReject(RejectReason::NOT_PAIRED);
       return 0;
     }
-    const uint32_t seed = (uint32_t)(nowMs ^ (ownerCode_ << 7) ^ 0xA5A5A5A5u);
-    sessionNonce_ = fnv1a32((const uint8_t*)&seed, sizeof(seed));
+    ++authSequence_;
+    const uint64_t k0 = read64le(ownerSecret_);
+    const uint64_t k1 = read64le(ownerSecret_ + 8);
+    uint64_t seed = (static_cast<uint64_t>(nowMs) << 32) ^ authSequence_ ^ k0 ^ rotl64(k1, 17);
+    sessionNonce_ = mix64(seed);
     if (sessionNonce_ == 0) {
       sessionNonce_ = 1;
     }
     sessionActive_ = false;
-    sessionKey_ = 0;
     lastCounter_ = 0;
+    rateWindowStartMs_ = 0;
+    rateCount_ = 0;
     setReject(RejectReason::NONE);
     return sessionNonce_;
   }
@@ -130,21 +141,18 @@ public:
       setReject(RejectReason::AUTH_REQUIRED);
       return false;
     }
-    uint32_t provided = 0;
-    if (!parseHexU32(proofHex, &provided)) {
+    uint64_t provided = 0;
+    if (!parseHexU64(proofHex, &provided)) {
       setReject(RejectReason::BAD_FORMAT);
       return false;
     }
-    const uint32_t expected = authProof();
+    const uint64_t expected = authProof();
     if (provided != expected) {
       setReject(RejectReason::AUTH_FAILED);
       sessionActive_ = false;
-      sessionKey_ = 0;
+      lastCounter_ = 0;
       return false;
     }
-    char buf[24];
-    snprintf(buf, sizeof(buf), "SK:%08lX", (unsigned long)expected);
-    sessionKey_ = fnv1a32((const uint8_t*)buf, strlen(buf));
     sessionActive_ = true;
     lastCounter_ = 0;
     rateWindowStartMs_ = 0;
@@ -182,11 +190,11 @@ public:
     }
 
     uint32_t counter = 0;
-    uint32_t sig = 0;
+    uint64_t sig = 0;
     const std::string counterHex = in.substr(8, p1 - 8);
     const std::string sigHex = in.substr(p1 + 1, p2 - (p1 + 1));
     if (!parseHexU32(counterHex.c_str(), &counter) ||
-        !parseHexU32(sigHex.c_str(), &sig)) {
+        !parseHexU64(sigHex.c_str(), &sig)) {
       setReject(RejectReason::BAD_FORMAT);
       return false;
     }
@@ -202,7 +210,7 @@ public:
     }
 
     const std::string payload = in.substr(p2 + 1);
-    const uint32_t expected = commandSig(counter, payload.c_str());
+    const uint64_t expected = commandSig(counter, payload.c_str());
     if (sig != expected) {
       setReject(RejectReason::BAD_SIGNATURE);
       return false;
@@ -221,10 +229,13 @@ public:
     if (cmd == "STOP" || cmd == "ANCHOR_OFF" || cmd == "HEARTBEAT" || cmd == "all") {
       return false;
     }
-    if (cmd.rfind("PAIR_", 0) == 0 || cmd.rfind("AUTH_", 0) == 0 || cmd.rfind("SEC_CMD:", 0) == 0) {
+    if (cmd.rfind("AUTH_", 0) == 0 || cmd.rfind("PAIR_SET:", 0) == 0 ||
+        cmd.rfind("SEC_CMD:", 0) == 0) {
       return false;
     }
-    // Any write/control command requires owner session once paired.
+    if (cmd == "PAIR_CLEAR") {
+      return true;
+    }
     return true;
   }
 
@@ -236,8 +247,8 @@ public:
         return "NOT_PAIRED";
       case RejectReason::PAIRING_WINDOW_CLOSED:
         return "PAIRING_WINDOW_CLOSED";
-      case RejectReason::INVALID_PAIR_CODE:
-        return "INVALID_PAIR_CODE";
+      case RejectReason::INVALID_OWNER_SECRET:
+        return "INVALID_OWNER_SECRET";
       case RejectReason::AUTH_REQUIRED:
         return "AUTH_REQUIRED";
       case RejectReason::AUTH_FAILED:
@@ -255,23 +266,18 @@ public:
     }
   }
 
-  uint32_t authProof() const {
-    char buf[48];
-    snprintf(buf, sizeof(buf), "%lu:%08lX",
-             (unsigned long)ownerCode_,
-             (unsigned long)sessionNonce_);
-    return fnv1a32((const uint8_t*)buf, strlen(buf));
+  uint64_t authProof() const {
+    return computeMac("AUTH", 0, nullptr);
   }
 
-  uint32_t commandSig(uint32_t counter, const char* payload) const {
-    char prefix[48];
-    snprintf(prefix, sizeof(prefix), "%08lX:%08lX:",
-             (unsigned long)sessionKey_,
-             (unsigned long)counter);
-    uint32_t h = 2166136261u;
-    h = fnv1a32Update(h, (const uint8_t*)prefix, strlen(prefix));
-    h = fnv1a32Update(h, (const uint8_t*)payload, strlen(payload));
-    return h;
+  uint64_t commandSig(uint32_t counter, const char* payload) const {
+    return computeMac("CMD", counter, payload);
+  }
+
+  std::string sessionNonceHex() const {
+    char buf[17];
+    snprintf(buf, sizeof(buf), "%016llX", static_cast<unsigned long long>(sessionNonce_));
+    return std::string(buf);
   }
 
   static bool parseHexU32(const char* text, uint32_t* out) {
@@ -283,37 +289,56 @@ public:
     if (!end || *end != '\0') {
       return false;
     }
-    *out = (uint32_t)v;
+    *out = static_cast<uint32_t>(v);
     return true;
   }
 
-private:
-  struct Stored {
-    uint8_t version = 0;
-    uint8_t paired = 0;
-    uint16_t reserved = 0;
-    uint32_t ownerCode = 0;
-    uint32_t crc = 0;
-  };
+  static bool parseHexU64(const char* text, uint64_t* out) {
+    if (!text || !out || !*text) {
+      return false;
+    }
+    char* end = nullptr;
+    unsigned long long v = strtoull(text, &end, 16);
+    if (!end || *end != '\0') {
+      return false;
+    }
+    *out = static_cast<uint64_t>(v);
+    return true;
+  }
 
   bool paired_ = false;
-  uint32_t ownerCode_ = 0;
+  uint8_t ownerSecret_[kOwnerSecretBytes] = {0};
   bool pairingWindowOpen_ = false;
   unsigned long pairingWindowUntilMs_ = 0;
   bool sessionActive_ = false;
-  uint32_t sessionNonce_ = 0;
-  uint32_t sessionKey_ = 0;
+  uint64_t sessionNonce_ = 0;
   uint32_t lastCounter_ = 0;
+  uint64_t authSequence_ = 0;
   unsigned long rateWindowStartMs_ = 0;
   uint16_t rateCount_ = 0;
   RejectReason lastReject_ = RejectReason::NONE;
 
-  static bool validPairCode(uint32_t code) {
-    return code >= 100000u && code <= 999999u;
+  bool ownerSecretValid() const {
+    for (size_t i = 0; i < sizeof(ownerSecret_); ++i) {
+      if (ownerSecret_[i] != 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void clearRuntimeState() {
+    sessionActive_ = false;
+    sessionNonce_ = 0;
+    lastCounter_ = 0;
+    authSequence_ = 0;
+    rateWindowStartMs_ = 0;
+    rateCount_ = 0;
   }
 
   bool checkRateLimit(unsigned long nowMs) {
-    if (rateWindowStartMs_ == 0 || nowMs < rateWindowStartMs_ || nowMs - rateWindowStartMs_ > kRateWindowMs) {
+    if (rateWindowStartMs_ == 0 || nowMs < rateWindowStartMs_ ||
+        nowMs - rateWindowStartMs_ > kRateWindowMs) {
       rateWindowStartMs_ = nowMs;
       rateCount_ = 0;
     }
@@ -323,14 +348,66 @@ private:
 
   void setReject(RejectReason reason) { lastReject_ = reason; }
 
+  uint64_t computeMac(const char* scope, uint32_t counter, const char* payload) const {
+    char msg[160];
+    if (payload && *payload) {
+      snprintf(msg,
+               sizeof(msg),
+               "%s:%016llX:%08lX:%s",
+               scope,
+               static_cast<unsigned long long>(sessionNonce_),
+               static_cast<unsigned long>(counter),
+               payload);
+    } else {
+      snprintf(msg,
+               sizeof(msg),
+               "%s:%016llX",
+               scope,
+               static_cast<unsigned long long>(sessionNonce_));
+    }
+    return sipHash24(ownerSecret_, reinterpret_cast<const uint8_t*>(msg), strlen(msg));
+  }
+
   static uint32_t calcCrc(const Stored& s) {
     const uint8_t* data = reinterpret_cast<const uint8_t*>(&s);
     const size_t len = sizeof(Stored) - sizeof(uint32_t);
     return fnv1a32(data, len);
   }
 
-  static uint32_t fnv1a32Update(uint32_t seed, const uint8_t* data, size_t len) {
-    uint32_t h = seed;
+  static bool parseHexBytes(const char* text, uint8_t* out, size_t outLen) {
+    if (!text || !out) {
+      return false;
+    }
+    const size_t len = strlen(text);
+    if (len != outLen * 2) {
+      return false;
+    }
+    for (size_t i = 0; i < outLen; ++i) {
+      const int hi = hexNibble(text[i * 2]);
+      const int lo = hexNibble(text[i * 2 + 1]);
+      if (hi < 0 || lo < 0) {
+        return false;
+      }
+      out[i] = static_cast<uint8_t>((hi << 4) | lo);
+    }
+    return true;
+  }
+
+  static int hexNibble(char c) {
+    if (c >= '0' && c <= '9') {
+      return c - '0';
+    }
+    if (c >= 'a' && c <= 'f') {
+      return 10 + (c - 'a');
+    }
+    if (c >= 'A' && c <= 'F') {
+      return 10 + (c - 'A');
+    }
+    return -1;
+  }
+
+  static uint32_t fnv1a32(const uint8_t* data, size_t len) {
+    uint32_t h = 2166136261u;
     for (size_t i = 0; i < len; ++i) {
       h ^= data[i];
       h *= 16777619u;
@@ -338,7 +415,74 @@ private:
     return h;
   }
 
-  static uint32_t fnv1a32(const uint8_t* data, size_t len) {
-    return fnv1a32Update(2166136261u, data, len);
+  static uint64_t mix64(uint64_t x) {
+    x += 0x9E3779B97F4A7C15ull;
+    x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
+    x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
+    return x ^ (x >> 31);
+  }
+
+  static uint64_t read64le(const uint8_t* p) {
+    uint64_t v = 0;
+    for (int i = 0; i < 8; ++i) {
+      v |= static_cast<uint64_t>(p[i]) << (i * 8);
+    }
+    return v;
+  }
+
+  static uint64_t rotl64(uint64_t v, uint8_t shift) {
+    return (v << shift) | (v >> (64 - shift));
+  }
+
+  static void sipRound(uint64_t& v0, uint64_t& v1, uint64_t& v2, uint64_t& v3) {
+    v0 += v1;
+    v1 = rotl64(v1, 13);
+    v1 ^= v0;
+    v0 = rotl64(v0, 32);
+    v2 += v3;
+    v3 = rotl64(v3, 16);
+    v3 ^= v2;
+    v0 += v3;
+    v3 = rotl64(v3, 21);
+    v3 ^= v0;
+    v2 += v1;
+    v1 = rotl64(v1, 17);
+    v1 ^= v2;
+    v2 = rotl64(v2, 32);
+  }
+
+  static uint64_t sipHash24(const uint8_t key[16], const uint8_t* data, size_t len) {
+    const uint64_t k0 = read64le(key);
+    const uint64_t k1 = read64le(key + 8);
+    uint64_t v0 = 0x736f6d6570736575ull ^ k0;
+    uint64_t v1 = 0x646f72616e646f6dull ^ k1;
+    uint64_t v2 = 0x6c7967656e657261ull ^ k0;
+    uint64_t v3 = 0x7465646279746573ull ^ k1;
+
+    const size_t blocks = len / 8;
+    for (size_t i = 0; i < blocks; ++i) {
+      const uint64_t m = read64le(data + (i * 8));
+      v3 ^= m;
+      sipRound(v0, v1, v2, v3);
+      sipRound(v0, v1, v2, v3);
+      v0 ^= m;
+    }
+
+    uint64_t b = static_cast<uint64_t>(len) << 56;
+    const size_t tailOffset = blocks * 8;
+    for (size_t i = len - tailOffset; i > 0; --i) {
+      b |= static_cast<uint64_t>(data[tailOffset + i - 1]) << ((i - 1) * 8);
+    }
+
+    v3 ^= b;
+    sipRound(v0, v1, v2, v3);
+    sipRound(v0, v1, v2, v3);
+    v0 ^= b;
+    v2 ^= 0xff;
+    sipRound(v0, v1, v2, v3);
+    sipRound(v0, v1, v2, v3);
+    sipRound(v0, v1, v2, v3);
+    sipRound(v0, v1, v2, v3);
+    return v0 ^ v1 ^ v2 ^ v3;
   }
 };

@@ -23,6 +23,8 @@ class StatusPanel extends StatelessWidget {
         spacing: 14,
         children: [
           _iconText(Icons.info_outline, data!.status),
+          if (data!.statusReasons.isNotEmpty)
+            _iconText(Icons.warning_amber_rounded, data!.statusReasons),
           _iconText(
             Icons.anchor,
             (data!.anchorLat != 0 || data!.anchorLon != 0)
@@ -52,12 +54,22 @@ class StatusPanel extends StatelessWidget {
     );
   }
 
-  Widget _iconText(IconData icon, String text) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Icon(icon, size: 20, color: Colors.blueGrey),
-      SizedBox(width: 4),
-      Text(text, style: TextStyle(fontWeight: FontWeight.w600)),
-    ],
+  Widget _iconText(IconData icon, String text) => ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: 220),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 20, color: Colors.blueGrey),
+        SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            text,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    ),
   );
 }

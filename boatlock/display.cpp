@@ -263,6 +263,9 @@ static uint16_t mode_color(const char *mode) {
   if (strcmp(mode, "ANCHOR") == 0) {
     return COLOR_ACCENT;
   }
+  if (strcmp(mode, "HOLD") == 0) {
+    return COLOR_CAUTION;
+  }
   if (strcmp(mode, "SIM") == 0) {
     return COLOR_TEAL;
   }

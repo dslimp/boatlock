@@ -27,9 +27,11 @@ void noteControlActivityNow();
 bool nudgeAnchorCardinal(const char* dir, float meters);
 bool nudgeAnchorBearing(float bearingDeg, float meters);
 const char* currentGnssFailReason();
+AnchorDeniedReason currentAnchorEnableDeniedReason();
 AnchorDeniedReason currentGnssDeniedReason();
 void setLastAnchorDeniedReason(AnchorDeniedReason reason);
 void setLastFailsafeReason(FailsafeReason reason);
+void clearSafeHold();
 bool preprocessSecureCommand(const std::string& incoming, std::string* effective);
 bool handleSimCommand(const std::string& command);
 
@@ -61,6 +63,7 @@ inline void handleBleCommand(const std::string& cmd) {
     if (command == "ANCHOR_OFF") {
         setLastFailsafeReason(FailsafeReason::NONE);
         setLastAnchorDeniedReason(AnchorDeniedReason::NONE);
+        clearSafeHold();
         settings.set("AnchorEnabled", 0);
         settings.save();
         stepperControl.cancelMove();
@@ -71,17 +74,15 @@ inline void handleBleCommand(const std::string& cmd) {
     }
 
     if (command == "ANCHOR_ON") {
-        if (!hasAnchorPoint()) {
-            setLastAnchorDeniedReason(AnchorDeniedReason::NO_ANCHOR_POINT);
-            logMessage("[EVENT] ANCHOR_DENIED reason=NO_ANCHOR_POINT\n");
-            logMessage("[BLE] ANCHOR_ON rejected: anchor point is not set\n");
-        } else if (!canEnableAnchorNow()) {
-            setLastAnchorDeniedReason(currentGnssDeniedReason());
-            logMessage("[EVENT] ANCHOR_DENIED reason=%s\n", currentGnssFailReason());
-            logMessage("[BLE] ANCHOR_ON rejected: GNSS quality is insufficient\n");
+        const AnchorDeniedReason denyReason = currentAnchorEnableDeniedReason();
+        if (denyReason != AnchorDeniedReason::NONE) {
+            setLastAnchorDeniedReason(denyReason);
+            logMessage("[EVENT] ANCHOR_DENIED reason=%s\n", anchorDeniedReasonString(denyReason));
+            logMessage("[BLE] ANCHOR_ON rejected: safety gate blocked\n");
         } else {
             setLastAnchorDeniedReason(AnchorDeniedReason::NONE);
             setLastFailsafeReason(FailsafeReason::NONE);
+            clearSafeHold();
             manualMode = false;
             manualDir = -1;
             manualSpeed = 0;
@@ -197,6 +198,9 @@ inline void handleBleCommand(const std::string& cmd) {
     } else if (command.rfind("MANUAL:",0) == 0) {
         bool newMode = atoi(command.c_str() + 7) != 0;
         if (newMode) {
+            setLastAnchorDeniedReason(AnchorDeniedReason::NONE);
+            setLastFailsafeReason(FailsafeReason::NONE);
+            clearSafeHold();
             stepperControl.cancelMove();
         } else {
             stepperControl.stopManual();

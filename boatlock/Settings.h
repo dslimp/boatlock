@@ -43,7 +43,7 @@ const SettingEntry defaultEntries[] = {
     {"AnchorProf", "Anchor profile",    TYPE_INT,   1.0,  1.0,   0.0,   2.0,    1.0, "", true},
 
     // Safety supervisor
-    {"CommToutMs", "Comm timeout",      TYPE_INT,   1200, 1200,  500, 60000,  100.0, "ms", false},
+    {"CommToutMs", "Comm timeout",      TYPE_INT,   4000, 4000,  3000, 60000,  100.0, "ms", false},
     {"CtrlLoopMs", "Control loop tout", TYPE_INT,   200,  200,   100, 10000,   10.0, "ms", false},
     {"SensorTout", "Sensor timeout",    TYPE_INT,   1500, 1500,  300, 30000,  100.0, "ms", false},
     {"FailAct",    "Failsafe action",   TYPE_INT,   0.0,  0.0,   0.0,   1.0,    1.0, "", false},

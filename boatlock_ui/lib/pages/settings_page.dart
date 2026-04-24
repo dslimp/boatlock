@@ -17,6 +17,11 @@ class SettingsPage extends StatefulWidget {
   final double pitch;
   final double roll;
   final bool isConnected;
+  final bool secPaired;
+  final bool secAuth;
+  final bool secPairWindowOpen;
+  final String secReject;
+
   const SettingsPage({
     super.key,
     required this.ble,
@@ -34,6 +39,10 @@ class SettingsPage extends StatefulWidget {
     required this.pitch,
     required this.roll,
     required this.isConnected,
+    required this.secPaired,
+    required this.secAuth,
+    required this.secPairWindowOpen,
+    required this.secReject,
   });
 
   @override
@@ -55,6 +64,11 @@ class _SettingsPageState extends State<SettingsPage> {
   late double pitch;
   late double roll;
   late bool isConnected;
+  late bool secPaired;
+  late bool secAuth;
+  late bool secPairWindowOpen;
+  late String secReject;
+  late final TextEditingController _ownerSecretCtrl;
 
   @override
   void initState() {
@@ -73,12 +87,40 @@ class _SettingsPageState extends State<SettingsPage> {
     pitch = widget.pitch;
     roll = widget.roll;
     isConnected = widget.isConnected;
+    secPaired = widget.secPaired;
+    secAuth = widget.secAuth;
+    secPairWindowOpen = widget.secPairWindowOpen;
+    secReject = widget.secReject;
+    _ownerSecretCtrl = TextEditingController(text: widget.ble.ownerSecret ?? '');
+    widget.ble.setOwnerSecret(_ownerSecretCtrl.text);
   }
 
-  void _toggleHoldHeading(bool v) {
+  @override
+  void dispose() {
+    _ownerSecretCtrl.dispose();
+    super.dispose();
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _syncOwnerSecret() {
+    widget.ble.setOwnerSecret(_ownerSecretCtrl.text);
+  }
+
+  Future<void> _toggleHoldHeading(bool value) async {
     if (!isConnected) return;
-    setState(() => holdHeading = v);
-    widget.ble.sendCustomCommand('SET_HOLD_HEADING:${v ? 1 : 0}');
+    final previous = holdHeading;
+    setState(() => holdHeading = value);
+    final ok = await widget.ble.setHoldHeading(value);
+    if (!ok) {
+      setState(() => holdHeading = previous);
+      _showMessage('Изменение отклонено: ${widget.ble.secReject}');
+    }
   }
 
   Future<void> _editCompassOffset() async {
@@ -105,25 +147,35 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
     if (val == null) return;
+    final previous = compassOffset;
     setState(() => compassOffset = val);
-    widget.ble.sendCustomCommand(
-      'SET_COMPASS_OFFSET:${val.toStringAsFixed(1)}',
-    );
+    final ok = await widget.ble.setCompassOffset(val);
+    if (!ok) {
+      setState(() => compassOffset = previous);
+      _showMessage('Команда отклонена: ${widget.ble.secReject}');
+    }
   }
 
-  void _resetCompassOffset() {
+  Future<void> _resetCompassOffset() async {
     if (!isConnected) return;
+    final previous = compassOffset;
     setState(() => compassOffset = 0.0);
-    widget.ble.sendCustomCommand('RESET_COMPASS_OFFSET');
+    final ok = await widget.ble.resetCompassOffset();
+    if (!ok) {
+      setState(() => compassOffset = previous);
+      _showMessage('Команда отклонена: ${widget.ble.secReject}');
+    }
   }
 
   Future<void> _editStepSpr() async {
     if (!isConnected) return;
-    setState(() => stepSpr = 4096);
-    widget.ble.sendCustomCommand('SET_STEP_SPR:4096');
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Для 28BYJ шагов/оборот фиксировано: 4096')),
-    );
+    final ok = await widget.ble.setStepSprFixed();
+    if (ok) {
+      setState(() => stepSpr = 4096);
+      _showMessage('Для 28BYJ шагов/оборот фиксировано: 4096');
+    } else {
+      _showMessage('Команда отклонена: ${widget.ble.secReject}');
+    }
   }
 
   Future<void> _editStepMaxSpd() async {
@@ -143,17 +195,19 @@ class _SettingsPageState extends State<SettingsPage> {
             child: const Text('Отмена'),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.pop(context, double.tryParse(ctrl.text));
-            },
+            onPressed: () => Navigator.pop(context, double.tryParse(ctrl.text)),
             child: const Text('OK'),
           ),
         ],
       ),
     );
-    if (val != null && val != stepMaxSpd) {
-      setState(() => stepMaxSpd = val);
-      widget.ble.sendCustomCommand('SET_STEP_MAXSPD:${val.round()}');
+    if (val == null || val == stepMaxSpd) return;
+    final previous = stepMaxSpd;
+    setState(() => stepMaxSpd = val);
+    final ok = await widget.ble.setStepMaxSpeed(val);
+    if (!ok) {
+      setState(() => stepMaxSpd = previous);
+      _showMessage('Команда отклонена: ${widget.ble.secReject}');
     }
   }
 
@@ -174,18 +228,103 @@ class _SettingsPageState extends State<SettingsPage> {
             child: const Text('Отмена'),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.pop(context, double.tryParse(ctrl.text));
-            },
+            onPressed: () => Navigator.pop(context, double.tryParse(ctrl.text)),
             child: const Text('OK'),
           ),
         ],
       ),
     );
-    if (val != null && val != stepAccel) {
-      setState(() => stepAccel = val);
-      widget.ble.sendCustomCommand('SET_STEP_ACCEL:${val.round()}');
+    if (val == null || val == stepAccel) return;
+    final previous = stepAccel;
+    setState(() => stepAccel = val);
+    final ok = await widget.ble.setStepAccel(val);
+    if (!ok) {
+      setState(() => stepAccel = previous);
+      _showMessage('Команда отклонена: ${widget.ble.secReject}');
     }
+  }
+
+  void _generateOwnerSecret() {
+    final secret = widget.ble.generateOwnerSecret();
+    _ownerSecretCtrl.text = secret;
+    _syncOwnerSecret();
+    _showMessage('Новый owner secret сгенерирован');
+  }
+
+  Future<void> _pairDevice() async {
+    if (!isConnected) return;
+    _syncOwnerSecret();
+    if (BleBoatLock.normalizeOwnerSecret(_ownerSecretCtrl.text) == null) {
+      _showMessage('Нужен owner secret из 32 hex-символов');
+      return;
+    }
+    final ok = await widget.ble.pairWithOwnerSecret(_ownerSecretCtrl.text);
+    setState(() {
+      secPaired = ok;
+      secAuth = false;
+      secReject = ok ? 'NONE' : widget.ble.secReject;
+      secPairWindowOpen = widget.ble.secPairWindowOpen;
+    });
+    _showMessage(
+      ok
+          ? 'Пара привязана. Owner secret нужен для последующей авторизации.'
+          : 'Привязка не прошла: ${widget.ble.secReject}',
+    );
+  }
+
+  Future<void> _authenticateOwner() async {
+    if (!isConnected) return;
+    _syncOwnerSecret();
+    final ok = await widget.ble.authenticateOwner(_ownerSecretCtrl.text);
+    setState(() {
+      secAuth = ok;
+      secPaired = widget.ble.secPaired;
+      secReject = ok ? 'NONE' : widget.ble.secReject;
+    });
+    _showMessage(ok ? 'Owner auth выполнен' : 'Auth не прошёл: ${widget.ble.secReject}');
+  }
+
+  Future<void> _clearPairing() async {
+    if (!isConnected) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Сбросить pairing'),
+        content: const Text(
+          'Сброс будет принят только из owner-session или пока открыт pairing window.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Сбросить'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    _syncOwnerSecret();
+    final cleared = await widget.ble.clearPairing();
+    setState(() {
+      secPaired = !cleared;
+      secAuth = false;
+      secReject = cleared ? 'NONE' : widget.ble.secReject;
+    });
+    _showMessage(
+      cleared ? 'Pairing сброшен' : 'Сброс отклонён: ${widget.ble.secReject}',
+    );
+  }
+
+  Widget _securityTile(String label, String value) {
+    return ListTile(
+      dense: true,
+      title: Text(label),
+      trailing: Text(value),
+    );
   }
 
   @override
@@ -193,6 +332,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('Настройки')),
       body: ListView(
+        padding: const EdgeInsets.only(bottom: 24),
         children: [
           SwitchListTile(
             title: const Text('Поддерживать курс носа'),
@@ -233,6 +373,60 @@ class _SettingsPageState extends State<SettingsPage> {
             enabled: isConnected,
             onTap: isConnected ? _resetCompassOffset : null,
           ),
+          const Divider(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Text(
+              'Security',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: _ownerSecretCtrl,
+              enabled: isConnected,
+              autocorrect: false,
+              enableSuggestions: false,
+              textCapitalization: TextCapitalization.characters,
+              onChanged: (_) => _syncOwnerSecret(),
+              decoration: const InputDecoration(
+                labelText: 'Owner secret',
+                hintText: '32 HEX символа',
+                helperText:
+                    'Сгенерируй secret, затем открой pairing window кнопкой STOP на устройстве.',
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton(
+                  onPressed: isConnected ? _generateOwnerSecret : null,
+                  child: const Text('Сгенерировать'),
+                ),
+                FilledButton(
+                  onPressed: isConnected ? _pairDevice : null,
+                  child: const Text('Привязать'),
+                ),
+                OutlinedButton(
+                  onPressed: isConnected ? _authenticateOwner : null,
+                  child: const Text('Авторизоваться'),
+                ),
+                OutlinedButton(
+                  onPressed: isConnected ? _clearPairing : null,
+                  child: const Text('Сбросить pairing'),
+                ),
+              ],
+            ),
+          ),
+          _securityTile('Paired', secPaired ? 'YES' : 'NO'),
+          _securityTile('Auth', secAuth ? 'YES' : 'NO'),
+          _securityTile('Pair window', secPairWindowOpen ? 'OPEN' : 'CLOSED'),
+          _securityTile('Last reject', secReject),
           const Divider(),
           ListTile(
             title: const Text('BNO08x quality'),

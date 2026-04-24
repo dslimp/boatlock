@@ -79,7 +79,7 @@ private:
     // Для примера: фиктивные значения параметров
     float distance = 0.0;
     int battery = 0;
-    std::string status = "HOLD";
+    std::string status = "OK";
 public:
     // Установить фиктивные значения (или подключи свои датчики)
     void setDistance(float d) { distance = d; }
