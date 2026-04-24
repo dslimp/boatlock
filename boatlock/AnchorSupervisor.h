@@ -83,8 +83,9 @@ public:
       return decision(SafeAction::STOP, Reason::INTERNAL_ERROR_NAN);
     }
 
-    if (in.commandThrustPct > cfg.maxCommandThrustPct ||
-        in.commandThrustPct < -cfg.maxCommandThrustPct) {
+    const int maxCommandThrustPct = effectiveMaxCommandThrustPct(cfg);
+    if (in.commandThrustPct > maxCommandThrustPct ||
+        in.commandThrustPct < -maxCommandThrustPct) {
       return decision(SafeAction::STOP, Reason::COMMAND_OUT_OF_RANGE);
     }
 
@@ -173,6 +174,16 @@ private:
 
   static unsigned long effectiveGpsWeakGraceMs(const Config& cfg) {
     return floorTimeoutMs(cfg.gpsWeakGraceMs, kMinGpsWeakGraceMs);
+  }
+
+  static int effectiveMaxCommandThrustPct(const Config& cfg) {
+    if (cfg.maxCommandThrustPct < 0) {
+      return 0;
+    }
+    if (cfg.maxCommandThrustPct > 100) {
+      return 100;
+    }
+    return cfg.maxCommandThrustPct;
   }
 
   static Decision decision(SafeAction action, Reason reason) {

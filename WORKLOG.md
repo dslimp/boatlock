@@ -3036,3 +3036,49 @@ Self-review:
 
 Promote to skill:
 - Manual control must remain a source-owned deadman lease; do not let a second source overwrite a live lease without expiry or explicit stop.
+
+### 2026-04-25 Stage 94: Supervisor config and command-limit fail-closed gate
+
+Scope:
+- Close the five-module actuator/control batch with `AnchorSupervisor` and `RuntimeSupervisorPolicy`.
+- Keep failsafe timeout and command-limit config bounded before it can affect supervisor decisions.
+- This is module `5/5`; hardware acceptance and Android BLE smokes ran after the module.
+
+External baseline:
+- ArduPilot pre-arm checks treat invalid configuration and unhealthy subsystems as blockers, and the docs recommend fixing the cause instead of bypassing safety checks: <https://ardupilot.org/copter/docs/common-prearm-safety-checks.html>.
+- ArduPilot radio failsafe triggers after configured RC loss timeout and explicitly documents invalid failsafe parameter values falling back to a safe action: <https://ardupilot.org/copter/docs/radio-failsafe.html>.
+- PX4 safety configuration models failsafes as explicit actions such as Hold, Disarm, and Terminate, with timeouts for manual-control and data-link loss: <https://docs.px4.io/main/en/config/safety>.
+
+Key outcomes:
+- `AnchorSupervisor` now clamps `maxCommandThrustPct` locally to `0..100` before command out-of-range checks.
+- Negative command-limit config fails closed by allowing only zero command thrust.
+- `RuntimeSupervisorPolicy` now clamps non-finite timeout settings to the safe minimum instead of relying on `constrain()`/casts.
+- Added native coverage for non-finite timeout settings, over-100 command limit, and negative command limit.
+- Promoted the supervisor fail-closed config rule into `skills/boatlock/references/firmware.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no new smoke mode needed because BLE command shape and app behavior did not change. Full Android smoke package ran because this closed module `5/5`.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_anchor_supervisor -f test_runtime_supervisor_policy -f test_runtime_motion -f test_motor_control` -> passed (`42/42`).
+- `cd boatlock && platformio test -e native` -> passed (`274/274`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `697453` bytes.
+- `./tools/hw/nh02/status.sh` -> target confirmed, RFC2217 service active, ESP32-S3 USB serial `98:88:e0:03:ba:5c`.
+- `./tools/hw/nh02/flash.sh` -> build success, flash success, app image write `697824` bytes, hard reset via RTS.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-control-batch-60s.log --json-out /tmp/boatlock-control-batch-60s.json` -> `[ACCEPT] PASS lines=75`.
+- Acceptance matched BNO08x-RVC ready, display ready, EEPROM loaded, security state, BLE init/advertising, stepper config, STOP button, fresh compass heading events, and GPS UART data.
+- Error scan over the 60-second log for panic/assert/Guru/config save or CRC errors/GPS stale/no data/compass loss/I2C errors/fail/error tokens -> no matches.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --status --wait-secs 130` -> first install hit `INSTALL_FAILED_USER_RESTRICTED`, canonical retry `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"status_stop_alert_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[EVENT] FAILSAFE_TRIGGERED reason=STOP_CMD"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --anchor --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"anchor_denied_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[EVENT] ANCHOR_OFF reason=BLE_CMD"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --sim --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"sim_run_abort_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[SIM] ABORTED"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `git diff --check` -> clean.
+
+Self-review:
+- This keeps normal supervisor timing unchanged for valid settings.
+- The change is defensive at the boundary where bad config could weaken failsafe decisions.
+- The hardware batch proves boot, sensors, BLE control smokes, reconnect, and ESP reset recovery; it still does not prove powered thrust or on-water hold quality.
+
+Promote to skill:
+- Supervisor timeout and command-limit values must be bounded/fail-closed at the policy boundary before the failsafe state machine uses them.

@@ -254,6 +254,32 @@ void test_command_out_of_range_triggers_failsafe() {
   TEST_ASSERT_EQUAL((int)AnchorSupervisor::Reason::COMMAND_OUT_OF_RANGE, (int)d.reason);
 }
 
+void test_command_limit_clamps_above_100_percent() {
+  AnchorSupervisor s;
+  auto cfg = baseCfg();
+  cfg.maxCommandThrustPct = 200;
+  auto in = baseIn();
+  in.commandThrustPct = 130;
+  auto d = s.update(cfg, in);
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::SafeAction::STOP, (int)d.action);
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::Reason::COMMAND_OUT_OF_RANGE, (int)d.reason);
+}
+
+void test_negative_command_limit_fails_closed() {
+  AnchorSupervisor s;
+  auto cfg = baseCfg();
+  cfg.maxCommandThrustPct = -1;
+  auto in = baseIn();
+  in.commandThrustPct = 1;
+  auto d1 = s.update(cfg, in);
+  in.commandThrustPct = 0;
+  auto d2 = s.update(cfg, in);
+
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::SafeAction::STOP, (int)d1.action);
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::Reason::COMMAND_OUT_OF_RANGE, (int)d1.reason);
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::SafeAction::NONE, (int)d2.action);
+}
+
 void test_inactive_anchor_resets_and_returns_none() {
   AnchorSupervisor s;
   auto cfg = baseCfg();
@@ -283,6 +309,8 @@ int main() {
   RUN_TEST(test_zero_config_keeps_gps_weak_hysteresis_floor);
   RUN_TEST(test_nan_guard_always_stops);
   RUN_TEST(test_command_out_of_range_triggers_failsafe);
+  RUN_TEST(test_command_limit_clamps_above_100_percent);
+  RUN_TEST(test_negative_command_limit_fails_closed);
   RUN_TEST(test_inactive_anchor_resets_and_returns_none);
   return UNITY_END();
 }
