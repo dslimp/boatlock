@@ -1,6 +1,7 @@
 #include "RuntimeCompassHealth.h"
 
 #include <unity.h>
+#include <climits>
 
 void setUp() {}
 void tearDown() {}
@@ -48,6 +49,20 @@ void test_ready_since_opens_new_first_event_window_after_reset() {
   TEST_ASSERT_EQUAL(RuntimeCompassLossReason::NONE, runtimeCompassLossReason(input));
 }
 
+void test_first_event_timeout_survives_unsigned_millis_wrap() {
+  RuntimeCompassHealthInput input;
+  input.compassReady = true;
+  input.nowMs = ULONG_MAX - 1UL;
+  input.readySinceMs = ULONG_MAX - 50UL;
+  input.lastHeadingEventAgeMs = kRuntimeCompassNoEventAge;
+  input.firstEventTimeoutMs = 100UL;
+  input.staleEventMs = 750;
+  TEST_ASSERT_EQUAL(RuntimeCompassLossReason::NONE, runtimeCompassLossReason(input));
+
+  input.nowMs = input.readySinceMs + 100UL;
+  TEST_ASSERT_EQUAL(RuntimeCompassLossReason::FIRST_EVENT_TIMEOUT, runtimeCompassLossReason(input));
+}
+
 void test_stale_event_timeout_is_fail_closed() {
   RuntimeCompassHealthInput input;
   input.compassReady = true;
@@ -68,6 +83,7 @@ int main() {
   RUN_TEST(test_not_ready_never_reports_loss);
   RUN_TEST(test_first_event_timeout_is_fail_closed);
   RUN_TEST(test_ready_since_opens_new_first_event_window_after_reset);
+  RUN_TEST(test_first_event_timeout_survives_unsigned_millis_wrap);
   RUN_TEST(test_stale_event_timeout_is_fail_closed);
   return UNITY_END();
 }

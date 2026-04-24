@@ -108,7 +108,7 @@ public:
 
   float getAzimuth() const { return headingDeg; }
   float getRawAzimuth() const { return headingRawDeg; }
-  uint8_t getHeadingQuality() const { return lastHeadingEventMs == 0 ? 0 : 3; }
+  uint8_t getHeadingQuality() const { return hasHeadingEvent ? 3 : 0; }
   float getRvAccuracyDeg() const { return 0.0f; }
   float getMagNormUT() const { return 0.0f; }
   float getGyroNormDps() const { return 0.0f; }
@@ -122,14 +122,14 @@ public:
   uint8_t lastFrameIndex() const { return frameIndex; }
 
   unsigned long lastHeadingEventAgeMs(unsigned long nowMs) const {
-    if (lastHeadingEventMs == 0 || nowMs < lastHeadingEventMs) {
+    if (!hasHeadingEvent) {
       return 0xFFFFFFFFUL;
     }
     return nowMs - lastHeadingEventMs;
   }
 
   unsigned long lastAnyEventAgeMs(unsigned long nowMs) const {
-    if (lastAnyEventMs == 0 || nowMs < lastAnyEventMs) {
+    if (!hasAnyEvent) {
       return 0xFFFFFFFFUL;
     }
     return nowMs - lastAnyEventMs;
@@ -139,6 +139,8 @@ private:
   void applySample(const BnoRvcSample& sample) {
     lastAnyEventMs = millis();
     lastHeadingEventMs = lastAnyEventMs;
+    hasAnyEvent = true;
+    hasHeadingEvent = true;
     frameIndex = sample.index;
     headingRawDeg = normalized360(sample.yawDeg);
     headingDeg = normalized360(headingRawDeg + headingOffsetDeg);
@@ -152,6 +154,8 @@ private:
   void clearEventState() {
     lastAnyEventMs = 0;
     lastHeadingEventMs = 0;
+    hasAnyEvent = false;
+    hasHeadingEvent = false;
     frameIndex = 0;
   }
 
@@ -172,6 +176,8 @@ private:
   bool serialOpen = false;
   unsigned long lastAnyEventMs = 0;
   unsigned long lastHeadingEventMs = 0;
+  bool hasAnyEvent = false;
+  bool hasHeadingEvent = false;
   uint8_t frameIndex = 0;
 
   float headingDeg = 0.0f;

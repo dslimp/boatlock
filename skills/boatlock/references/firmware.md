@@ -56,7 +56,7 @@
   - format version
   - raw float value array
   - CRC32 over the values array
-- Current schema version is `Settings::VERSION = 0x16`.
+- Current schema version is `Settings::VERSION = 0x17`.
 - `Settings::set()` rejects non-finite values, then clamps finite values to each key's configured range.
 - `Settings::setStrict()` rejects non-finite or out-of-range values and logs `CONFIG_REJECTED`.
 - `Settings::save()` is dirty-state guarded. Calling it after no-op `set()` calls must not write flash.
@@ -86,6 +86,7 @@
 - GNSS status reasons must preserve exact gate names end-to-end, including `GPS_DATA_STALE`, `GPS_POSITION_JUMP`, and `GPS_HDOP_MISSING`.
 - Heading is onboard BNO08x UART-RVC only.
 - `headingAvailable()` is true only when BNO08x is initialized and fresh heading frames are arriving.
+- BNO08x event freshness must use explicit "event seen" flags plus unsigned elapsed-time math. Timestamp `0` is a valid event time, not a "no event" sentinel.
 - If the BNO08x reset GPIO logs `pulse=1`, still require fresh heading frames afterward; GPIO toggling alone does not prove sensor recovery.
 - There is no phone-heading or `SET_HEADING` fallback in current runtime logic.
 

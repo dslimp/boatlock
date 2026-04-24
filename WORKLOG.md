@@ -1619,3 +1619,50 @@ Self-review:
 
 Promote to skill:
 - Runtime watchdogs must use unsigned elapsed-time checks and cover timestamp-zero/rollover edge cases in native tests.
+
+### 2026-04-24 Stage 59: Compass event-age rollover pass
+
+Scope:
+- Continue module-by-module refactor with `BNO08xCompass`, `RuntimeCompassHealth`, and `RuntimeCompassRetry`.
+- Remove timestamp-zero ambiguity and keep compass loss detection stable across long uptime.
+
+External baseline:
+- CEVA documents UART-RVC as a simplified BNO08X mode that transmits heading/sensor data at `100 Hz` and exposes `NRST` as a host- or board-driven reset line: <https://www.ceva-ip.com/wp-content/uploads/2019/10/BNO080_085-Datasheet.pdf>.
+- Adafruit's BNO085 UART-RVC guide confirms the simple one-way UART wiring and `115200` serial demo path: <https://learn.adafruit.com/adafruit-9-dof-orientation-imu-fusion-breakout-bno085/uart-rvc-for-arduino>.
+- Adafruit's pinout guide confirms `RST` is active low and `P1=Low/P0=High` selects UART-RVC: <https://learn.adafruit.com/adafruit-9-dof-orientation-imu-fusion-breakout-bno085/pinouts>.
+- Arduino's non-blocking timing pattern uses `currentMillis - previousMillis >= interval`, which is the pattern we want for sensor watchdogs: <https://docs.arduino.cc/built-in-examples/digital/BlinkWithoutDelay/>.
+
+Key outcomes:
+- `BNO08xCompass` now separates "event seen" state from timestamp values, so a first heading frame at `millis()==0` is valid.
+- Heading and any-event age calculations now use unsigned subtraction and survive `millis()` wrap.
+- Hardware reset clears event-seen state, so recovery proof requires fresh RVC frames after reset.
+- `RuntimeCompassHealth` first-event timeout now uses the same elapsed-time helper instead of direct timestamp comparisons.
+- Added native tests for BNO08x UART-RVC frame age, timestamp-zero, reset clearing, and compass health/retry rollover behavior.
+
+Validation:
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native -f test_bno08x_compass -f test_bno_rvc_frame -f test_runtime_compass_health -f test_runtime_compass_retry -f test_anchor_supervisor` -> `26/26` passed after fixing a test-time expectation around `begin()` delay.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native` -> `205/205` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> `29/29` passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio pio run -e esp32s3` -> success, flash size `695561` bytes.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter build apk --debug --no-pub` -> success.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `git diff --check` -> clean.
+- `./tools/hw/nh02/status.sh` -> target ESP32-S3 `98:88:E0:03:BA:5C` visible and RFC2217 service active.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`; app image write `695920` bytes.
+- `./tools/hw/nh02/acceptance.sh --seconds 180 --log-out /tmp/boatlock-compass-acceptance.log --json-out /tmp/boatlock-compass-acceptance.json` -> `PASS`, including EEPROM `ver=23`, RVC compass on `rx=12 baud=115200`, heading events, display, BLE advertising, stepper, STOP, and GPS UART data.
+- Acceptance JSON had `errors=[]` and `warnings=[]`; log scan found no panic/assert/Guru, Arduino `[E]`, `COMPASS lost`, `COMPASS retry ready=0`, `Wire.cpp`, `i2cRead`, `error`, or `FAIL`.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> two MIUI `USER_RESTRICTED` install retries, canonical retry succeeded, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> one MIUI `USER_RESTRICTED` install retry, canonical retry succeeded, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+
+Self-review:
+- This is a correctness hardening, not a protocol or actuation behavior expansion.
+- Native tests cover language-defined unsigned wrap and timestamp-zero behavior; the hardware run proves normal RVC traffic and long capture health, but not an actual 49-day uptime rollover on ESP32.
+- UART-RVC remains the correct KISS choice for the current bench: one data line, fixed heading stream, reset line for recovery, and no I2C bus failure mode on the compass path.
+
+Promote to skill:
+- Compass event freshness must use explicit event-valid flags; never use timestamp `0` as "no event".
+- Compass health/retry timers must use unsigned elapsed-time checks and include rollover tests.

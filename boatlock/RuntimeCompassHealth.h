@@ -17,16 +17,20 @@ struct RuntimeCompassHealthInput {
   unsigned long staleEventMs = 0;
 };
 
+inline bool elapsedAtLeast(unsigned long nowMs, unsigned long sinceMs, unsigned long intervalMs) {
+  return nowMs - sinceMs >= intervalMs;
+}
+
 inline RuntimeCompassLossReason runtimeCompassLossReason(const RuntimeCompassHealthInput& input) {
   if (!input.compassReady) {
     return RuntimeCompassLossReason::NONE;
   }
 
   if (input.lastHeadingEventAgeMs == kRuntimeCompassNoEventAge) {
-    if (input.firstEventTimeoutMs == 0 || input.nowMs < input.readySinceMs) {
+    if (input.firstEventTimeoutMs == 0) {
       return RuntimeCompassLossReason::NONE;
     }
-    return (input.nowMs - input.readySinceMs >= input.firstEventTimeoutMs)
+    return elapsedAtLeast(input.nowMs, input.readySinceMs, input.firstEventTimeoutMs)
                ? RuntimeCompassLossReason::FIRST_EVENT_TIMEOUT
                : RuntimeCompassLossReason::NONE;
   }
