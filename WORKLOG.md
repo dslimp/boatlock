@@ -1943,3 +1943,49 @@ Self-review:
 Promote to skill:
 - Core failsafe modules must not rely only on upstream settings clamps; apply local fail-closed floors before timeout comparisons.
 - Input fields that claim to report current control activity must refresh the relevant deadline in the core module, or be removed.
+
+### 2026-04-24 Stage 66: Runtime control input numeric gate
+
+Scope:
+- Continue module-by-module refactor with `RuntimeControlInputBuilder`.
+- Keep mode/control glue simple and make invalid numeric sensor/controller values unavailable before they reach motion code.
+
+External baseline:
+- ArduPilot Rover failsafes map loss/fault conditions to explicit safe actions instead of continuing on ambiguous inputs: <https://ardupilot.org/rover/docs/rover-failsafes.html>.
+- ArduPilot Rover Hold mode is the explicit quiet state used to stop movement while keeping the vehicle ready for later operator action: <https://ardupilot.org/rover/docs/hold-mode.html>.
+- PX4 safety guidance treats manual-control/data-link loss as timeout-based invalid input and warns against continuing stale setpoints: <https://docs.px4.io/main/en/config/safety.html>.
+
+Key outcomes:
+- Non-finite heading now clears `hasHeading`, zeroes exported heading, and prevents `diffDeg` calculation.
+- Non-finite bearing now clears `hasBearing`, zeroes exported bearing, and prevents `diffDeg` calculation.
+- Non-finite or negative distance now exports as `0` before reaching runtime motion input.
+- Mode precedence remains unchanged by design: `SIM > MANUAL > ANCHOR > HOLD > IDLE`.
+
+Validation:
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native -f test_runtime_control_input_builder -f test_runtime_control -f test_runtime_motion -f test_anchor_supervisor` -> `36/36` passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native` -> `228/228` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> `29/29` passed.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `git diff --check` -> clean.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio pio run -e esp32s3` -> success, flash size `695953` bytes.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter build apk --debug --no-pub` -> success.
+- `./tools/hw/nh02/status.sh` -> target ESP32-S3 `98:88:E0:03:BA:5C` visible and RFC2217 service active.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`; app image write `696320` bytes.
+- First `./tools/hw/nh02/acceptance.sh ...` attempt hit RFC2217 `Connection refused`; canonical `status.sh` showed the target path healthy, then the same acceptance wrapper was rerun instead of substituting manual logs.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-control-input-60s.log --json-out /tmp/boatlock-control-input-60s.json` -> `PASS`, including EEPROM `ver=23`, RVC compass, display, BLE advertising, stepper, STOP, heading events, and GPS UART data.
+- Acceptance log scan found no panic/assert/Guru, Arduino `[E]`, `CONFIG_SAVE_FAILED`, `CONFIG_CRC_FAIL`, GPS UART stale/no-data warning, compass loss, compass retry failure, `Wire.cpp`, `i2cRead`, `error`, or `FAIL`.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> one MIUI `USER_RESTRICTED` install retry, canonical retry succeeded, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> one MIUI `USER_RESTRICTED` install retry, canonical retry succeeded, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+
+Self-review:
+- This is a boundary hardening change, not a controller behavior rewrite.
+- The guard prevents bad numeric state from reaching motion code; supervisor still owns runtime `INTERNAL_ERROR_NAN` containment if invalid values appear deeper in the loop.
+- Hardware acceptance proves boot/sensor/BLE health after the change. The invalid-number paths are covered by native tests rather than injected into the live bench.
+
+Promote to skill:
+- Mode/control-input builders must validate numeric availability at the boundary.
+- Non-finite sensor or bearing values should become unavailable and zeroed before motion code sees them.

@@ -31,11 +31,11 @@ inline RuntimeControlState buildRuntimeControlState(unsigned long nowMs,
   RuntimeControlState state;
   state.mode = mode;
   state.autoControlActive = coreModeUsesAnchorControl(mode);
-  state.hasHeading = headingAvailable;
-  state.headingDeg = headingDeg;
-  state.hasBearing = state.autoControlActive && bearingAvailable;
+  state.hasHeading = headingAvailable && isfinite(headingDeg);
+  state.headingDeg = state.hasHeading ? headingDeg : 0.0f;
+  state.hasBearing = state.autoControlActive && bearingAvailable && isfinite(bearingDeg);
   state.diffDeg =
-      (state.hasHeading && state.hasBearing) ? RuntimeGnss::normalizeDiffDeg(bearingDeg, headingDeg) : 0.0f;
+      (state.hasHeading && state.hasBearing) ? RuntimeGnss::normalizeDiffDeg(bearingDeg, state.headingDeg) : 0.0f;
 
   state.input.nowMs = nowMs;
   state.input.mode = mode;
@@ -44,12 +44,12 @@ inline RuntimeControlState buildRuntimeControlState(unsigned long nowMs,
   state.input.controlGpsAvailable = controlGpsAvailable;
   state.input.hasHeading = state.hasHeading;
   state.input.hasBearing = state.hasBearing;
-  state.input.bearingDeg = bearingDeg;
-  state.input.headingDeg = headingDeg;
+  state.input.bearingDeg = state.hasBearing ? bearingDeg : 0.0f;
+  state.input.headingDeg = state.headingDeg;
   state.input.diffDeg = state.diffDeg;
   state.input.compassReady = compassReady;
   state.input.rvAccuracyDeg = rvAccuracyDeg;
   state.input.rvQuality = rvQuality;
-  state.input.distanceM = distanceM;
+  state.input.distanceM = (isfinite(distanceM) && distanceM >= 0.0f) ? distanceM : 0.0f;
   return state;
 }

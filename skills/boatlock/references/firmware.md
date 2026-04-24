@@ -134,6 +134,8 @@
 - Nudge/jog uses a fixed small `1.5 m` step. Do not re-add arbitrary distance parameters without a product reason and tests.
 - Keep anchor enable denial precedence in `RuntimeAnchorGate`, not inline in `main.cpp`.
 - Keep control-input derivation in `RuntimeControlInputBuilder`, not as inline mode/heading/bearing glue in `loop()`.
+- Runtime control-input builders must validate numeric availability at the boundary; non-finite heading or bearing values become unavailable and zeroed before motion code sees them.
+- Invalid distance input should be clamped to safe neutral telemetry/control input, not propagated as `NaN` or a negative distance.
 - Keep compass retry cadence in `RuntimeCompassRetry`, not as raw `millis()` gating in `main.cpp`.
 - Keep compass event freshness policy in `RuntimeCompassHealth`, not as loose age checks spread through runtime code.
 - Runtime sensor watchdog timers must use unsigned elapsed-time math so `millis()` rollover does not disable stale/no-data detection.

@@ -38,10 +38,43 @@ void test_builder_zeroes_diff_when_heading_missing() {
   TEST_ASSERT_EQUAL_FLOAT(0.0f, state.diffDeg);
 }
 
+void test_builder_rejects_nonfinite_heading_as_unavailable() {
+  const RuntimeControlState state = buildRuntimeControlState(
+      4000, CoreMode::ANCHOR, -1, 0, true, true, NAN, true, 100.0f, true, 2.0f, 3, 5.0f);
+
+  TEST_ASSERT_FALSE(state.hasHeading);
+  TEST_ASSERT_TRUE(state.hasBearing);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, state.headingDeg);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, state.diffDeg);
+  TEST_ASSERT_FALSE(state.input.hasHeading);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, state.input.headingDeg);
+}
+
+void test_builder_rejects_nonfinite_bearing_as_unavailable() {
+  const RuntimeControlState state = buildRuntimeControlState(
+      5000, CoreMode::ANCHOR, -1, 0, true, true, 20.0f, true, INFINITY, true, 2.0f, 3, 5.0f);
+
+  TEST_ASSERT_TRUE(state.hasHeading);
+  TEST_ASSERT_FALSE(state.hasBearing);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, state.diffDeg);
+  TEST_ASSERT_FALSE(state.input.hasBearing);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, state.input.bearingDeg);
+}
+
+void test_builder_sanitizes_invalid_distance() {
+  const RuntimeControlState state = buildRuntimeControlState(
+      6000, CoreMode::ANCHOR, -1, 0, true, true, 20.0f, true, 30.0f, true, 2.0f, 3, NAN);
+
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, state.input.distanceM);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_builder_keeps_manual_fields_and_disables_bearing_outside_anchor_mode);
   RUN_TEST(test_builder_computes_anchor_diff_when_heading_and_bearing_exist);
   RUN_TEST(test_builder_zeroes_diff_when_heading_missing);
+  RUN_TEST(test_builder_rejects_nonfinite_heading_as_unavailable);
+  RUN_TEST(test_builder_rejects_nonfinite_bearing_as_unavailable);
+  RUN_TEST(test_builder_sanitizes_invalid_distance);
   return UNITY_END();
 }
