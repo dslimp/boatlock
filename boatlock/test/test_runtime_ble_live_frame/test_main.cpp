@@ -69,9 +69,25 @@ void test_runtime_ble_live_frame_maps_reasons_and_reject_codes() {
   TEST_ASSERT_BITS_LOW(RUNTIME_BLE_REASON_NO_COMPASS, reasons);
 }
 
+void test_runtime_ble_live_frame_scaling_clamps_before_cast() {
+  TEST_ASSERT_EQUAL_INT32(INT32_MAX,
+                          runtimeBleScaleSigned(1.0e100, 10000000.0,
+                                                INT32_MIN, INT32_MAX));
+  TEST_ASSERT_EQUAL_INT32(INT32_MIN,
+                          runtimeBleScaleSigned(-1.0e100, 10000000.0,
+                                                INT32_MIN, INT32_MAX));
+  TEST_ASSERT_EQUAL_UINT32(UINT16_MAX,
+                           runtimeBleScaleUnsigned(1.0e100, 100.0, UINT16_MAX));
+  TEST_ASSERT_EQUAL_UINT32(0, runtimeBleScaleUnsigned(-1.0, 100.0, UINT16_MAX));
+  TEST_ASSERT_EQUAL_INT32(0,
+                          runtimeBleScaleSigned(NAN, 10000000.0,
+                                                INT32_MIN, INT32_MAX));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_runtime_ble_live_frame_encodes_stable_header_and_scaled_fields);
   RUN_TEST(test_runtime_ble_live_frame_maps_reasons_and_reject_codes);
+  RUN_TEST(test_runtime_ble_live_frame_scaling_clamps_before_cast);
   return UNITY_END();
 }

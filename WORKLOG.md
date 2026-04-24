@@ -2223,3 +2223,60 @@ Self-review:
 Promote to skill:
 - Anchor-point persistence must be all-or-reject at the runtime boundary; do not log or return saved when the settings commit fails.
 - Loaded anchor coordinates must be validated as a pair and invalid/default coordinates must clear the live anchor point.
+
+### 2026-04-24 Stage 72: BLE live-frame scaling hardening
+
+Scope:
+- Continue module-by-module refactor with `RuntimeBleLiveFrame`.
+- Keep the fixed 70-byte binary v2 live telemetry frame unchanged.
+- Harden numeric scaling at the firmware BLE boundary so malformed finite telemetry values clamp before integer conversion.
+
+External baseline:
+- Bluetooth Core GATT defines characteristic values as profile/application data and supports read/notify delivery of characteristic values: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-61/out/en/host/generic-attribute-profile--gatt-.html>.
+- Android `BluetoothGattCharacteristic` integer helpers exist for characteristic values but are deprecated; the app already uses explicit byte decoding, so firmware must keep its byte layout deterministic: <https://developer.android.com/reference/android/bluetooth/BluetoothGattCharacteristic>.
+- Android `BluetoothGatt` is the client runtime path for BLE characteristic read/notify operations: <https://developer.android.com/reference/android/bluetooth/BluetoothGatt>.
+
+Key outcomes:
+- `runtimeBleScaleSigned()` now clamps the scaled `double` before `lround()` and integer cast.
+- `runtimeBleScaleUnsigned()` now clamps large scaled values before `lround()` and integer cast.
+- Non-finite input still maps to neutral `0`, while finite out-of-range input maps to the field's min/max.
+- Added native coverage for extreme finite signed/unsigned values and `NaN` handling.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_live_frame -f test_ble_command_handler` -> `36/36` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub test/ble_boatlock_test.dart` -> passed.
+- `cd boatlock && platformio test -e native` -> `242/242` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> `29/29` passed.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `git diff --check` -> clean.
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `696869` bytes.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter build apk --debug --no-pub` -> success.
+- `./tools/hw/nh02/status.sh` -> target ESP32-S3 `98:88:E0:03:BA:5C` visible and RFC2217 service active.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`; app image write `697232` bytes.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-ble-live-frame-60s.log --json-out /tmp/boatlock-ble-live-frame-60s.json` -> `PASS`, including EEPROM `ver=23`, RVC compass, display, BLE advertising, stepper, STOP, GPS UART data, and heading events.
+- Acceptance log scan found no panic/assert/Guru, Arduino `[E]`, `CONFIG_SAVE_FAILED`, `CONFIG_CRC_FAIL`, GPS UART stale/no-data warning, compass loss, compass retry failure, `Wire.cpp`, `i2cRead`, `error`, or `FAIL`.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+
+Self-review:
+- This does not change the BLE frame version, layout, fields, or Flutter decoder.
+- The fix is boundary hardening against undefined/implementation-dependent numeric conversion, not a protocol feature.
+- Hardware and Android BLE validation were run before the new batch cadence was requested; from the next modules, hardware is batched every three modules unless risk requires earlier acceptance.
+
+Promote to skill:
+- BLE binary encoders must clamp in floating-point space before integer rounding/casting.
+- Fixed binary frame changes need firmware encoder, Flutter decoder, protocol docs, and tests together; pure range-hardening inside existing fields does not require a frame-version bump.
+
+### 2026-04-24 Workflow correction: hardware cadence
+
+Decision:
+- User changed the default cadence from hardware acceptance after every module to hardware acceptance after every three modules.
+- For each module, still run external baseline, local validation, worklog/self-review, commit, and push.
+- Run `nh02` flash/acceptance/log scan/Android BLE smokes after the third module in a batch, unless the change touches hardware drivers, pinout, deploy/debug wrappers, actuator safety, BLE reconnect/install behavior, or another path where local tests cannot bound the risk.
+
+Promote to skill:
+- Batch low-risk refactors in groups of three for hardware acceptance.

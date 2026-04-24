@@ -171,8 +171,17 @@ inline int32_t runtimeBleScaleSigned(double value, double scale,
   if (!std::isfinite(value)) {
     return 0;
   }
-  const long scaled = lround(value * scale);
-  return runtimeBleClampValue<int32_t>((int32_t)scaled, minValue, maxValue);
+  const double scaled = value * scale;
+  if (!std::isfinite(scaled)) {
+    return scaled < 0.0 ? minValue : maxValue;
+  }
+  if (scaled <= minValue) {
+    return minValue;
+  }
+  if (scaled >= maxValue) {
+    return maxValue;
+  }
+  return (int32_t)lround(scaled);
 }
 
 inline uint32_t runtimeBleScaleUnsigned(double value, double scale,
@@ -180,8 +189,11 @@ inline uint32_t runtimeBleScaleUnsigned(double value, double scale,
   if (!std::isfinite(value) || value <= 0) {
     return 0;
   }
-  const unsigned long scaled = (unsigned long)lround(value * scale);
-  return runtimeBleClampValue<uint32_t>((uint32_t)scaled, 0, maxValue);
+  const double scaled = value * scale;
+  if (!std::isfinite(scaled) || scaled >= maxValue) {
+    return maxValue;
+  }
+  return (uint32_t)lround(scaled);
 }
 
 inline void runtimeBleAppendU8(std::vector<uint8_t>& out, uint8_t value) {

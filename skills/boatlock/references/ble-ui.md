@@ -103,7 +103,9 @@
   - `secPaired`, `secAuth`, `secPairWin`, `secReject`
 - The auth nonce is carried as binary `uint64` in the live frame and rendered by Flutter as 16 hex chars.
 - `status` is a short health summary (`OK|WARN|ALERT`), while `mode` is the runtime mode and `statusReasons` carries comma-separated detail flags.
+- Firmware live-frame scaling must clamp in floating-point space before integer rounding/casting; non-finite values map to neutral `0`.
 - If you add telemetry, update `RuntimeBleLiveFrame.h`, `ble_live_frame.dart`, affected tests, and `docs/BLE_PROTOCOL.md` together.
+- Pure range-hardening inside existing fields does not require a frame-version bump when the byte layout and decoder contract are unchanged.
 
 ## Manual UI Semantics
 

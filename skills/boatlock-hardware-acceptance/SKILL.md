@@ -107,7 +107,9 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
 ## Working Rules
 
 - Keep host-side ownership limited to `/opt/boatlock-hw` and the tracked RFC2217 service.
-- Prefer acceptance right after flashing so the boot path stays part of the same validation slice.
+- Default refactor cadence runs hardware acceptance after every third module, not after every low-risk module.
+- Run acceptance immediately when the module touches hardware drivers, pinout, deploy/debug wrappers, actuator safety, BLE reconnect/install behavior, or another path where local tests cannot bound the risk.
+- When acceptance is due, run it right after flashing so the boot path stays part of the same validation slice.
 - Preserve the documented order `install -> flash -> acceptance -> monitor/debug`; do not skip to a later step just because an earlier prerequisite is broken.
 - For phones attached to `nh02`, use the tracked `android-install.sh` and `android-status.sh` path before falling back to local `adb` assumptions.
 - Record whether failure is in first install policy, later `adb install -r` update, app launch, or BLE runtime; do not collapse those into one generic "Android smoke failed" verdict.

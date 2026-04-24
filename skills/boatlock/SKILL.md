@@ -47,6 +47,13 @@ Use this skill for any code, review, debugging, test, or docs task in the BoatLo
 6. If the user corrected a reusable workflow or scope assumption, capture it before continuing.
 7. Promote only stable lessons into `references/*.md` or this skill; keep temporary task notes in `WORKLOG.md`.
 
+## Module Cadence
+
+- Work in batches of three modules by default.
+- For each module in the batch: run the targeted external baseline, make the smallest useful refactor, run local tests, record `WORKLOG.md` plus self-review, then commit and push.
+- Run `nh02` hardware acceptance and Android BLE smokes after every third module in the batch.
+- Do not wait for the third module when the change directly touches hardware drivers, pinout, deploy/debug wrappers, actuator safety, BLE reconnect/install behavior, or another path where local tests cannot bound the risk.
+
 ## Execution Discipline
 
 - Treat a detour as unfinished work, not as the fix.
