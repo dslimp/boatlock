@@ -61,11 +61,12 @@ enum RuntimeBleReasonFlags : uint32_t {
   RUNTIME_BLE_REASON_STOP_CMD = 1ul << 11,
   RUNTIME_BLE_REASON_GPS_HDOP_TOO_HIGH = 1ul << 12,
   RUNTIME_BLE_REASON_GPS_SATS_TOO_LOW = 1ul << 13,
-  RUNTIME_BLE_REASON_GPS_STALE = 1ul << 14,
-  RUNTIME_BLE_REASON_GPS_JUMP = 1ul << 15,
+  RUNTIME_BLE_REASON_GPS_DATA_STALE = 1ul << 14,
+  RUNTIME_BLE_REASON_GPS_POSITION_JUMP = 1ul << 15,
   RUNTIME_BLE_REASON_NUDGE_OK = 1ul << 16,
   RUNTIME_BLE_REASON_NO_ANCHOR_POINT = 1ul << 17,
   RUNTIME_BLE_REASON_NO_HEADING = 1ul << 18,
+  RUNTIME_BLE_REASON_GPS_HDOP_MISSING = 1ul << 19,
 };
 
 inline bool runtimeBleCsvHasToken(const std::string& csv, const char* token) {
@@ -140,11 +141,12 @@ inline uint32_t runtimeBleReasonFlags(const std::string& reasons) {
   if (runtimeBleCsvHasToken(reasons, "STOP_CMD")) flags |= RUNTIME_BLE_REASON_STOP_CMD;
   if (runtimeBleCsvHasToken(reasons, "GPS_HDOP_TOO_HIGH")) flags |= RUNTIME_BLE_REASON_GPS_HDOP_TOO_HIGH;
   if (runtimeBleCsvHasToken(reasons, "GPS_SATS_TOO_LOW")) flags |= RUNTIME_BLE_REASON_GPS_SATS_TOO_LOW;
-  if (runtimeBleCsvHasToken(reasons, "GPS_STALE")) flags |= RUNTIME_BLE_REASON_GPS_STALE;
-  if (runtimeBleCsvHasToken(reasons, "GPS_JUMP")) flags |= RUNTIME_BLE_REASON_GPS_JUMP;
+  if (runtimeBleCsvHasToken(reasons, "GPS_DATA_STALE")) flags |= RUNTIME_BLE_REASON_GPS_DATA_STALE;
+  if (runtimeBleCsvHasToken(reasons, "GPS_POSITION_JUMP")) flags |= RUNTIME_BLE_REASON_GPS_POSITION_JUMP;
   if (runtimeBleCsvHasToken(reasons, "NUDGE_OK")) flags |= RUNTIME_BLE_REASON_NUDGE_OK;
   if (runtimeBleCsvHasToken(reasons, "NO_ANCHOR_POINT")) flags |= RUNTIME_BLE_REASON_NO_ANCHOR_POINT;
   if (runtimeBleCsvHasToken(reasons, "NO_HEADING")) flags |= RUNTIME_BLE_REASON_NO_HEADING;
+  if (runtimeBleCsvHasToken(reasons, "GPS_HDOP_MISSING")) flags |= RUNTIME_BLE_REASON_GPS_HDOP_MISSING;
   return flags;
 }
 

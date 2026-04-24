@@ -197,8 +197,12 @@ public:
     void stop() {
         ledcWrite(pwmChannel, 0);
         pwmRaw = 0;
+        autoThrustActive = false;
+        filteredAnchorDistance = 0.0f;
+        filteredAnchorDistanceValid = false;
         autoPwmRaw = 0;
         autoRampUpdatedMs = 0;
+        autoThrustStateChangedMs = millis();
         filteredDistanceRateValid = false;
         filteredDistanceUpdatedMs = 0;
         filteredDistanceRateMps = 0.0f;
@@ -230,8 +234,6 @@ public:
         const float idleRadius = holdRadius + deadband;
 
         if (!allowThrust || !isfinite(distanceMeters) || distanceMeters <= 0.0f) {
-            autoThrustActive = false;
-            filteredAnchorDistanceValid = false;
             stop();
             return;
         }
@@ -273,13 +275,13 @@ public:
             autoThrustActive = shouldBeActive;
             autoThrustStateChangedMs = now;
             if (!autoThrustActive) {
-                stop();
+                stopAnchorOutput();
                 return;
             }
         }
 
         if (!autoThrustActive) {
-            stop();
+            stopAnchorOutput();
             return;
         }
 
@@ -352,5 +354,13 @@ public:
         pwmRaw = pwmValue;
         autoPwmRaw = pwmValue;
         autoRampUpdatedMs = millis();
+    }
+
+private:
+    void stopAnchorOutput() {
+        ledcWrite(pwmChannel, 0);
+        pwmRaw = 0;
+        autoPwmRaw = 0;
+        autoRampUpdatedMs = 0;
     }
 };

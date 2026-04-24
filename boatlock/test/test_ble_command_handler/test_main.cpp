@@ -1,4 +1,5 @@
 #include "../mocks/BleCommandHandler.h"
+#include "ManualControl.h"
 #include <unity.h>
 #include <cstring>
 #include <cstdlib>
@@ -8,10 +9,8 @@ StepperControl stepperControl;
 MotorControl motor;
 Settings settings;
 BNO08xCompass compass;
-bool compassReady = false;
-bool manualMode = false;
-int manualDir = -1;
-int manualSpeed = 0;
+bool headingAvailableStub = false;
+ManualControl manualControl;
 bool phoneGpsFixSet = false;
 float phoneGpsLat = 0.0f;
 float phoneGpsLon = 0.0f;
@@ -35,6 +34,7 @@ AnchorDeniedReason anchorEnableDeniedReasonStub = AnchorDeniedReason::NONE;
 AnchorDeniedReason lastDeniedReason = AnchorDeniedReason::NONE;
 FailsafeReason lastFailsafeReason = FailsafeReason::NONE;
 int clearSafeHoldCalls = 0;
+int manualStopCalls = 0;
 bool securityForceReject = false;
 bool securityRequireWrapper = false;
 bool securitySessionActive = false;
@@ -73,6 +73,28 @@ AnchorDeniedReason currentGnssDeniedReason() { return gnssDeniedReasonStub; }
 void setLastAnchorDeniedReason(AnchorDeniedReason reason) { lastDeniedReason = reason; }
 void setLastFailsafeReason(FailsafeReason reason) { lastFailsafeReason = reason; }
 void clearSafeHold() { ++clearSafeHoldCalls; }
+bool setManualControlFromBle(int steer, int throttlePct, unsigned long ttlMs) {
+  const bool wasActive = manualControl.active();
+  if (!manualControl.apply(ManualControlSource::BLE_PHONE, steer, throttlePct, ttlMs, 1000)) {
+    return false;
+  }
+  if (!wasActive) {
+    setLastAnchorDeniedReason(AnchorDeniedReason::NONE);
+    setLastFailsafeReason(FailsafeReason::NONE);
+    clearSafeHold();
+    stepperControl.cancelMove();
+    if (settings.get("AnchorEnabled") == 1.0f) {
+      settings.set("AnchorEnabled", 0.0f);
+    }
+  }
+  return true;
+}
+void stopManualControlFromBle() {
+  ++manualStopCalls;
+  manualControl.stop();
+  stepperControl.stopManual();
+  motor.stop();
+}
 bool preprocessSecureCommand(const std::string& incoming, std::string* effective) {
   if (!effective) return false;
   if (securityForceReject) return false;
@@ -102,6 +124,7 @@ bool handleSimCommand(const std::string& command) {
   simLastCommand = command;
   return simHandlerConsumes;
 }
+bool headingAvailable() { return headingAvailableStub; }
 
 void setUp() {
   settings.reset();
@@ -110,9 +133,9 @@ void setUp() {
   stepperControl.stopManualCalled = false;
   stepperControl.loadCalled = false;
   motor.stopCalled = false;
-  manualMode = false;
-  manualDir = -1;
-  manualSpeed = 0;
+  headingAvailableStub = false;
+  compass.az = 0.0f;
+  manualControl.stop();
   phoneGpsFixSet = false;
   phoneGpsLat = 0.0f;
   phoneGpsLon = 0.0f;
@@ -136,6 +159,7 @@ void setUp() {
   lastDeniedReason = AnchorDeniedReason::NONE;
   lastFailsafeReason = FailsafeReason::NONE;
   clearSafeHoldCalls = 0;
+  manualStopCalls = 0;
   securityForceReject = false;
   securityRequireWrapper = false;
   securitySessionActive = false;
@@ -152,29 +176,46 @@ void test_set_hold_heading() {
   TEST_ASSERT_EQUAL_FLOAT(1.0f, settings.get("HoldHeading"));
 }
 
-void test_manual_on_cancels_stepper_move() {
-  handleBleCommand("MANUAL:1");
-  TEST_ASSERT_TRUE(manualMode);
+void test_manual_set_is_atomic_and_enters_manual_mode() {
+  handleBleCommand("MANUAL_SET:-1,42,500");
+  TEST_ASSERT_TRUE(manualControl.active());
+  TEST_ASSERT_EQUAL(-1, manualControl.steer());
+  TEST_ASSERT_EQUAL(42, manualControl.throttlePct());
+  TEST_ASSERT_EQUAL(0, manualControl.stepperDir());
+  TEST_ASSERT_EQUAL(107, manualControl.motorPwm());
   TEST_ASSERT_TRUE(stepperControl.cancelCalled);
+  TEST_ASSERT_EQUAL(1, clearSafeHoldCalls);
 }
 
-void test_manual_off() {
-  manualMode = true;
-  manualDir = 2;
-  manualSpeed = 100;
-  handleBleCommand("MANUAL:0");
-  TEST_ASSERT_FALSE(manualMode);
+void test_manual_set_disarms_anchor_without_reenable_path() {
+  settings.set("AnchorEnabled", 1.0f);
+  handleBleCommand("MANUAL_SET:1,-30,500");
+  TEST_ASSERT_TRUE(manualControl.active());
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
+}
+
+void test_manual_off_stops_manual_outputs() {
+  manualControl.apply(ManualControlSource::BLE_PHONE, 1, 50, 500, 1000);
+  handleBleCommand("MANUAL_OFF");
+  TEST_ASSERT_FALSE(manualControl.active());
   TEST_ASSERT_TRUE(stepperControl.stopManualCalled);
   TEST_ASSERT_TRUE(motor.stopCalled);
-  TEST_ASSERT_EQUAL(0, manualSpeed);
-  TEST_ASSERT_EQUAL(-1, manualDir);
+  TEST_ASSERT_EQUAL(1, manualStopCalls);
 }
 
-void test_manual_dir_and_speed() {
+void test_removed_split_manual_commands_do_not_change_state() {
+  handleBleCommand("MANUAL:1");
   handleBleCommand("MANUAL_DIR:1");
   handleBleCommand("MANUAL_SPEED:-123");
-  TEST_ASSERT_EQUAL(1, manualDir);
-  TEST_ASSERT_EQUAL(-123, manualSpeed);
+  TEST_ASSERT_FALSE(manualControl.active());
+  TEST_ASSERT_EQUAL(0, manualControl.throttlePct());
+}
+
+void test_manual_set_rejects_out_of_range_payloads() {
+  handleBleCommand("MANUAL_SET:2,10,500");
+  handleBleCommand("MANUAL_SET:0,101,500");
+  handleBleCommand("MANUAL_SET:0,10,50");
+  TEST_ASSERT_FALSE(manualControl.active());
 }
 
 void test_set_stepper_bow_calls_capture() {
@@ -187,7 +228,19 @@ void test_set_anchor_saves_point_without_enabling_mode() {
   handleBleCommand("SET_ANCHOR:59.9386,30.3141");
   TEST_ASSERT_EQUAL_FLOAT(59.9386f, anchor.anchorLat);
   TEST_ASSERT_EQUAL_FLOAT(30.3141f, anchor.anchorLon);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, anchor.anchorHeading);
   TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
+}
+
+void test_set_anchor_uses_only_fresh_heading() {
+  compass.az = 123.4f;
+  headingAvailableStub = false;
+  handleBleCommand("SET_ANCHOR:59.9386,30.3141");
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, anchor.anchorHeading);
+
+  headingAvailableStub = true;
+  handleBleCommand("SET_ANCHOR:59.9387,30.3142");
+  TEST_ASSERT_EQUAL_FLOAT(123.4f, anchor.anchorHeading);
 }
 
 void test_anchor_on_rejected_without_anchor_point() {
@@ -221,17 +274,14 @@ void test_anchor_on_rejected_without_heading() {
 }
 
 void test_anchor_on_accepts_and_exits_manual_mode() {
-  manualMode = true;
-  manualDir = 1;
-  manualSpeed = 90;
+  manualControl.apply(ManualControlSource::BLE_PHONE, 1, 90, 500, 1000);
   anchorPointPresent = true;
   anchorEnableAllowed = true;
   anchorEnableDeniedReasonStub = AnchorDeniedReason::NONE;
   settings.set("AnchorEnabled", 0.0f);
   handleBleCommand("ANCHOR_ON");
-  TEST_ASSERT_FALSE(manualMode);
-  TEST_ASSERT_EQUAL(-1, manualDir);
-  TEST_ASSERT_EQUAL(0, manualSpeed);
+  TEST_ASSERT_FALSE(manualControl.active());
+  TEST_ASSERT_EQUAL(1, manualStopCalls);
   TEST_ASSERT_EQUAL_FLOAT(1.0f, settings.get("AnchorEnabled"));
   TEST_ASSERT_EQUAL((int)AnchorDeniedReason::NONE, (int)lastDeniedReason);
   TEST_ASSERT_EQUAL(1, clearSafeHoldCalls);
@@ -239,10 +289,13 @@ void test_anchor_on_accepts_and_exits_manual_mode() {
 
 void test_anchor_off_always_disables_anchor_and_stops_drive() {
   settings.set("AnchorEnabled", 1.0f);
+  manualControl.apply(ManualControlSource::BLE_PHONE, 1, 25, 500, 1000);
   handleBleCommand("ANCHOR_OFF");
   TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
+  TEST_ASSERT_FALSE(manualControl.active());
   TEST_ASSERT_TRUE(stepperControl.cancelCalled);
   TEST_ASSERT_TRUE(motor.stopCalled);
+  TEST_ASSERT_EQUAL(1, manualStopCalls);
   TEST_ASSERT_EQUAL((int)FailsafeReason::NONE, (int)lastFailsafeReason);
   TEST_ASSERT_EQUAL(1, clearSafeHoldCalls);
 }
@@ -250,8 +303,8 @@ void test_anchor_off_always_disables_anchor_and_stops_drive() {
 void test_manual_on_clears_safe_hold_and_failsafe_latch() {
   lastDeniedReason = AnchorDeniedReason::GPS_HDOP_TOO_HIGH;
   lastFailsafeReason = FailsafeReason::COMM_TIMEOUT;
-  handleBleCommand("MANUAL:1");
-  TEST_ASSERT_TRUE(manualMode);
+  handleBleCommand("MANUAL_SET:0,0,500");
+  TEST_ASSERT_TRUE(manualControl.active());
   TEST_ASSERT_EQUAL((int)AnchorDeniedReason::NONE, (int)lastDeniedReason);
   TEST_ASSERT_EQUAL((int)FailsafeReason::NONE, (int)lastFailsafeReason);
   TEST_ASSERT_EQUAL(1, clearSafeHoldCalls);
@@ -316,9 +369,7 @@ void test_removed_route_commands_do_not_change_state() {
   handleBleCommand("START_ROUTE");
   handleBleCommand("STOP_ROUTE");
   TEST_ASSERT_EQUAL_FLOAT(1.0f, settings.get("AnchorEnabled"));
-  TEST_ASSERT_FALSE(manualMode);
-  TEST_ASSERT_EQUAL(-1, manualDir);
-  TEST_ASSERT_EQUAL(0, manualSpeed);
+  TEST_ASSERT_FALSE(manualControl.active());
 }
 
 void test_removed_compass_and_log_commands_do_not_change_state() {
@@ -399,7 +450,7 @@ void test_command_parser_fuzz_does_not_break_safe_state() {
     handleBleCommand(cmd);
   }
   TEST_ASSERT_TRUE(settings.get("AnchorEnabled") == 0.0f || settings.get("AnchorEnabled") == 1.0f);
-  TEST_ASSERT_TRUE(manualDir >= -1 && manualDir <= 1);
+  TEST_ASSERT_FALSE(manualControl.active());
 }
 
 void test_sim_command_is_forwarded_and_consumed() {
@@ -421,11 +472,14 @@ void test_non_sim_command_still_runs_when_sim_handler_declines() {
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_set_hold_heading);
-  RUN_TEST(test_manual_on_cancels_stepper_move);
-  RUN_TEST(test_manual_off);
-  RUN_TEST(test_manual_dir_and_speed);
+  RUN_TEST(test_manual_set_is_atomic_and_enters_manual_mode);
+  RUN_TEST(test_manual_set_disarms_anchor_without_reenable_path);
+  RUN_TEST(test_manual_off_stops_manual_outputs);
+  RUN_TEST(test_removed_split_manual_commands_do_not_change_state);
+  RUN_TEST(test_manual_set_rejects_out_of_range_payloads);
   RUN_TEST(test_set_stepper_bow_calls_capture);
   RUN_TEST(test_set_anchor_saves_point_without_enabling_mode);
+  RUN_TEST(test_set_anchor_uses_only_fresh_heading);
   RUN_TEST(test_anchor_on_rejected_without_anchor_point);
   RUN_TEST(test_anchor_on_rejected_on_bad_gnss);
   RUN_TEST(test_anchor_on_rejected_without_heading);

@@ -14,10 +14,6 @@ extern StepperControl stepperControl;
 extern MotorControl motor;
 extern Settings settings;
 extern BNO08xCompass compass;
-extern bool compassReady;
-extern bool manualMode;
-extern int manualDir;
-extern int manualSpeed;
 void setPhoneGpsFix(float lat, float lon, float speedKmh, int satellites);
 void captureStepperBowZero();
 bool canEnableAnchorNow();
@@ -32,8 +28,11 @@ AnchorDeniedReason currentGnssDeniedReason();
 void setLastAnchorDeniedReason(AnchorDeniedReason reason);
 void setLastFailsafeReason(FailsafeReason reason);
 void clearSafeHold();
+bool setManualControlFromBle(int steer, int throttlePct, unsigned long ttlMs);
+void stopManualControlFromBle();
 bool preprocessSecureCommand(const std::string& incoming, std::string* effective);
 bool handleSimCommand(const std::string& command);
+bool headingAvailable();
 
 inline void handleBleCommand(const std::string& cmd) {
     std::string effectiveCmd;
@@ -66,6 +65,7 @@ inline void handleBleCommand(const std::string& cmd) {
         clearSafeHold();
         settings.set("AnchorEnabled", 0);
         settings.save();
+        stopManualControlFromBle();
         stepperControl.cancelMove();
         motor.stop();
         logMessage("[EVENT] ANCHOR_OFF reason=BLE_CMD\n");
@@ -83,9 +83,7 @@ inline void handleBleCommand(const std::string& cmd) {
             setLastAnchorDeniedReason(AnchorDeniedReason::NONE);
             setLastFailsafeReason(FailsafeReason::NONE);
             clearSafeHold();
-            manualMode = false;
-            manualDir = -1;
-            manualSpeed = 0;
+            stopManualControlFromBle();
             settings.set("AnchorEnabled", 1);
             settings.save();
             logMessage("[EVENT] ANCHOR_ON source=BLE\n");
@@ -102,7 +100,7 @@ inline void handleBleCommand(const std::string& cmd) {
             return;
         }
         // Save anchor point only; arm Anchor mode via explicit ANCHOR_ON.
-        anchor.saveAnchor(lat, lon, compassReady ? compass.getAzimuth() : 0.0f, false);
+        anchor.saveAnchor(lat, lon, headingAvailable() ? compass.getAzimuth() : 0.0f, false);
         logMessage("[BLE] Anchor point saved via BLE: %.6f, %.6f\n", lat, lon);
     } else if (command.rfind("NUDGE_DIR:", 0) == 0) {
         char dir[12] = {0};
@@ -189,24 +187,22 @@ inline void handleBleCommand(const std::string& cmd) {
         stepperControl.loadFromSettings();
     } else if (command == "SET_STEPPER_BOW") {
         captureStepperBowZero();
-    } else if (command.rfind("MANUAL:",0) == 0) {
-        bool newMode = atoi(command.c_str() + 7) != 0;
-        if (newMode) {
-            setLastAnchorDeniedReason(AnchorDeniedReason::NONE);
-            setLastFailsafeReason(FailsafeReason::NONE);
-            clearSafeHold();
-            stepperControl.cancelMove();
+    } else if (command.rfind("MANUAL_SET:", 0) == 0) {
+        int steer = 0;
+        int throttlePct = 0;
+        unsigned long ttlMs = 0;
+        if (sscanf(command.c_str() + 11, "%d,%d,%lu", &steer, &throttlePct, &ttlMs) == 3 &&
+            setManualControlFromBle(steer, throttlePct, ttlMs)) {
+            logMessage("[BLE] MANUAL_SET accepted steer=%d throttle=%d ttl=%lu\n",
+                       steer,
+                       throttlePct,
+                       ttlMs);
         } else {
-            stepperControl.stopManual();
-            motor.stop();
-            manualSpeed = 0;
-            manualDir = -1;
+            logMessage("[BLE] MANUAL_SET rejected: %s\n", command.c_str());
         }
-        manualMode = newMode;
-    } else if (command.rfind("MANUAL_DIR:",0) == 0) {
-        manualDir = atoi(command.c_str() + 11);
-    } else if (command.rfind("MANUAL_SPEED:",0) == 0) {
-        manualSpeed = atoi(command.c_str() + 13);
+    } else if (command == "MANUAL_OFF") {
+        stopManualControlFromBle();
+        logMessage("[BLE] MANUAL_OFF accepted\n");
     } else {
         logMessage("[BLE] Unhandled command: %s\n", command.c_str());
     }

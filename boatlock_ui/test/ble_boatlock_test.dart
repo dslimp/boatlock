@@ -1,5 +1,6 @@
 import 'package:boatlock_ui/ble/ble_boatlock.dart';
 import 'package:boatlock_ui/models/boat_data.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 BoatData _data({required double lat, required double lon}) {
@@ -57,9 +58,18 @@ void main() {
   });
 
   test('buildSetAnchorCommandFromCoords validates ranges', () {
-    expect(BleBoatLock.buildSetAnchorCommandFromCoords(59.1, 30.2), 'SET_ANCHOR:59.100000,30.200000');
-    expect(BleBoatLock.buildSetAnchorCommandFromCoords(double.nan, 30.2), isNull);
-    expect(BleBoatLock.buildSetAnchorCommandFromCoords(59.1, double.infinity), isNull);
+    expect(
+      BleBoatLock.buildSetAnchorCommandFromCoords(59.1, 30.2),
+      'SET_ANCHOR:59.100000,30.200000',
+    );
+    expect(
+      BleBoatLock.buildSetAnchorCommandFromCoords(double.nan, 30.2),
+      isNull,
+    );
+    expect(
+      BleBoatLock.buildSetAnchorCommandFromCoords(59.1, double.infinity),
+      isNull,
+    );
     expect(BleBoatLock.buildSetAnchorCommandFromCoords(-95.0, 30.0), isNull);
     expect(BleBoatLock.buildSetAnchorCommandFromCoords(59.0, 181.0), isNull);
   });
@@ -87,24 +97,64 @@ void main() {
   });
 
   test('buildNudgeDirCommand validates direction and distance', () {
-    expect(BleBoatLock.buildNudgeDirCommand('left', meters: 2.0), 'NUDGE_DIR:LEFT,2.0');
+    expect(
+      BleBoatLock.buildNudgeDirCommand('left', meters: 2.0),
+      'NUDGE_DIR:LEFT,2.0',
+    );
     expect(BleBoatLock.buildNudgeDirCommand('foo', meters: 2.0), isNull);
     expect(BleBoatLock.buildNudgeDirCommand('RIGHT', meters: 0.5), isNull);
     expect(BleBoatLock.buildNudgeDirCommand('RIGHT', meters: 6.0), isNull);
   });
 
-  test('buildNudgeBearingCommand normalizes bearing and validates distance', () {
-    expect(BleBoatLock.buildNudgeBearingCommand(450.0, meters: 3.0), 'NUDGE_BRG:90.0,3.0');
-    expect(BleBoatLock.buildNudgeBearingCommand(-10.0, meters: 1.0), 'NUDGE_BRG:350.0,1.0');
-    expect(BleBoatLock.buildNudgeBearingCommand(double.nan, meters: 2.0), isNull);
-    expect(BleBoatLock.buildNudgeBearingCommand(120.0, meters: 0.9), isNull);
-  });
+  test(
+    'buildNudgeBearingCommand normalizes bearing and validates distance',
+    () {
+      expect(
+        BleBoatLock.buildNudgeBearingCommand(450.0, meters: 3.0),
+        'NUDGE_BRG:90.0,3.0',
+      );
+      expect(
+        BleBoatLock.buildNudgeBearingCommand(-10.0, meters: 1.0),
+        'NUDGE_BRG:350.0,1.0',
+      );
+      expect(
+        BleBoatLock.buildNudgeBearingCommand(double.nan, meters: 2.0),
+        isNull,
+      );
+      expect(BleBoatLock.buildNudgeBearingCommand(120.0, meters: 0.9), isNull);
+    },
+  );
 
   test('buildSetAnchorProfileCommand validates profile values', () {
-    expect(BleBoatLock.buildSetAnchorProfileCommand('quiet'), 'SET_ANCHOR_PROFILE:quiet');
-    expect(BleBoatLock.buildSetAnchorProfileCommand(' CURRENT '), 'SET_ANCHOR_PROFILE:current');
+    expect(
+      BleBoatLock.buildSetAnchorProfileCommand('quiet'),
+      'SET_ANCHOR_PROFILE:quiet',
+    );
+    expect(
+      BleBoatLock.buildSetAnchorProfileCommand(' CURRENT '),
+      'SET_ANCHOR_PROFILE:current',
+    );
     expect(BleBoatLock.buildSetAnchorProfileCommand('storm'), isNull);
     expect(BleBoatLock.buildSetAnchorProfileCommand(''), isNull);
+  });
+
+  test('buildManualSetCommand validates atomic deadman payload', () {
+    expect(
+      BleBoatLock.buildManualSetCommand(steer: -1, throttlePct: 45, ttlMs: 500),
+      'MANUAL_SET:-1,45,500',
+    );
+    expect(
+      BleBoatLock.buildManualSetCommand(steer: 2, throttlePct: 45, ttlMs: 500),
+      isNull,
+    );
+    expect(
+      BleBoatLock.buildManualSetCommand(steer: 0, throttlePct: 101, ttlMs: 500),
+      isNull,
+    );
+    expect(
+      BleBoatLock.buildManualSetCommand(steer: 0, throttlePct: 10, ttlMs: 50),
+      isNull,
+    );
   });
 
   test('security helpers build deterministic auth and secure commands', () {
@@ -113,7 +163,9 @@ void main() {
       '00112233445566778899AABBCCDDEEFF',
     );
     expect(
-      BleBoatLock.normalizeOwnerSecret('00 11 22 33 44 55 66 77 88 99 aa bb cc dd ee ff'),
+      BleBoatLock.normalizeOwnerSecret(
+        '00 11 22 33 44 55 66 77 88 99 aa bb cc dd ee ff',
+      ),
       '00112233445566778899AABBCCDDEEFF',
     );
     expect(BleBoatLock.normalizeOwnerSecret('123456'), isNull);
@@ -131,5 +183,11 @@ void main() {
     );
     expect(secure.startsWith('SEC_CMD:00000001:'), isTrue);
     expect(secure.endsWith(':ANCHOR_ON'), isTrue);
+  });
+
+  test('adapter ready helper accepts only on state', () {
+    expect(BleBoatLock.isAdapterReady(BluetoothAdapterState.on), isTrue);
+    expect(BleBoatLock.isAdapterReady(BluetoothAdapterState.off), isFalse);
+    expect(BleBoatLock.isAdapterReady(BluetoothAdapterState.unknown), isFalse);
   });
 }

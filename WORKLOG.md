@@ -794,3 +794,563 @@ Self-review:
 
 Promote to skill:
 - Treat `--no-install` phone smoke as BLE-runtime proof only, not as proof that the exact just-built APK was installed.
+
+### 2026-04-24 Stage 35: GNSS quality gate best-practice pass
+
+Scope:
+- Start the module-by-module best-practice refactor cycle with the GNSS/quality gate module, because it is the first safety-critical input for `ANCHOR_ON`.
+
+External baseline:
+- ArduPilot GPS/pre-arm guidance treats GPS lock, HDOP, and GPS glitches as explicit blockers for modes that require position.
+- BoatLock should keep the same principle: missing quality evidence is not a pass.
+
+Key outcomes:
+- Made HDOP mandatory for anchor-quality GNSS: missing, non-finite, or zero HDOP now returns `GPS_HDOP_MISSING`.
+- Added `GPS_HDOP_MISSING` to anchor-denial mapping and stable status strings.
+- Fixed `RuntimeGnss::gnssQualityLevel()` so it re-evaluates the current sample instead of trusting a cached previous `NONE` reason.
+- Fixed binary BLE status reason mapping to preserve exact GNSS gate names: `GPS_DATA_STALE`, `GPS_POSITION_JUMP`, and `GPS_HDOP_MISSING`.
+- Updated Flutter live-frame decoding and BLE protocol docs for the same reason names.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_gnss -f test_gnss_quality_gate -f test_anchor_reasons -f test_runtime_ble_live_frame` -> `13/13`
+- `cd boatlock_ui && flutter test --no-pub test/ble_live_frame_test.dart` -> passed
+- `git diff --check` -> clean
+
+Self-review:
+- This is a behavior-tightening safety change, not a compatibility shim.
+- The remaining GNSS module risk is that source selection and filtering are still mixed inside `RuntimeGnss`; next GNSS pass should consider splitting pure quality/sample building from mutable fix application if it reduces code without widening behavior.
+
+Promote to skill:
+- For GNSS pre-enable checks, missing quality evidence must fail closed; do not let absent HDOP or stale cached pass state enable anchor control.
+
+### 2026-04-24 Stage 36: Android install blocker narrowed
+
+Scope:
+- Stop the Android validation path on the real install blocker instead of continuing through `--no-install`.
+
+Key outcomes:
+- Verified the phone on `nh02` is reachable over ADB as Xiaomi `220333QNY`.
+- Verified `development_settings_enabled=1`, `adb_enabled=1`, and `verifier_verify_adb_installs=0`.
+- Found the remaining phone-side policy signal: the active user restrictions include `no_install_unknown_sources`.
+- Classified `INSTALL_FAILED_USER_RESTRICTED` as an exact APK install/update blocker, not a BLE, cable, or firmware blocker.
+
+Validation:
+- `ssh root@192.168.88.61 'adb devices -l ... settings/dumpsys checks ...'` -> phone visible, ADB enabled, install policy still restricted.
+
+Self-review:
+- The earlier `--no-install` path is useful only for BLE runtime debugging. It must not be used as acceptance for the just-built APK unless explicitly waived.
+
+Promote to skill:
+- Full Android smoke must fail closed on `INSTALL_FAILED_USER_RESTRICTED`; resolve the phone-side install policy before claiming app validation.
+
+### 2026-04-24 Stage 37: Xiaomi SIM prerequisite recorded
+
+Scope:
+- Clarify the remaining phone-side blocker for exact APK install/update over USB.
+
+Key outcomes:
+- After Xiaomi account requirements, MIUI also requested an inserted SIM card before enabling the install-over-USB path.
+- Classified this as a hard phone-side prerequisite for canonical `adb install -r`, not something to bypass in BoatLock scripts.
+
+Validation:
+- User-observed MIUI prompt after account flow: `insert SIM card`.
+
+Self-review:
+- For a stable hardware bench, the best fix is to satisfy the phone policy or use a bench Android device that permits ADB installs without vendor account/SIM gates. Repo wrappers should stay strict and fail closed.
+
+Promote to skill:
+- MIUI `Install via USB` may require Xiaomi account plus SIM; do not call the Android smoke path green until exact APK install succeeds through the tracked wrapper.
+
+### 2026-04-24 Stage 38: Android exact install and BLE smoke restored
+
+Scope:
+- Recheck the Xiaomi phone after SIM insertion and MIUI `Install via USB` approval.
+
+Key outcomes:
+- Confirmed the phone remains visible on `nh02` as ADB device `68b657f0`.
+- Proved exact APK update through the tracked wrapper: `Performing Streamed Install` -> `Success`.
+- First full smoke after install reached the app but timed out waiting for BLE telemetry; logcat showed repeated scans with no BoatLock match.
+- Ran hardware acceptance to reset and verify the firmware advertisement path; boot log matched `[BLE] init ...` and `[BLE] advertising started`.
+- Re-ran the full Android wrapper with install and received BLE telemetry from the just-installed app.
+
+Validation:
+- `./tools/hw/nh02/android-status.sh` -> phone visible over ADB.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 100` -> install success, then `timeout_waiting_for_telemetry`.
+- `./tools/hw/nh02/acceptance.sh --seconds 12 --log-out /tmp/boatlock-ble-debug-boot.log --json-out /tmp/boatlock-ble-debug-acceptance.json` -> `PASS`, including BLE advertising.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 100` -> `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received","dataEvents":1,"mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","rssi":-30,...}`.
+
+Self-review:
+- The install path is now usable without bypasses, but a single transient scan miss happened immediately before the passing run. Keep future BLE acceptance strict and track repeated scan misses as a BLE reliability bug if they recur.
+
+Promote to skill:
+- On this Xiaomi bench phone, canonical ADB update requires MIUI account/SIM/install-over-USB approval; after that, use `android-run-smoke.sh` with install as the proof path.
+
+### 2026-04-24 Stage 39: BLE reconnect is first-class app behavior
+
+Scope:
+- Make the Flutter BLE client automatically recover while the app is running after disconnect, Bluetooth off/on, heartbeat write failure, or app resume.
+- Add a real phone reconnect smoke path instead of relying only on startup connect.
+
+Key outcomes:
+- Added `BleReconnectPolicy` as a small pure decision module for reconnect state.
+- `BleBoatLock` now observes Bluetooth adapter state and app lifecycle:
+  - adapter not ready stops scan and clears stale GATT state
+  - adapter ready schedules scan
+  - app resume schedules scan unless a usable data/control link already exists
+  - disconnect and heartbeat write failure clear stale link state and retry
+- Added reconnect smoke mode to `main_smoke.dart` and `BleSmokePage`.
+- Added wrapper support:
+  - `tools/android/build-smoke-apk.sh --mode reconnect`
+  - `tools/android/run-smoke.sh --reconnect`
+  - `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130`
+  - remote helper `--cycle-bluetooth`
+- Reconnect smoke passes only after first telemetry, a telemetry gap, and telemetry returning without app restart.
+
+Validation:
+- `dart format ...` -> clean.
+- `bash -n tools/android/build-smoke-apk.sh tools/android/run-smoke.sh tools/hw/nh02/android-run-smoke.sh tools/hw/nh02/remote/boatlock-run-android-smoke.sh` -> clean.
+- `cd boatlock_ui && flutter analyze` -> clean.
+- `cd boatlock_ui && flutter test --no-pub` -> `26/26` passed after rerun outside sandbox; the first sandbox run failed only because the test runner could not bind `127.0.0.1`.
+- `./tools/hw/nh02/install.sh` -> refreshed tracked remote helpers.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect","dataEvents":6,"mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","rssi":-31,...}`.
+
+Self-review:
+- This covers the user requirement for an already-running app. If Android kills the process after the user closes/swipes it away, no app code can reconnect until the process is launched again; the startup path is still covered by the same smoke wrapper.
+- The reconnect smoke toggles phone Bluetooth through ADB and is intentionally read-only against the boat: it does not send actuation commands.
+
+Promote to skill:
+- BLE reconnect changes require both policy/unit coverage and `android-run-smoke.sh --reconnect --wait-secs 130` on `nh02` when the phone is available.
+
+### 2026-04-24 Stage 40: GNSS closure blocked at Android install
+
+Scope:
+- Close the GNSS quality-gate slice with full local, firmware, hardware, and Android validation before moving to the next module.
+
+Key outcomes:
+- Reverted the briefly-started `RuntimeMotion` helper refactor so the GNSS closure is not mixed with the next module.
+- Full native firmware regression passed.
+- Full Flutter regression passed.
+- ESP32-S3 firmware build passed.
+- Offline simulation passed.
+- Current firmware was flashed to the `nh02` ESP32-S3 and serial acceptance passed.
+- Android basic smoke with exact APK install stopped on MIUI `INSTALL_FAILED_USER_RESTRICTED`; no `--no-install` bypass was used.
+
+Validation:
+- `cd boatlock && platformio test -e native` -> `170/170` passed.
+- `cd boatlock_ui && flutter test --no-pub` -> `26/26` passed after host-side rerun; sandbox run cannot bind localhost for Flutter test runner.
+- `cd boatlock && pio run -e esp32s3` -> success, flash size `724729` bytes.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `./tools/hw/nh02/install.sh` -> remote helpers refreshed.
+- `./tools/hw/nh02/flash.sh` -> flashed and verified ESP32-S3 `98:88:e0:03:ba:5c`.
+- `./tools/hw/nh02/acceptance.sh --seconds 15 --log-out /tmp/boatlock-gnss-closure-boot.log --json-out /tmp/boatlock-gnss-closure-acceptance.json` -> `PASS`.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 100` -> blocked at install: `INSTALL_FAILED_USER_RESTRICTED`.
+
+Self-review:
+- GNSS firmware/hardware closure is green through serial acceptance, but Android validation is not closed because the exact APK install/update path was denied by MIUI.
+- Do not continue to the next module or substitute `--no-install`; phone-side install approval must be restored first.
+
+Promote to skill:
+- If MIUI returns `INSTALL_FAILED_USER_RESTRICTED` after a previously successful setup, treat it as a fresh phone-side install approval blocker and stop the acceptance path.
+
+### 2026-04-24 Stage 41: BLE advertising watchdog for post-install scan misses
+
+Scope:
+- Investigate and fix the Android smoke failure after exact install succeeded but the app could not find `BoatLock` in BLE scan results.
+
+Key outcomes:
+- Logcat showed the phone repeatedly scanning but seeing only unnamed devices and no advertised `BoatLock` name or `12ab` service.
+- Added `BleAdvertisingWatchdog.h`, a pure decision helper for stale BLE advertising/server state.
+- `BLEBoatLock.loop()` now checks once per second:
+  - if server has clients but local state is not connected, mark connected
+  - if local state says connected but server has no clients, clear stale stream/subscription state and restart advertising
+  - if no clients and advertising is stopped, restart advertising
+- Deliberately did not enable continuous advertising while connected. Multi-client BLE needs an explicit design: multiple read-only subscribers, one control owner/lease, and per-client auth/session or write rejection.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_ble_advertising_watchdog -f test_runtime_ble_live_frame -f test_ble_command_handler` -> `36/36` passed.
+- `cd boatlock && pio run -e esp32s3` -> success, flash size `724917` bytes.
+- `cd boatlock && platformio test -e native` -> `175/175` passed.
+- `./tools/hw/nh02/flash.sh` -> built, flashed, and verified ESP32-S3 `98:88:e0:03:ba:5c`.
+- `./tools/hw/nh02/acceptance.sh --seconds 15 --log-out /tmp/boatlock-ble-watchdog-boot.log --json-out /tmp/boatlock-ble-watchdog-acceptance.json` -> `PASS`, including BNO08x, display, EEPROM, BLE advertising, stepper config, STOP button, and GPS UART.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 100` -> exact APK install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received","dataEvents":1,...}`.
+
+Self-review:
+- This fixes self-recovery when advertising actually stopped or BLE state went stale, without widening the control surface to multiple simultaneous clients.
+- The next BLE module should explicitly design multi-client behavior instead of treating "advertise while connected" as a safe toggle.
+- The previously blocked GNSS Android acceptance path is no longer blocked in this run because the exact APK install/update path succeeded again.
+
+Promote to skill:
+- Do not enable always-advertising/multi-central behavior until control ownership and per-client session semantics are defined and tested.
+- For Xiaomi install flakiness, one repeat of the exact install after phone-side approval is acceptable; if it fails again, stop and fix phone policy instead of using `--no-install`.
+
+### 2026-04-24 Stage 42: Android smoke covers ESP32 reboot recovery
+
+Scope:
+- Add a hardware acceptance scenario for the phone staying connected/recovering when the ESP32-S3 reboots while the app is running.
+
+Key outcomes:
+- Reused the existing reconnect smoke APK state machine: first telemetry, telemetry gap, telemetry after reconnect.
+- Added `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130`.
+- The `nh02` wrapper now triggers the gap with the tracked `/opt/boatlock-hw/bin/boatlock-reset-esp32s3.sh` helper instead of phone Bluetooth cycling.
+- Kept this as a separate acceptance target from Bluetooth off/on so failures point at the correct side of the link.
+
+Validation:
+- `bash -n tools/hw/nh02/android-run-smoke.sh tools/hw/nh02/remote/boatlock-run-android-smoke.sh tools/android/build-smoke-apk.sh tools/android/run-smoke.sh` -> clean.
+- `./tools/hw/nh02/install.sh` -> refreshed the tracked remote helper on `nh02`; RFC2217 service returned active.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact APK install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect","dataEvents":4,...}` after phone Bluetooth cycle.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact APK install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect","dataEvents":4,...}` after ESP32 reset.
+
+Self-review:
+- This proves recovery while the app process is alive. If Android kills the app process after the user closes it, automatic BLE reconnect starts only when the app is launched again.
+- The test remains read-only: it does not send anchor or manual actuation commands.
+
+Promote to skill:
+- ESP32 reboot recovery must be tested with `android-run-smoke.sh --esp-reset --wait-secs 130` after BLE reconnect changes or firmware changes that affect advertising/connection lifecycle.
+
+### 2026-04-24 Stage 43: BNO08x I2C/event-stream failure isolated
+
+Scope:
+- Investigate the observed real-hardware compass freeze and `Wire.cpp requestFrom(): i2cRead returned Error -1`.
+
+Key outcomes:
+- Confirmed the original acceptance wrapper missed Arduino `[E]` logs; it now fails on Arduino error logs, `COMPASS lost`, `COMPASS retry ready=0`, and `I2C address not found`.
+- Added `RuntimeCompassHealth` so stale/missing BNO08x events fail closed as no heading instead of leaving the screen/control path with a frozen last heading.
+- Reduced BNO08x polling to a bounded cadence and added `wasReset()` handling to re-enable BNO08x reports after SH2 reset, matching the Adafruit example pattern.
+- Current `nh02` evidence after those fixes:
+  - I2C scan sees `0x4B(BNO08x)`
+  - firmware logs `[COMPASS] reset detected reports=1`
+  - no first sensor event arrives
+  - firmware logs `[COMPASS] lost reason=FIRST_EVENT_TIMEOUT`
+  - retry then prints `I2C address not found` and `[COMPASS] retry ready=0`
+- Conclusion for this bench state: raw I2C address visibility is not enough; the BNO08x SH2/report stream is unusable. This is now fail-closed in software, but the remaining root cause is likely hardware/power/reset-line/bus integrity unless a full sensor power-cycle restores it.
+
+Validation:
+- `pytest tools/hw/nh02/test_acceptance.py` -> `4/4` passed.
+- `cd boatlock && platformio test -e native -f test_runtime_compass_health -f test_runtime_telemetry_cadence` -> `7/7` passed after host-side rerun.
+- `cd boatlock && pio run -e esp32s3` -> success, flash size `725393` bytes.
+- `./tools/hw/nh02/flash.sh --no-build` -> flashed and verified ESP32-S3 `98:88:e0:03:ba:5c`.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-compass-reset-reports-boot.log --json-out /tmp/boatlock-compass-reset-reports-acceptance.json` -> `FAIL` by design on `compass_lost`, `i2c_address_not_found`, and `compass_retry_failed`.
+
+Self-review:
+- The safety behavior is better: stale compass no longer remains trusted.
+- The hardware bench is not green; do not proceed to anchor/control validation until BNO08x produces fresh events again.
+
+Promote to skill:
+- Compass acceptance must require live BNO08x event health, not only an I2C address and a boot-time `ready=1` line.
+
+### 2026-04-24 Stage 44: Compass heading-event hardening and long acceptance
+
+Scope:
+- Finish the BNO08x compass slice after the real bench showed the screen heading could freeze and serial logged `Wire.cpp requestFrom(): i2cRead returned Error -1`.
+
+Key outcomes:
+- Researched official BNO08x guidance and captured the durable conclusion in `docs/COMPASS_BNO08X.md`: BNO08x I2C is known-problematic with ESP32/ESP32-S3, so I2C remains bring-up/diagnostic only; stable production wiring should move to UART-RVC or SPI with reset wiring.
+- Changed `BNO08xCompass::read()` to check `wasReset()` before reading events, clear cached event state on reset, re-enable reports, and return explicit `anyEvent` vs `headingEvent`.
+- Runtime freshness now uses only rotation-vector heading events via `lastHeadingEventAgeMs`; gyro/mag events no longer keep heading alive.
+- Added `[COMPASS] heading events ready ...` and made hardware acceptance require that marker.
+- Fixed reset grace handling: after a BNO reset and successful report re-enable, the first-heading-event timeout starts from the reset/reconfigure time, not from original boot.
+- `SET_ANCHOR` and cardinal nudge now use `headingAvailable()` instead of raw `compassReady`, so stale heading is not saved during reset or dropout windows.
+
+Validation:
+- `pytest tools/hw/nh02/test_acceptance.py` -> `5/5` passed.
+- `cd boatlock && platformio test -e native -f test_runtime_compass_health -f test_runtime_telemetry_cadence -f test_ble_command_handler` -> `38/38` passed.
+- `cd boatlock && pio run -e esp32s3` -> success, flash size `725665` bytes.
+- `./tools/hw/nh02/flash.sh --no-build` -> flashed and verified ESP32-S3 `98:88:e0:03:ba:5c`.
+- First short hardware acceptance -> `PASS`, but a subsequent 180 s run failed around 65 s on `Wire.cpp`, `COMPASS lost`, `I2C address not found`, and retry failure. This confirmed short boot acceptance was insufficient for compass stability.
+- After reset-grace and heading-gate fixes, `./tools/hw/nh02/acceptance.sh --seconds 180 --log-out /tmp/boatlock-compass-final-180s.log --json-out /tmp/boatlock-compass-final-180s.json` -> `PASS`, with `[COMPASS] heading events ready age=4` and no fatal errors.
+- `cd boatlock && platformio test -e native` -> `181/181` passed.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 100` -> blocked at exact APK install with `INSTALL_FAILED_USER_RESTRICTED: Install canceled by user`; no `--no-install` fallback was used.
+- `git diff --check` -> clean.
+
+Self-review:
+- Software now fails closed on stale heading and acceptance can catch both no-event and later Wire/I2C failure cases.
+- The bench passed 180 seconds, but official vendor guidance still makes ESP32-S3+BNO08x I2C a weak production choice. Do not treat this as final hardware architecture for alpha if compass stability matters on water.
+- Android BLE smoke is not closed for this slice because MIUI blocked exact APK install; rerun the canonical wrapper after phone-side install approval is restored.
+- Next hardware improvement should be wiring BNO08x UART-RVC or SPI plus reset, then adding an acceptance mode that proves heading continuity on that transport.
+
+Promote to skill:
+- Compass acceptance needs a long enough capture to catch delayed BNO08x I2C failures; a boot-only pass is not sufficient for this module.
+- Fresh heading means rotation-vector events only.
+
+### 2026-04-24 Stage 45: BNO08x GPIO13 reset trial is not sufficient
+
+Scope:
+- Verify whether the newly wired BNO08x reset candidate on GPIO13 can make the current ESP32-S3 I2C compass path stable enough for repeated hardware acceptance.
+
+Key outcomes:
+- Used the tracked `gpio_probe` sketch to identify the unknown accessible header pin:
+  - GPIO15 toggled first but is the STOP button path, so it is not usable for compass reset.
+  - GPIO13 toggled cleanly and was selected for the BNO08x reset trial.
+  - GPIO17 showed expected GPS RX activity/noise and must not be reused.
+- Added and flashed the `esp32s3_rst13` firmware environment.
+- Strengthened BNO08x recovery to close the SH2 session, pulse the configured reset pin, restart I2C, and require fresh rotation-vector heading events before heading is trusted.
+- Repeated 180 s hardware acceptance through the canonical `nh02` path:
+  - `/tmp/boatlock-compass-rst13-hardreset-1.log` passed with `[COMPASS] reset pin=13 pulse=1` and `[COMPASS] heading events ready age=4`.
+  - `/tmp/boatlock-compass-rst13-hardreset-2.log` failed with `[COMPASS] lost reason=FIRST_EVENT_TIMEOUT`, repeated `[COMPASS] reset pulse source=recovery pin=13 pulse=1`, repeated `[COMPASS] retry ready=0 source=BNO08x`, while I2C inventory still saw `0x4B(BNO08x)`.
+  - `/tmp/boatlock-compass-rst13-hardreset-3.log` failed from boot with `[COMPASS] ready=0 source=BNO08x`, repeated reset pulses, repeated retry failures, and persistent `0x4B(BNO08x)` inventory.
+- Conclusion: GPIO13 toggling is real at the ESP32 side, but the current BNO08x I2C path remains unstable. A visible I2C ACK and `pulse=1` do not prove the BNO08x report stream recovered.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_compass_recovery -f test_runtime_compass_health` -> `9/9` passed before the final flash.
+- `./tools/hw/nh02/flash.sh --env esp32s3_rst13` -> build `SUCCESS`, flash verified.
+- `./tools/hw/nh02/acceptance.sh --seconds 180 --log-out /tmp/boatlock-compass-rst13-hardreset-1.log --json-out /tmp/boatlock-compass-rst13-hardreset-1.json` -> `PASS`.
+- `./tools/hw/nh02/acceptance.sh --seconds 180 --log-out /tmp/boatlock-compass-rst13-hardreset-2.log --json-out /tmp/boatlock-compass-rst13-hardreset-2.json` -> `FAIL`.
+- `./tools/hw/nh02/acceptance.sh --seconds 180 --log-out /tmp/boatlock-compass-rst13-hardreset-3.log --json-out /tmp/boatlock-compass-rst13-hardreset-3.json` -> `FAIL`.
+- `pytest tools/hw/nh02/test_acceptance.py` -> `5/5` passed after documenting the failed trial.
+- `cd boatlock && platformio test -e native -f test_runtime_compass_recovery -f test_runtime_compass_health` -> `9/9` passed after documenting the failed trial.
+- `git diff --check` -> clean.
+
+Self-review:
+- The safety behavior remains correct because heading fails closed and anchor cannot rely on stale compass data.
+- The hardware path is not acceptable for anchor validation: repeated reset pulses do not restore BNO08x heading events once the SH2/report stream is absent.
+- The next hardware cut should not be more I2C timing tweaks. If the module wiring is accessible, move to UART-RVC first for heading-only operation, or SPI if full SH2 report control is required.
+
+Promote to skill:
+- Do not treat `[COMPASS] reset pulse ... pulse=1` as proof that the BNO08x recovered. Recovery is proven only by fresh `[COMPASS] heading events ready` after the pulse and a clean long acceptance capture.
+- For this bench, `esp32s3_rst13` is a reset trial environment, not a green production compass transport.
+
+### 2026-04-24 Stage 46: BNO08x production migration to UART-RVC
+
+Scope:
+- Move the main firmware compass path from ESP32-S3 I2C/SH2 to BNO08x UART-RVC on the confirmed `nh02` wiring, with no backward compatibility path.
+
+Key outcomes:
+- Replaced the production `BNO08xCompass` implementation with a small UART-RVC reader on `HardwareSerial2`, `RX=12`, `baud=115200`, reset `GPIO13`.
+- Added `BnoRvcFrame` parser coverage for checksum, little-endian decode, scaling, and stream resync.
+- Removed production I2C/SH2 compass recovery code, old I2C debug sketches, Adafruit BNO08x/BusIO dependencies, and the `esp32s3_rst13` trial environment.
+- Updated hardware acceptance so compass readiness is `[COMPASS] ready=1 source=BNO08x-RVC rx=12 baud=115200` plus fresh `[COMPASS] heading events ready`.
+- Captured the user correction that active development targets one default ESP32-S3 bench board; do not add new `BOATLOCK_BOARD_JC4832W535` runtime branches unless explicitly requested.
+
+Validation:
+- `pytest tools/hw/nh02/test_acceptance.py` -> `5/5` passed.
+- `cd boatlock && platformio test -e native -f test_bno_rvc_frame -f test_runtime_compass_health` -> `7/7` passed.
+- `cd boatlock && platformio test -e native` -> `179/179` passed after deleting the empty removed-suite directory.
+- `cd boatlock && pio run -e esp32s3` -> success, flash size `694941` bytes.
+- `git diff --check` -> clean.
+- `./tools/hw/nh02/flash.sh --no-build` initially failed because the expected canonical artifact shape was missing; reran `./tools/hw/nh02/flash.sh`, which rebuilt and flashed production firmware successfully.
+- `./tools/hw/nh02/acceptance.sh --seconds 180 --log-out /tmp/boatlock-rvc-production-180s.log --json-out /tmp/boatlock-rvc-production-180s.json` -> `PASS`, matched RVC compass ready, heading events, display, EEPROM, BLE advertising, stepper, STOP, and GPS UART with no missing checks or errors.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 100` -> exact APK install succeeded after the wrapper retried the MIUI `USER_RESTRICTED` first attempt; `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+
+Self-review:
+- This is a real architecture simplification: production no longer contains a second compass transport or SH2 reset/reconfigure branch.
+- `Wire` still appears in the PlatformIO dependency graph through the display library, but the production compass code no longer includes or uses `Wire`.
+- RVC gives stable heading/acceleration for anchor needs, but it does not expose SH2 calibration quality or RV accuracy; those fields remain neutral placeholders and should not be used as acceptance criteria.
+
+Promote to skill:
+- Current BoatLock development is single-board on the default `nh02` bench. Do not add new alternate-board runtime branches for future changes unless the user explicitly asks for that board.
+- If `flash.sh --no-build` fails because artifacts are missing, do not hand-copy or reconstruct artifacts; run the canonical `flash.sh` so build and deploy stay in one tracked path.
+
+### 2026-04-24 Stage 47: GNSS quality sample simplification
+
+Scope:
+- Continue module-by-module refactor with the GNSS/source/quality gate layer after the compass migration.
+
+Key outcomes:
+- Split `RuntimeGnss` quality evaluation into two explicit builders: `qualityConfigFromSettings()` and `qualitySample()`.
+- Removed duplicated `controlGpsAvailable()` checks from the quality gate path.
+- Added coverage that phone GPS fallback does not reuse previous hardware HDOP, speed, accel, satellite, or sentence metrics as control quality.
+- Promoted the invariant that control GNSS is hardware-only; phone GPS is UI/telemetry fallback, not anchor quality input.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_gnss -f test_gnss_quality_gate -f test_ble_command_handler` -> `40/40` passed.
+- `cd boatlock && platformio test -e native` -> `180/180` passed.
+- `cd boatlock && pio run -e esp32s3` -> success, flash size `694985` bytes.
+- `git diff --check` -> clean.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-gnss-refactor-60s.log --json-out /tmp/boatlock-gnss-refactor-60s.json` -> `PASS`, including RVC compass, display, EEPROM, BLE advertising, stepper, STOP, and GPS UART.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 100` -> exact APK install `Success`, `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+
+Self-review:
+- This is intentionally a small KISS refactor: behavior stays the same, but the safety boundary is now testable as data instead of being implicit in repeated conditionals.
+- Hardware acceptance proves the boot/GPS UART path and BLE telemetry still work; it does not prove outdoor GPS fix quality because the bench currently reports `NO_GPS` in the Android smoke result.
+- I accidentally ran `pio test` and `pio run` concurrently against the same project; it did not fail this time, but that should not be normalized because PlatformIO shares `.pio/build`.
+
+Promote to skill:
+- GNSS quality samples must be built from hardware control fixes only. Phone GPS fallback should not carry over hardware quality fields.
+- Do not parallelize PlatformIO build and test in the same project/build directory unless build dirs are isolated.
+
+### 2026-04-24 Stage 48: Motion/Motor refactor with explicit external baseline
+
+Scope:
+- Continue the module-by-module KISS refactor with actuator quieting and anchor thrust state.
+- Correct the workflow after the user pointed out that each module pass must start from external best practices, not only local code intuition.
+
+External baseline:
+- ArduPilot Rover `Hold` mode is a dedicated quiet state where vehicle outputs go to safe trims and failsafes commonly switch into that mode: <https://ardupilot.org/rover/docs/hold-mode.html>.
+- ArduPilot Rover failsafe recovery is explicit: after link recovery, operator action is still required before control resumes: <https://ardupilot.org/rover/docs/rover-failsafes.html>.
+- ArduPilot Rover boat `Loiter` is zone-based: drift inside radius, bounded correction outside radius, with deadband/throttle considerations: <https://ardupilot.org/rover/docs/loiter-mode.html>.
+- ArduPilot Rover motor configuration treats throttle type, deadband, direction testing, and mechanically safe low-throttle tests as first-class setup: <https://ardupilot.org/rover/docs/rover-motor-and-servo-configuration.html>.
+- OpenCPN Anchor Watch fails closed on GPS loss for anchor monitoring, reinforcing that missing position evidence is a safety event: <https://opencpn.org/wiki/dokuwiki/doku.php?id=opencpn:manual_advanced:features:auto_anchor>.
+
+Key outcomes:
+- Added an explicit repo rule: before refactoring any module, do a targeted external best-practice pass from official/primary sources and record the applied baseline.
+- Updated the BoatLock skill so the baseline check is part of the normal working pattern and self-review loop.
+- Added `RuntimeMotion::quietAutoOutputs()` and `quietAllOutputs()` to centralize safe actuator quieting instead of duplicating partial stop blocks.
+- Made hard `MotorControl::stop()` clear hidden anchor-auto state, filtered distance/rate state, ramp state, and PWM state.
+- Kept normal anchor-controller idle separate from hard stop via `stopAnchorOutput()`, so anti-hunt min on/off windows are preserved during ordinary zone-based control.
+- Added tests proving hard stop clears auto-thrust state and loss of control GNSS clears auto thrust through `RuntimeMotion`.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_motor_control -f test_runtime_motion -f test_anchor_supervisor -f test_anchor_safety` initially caught a real regression in anti-hunt timing; fixed by separating hard stop from controller idle output.
+- `cd boatlock && platformio test -e native -f test_motor_control -f test_runtime_motion -f test_anchor_supervisor -f test_anchor_safety` -> `28/28` passed.
+- `cd boatlock && platformio test -e native` -> `182/182` passed.
+- `cd boatlock && pio run -e esp32s3` -> success, flash size `695045` bytes.
+- `git diff --check` -> clean.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-motion-refactor-60s.log --json-out /tmp/boatlock-motion-refactor-60s.json` -> `PASS`, including RVC compass, display, EEPROM, BLE advertising, stepper, STOP, heading events, and GPS UART.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 100` -> exact APK install eventually `Success` after two MIUI `USER_RESTRICTED` retries, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+
+Self-review:
+- This is a small safety simplification, not a broad controller rewrite: the public behavior stays zone-based and bounded, while hard stop now removes hidden actuator state.
+- The targeted test failure was valuable because it prevented turning a safety hard-stop rule into ordinary anti-hunt instability.
+- Hardware acceptance proves boot/device health and BLE telemetry after this firmware; it does not prove loaded thrust behavior on a real prop/boat.
+
+Promote to skill:
+- External best-practice review is mandatory per module before refactor. Use official/primary sources first and record the baseline before or with the worklog entry.
+- Keep hard actuator stop distinct from ordinary controller idle output; failsafe/STOP should clear hidden state, while zone-control idle should preserve anti-hunt timing.
+
+### 2026-04-24 Stage 49: Runtime supervisor fail-closed simplification
+
+Scope:
+- Continue the module-by-module refactor with `AnchorSupervisor`, `RuntimeSupervisorPolicy`, and the related settings/schema surface.
+- Remove optional behavior that can widen the actuation surface during faults.
+
+External baseline:
+- ArduPilot Rover failsafes switch to deterministic actions such as `Hold` or disarm, and after link recovery the operator must explicitly retake control: <https://ardupilot.org/rover/docs/rover-failsafes.html>.
+- ArduPilot pre-arm checks block movement until the fault is resolved and warn against disabling arming checks except for bench testing: <https://ardupilot.org/rover/docs/common-prearm-safety-checks.html>.
+- ArduPilot `Hold` mode is the quiet mode used for arming/disarming and failsafe behavior: <https://ardupilot.org/rover/docs/hold-mode.html>.
+- PX4 safety configuration also treats data-link loss and telemetry loss as explicit failsafe triggers with configured hold/return/land-style actions, not silent recovery: <https://docs.px4.io/main/en/config/safety>.
+
+Key outcomes:
+- Removed legacy `AnchorSafety` and its test suite; `AnchorSupervisor` is the single runtime safety decision module now.
+- Removed `SafeAction::MANUAL` and the `FailAct` / `NanAct` settings. Runtime failsafes now always stop motion and latch `HOLD`; manual control requires a new explicit command.
+- Removed unused `MaxThrustS` from settings and config docs.
+- Bumped `Settings::VERSION` and `docs/CONFIG_SCHEMA.md` from `0x15` to `0x16`; `nh02` migrated EEPROM to `ver=22`.
+- Replaced zero-as-sentinel GPS/sensor timers with explicit active flags so failures starting at `millis()==0` still time out correctly.
+- Made containment breach priority explicit over a simultaneous GPS weak grace expiry.
+- Added regression tests for zero-time GPS/sensor faults, containment priority, and fail-closed NaN handling.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_anchor_supervisor -f test_runtime_supervisor_policy -f test_runtime_motion -f test_settings -f test_ble_command_handler -f test_runtime_control` -> `66/66` passed.
+- `python3 tools/ci/check_config_schema_version.py` -> `config schema version OK: 0x16`.
+- First full native run caught an empty deleted `test_anchor_safety` suite; removed the empty directory and reran.
+- `cd boatlock && platformio test -e native` -> `181/181` passed.
+- `cd boatlock && pio run -e esp32s3` -> success, flash size `694625` bytes.
+- `git diff --check` -> clean.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-supervisor-refactor-60s.log --json-out /tmp/boatlock-supervisor-refactor-60s.json` -> `PASS`, including EEPROM `ver=22`, RVC compass, display, BLE advertising, stepper, STOP, GPS UART, and heading events.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 100` -> exact APK install `Success` after one MIUI `USER_RESTRICTED` retry, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+
+Self-review:
+- This is a deliberate behavior tightening: no automatic manual mode on faults. That matches the safety baseline and the current product scope.
+- Manual BLE commands still exist as a separate service/dev control surface; they were not removed in this supervisor slice.
+- Hardware acceptance and Android smoke prove boot, migration, BLE telemetry, and sensor presence, but not real loaded thrust behavior.
+
+Promote to skill:
+- Supervisor/failsafe logic must not auto-enter manual. Fault recovery should require an explicit operator command after the quiet state is reached.
+- Do not keep empty PlatformIO test suite directories after removing a module; full `pio test` treats them as errors.
+
+### 2026-04-24 Stage 50: Hardware button debounce pass
+
+Scope:
+- Continue the module-by-module refactor with `HoldButtonController` and `RuntimeButtons`.
+- Reduce accidental physical-input triggers for BOOT anchor save, STOP emergency stop, and STOP long-press pairing.
+
+External baseline:
+- ArduPilot pre-arm checks treat safety state and input/config faults as blockers before movement: <https://ardupilot.org/rover/docs/common-prearm-safety-checks.html>.
+- ArduPilot safety switch behavior keeps physical safety controls explicit instead of hidden in normal control flow: <https://ardupilot.org/rover/docs/common-safety-switch-pixhawk.html>.
+- ESP-IDF GPIO guidance treats GPIO as raw hardware input; firmware must configure and interpret input state deliberately: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-reference/peripherals/gpio.html>.
+
+Key outcomes:
+- Added 40 ms debounce to `HoldButtonController` before emitting press/release edges.
+- BOOT anchor save still requires stable long press; a short GPIO bounce no longer starts a valid hold cycle.
+- STOP emergency action now fires on a debounced press edge; STOP pairing window still requires stable 3 s hold.
+- Added button tests for debounce timing, zero-time press, release after debounce, and short bounce suppression.
+- Promoted a durable rule: raw physical button input must be debounced before state-changing actions.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_hold_button_controller -f test_runtime_buttons -f test_ble_command_handler` -> `39/39` passed.
+- `cd boatlock && platformio test -e native` -> `183/183` passed.
+- `cd boatlock && pio run -e esp32s3` -> success, flash size `694677` bytes.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-buttons-refactor-60s.log --json-out /tmp/boatlock-buttons-refactor-60s.json` -> `PASS`, including RVC compass, display, EEPROM `ver=22`, BLE advertising, stepper, STOP, heading events, and GPS UART.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 100` -> exact APK install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+
+Self-review:
+- Debounce delays hardware STOP by 40 ms. That is an acceptable tradeoff to suppress raw GPIO bounce without making STOP a long-press action.
+- Hardware acceptance proves normal boot and BLE still work, but it does not physically inject button bounce on `nh02`; bounce behavior is covered by native unit tests.
+
+Promote to skill:
+- Physical inputs are raw and unsafe until debounced. State-changing actions need stable edges or stable long-press, not single-sample GPIO reads.
+
+### 2026-04-24 Stage 51: BLE manual control standardization
+
+Scope:
+- Continue BLE module refactor after correcting the assumption that manual control should be cut from `main`.
+- Keep manual control as core scope for phone and future BLE joystick/remotes, but replace split commands with a safer standardized input model.
+
+External baseline:
+- Bluetooth GATT write requests return a write response or error for a single characteristic value and are bounded by ATT MTU; this favors small explicit command payloads over serial-style command streams: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-61/out/en/host/generic-attribute-profile--gatt-.html>.
+- Android `BluetoothGatt.writeCharacteristic(..., writeType)` reports completion through `onCharacteristicWrite`; use that as transport status, not as a substitute for an application-level safety contract: <https://developer.android.com/reference/android/bluetooth/BluetoothGatt>.
+- Android exposes write types including default acknowledged write and no-response write; control commands should keep acknowledged writes where the client needs a result: <https://developer.android.com/reference/android/bluetooth/BluetoothGattCharacteristic>.
+- Bluetooth HID over GATT is the standard direction for future generic BLE joystick/remotes, but BoatLock should map any such input into one internal manual-control state instead of adding a second actuator path: <https://www.bluetooth.com/specifications/specs/hid-over-gatt-profile/>.
+
+Key outcomes:
+- Corrected repo scope: manual control is core product functionality, not a feature to remove.
+- Added `ManualControl` with source, atomic steer/throttle input, valid ranges, and a short deadman TTL.
+- Replaced split BLE commands `MANUAL`, `MANUAL_DIR`, and `MANUAL_SPEED` with `MANUAL_SET:<steer>,<throttlePct>,<ttlMs>` plus `MANUAL_OFF`.
+- `MANUAL_SET` disables Anchor on entry, so timeout, reconnect, or app crash cannot resume Anchor unexpectedly.
+- `ANCHOR_ON`, `ANCHOR_OFF`, STOP/failsafe paths now clear manual state and quiet manual outputs.
+- Flutter now builds/sends the atomic manual command and exposes `manualOff()`.
+- Added Android `--manual` smoke mode: installs exact APK, sends zero-throttle `MANUAL_SET`, observes `MANUAL`, sends `MANUAL_OFF`, and observes mode exit.
+- Updated BLE protocol docs, repo notes, validation references, and hardware acceptance skill.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_manual_control -f test_ble_command_handler -f test_runtime_motion -f test_runtime_control` -> `49/49` passed.
+- `cd boatlock_ui && flutter test --no-pub` with `HOME=/tmp XDG_CACHE_HOME=/tmp` -> all tests passed.
+- `cd boatlock && pio run -e esp32s3` -> success, flash size `695133` bytes.
+- `cd boatlock && platformio test -e native` -> `189/189` passed.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-manual-standard-60s.log --json-out /tmp/boatlock-manual-standard-60s.json` -> `PASS`, including RVC compass, display, EEPROM `ver=22`, BLE advertising, stepper, STOP, heading events, and GPS UART.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 100` -> exact APK install eventually `Success` after two MIUI `USER_RESTRICTED` retries, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+- `./tools/android/build-smoke-apk.sh --mode manual` initially failed in sandbox with Gradle `SocketException: Operation not permitted`; rerun outside sandbox succeeded.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact APK install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip","dataEvents":4,...,"mode":"IDLE"}`.
+
+Self-review:
+- This intentionally changes the protocol because there is no alpha-release compatibility requirement. Old split commands now fall through as unhandled and are covered by a regression test.
+- Manual smoke is zero-throttle only. It proves phone-to-ESP32 BLE command flow and mode transition, not powered thrust or steering under load.
+- Future BLE joystick work should reuse `ManualControl` and add a control-owner/lease model before supporting multiple simultaneous controllers.
+
+Promote to skill:
+- Manual control is core scope for BoatLock, but must be atomic, deadman-protected, and source-agnostic.
+- Use zero-throttle Android manual smoke after manual BLE protocol changes; basic smoke is telemetry-only and is not enough for this module.
+
+### 2026-04-24 Stage 52: Phone manual-control UI completion
+
+Scope:
+- Complete the phone side of manual control after standardizing the BLE command.
+- Keep the UI consistent with operational safety: no one-tap latched motion from the main map.
+
+External baseline:
+- Material FAB guidance recommends one primary floating action per screen and warns against using FABs for minor/destructive/control actions: <https://m1.material.io/components/buttons-floating-action-button.html>.
+- The BLE/manual baseline from Stage 51 still applies: manual actuation must be atomic and deadman-protected.
+
+Key outcomes:
+- Added `ManualControlSheet`, opened from an app-bar joystick icon instead of adding another main-map FAB.
+- Manual UI sends `MANUAL_SET` only while a directional/throttle button is held.
+- Manual UI refreshes every `250 ms` with a `500 ms` firmware TTL.
+- Releasing all controls or pressing STOP sends `MANUAL_OFF`.
+- Widget disposal also sends `MANUAL_OFF` if a manual command was active.
+- Added widget tests proving hold-to-send and release-to-off behavior.
+
+Validation:
+- `cd boatlock_ui && flutter test --no-pub` with `HOME=/tmp XDG_CACHE_HOME=/tmp` -> `29/29` passed.
+- `cd boatlock_ui && flutter build apk --debug --no-pub` with `HOME=/tmp XDG_CACHE_HOME=/tmp` -> success, built `build/app/outputs/flutter-apk/app-debug.apk`.
+
+Self-review:
+- This validates the UI command contract locally and the BLE manual roundtrip on phone was already proven by Stage 51 manual smoke.
+- I did not run interactive phone UI automation for this sheet; current hardware proof is the zero-throttle smoke app, not a tap-through of the production map UI.
+
+Promote to skill:
+- Phone manual control should remain press-and-hold/deadman UI. Do not add one-tap latched manual actuation to the main map.

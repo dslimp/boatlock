@@ -4,15 +4,16 @@ import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/boat_data.dart';
 import 'ble_live_frame.dart';
+import 'ble_reconnect_policy.dart';
 
 typedef BoatDataCallback = void Function(BoatData? data);
 typedef LogCallback = void Function(String line);
 
-class BleBoatLock {
+class BleBoatLock with WidgetsBindingObserver {
   BluetoothDevice? _device;
   BluetoothCharacteristic? _dataChar;
   BluetoothCharacteristic? _cmdChar;
@@ -38,24 +39,32 @@ class BleBoatLock {
 
   StreamSubscription<BluetoothConnectionState>? _connectionSub;
   StreamSubscription<List<ScanResult>>? _scanResultsSub;
+  StreamSubscription<BluetoothAdapterState>? _adapterStateSub;
   StreamSubscription<List<int>>? _dataSub;
   StreamSubscription<List<int>>? _logSub;
   Timer? _reconnectTimer;
   Timer? _heartbeatTimer;
+  final BleReconnectPolicy _reconnectPolicy = BleReconnectPolicy();
   bool _isConnecting = false;
+  bool _isDisposed = false;
   DateTime? _lastDataLogAt;
 
   BleBoatLock({required this.onData, this.onLog});
 
   Future<void> connectAndListen() async {
     _log('connectAndListen()');
+    _isDisposed = false;
+    WidgetsBinding.instance.addObserver(this);
     await _disconnectCurrentDevice();
     final ok = await _ensurePermissions();
     if (!ok) {
       _log('BLE permissions are not granted');
       return;
     }
-    await _scanAndConnect();
+    await _watchAdapterState();
+    final adapterReady = await _readAdapterReady();
+    final decision = _reconnectPolicy.start(adapterReady: adapterReady);
+    await _applyReconnectDecision(decision, waitForScan: true);
   }
 
   Future<void> _disconnectCurrentDevice() async {
@@ -74,6 +83,7 @@ class BleBoatLock {
         await _device!.disconnect();
       } catch (_) {}
     }
+    _device = null;
     _clearCharacteristics();
   }
 
@@ -100,6 +110,12 @@ class BleBoatLock {
 
   Future<void> _scanAndConnect() async {
     _log('_scanAndConnect()');
+    if (_isDisposed || !_reconnectPolicy.canAttempt) {
+      _log(
+        'scan skipped: disposed=$_isDisposed canAttempt=${_reconnectPolicy.canAttempt}',
+      );
+      return;
+    }
     if (_isConnecting) return;
     _isConnecting = true;
 
@@ -138,6 +154,8 @@ class BleBoatLock {
         scanDone.future,
         Future.delayed(const Duration(seconds: 7)),
       ]);
+    } catch (e) {
+      _log('scan failed: $e');
     } finally {
       await FlutterBluePlus.stopScan();
       await _scanResultsSub?.cancel();
@@ -147,7 +165,7 @@ class BleBoatLock {
 
     if (!found) {
       _log('BoatLock not found, retry scan in 3s');
-      _scheduleReconnect();
+      await _applyReconnectDecision(_reconnectPolicy.scanMiss());
     }
   }
 
@@ -166,9 +184,7 @@ class BleBoatLock {
       _connectionSub = _device!.connectionState.listen((state) {
         _log('BLE state: $state');
         if (state == BluetoothConnectionState.disconnected) {
-          _heartbeatTimer?.cancel();
-          _clearCharacteristics();
-          _scheduleReconnect();
+          unawaited(_applyReconnectDecision(_reconnectPolicy.disconnected()));
         }
       });
 
@@ -200,7 +216,7 @@ class BleBoatLock {
       _startHeartbeat();
     } catch (e) {
       _log('connect failed: $e');
-      _scheduleReconnect();
+      await _applyReconnectDecision(_reconnectPolicy.connectFailed());
     }
     _isConnecting = false;
   }
@@ -212,17 +228,102 @@ class BleBoatLock {
       if (_cmdChar == null) return;
       try {
         await _writeControlPoint('HEARTBEAT', withoutResponse: true);
-      } catch (_) {
-        // reconnect flow handles link issues
+      } catch (e) {
+        _log('heartbeat failed: $e');
+        await _applyReconnectDecision(_reconnectPolicy.connectFailed());
       }
     });
   }
 
-  void _scheduleReconnect() {
+  void _scheduleReconnect([Duration delay = const Duration(seconds: 3)]) {
     _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(const Duration(seconds: 3), () async {
+    _reconnectTimer = Timer(delay, () async {
       await _scanAndConnect();
     });
+  }
+
+  Future<void> _applyReconnectDecision(
+    BleReconnectDecision decision, {
+    bool waitForScan = false,
+  }) async {
+    if (decision.isIdle) return;
+    _log('reconnect decision: ${decision.reason}');
+    if (decision.stopScan) {
+      await FlutterBluePlus.stopScan();
+      await _scanResultsSub?.cancel();
+      _scanResultsSub = null;
+    }
+    if (decision.clearLink) {
+      _heartbeatTimer?.cancel();
+      await _connectionSub?.cancel();
+      _connectionSub = null;
+      await _dataSub?.cancel();
+      _dataSub = null;
+      await _logSub?.cancel();
+      _logSub = null;
+      _clearCharacteristics();
+      final device = _device;
+      _device = null;
+      if (device != null) {
+        try {
+          await device.disconnect();
+        } catch (_) {}
+      }
+    }
+    if (decision.scanNow) {
+      _reconnectTimer?.cancel();
+      if (_hasUsableLink) {
+        _log('scan skipped: link already active');
+        return;
+      }
+      if (waitForScan) {
+        await _scanAndConnect();
+      } else {
+        unawaited(_scanAndConnect());
+      }
+      return;
+    }
+    if (decision.scheduleRetry) {
+      _scheduleReconnect(decision.retryDelay);
+    }
+  }
+
+  Future<void> _watchAdapterState() async {
+    if (!_usesRuntimeAdapterState) return;
+    await _adapterStateSub?.cancel();
+    _adapterStateSub = FlutterBluePlus.adapterState.listen((state) {
+      _log('BLE adapter state: $state');
+      final decision = _reconnectPolicy.adapterChanged(
+        adapterReady: isAdapterReady(state),
+      );
+      unawaited(_applyReconnectDecision(decision));
+    });
+  }
+
+  Future<bool> _readAdapterReady() async {
+    if (!_usesRuntimeAdapterState) return true;
+    try {
+      final state = await FlutterBluePlus.adapterState.first.timeout(
+        const Duration(seconds: 2),
+      );
+      _log('BLE adapter initial state: $state');
+      return isAdapterReady(state);
+    } catch (e) {
+      _log('BLE adapter state unavailable, trying scan: $e');
+      return true;
+    }
+  }
+
+  bool get _usesRuntimeAdapterState {
+    return Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
+  }
+
+  bool get _hasUsableLink {
+    return _device != null && _dataChar != null && _cmdChar != null;
+  }
+
+  static bool isAdapterReady(BluetoothAdapterState state) {
+    return state == BluetoothAdapterState.on;
   }
 
   Future<void> requestSnapshot() async {
@@ -325,28 +426,28 @@ class BleBoatLock {
     return _writeCommand(cmd);
   }
 
-  Future<void> setManualMode(bool manual) async {
-    if (_cmdChar != null) {
-      await _writeCommand('MANUAL:${manual ? 1 : 0}');
-    }
-  }
-
   Future<void> setStepperBowZero() async {
     if (_cmdChar != null) {
       await _writeCommand('SET_STEPPER_BOW');
     }
   }
 
-  Future<void> sendManualDirection(int dir) async {
-    if (_cmdChar != null) {
-      await _writeCommand('MANUAL_DIR:$dir');
-    }
+  Future<bool> sendManualControl({
+    required int steer,
+    required int throttlePct,
+    int ttlMs = 500,
+  }) async {
+    final cmd = buildManualSetCommand(
+      steer: steer,
+      throttlePct: throttlePct,
+      ttlMs: ttlMs,
+    );
+    if (cmd == null) return false;
+    return _writeCommand(cmd);
   }
 
-  Future<void> sendManualSpeed(int speed) async {
-    if (_cmdChar != null) {
-      await _writeCommand('MANUAL_SPEED:$speed');
-    }
+  Future<bool> manualOff() async {
+    return _writeCommand('MANUAL_OFF');
   }
 
   Future<bool> setHoldHeading(bool enabled) async {
@@ -383,7 +484,10 @@ class BleBoatLock {
   String generateOwnerSecret() {
     final random = Random.secure();
     final bytes = List<int>.generate(16, (_) => random.nextInt(256));
-    final secret = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join().toUpperCase();
+    final secret = bytes
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join()
+        .toUpperCase();
     _ownerSecret = secret;
     return secret;
   }
@@ -442,7 +546,10 @@ class BleBoatLock {
     if (_secNonceHex == '0000000000000000') return false;
 
     final proof = buildAuthProofHex(secret, _secNonceHex);
-    await _cmdChar!.write(utf8.encode('AUTH_PROVE:$proof'), withoutResponse: false);
+    await _cmdChar!.write(
+      utf8.encode('AUTH_PROVE:$proof'),
+      withoutResponse: false,
+    );
     await Future.delayed(const Duration(milliseconds: 120));
     await requestSnapshot();
     await Future.delayed(const Duration(milliseconds: 120));
@@ -539,7 +646,10 @@ class BleBoatLock {
     return 'NUDGE_DIR:$dir,${meters.toStringAsFixed(1)}';
   }
 
-  static String? buildNudgeBearingCommand(double bearingDeg, {double meters = 1.0}) {
+  static String? buildNudgeBearingCommand(
+    double bearingDeg, {
+    double meters = 1.0,
+  }) {
     if (!bearingDeg.isFinite) return null;
     if (!meters.isFinite || meters < 1.0 || meters > 5.0) return null;
     var norm = bearingDeg % 360.0;
@@ -553,6 +663,17 @@ class BleBoatLock {
     const allowed = {'quiet', 'normal', 'current'};
     if (!allowed.contains(raw)) return null;
     return 'SET_ANCHOR_PROFILE:$raw';
+  }
+
+  static String? buildManualSetCommand({
+    required int steer,
+    required int throttlePct,
+    int ttlMs = 500,
+  }) {
+    if (steer < -1 || steer > 1) return null;
+    if (throttlePct < -100 || throttlePct > 100) return null;
+    if (ttlMs < 100 || ttlMs > 1000) return null;
+    return 'MANUAL_SET:$steer,$throttlePct,$ttlMs';
   }
 
   static String? normalizeOwnerSecret(String? raw) {
@@ -681,7 +802,11 @@ class BleBoatLock {
   }
 
   void dispose() {
+    _isDisposed = true;
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_applyReconnectDecision(_reconnectPolicy.dispose()));
     _scanResultsSub?.cancel();
+    _adapterStateSub?.cancel();
     _connectionSub?.cancel();
     _dataSub?.cancel();
     _logSub?.cancel();
@@ -689,6 +814,12 @@ class BleBoatLock {
     _heartbeatTimer?.cancel();
     _device?.disconnect();
     _clearCharacteristics();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    unawaited(_applyReconnectDecision(_reconnectPolicy.appResumed()));
   }
 
   void _clearCharacteristics() {

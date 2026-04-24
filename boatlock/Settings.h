@@ -46,10 +46,6 @@ const SettingEntry defaultEntries[] = {
     {"CommToutMs", "Comm timeout",      TYPE_INT,   4000, 4000,  3000, 60000,  100.0, "ms", false},
     {"CtrlLoopMs", "Control loop tout", TYPE_INT,   200,  200,   100, 10000,   10.0, "ms", false},
     {"SensorTout", "Sensor timeout",    TYPE_INT,   1500, 1500,  300, 30000,  100.0, "ms", false},
-    {"FailAct",    "Failsafe action",   TYPE_INT,   0.0,  0.0,   0.0,   1.0,    1.0, "", false},
-    {"MaxThrustS", "Max thrust time",   TYPE_INT,   60,  60,    10,  3600,    1.0, "s", false},
-    {"NanAct",     "NaN guard action",  TYPE_INT,   0.0,  0.0,   0.0,   1.0,    1.0, "", false},
-
     // UX / events
     {"GpsWeakHys", "GPS weak hysteresis", TYPE_FLOAT, 1.5, 1.5, 0.5, 60.0, 0.5, "s", false},
     {"EventRateMs","Event rate limit",  TYPE_INT,   1000, 1000, 100, 10000, 100.0, "ms", false},
@@ -93,7 +89,7 @@ const char* imuTypeNames[] = { "BNO055", "MPU9250", "BNO085", "LSM9DS1", "None" 
 
 class Settings {
 public:
-    static constexpr uint8_t VERSION = 0x15;
+    static constexpr uint8_t VERSION = 0x16;
     static const int EEPROM_ADDR = 256;
     static constexpr int VALUES_BYTES = sizeof(float) * count;
     static constexpr int VALUES_ADDR = EEPROM_ADDR + sizeof(uint8_t);

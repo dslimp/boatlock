@@ -13,14 +13,21 @@
 - Use `tools/hw/nh02/android-install.sh` to ensure `adb` exists on `nh02`.
 - Use `tools/hw/nh02/android-status.sh` to check USB enumeration and `adb devices -l` on `nh02`.
 - Use `tools/hw/nh02/android-run-smoke.sh` to copy the smoke APK to `nh02`, install or update it on the attached phone, launch it, and wait for `BOATLOCK_SMOKE_RESULT`.
+- Use `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` to install/update the reconnect smoke APK, wait for first telemetry, cycle phone Bluetooth through ADB, and require telemetry recovery without restarting the app.
+- Use `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` to install/update the reconnect smoke APK, wait for first telemetry, reset the ESP32-S3 through the tracked reset helper, and require telemetry recovery without restarting the app.
 - If `nh02` shows the phone only as `MTP` or a vendor USB device and not in `adb devices`, the cable path is alive but USB debugging is still off on the phone.
 
 ## Install / Update Semantics Seen On The Xiaomi Test Phone
 
-- Initial `adb install` can be blocked by MIUI with `INSTALL_FAILED_USER_RESTRICTED` until the app is installed manually on the phone.
-- After that first manual install, `adb install -r` was proven to succeed from `nh02` on the same phone, so USB update is a valid tracked path for subsequent APK refreshes.
-- `tools/hw/nh02/android-run-smoke.sh --no-install` exists for cases where the install step must be skipped temporarily, but it is a fallback for already-installed builds, not the preferred steady-state update path.
-- Current proven blocker is no longer APK install; it is BLE telemetry after connect on the smoke app.
+- Full acceptance requires the tracked wrapper to install the exact just-built APK with `adb install -r`; an already-installed app is not enough proof.
+- Xiaomi/MIUI can block both first install and later update with `INSTALL_FAILED_USER_RESTRICTED`.
+- Current Xiaomi bench phone has proven canonical ADB update only after the phone-side MIUI flow was satisfied: Xiaomi account, inserted SIM card, and `Install via USB` approval.
+- Required phone-side fixes are `Install via USB`, any MIUI security install confirmation such as `USB debugging (Security settings)`, and any Xiaomi account, SIM-card, or policy prompt that gates ADB installs.
+- If MIUI asks for `insert SIM card` after Xiaomi account login, treat it as a hard phone-side prerequisite for the canonical ADB install path. Do not patch around it in repo scripts.
+- Use the wrapper's actual `adb install -r` result as the source of truth. `dumpsys user` may still print default restriction names and is blocker context, not a pass/fail verdict by itself.
+- If a run returns `INSTALL_FAILED_USER_RESTRICTED` after this setup was previously proven, repeat the same exact install once while the phone is unlocked and the user can approve MIUI prompts.
+- If the repeated exact install also fails, stop the acceptance path and fix the phone-side install policy. Do not continue with `--no-install`.
+- `tools/hw/nh02/android-run-smoke.sh --no-install` exists for BLE-runtime debugging only. Do not use it as acceptance unless the user explicitly waives exact APK installation proof for that run.
 
 ## What Can Be Done Today
 
@@ -29,6 +36,8 @@
 - Build the dedicated smoke APK with `tools/android/build-smoke-apk.sh`.
 - Install and run the smoke app with `tools/android/run-smoke.sh`.
 - Use the phone as the real BLE central against the BoatLock bench.
+- Prove BLE reconnect behavior on `nh02` with `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130`.
+- Prove recovery after ESP32 reboot on `nh02` with `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130`.
 - Read device logs with `adb logcat`.
 - Update an already-installed smoke APK over USB with `adb install -r` through the tracked smoke wrapper.
 - Drive assisted/manual smoke tests while watching:
@@ -42,14 +51,14 @@
 - It auto-starts BLE scan/connect on app launch.
 - It passes only after receiving BoatLock telemetry with non-empty `mode` and `status`.
 - It emits one structured log line prefixed with `BOATLOCK_SMOKE_RESULT ` for `adb` parsing.
+- In reconnect mode, it first emits `BOATLOCK_SMOKE_STAGE {"stage":"first_telemetry"}`, waits for a telemetry gap caused by the wrapper's Bluetooth cycle, and passes only after telemetry returns.
+- In ESP reset mode, the same reconnect APK is used, but the wrapper triggers the gap by resetting the ESP32-S3 instead of cycling phone Bluetooth.
 - It is intentionally read-only and does not send `ANCHOR_ON`, manual, or other actuation commands.
 
 ## What Still Needs Extra Work For Full Automation
 
-- A repeatable device-side BLE smoke harness in the app.
 - Stable automation hooks for:
   - pairing/auth
-  - reconnect
   - anchor-on deny/allow assertions
   - richer telemetry assertions
 
@@ -67,4 +76,8 @@
   - `tools/hw/nh02/android-status.sh`
 - Then run:
   - `tools/hw/nh02/android-run-smoke.sh`
+- For reconnect acceptance, run:
+  - `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130`
+- For ESP32 reboot recovery acceptance, run:
+  - `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130`
 - After that, if stronger coverage is needed, add a narrow app-side flow for connect + auth + heartbeat + anchor-on deny/allow checks.

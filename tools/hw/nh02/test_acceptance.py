@@ -6,8 +6,9 @@ import acceptance
 
 
 GOOD_LOG = [
-    "[I2C] SDA=47 SCL=48 devices=1: 0x4B(BNO08x)",
-    "[COMPASS] ready=1 source=BNO08x addr=0x4B",
+    "[COMPASS] reset pin=13 pulse=1",
+    "[COMPASS] ready=1 source=BNO08x-RVC rx=12 baud=115200",
+    "[COMPASS] heading events ready age=0",
     "[DISPLAY] ready=1",
     "[EEPROM] settings loaded (ver=21)",
     "[SEC] paired=0",
@@ -26,13 +27,24 @@ def test_acceptance_passes_on_expected_boot_log():
     assert result["missing"] == []
     assert result["errors"] == []
     assert result["matched"]["compass_ready"].startswith("[COMPASS] ready=1")
+    assert result["matched"]["compass_heading_events"].startswith(
+        "[COMPASS] heading events ready"
+    )
+
+
+def test_acceptance_fails_when_compass_has_no_heading_events():
+    result = acceptance.analyze_lines(
+        [line for line in GOOD_LOG if not line.startswith("[COMPASS] heading events ready")]
+    )
+
+    assert result["pass"] is False
+    assert "compass_heading_events" in result["missing"]
 
 
 def test_acceptance_fails_on_missing_ble_and_error_log():
     result = acceptance.analyze_lines(
         [
-            "[I2C] SDA=47 SCL=48 devices=0: none",
-            "[COMPASS] ready=0 source=BNO08x",
+            "[COMPASS] ready=0 source=BNO08x-RVC rx=12 baud=115200",
             "[DISPLAY] ready=1",
             "[EEPROM] settings loaded (ver=21)",
             "[SEC] paired=1",
@@ -48,4 +60,29 @@ def test_acceptance_fails_on_missing_ble_and_error_log():
     assert {item["key"] for item in result["errors"]} >= {
         "compass_not_ready",
         "ble_advertising_failed",
+    }
+
+
+def test_acceptance_fails_on_arduino_error_log():
+    result = acceptance.analyze_lines(
+        GOOD_LOG + ["[ 13792][E][HardwareSerial.cpp:513] uartRead returned Error -1"]
+    )
+
+    assert result["pass"] is False
+    assert {item["key"] for item in result["errors"]} == {"arduino_error_log"}
+
+
+def test_acceptance_fails_on_compass_runtime_loss():
+    result = acceptance.analyze_lines(
+        GOOD_LOG
+        + [
+            "[COMPASS] lost reason=FIRST_EVENT_TIMEOUT age=4294967295",
+            "[COMPASS] retry ready=0 source=BNO08x-RVC rx=12 baud=115200 reset=1",
+        ]
+    )
+
+    assert result["pass"] is False
+    assert {item["key"] for item in result["errors"]} >= {
+        "compass_lost",
+        "compass_retry_failed",
     }

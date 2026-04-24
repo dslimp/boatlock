@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../models/boat_data.dart';
 
 const kBoatLockSmokeResultPrefix = 'BOATLOCK_SMOKE_RESULT ';
+const kBoatLockSmokeStagePrefix = 'BOATLOCK_SMOKE_STAGE ';
 
 bool smokeTelemetryLooksHealthy(BoatData? data) {
   if (data == null) {
@@ -36,4 +37,8 @@ Map<String, dynamic> buildSmokeResultPayload({
 
 String encodeSmokeResultLine(Map<String, dynamic> payload) {
   return '$kBoatLockSmokeResultPrefix${jsonEncode(payload)}';
+}
+
+String encodeSmokeStageLine(String stage) {
+  return '$kBoatLockSmokeStagePrefix${jsonEncode(<String, String>{'stage': stage})}';
 }

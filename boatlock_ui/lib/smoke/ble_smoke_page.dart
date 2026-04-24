@@ -8,20 +8,28 @@ import '../ble/ble_boatlock.dart';
 import '../models/boat_data.dart';
 import 'ble_smoke_logic.dart';
 
+enum BleSmokeMode { basic, reconnect, manual }
+
 class BleSmokePage extends StatefulWidget {
-  const BleSmokePage({super.key});
+  const BleSmokePage({super.key, this.mode = BleSmokeMode.basic});
+
+  final BleSmokeMode mode;
 
   @override
   State<BleSmokePage> createState() => _BleSmokePageState();
 }
 
 class _BleSmokePageState extends State<BleSmokePage> {
-  static const Duration _smokeTimeout = Duration(seconds: 75);
+  static const Duration _basicTimeout = Duration(seconds: 75);
+  static const Duration _reconnectTimeout = Duration(seconds: 150);
+  static const Duration _reconnectGap = Duration(seconds: 4);
 
   late final BleBoatLock _ble;
   Timer? _timeoutTimer;
+  Timer? _gapTimer;
   final List<String> _eventLines = <String>[];
   BoatData? _lastData;
+  DateTime? _lastDataAt;
   String _phase = 'starting';
   String _result = 'RUNNING';
   String _detail = 'booting';
@@ -29,22 +37,32 @@ class _BleSmokePageState extends State<BleSmokePage> {
   int _deviceLogEvents = 0;
   String? _lastDeviceLog;
   bool _completed = false;
+  bool _firstTelemetrySeen = false;
+  bool _reconnectGapSeen = false;
+  bool _manualSetSent = false;
+  bool _manualModeSeen = false;
+  bool _manualOffSent = false;
 
   @override
   void initState() {
     super.initState();
-    _ble = BleBoatLock(
-      onData: _onData,
-      onLog: _onDeviceLog,
-    );
+    _ble = BleBoatLock(onData: _onData, onLog: _onDeviceLog);
     _start();
   }
 
   Future<void> _start() async {
     _appendEvent('starting_ble_smoke');
-    _timeoutTimer = Timer(_smokeTimeout, () {
+    final timeout = widget.mode == BleSmokeMode.reconnect
+        ? _reconnectTimeout
+        : _basicTimeout;
+    _timeoutTimer = Timer(timeout, () {
       _finish(false, 'timeout_waiting_for_telemetry');
     });
+    if (widget.mode == BleSmokeMode.reconnect) {
+      _gapTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        _checkReconnectGap();
+      });
+    }
     await _ble.connectAndListen();
     _appendEvent('connect_started');
     if (mounted) {
@@ -60,19 +78,114 @@ class _BleSmokePageState extends State<BleSmokePage> {
       return;
     }
     _lastData = data;
+    _lastDataAt = DateTime.now();
     _dataEvents += 1;
     _appendEvent(
       'telemetry mode=${data.mode} status=${data.status} '
       'paired=${data.secPaired} auth=${data.secAuth} rssi=${data.rssi}',
     );
     if (!_completed && smokeTelemetryLooksHealthy(data)) {
-      _finish(true, 'telemetry_received');
+      if (widget.mode == BleSmokeMode.basic) {
+        _finish(true, 'telemetry_received');
+        return;
+      }
+      if (widget.mode == BleSmokeMode.manual) {
+        _handleManualSmokeData(data);
+        return;
+      }
+      if (!_firstTelemetrySeen) {
+        _firstTelemetrySeen = true;
+        _appendEvent(encodeSmokeStageLine('first_telemetry'));
+        if (mounted) {
+          setState(() {
+            _phase = 'reconnect';
+            _detail = 'first_telemetry_waiting_for_gap';
+          });
+        }
+        return;
+      }
+      if (_reconnectGapSeen) {
+        _finish(true, 'telemetry_after_reconnect');
+        return;
+      }
       return;
     }
     if (mounted) {
       setState(() {
         _phase = 'telemetry';
         _detail = 'mode=${data.mode} status=${data.status}';
+      });
+    }
+  }
+
+  void _handleManualSmokeData(BoatData data) {
+    if (!_manualSetSent) {
+      _manualSetSent = true;
+      _appendEvent(encodeSmokeStageLine('manual_set_zero'));
+      _sendManualSet();
+      if (mounted) {
+        setState(() {
+          _phase = 'manual';
+          _detail = 'waiting_for_manual_mode';
+        });
+      }
+      return;
+    }
+    if (!_manualModeSeen) {
+      if (data.mode != 'MANUAL') {
+        return;
+      }
+      _manualModeSeen = true;
+      _appendEvent(encodeSmokeStageLine('manual_mode_seen'));
+      _sendManualOff();
+      if (mounted) {
+        setState(() {
+          _phase = 'manual';
+          _detail = 'waiting_for_manual_exit';
+        });
+      }
+      return;
+    }
+    if (!_manualOffSent || data.mode == 'MANUAL') {
+      return;
+    }
+    _finish(true, 'manual_roundtrip');
+  }
+
+  Future<void> _sendManualSet() async {
+    final ok = await _ble.sendManualControl(
+      steer: 0,
+      throttlePct: 0,
+      ttlMs: 1000,
+    );
+    _appendEvent('manual_set_zero ok=$ok');
+    if (!ok) {
+      _finish(false, 'manual_set_failed');
+    }
+  }
+
+  Future<void> _sendManualOff() async {
+    final ok = await _ble.manualOff();
+    _manualOffSent = ok;
+    _appendEvent('manual_off ok=$ok');
+    if (!ok) {
+      _finish(false, 'manual_off_failed');
+    }
+  }
+
+  void _checkReconnectGap() {
+    if (_completed || widget.mode != BleSmokeMode.reconnect) return;
+    if (!_firstTelemetrySeen || _reconnectGapSeen || _lastDataAt == null) {
+      return;
+    }
+    final gap = DateTime.now().difference(_lastDataAt!);
+    if (gap < _reconnectGap) return;
+    _reconnectGapSeen = true;
+    _appendEvent(encodeSmokeStageLine('telemetry_gap'));
+    if (mounted) {
+      setState(() {
+        _phase = 'reconnect';
+        _detail = 'telemetry_gap_waiting_for_return';
       });
     }
   }
@@ -89,6 +202,7 @@ class _BleSmokePageState extends State<BleSmokePage> {
     }
     _completed = true;
     _timeoutTimer?.cancel();
+    _gapTimer?.cancel();
     final payload = buildSmokeResultPayload(
       pass: pass,
       reason: reason,
@@ -127,6 +241,7 @@ class _BleSmokePageState extends State<BleSmokePage> {
   @override
   void dispose() {
     _timeoutTimer?.cancel();
+    _gapTimer?.cancel();
     _ble.dispose();
     super.dispose();
   }

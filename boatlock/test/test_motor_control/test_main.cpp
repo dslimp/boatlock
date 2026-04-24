@@ -168,6 +168,27 @@ void test_pid_anti_windup_blocks_integral_growth_when_saturated() {
   TEST_ASSERT_EQUAL(255, motor.pwmRaw);
 }
 
+void test_stop_clears_auto_thrust_state() {
+  MotorControl motor;
+  motor.setupPWM(7, 0, 5000, 8);
+  motor.setDirPins(5, 10);
+
+  mockSetMillis(1000);
+  motor.driveAnchorAuto(20.0f, 2.0f, true);
+  TEST_ASSERT_TRUE(motor.autoThrustActive);
+  TEST_ASSERT_TRUE(motor.filteredAnchorDistanceValid);
+
+  mockSetMillis(1500);
+  motor.stop();
+
+  TEST_ASSERT_FALSE(motor.autoThrustActive);
+  TEST_ASSERT_FALSE(motor.filteredAnchorDistanceValid);
+  TEST_ASSERT_FALSE(motor.filteredDistanceRateValid);
+  TEST_ASSERT_EQUAL(0, motor.pwmRaw);
+  TEST_ASSERT_EQUAL(0, motor.autoPwmRaw);
+  TEST_ASSERT_EQUAL(1500, motor.autoThrustStateChangedMs);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_anchor_auto_stays_off_inside_hold_plus_deadband);
@@ -177,5 +198,6 @@ int main() {
   RUN_TEST(test_anchor_auto_low_passes_distance_rate);
   RUN_TEST(test_anchor_auto_reduces_pwm_on_fast_approach);
   RUN_TEST(test_pid_anti_windup_blocks_integral_growth_when_saturated);
+  RUN_TEST(test_stop_clears_auto_thrust_state);
   return UNITY_END();
 }

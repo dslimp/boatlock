@@ -41,6 +41,7 @@ private:
     static constexpr size_t kLogQueueLen = 32;
     static constexpr unsigned long kMinDataNotifyGapMs = 40;
     static constexpr unsigned long kMinLogNotifyGapMs = 12;
+    static constexpr unsigned long kAdvertisingWatchdogGapMs = 1000;
     struct DataPacket {
         uint16_t len = 0;
         uint8_t bytes[kDataMaxLen] = {0};
@@ -55,6 +56,7 @@ private:
     unsigned long lastDataNotifyMs = 0;
     unsigned long lastLogNotifyMs = 0;
     unsigned long lastConnParamReqMs = 0;
+    unsigned long lastAdvertisingWatchdogMs = 0;
     unsigned long connEstablishedMs = 0;
     QueueHandle_t cmdQueue = nullptr;
     QueueHandle_t dataQueue = nullptr;
@@ -85,6 +87,7 @@ private:
     void enqueueLogLine(const char* line);
     void processQueuedLogs();
     void maintainConnParams();
+    void maintainAdvertising();
 
     std::string status = "OK";
 public:

@@ -1,6 +1,6 @@
 # Config Schema
 
-Schema version: `0x15` (`Settings::VERSION`).
+Schema version: `0x16` (`Settings::VERSION`).
 
 Settings are stored in EEPROM as:
 
@@ -53,9 +53,8 @@ On boot:
 - `CommToutMs` (`3000..60000`)
 - `CtrlLoopMs` (`100..10000`)
 - `SensorTout` (`300..30000`)
-- `FailAct` (`0..1`, `0=STOP`, `1=Manual`)
-- `MaxThrustS` (`10..3600`)
-- `NanAct` (`0..1`, `0=STOP`, `1=Manual`)
+
+Runtime failsafes always stop motion and latch `HOLD`. They do not automatically enter `MANUAL`; operator control must be re-enabled explicitly after a failsafe.
 
 ### UX / Events
 

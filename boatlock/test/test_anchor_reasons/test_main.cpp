@@ -11,6 +11,8 @@ void test_denied_reason_mapping_from_gnss_gate() {
                     (int)deniedReasonFromGnss(GnssQualityFailReason::DATA_STALE));
   TEST_ASSERT_EQUAL((int)AnchorDeniedReason::GPS_SATS_TOO_LOW,
                     (int)deniedReasonFromGnss(GnssQualityFailReason::SATS_TOO_LOW));
+  TEST_ASSERT_EQUAL((int)AnchorDeniedReason::GPS_HDOP_MISSING,
+                    (int)deniedReasonFromGnss(GnssQualityFailReason::HDOP_MISSING));
   TEST_ASSERT_EQUAL((int)AnchorDeniedReason::GPS_HDOP_TOO_HIGH,
                     (int)deniedReasonFromGnss(GnssQualityFailReason::HDOP_TOO_HIGH));
   TEST_ASSERT_EQUAL((int)AnchorDeniedReason::GPS_POSITION_JUMP,
@@ -30,6 +32,8 @@ void test_reason_strings_are_stable() {
                            anchorDeniedReasonString(AnchorDeniedReason::NO_HEADING));
   TEST_ASSERT_EQUAL_STRING("GPS_HDOP_TOO_HIGH",
                            anchorDeniedReasonString(AnchorDeniedReason::GPS_HDOP_TOO_HIGH));
+  TEST_ASSERT_EQUAL_STRING("GPS_HDOP_MISSING",
+                           anchorDeniedReasonString(AnchorDeniedReason::GPS_HDOP_MISSING));
   TEST_ASSERT_EQUAL_STRING("CONTAINMENT_BREACH",
                            failsafeReasonString(FailsafeReason::CONTAINMENT_BREACH));
   TEST_ASSERT_EQUAL_STRING("CONTROL_LOOP_TIMEOUT",

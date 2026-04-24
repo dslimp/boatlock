@@ -2,8 +2,27 @@
 class BNO08xCompass {
 public:
   float az = 0;
+  float rawAz = 0;
   float headingOffset = 0;
-  float getAzimuth() { return az; }
+  float rvAccuracyDeg = 0;
+  float magNormUT = 0;
+  float gyroNormDps = 0;
+  float pitchDeg = 0;
+  float rollDeg = 0;
+  unsigned char headingQuality = 3;
+  unsigned char magQuality = 0;
+  unsigned char gyroQuality = 0;
+
+  float getAzimuth() const { return az; }
+  float getRawAzimuth() const { return rawAz; }
+  unsigned char getHeadingQuality() const { return headingQuality; }
+  float getRvAccuracyDeg() const { return rvAccuracyDeg; }
+  float getMagNormUT() const { return magNormUT; }
+  float getGyroNormDps() const { return gyroNormDps; }
+  unsigned char getMagQuality() const { return magQuality; }
+  unsigned char getGyroQuality() const { return gyroQuality; }
+  float getPitchDeg() const { return pitchDeg; }
+  float getRollDeg() const { return rollDeg; }
   void setHeadingOffsetDeg(float v) { headingOffset = v; }
   float getHeadingOffsetDeg() const { return headingOffset; }
 };

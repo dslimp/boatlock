@@ -50,7 +50,9 @@ void test_runtime_ble_live_frame_encodes_stable_header_and_scaled_fields() {
 
 void test_runtime_ble_live_frame_maps_reasons_and_reject_codes() {
   RuntimeBleLiveTelemetry telemetry;
-  telemetry.statusReasons = "NO_GPS,DRIFT_FAIL,COMM_TIMEOUT,NO_HEADING";
+  telemetry.statusReasons =
+      "NO_GPS,DRIFT_FAIL,COMM_TIMEOUT,NO_HEADING,GPS_DATA_STALE,"
+      "GPS_POSITION_JUMP,GPS_HDOP_MISSING";
   telemetry.secReject = "AUTH_REQUIRED";
 
   const std::vector<uint8_t> frame = runtimeBleEncodeLiveFrame(telemetry, 1);
@@ -61,6 +63,9 @@ void test_runtime_ble_live_frame_maps_reasons_and_reject_codes() {
   TEST_ASSERT_BITS_HIGH(RUNTIME_BLE_REASON_DRIFT_FAIL, reasons);
   TEST_ASSERT_BITS_HIGH(RUNTIME_BLE_REASON_COMM_TIMEOUT, reasons);
   TEST_ASSERT_BITS_HIGH(RUNTIME_BLE_REASON_NO_HEADING, reasons);
+  TEST_ASSERT_BITS_HIGH(RUNTIME_BLE_REASON_GPS_DATA_STALE, reasons);
+  TEST_ASSERT_BITS_HIGH(RUNTIME_BLE_REASON_GPS_POSITION_JUMP, reasons);
+  TEST_ASSERT_BITS_HIGH(RUNTIME_BLE_REASON_GPS_HDOP_MISSING, reasons);
   TEST_ASSERT_BITS_LOW(RUNTIME_BLE_REASON_NO_COMPASS, reasons);
 }
 

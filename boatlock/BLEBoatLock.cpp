@@ -1,4 +1,5 @@
 #include "BLEBoatLock.h"
+#include "BleAdvertisingWatchdog.h"
 #include "Logger.h"
 #include <algorithm>
 #include <cstring>
@@ -167,6 +168,7 @@ void BLEBoatLock::setCommandHandler(CommandHandler handler) {
 void BLEBoatLock::loop() {
     processQueuedCommands();
     processQueuedData();
+    maintainAdvertising();
     maintainConnParams();
     processQueuedLogs();
 }
@@ -349,6 +351,48 @@ void BLEBoatLock::maintainConnParams() {
     pServer->updateConnParams(conn.getConnHandle(), 24, 48, 0, 300);
     logMessage("[BLE] Conn params re-request: int=%u timeout=%u -> timeout=300\n",
                conn.getConnInterval(), conn.getConnTimeout());
+}
+
+void BLEBoatLock::maintainAdvertising() {
+    if (!pServer) {
+        return;
+    }
+
+    const unsigned long now = millis();
+    if (now - lastAdvertisingWatchdogMs < kAdvertisingWatchdogGapMs) {
+        return;
+    }
+    lastAdvertisingWatchdogMs = now;
+
+    NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
+    if (!advertising) {
+        return;
+    }
+
+    const bool hasClients = pServer->getConnectedCount() > 0;
+    const bool advertisingActive = advertising->isAdvertising();
+    const bool statusConnected = (bleStatus == CONNECTED);
+    const BleAdvertisingWatchdogAction action =
+        bleAdvertisingWatchdogAction(statusConnected, hasClients, advertisingActive);
+
+    if (action == BleAdvertisingWatchdogAction::NONE) {
+        return;
+    }
+
+    if (action == BleAdvertisingWatchdogAction::MARK_CONNECTED) {
+        bleStatus = CONNECTED;
+        return;
+    }
+
+    clearQueuedData();
+    dataNotifyEnabled = false;
+    logNotifyEnabled = false;
+    streamEnabled = false;
+    lastConnParamReqMs = 0;
+    connEstablishedMs = 0;
+    bleStatus = ADVERTISING;
+    const bool advOk = advertising->start();
+    logMessage("[BLE] advertising watchdog restart %s\n", advOk ? "started" : "failed");
 }
 
 void BLEBoatLock::notifyLive() {

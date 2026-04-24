@@ -9,6 +9,7 @@ enum class AnchorDeniedReason : uint8_t {
   GPS_NO_FIX,
   GPS_DATA_STALE,
   GPS_SATS_TOO_LOW,
+  GPS_HDOP_MISSING,
   GPS_HDOP_TOO_HIGH,
   GPS_POSITION_JUMP,
   GPS_SPEED_INVALID,
@@ -41,6 +42,8 @@ inline const char* anchorDeniedReasonString(AnchorDeniedReason reason) {
       return "GPS_DATA_STALE";
     case AnchorDeniedReason::GPS_SATS_TOO_LOW:
       return "GPS_SATS_TOO_LOW";
+    case AnchorDeniedReason::GPS_HDOP_MISSING:
+      return "GPS_HDOP_MISSING";
     case AnchorDeniedReason::GPS_HDOP_TOO_HIGH:
       return "GPS_HDOP_TOO_HIGH";
     case AnchorDeniedReason::GPS_POSITION_JUMP:
@@ -91,6 +94,8 @@ inline AnchorDeniedReason deniedReasonFromGnss(GnssQualityFailReason reason) {
       return AnchorDeniedReason::GPS_DATA_STALE;
     case GnssQualityFailReason::SATS_TOO_LOW:
       return AnchorDeniedReason::GPS_SATS_TOO_LOW;
+    case GnssQualityFailReason::HDOP_MISSING:
+      return AnchorDeniedReason::GPS_HDOP_MISSING;
     case GnssQualityFailReason::HDOP_TOO_HIGH:
       return AnchorDeniedReason::GPS_HDOP_TOO_HIGH;
     case GnssQualityFailReason::POSITION_JUMP:

@@ -90,16 +90,14 @@ Use `flutter build <platform>` to create release builds.
 
 Ensure these tools are installed and available in your `PATH` before attempting to build or run the project.
 
-## Quick Start: ReadyToSky NEO‑M8N GPS Module
+## Quick Start: ReadyToSky NEO-M8N GPS Module
 
-The firmware is preconfigured for the ReadyToSky GPS+compass board based on the
-NEO‑M8N receiver. Connect the module to the ESP32‑S3 board as follows:
+The firmware is preconfigured for a hardware GPS receiver on UART1. Connect the
+GPS side of the module to the ESP32-S3 board as follows:
 
 - **GPS TX** → **GPIO17**
 - **GPS RX** → **GPIO18**
-- **SDA** → **GPIO47**
-- **SCL** → **GPIO48**
-- **VCC** → 5 V (or 3.3 V if your module supports it)
+- **VCC** → 5 V (or 3.3 V if your module supports it)
 - **GND** → **GND**
 
 After wiring, build and flash the firmware with PlatformIO
@@ -108,10 +106,22 @@ that GPS data is being received.
 
 ## Compass (BNO08x)
 
-The firmware uses onboard BNO08x dynamic calibration and does not expose a
-manual BLE calibration command. If mounting angle needs adjustment, use the
-compass offset controls in app settings (`SET_COMPASS_OFFSET` /
-`RESET_COMPASS_OFFSET`).
+The firmware trusts onboard BNO08x UART-RVC heading frames only. The old I2C/SH2
+path is not part of production firmware.
+
+Current default wiring:
+
+- **BNO08x SDA/TX** → **GPIO12**
+- **BNO08x RST** → **GPIO13**
+- **BNO08x P0/PS0** → **3V3**
+- **BNO08x P1/PS1** → **GND**
+
+Acceptance requires `[COMPASS] ready=1 source=BNO08x-RVC rx=12 baud=115200` and
+fresh `[COMPASS] heading events ready` logs. See
+[docs/COMPASS_BNO08X.md](docs/COMPASS_BNO08X.md).
+
+If mounting angle needs adjustment, use the compass offset controls in app
+settings (`SET_COMPASS_OFFSET` / `RESET_COMPASS_OFFSET`).
 
 See [CHANGELOG.md](CHANGELOG.md) for recent changes and firmware versions.
 

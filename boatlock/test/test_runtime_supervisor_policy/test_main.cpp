@@ -7,15 +7,13 @@ void logMessage(const char*, ...) {}
 void setUp() {}
 void tearDown() {}
 
-void test_supervisor_config_clamps_ranges_and_maps_actions() {
+void test_supervisor_config_clamps_ranges() {
   Settings settings;
   settings.reset();
   settings.set("CommToutMs", 1000.0f);
   settings.set("CtrlLoopMs", 50000.0f);
   settings.set("SensorTout", 100.0f);
   settings.set("GpsWeakHys", 120.0f);
-  settings.set("FailAct", 1.0f);
-  settings.set("NanAct", 0.0f);
 
   const AnchorSupervisor::Config config = buildRuntimeSupervisorConfig(settings);
 
@@ -24,8 +22,6 @@ void test_supervisor_config_clamps_ranges_and_maps_actions() {
   TEST_ASSERT_EQUAL_UINT32(300UL, config.sensorTimeoutMs);
   TEST_ASSERT_EQUAL_UINT32(60000UL, config.gpsWeakGraceMs);
   TEST_ASSERT_EQUAL(100, config.maxCommandThrustPct);
-  TEST_ASSERT_EQUAL((int)AnchorSupervisor::SafeAction::MANUAL, (int)config.failsafeAction);
-  TEST_ASSERT_EQUAL((int)AnchorSupervisor::SafeAction::STOP, (int)config.nanGuardAction);
 }
 
 void test_supervisor_input_builder_keeps_runtime_flags() {
@@ -45,7 +41,7 @@ void test_supervisor_input_builder_keeps_runtime_flags() {
 
 int main() {
   UNITY_BEGIN();
-  RUN_TEST(test_supervisor_config_clamps_ranges_and_maps_actions);
+  RUN_TEST(test_supervisor_config_clamps_ranges);
   RUN_TEST(test_supervisor_input_builder_keeps_runtime_flags);
   return UNITY_END();
 }

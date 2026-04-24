@@ -6,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import '../ble/ble_boatlock.dart';
 import '../models/boat_data.dart';
+import '../widgets/manual_control_sheet.dart';
 import '../widgets/status_panel.dart';
 import 'settings_page.dart';
 
@@ -51,9 +52,9 @@ class _MapPageState extends State<MapPage> {
     if (ok == true) {
       await ble.stopAll();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('STOP отправлен')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('STOP отправлен')));
     }
   }
 
@@ -64,6 +65,26 @@ class _MapPageState extends State<MapPage> {
     if (pos != null) {
       _mapController.move(pos, _zoom);
     }
+  }
+
+  void _openManualControl() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => ManualControlSheet(
+        enabled: boatData != null,
+        mode: boatData?.mode ?? 'IDLE',
+        onManualControl:
+            ({required int steer, required int throttlePct, int ttlMs = 500}) {
+              return ble.sendManualControl(
+                steer: steer,
+                throttlePct: throttlePct,
+                ttlMs: ttlMs,
+              );
+            },
+        onManualOff: ble.manualOff,
+      ),
+    );
   }
 
   @override
@@ -180,6 +201,11 @@ class _MapPageState extends State<MapPage> {
                 ),
               ),
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.sports_esports),
+            tooltip: 'Ручное управление',
+            onPressed: _openManualControl,
           ),
           IconButton(
             icon: Icon(_satellite ? Icons.map : Icons.satellite),

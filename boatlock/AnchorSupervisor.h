@@ -6,8 +6,7 @@ public:
   enum class SafeAction : uint8_t {
     NONE = 0,
     STOP = 1,
-    MANUAL = 2,
-    EXIT_ANCHOR = 3,
+    EXIT_ANCHOR = 2,
   };
 
   enum class Reason : uint8_t {
@@ -26,8 +25,6 @@ public:
     unsigned long controlLoopTimeoutMs = 600;
     unsigned long sensorTimeoutMs = 3000;
     unsigned long gpsWeakGraceMs = 5000;
-    SafeAction failsafeAction = SafeAction::STOP;
-    SafeAction nanGuardAction = SafeAction::STOP;
     int maxCommandThrustPct = 100;
   };
 
@@ -50,7 +47,9 @@ public:
   };
 
   void reset() {
+    gpsWeakActive_ = false;
     gpsWeakSinceMs_ = 0;
+    sensorBadActive_ = false;
     sensorBadSinceMs_ = 0;
     lastControlActivityMs_ = 0;
     controlActivitySeen_ = false;
@@ -67,77 +66,57 @@ public:
       return {};
     }
 
-    if (!in.gpsQualityOk) {
-      if (gpsWeakSinceMs_ == 0) {
-        gpsWeakSinceMs_ = in.nowMs;
-      } else if (in.nowMs - gpsWeakSinceMs_ >= cfg.gpsWeakGraceMs) {
-        Decision d;
-        d.action = SafeAction::EXIT_ANCHOR;
-        d.reason = Reason::GPS_WEAK;
-        return d;
-      }
-    } else {
-      gpsWeakSinceMs_ = 0;
+    if (in.containmentBreached) {
+      return decision(SafeAction::EXIT_ANCHOR, Reason::CONTAINMENT_BREACH);
     }
 
-    if (in.containmentBreached) {
-      Decision d;
-      d.action = SafeAction::EXIT_ANCHOR;
-      d.reason = Reason::CONTAINMENT_BREACH;
-      return d;
+    if (in.hasNaN) {
+      return decision(SafeAction::STOP, Reason::INTERNAL_ERROR_NAN);
+    }
+
+    if (in.commandThrustPct > cfg.maxCommandThrustPct ||
+        in.commandThrustPct < -cfg.maxCommandThrustPct) {
+      return decision(SafeAction::STOP, Reason::COMMAND_OUT_OF_RANGE);
     }
 
     if (!in.linkOk) {
-      Decision d;
-      d.action = cfg.failsafeAction;
-      d.reason = Reason::COMM_TIMEOUT;
-      return d;
+      return decision(SafeAction::STOP, Reason::COMM_TIMEOUT);
     }
 
     if ((controlActivitySeen_ || in.controlActivitySeen) &&
         cfg.commTimeoutMs > 0 &&
         in.nowMs - lastControlActivityMs_ > cfg.commTimeoutMs) {
-      Decision d;
-      d.action = cfg.failsafeAction;
-      d.reason = Reason::COMM_TIMEOUT;
-      return d;
+      return decision(SafeAction::STOP, Reason::COMM_TIMEOUT);
     }
 
     if (cfg.controlLoopTimeoutMs > 0 &&
         in.controlLoopDtMs > cfg.controlLoopTimeoutMs) {
-      Decision d;
-      d.action = cfg.failsafeAction;
-      d.reason = Reason::CONTROL_LOOP_TIMEOUT;
-      return d;
+      return decision(SafeAction::STOP, Reason::CONTROL_LOOP_TIMEOUT);
+    }
+
+    if (!in.gpsQualityOk) {
+      if (!gpsWeakActive_) {
+        gpsWeakActive_ = true;
+        gpsWeakSinceMs_ = in.nowMs;
+      } else if (in.nowMs - gpsWeakSinceMs_ >= cfg.gpsWeakGraceMs) {
+        return decision(SafeAction::EXIT_ANCHOR, Reason::GPS_WEAK);
+      }
+    } else {
+      gpsWeakActive_ = false;
+      gpsWeakSinceMs_ = 0;
     }
 
     if (!in.sensorsOk) {
-      if (sensorBadSinceMs_ == 0) {
+      if (!sensorBadActive_) {
+        sensorBadActive_ = true;
         sensorBadSinceMs_ = in.nowMs;
       } else if (cfg.sensorTimeoutMs > 0 &&
                  in.nowMs - sensorBadSinceMs_ >= cfg.sensorTimeoutMs) {
-        Decision d;
-        d.action = cfg.failsafeAction;
-        d.reason = Reason::SENSOR_TIMEOUT;
-        return d;
+        return decision(SafeAction::STOP, Reason::SENSOR_TIMEOUT);
       }
     } else {
+      sensorBadActive_ = false;
       sensorBadSinceMs_ = 0;
-    }
-
-    if (in.hasNaN) {
-      Decision d;
-      d.action = cfg.nanGuardAction;
-      d.reason = Reason::INTERNAL_ERROR_NAN;
-      return d;
-    }
-
-    if (in.commandThrustPct > cfg.maxCommandThrustPct ||
-        in.commandThrustPct < -cfg.maxCommandThrustPct) {
-      Decision d;
-      d.action = cfg.failsafeAction;
-      d.reason = Reason::COMMAND_OUT_OF_RANGE;
-      return d;
     }
 
     return {};
@@ -166,7 +145,16 @@ public:
   }
 
 private:
+  static Decision decision(SafeAction action, Reason reason) {
+    Decision d;
+    d.action = action;
+    d.reason = reason;
+    return d;
+  }
+
+  bool gpsWeakActive_ = false;
   unsigned long gpsWeakSinceMs_ = 0;
+  bool sensorBadActive_ = false;
   unsigned long sensorBadSinceMs_ = 0;
   unsigned long lastControlActivityMs_ = 0;
   bool controlActivitySeen_ = false;

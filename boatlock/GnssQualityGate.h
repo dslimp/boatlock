@@ -34,6 +34,7 @@ enum class GnssQualityFailReason {
   NO_FIX,
   DATA_STALE,
   SATS_TOO_LOW,
+  HDOP_MISSING,
   HDOP_TOO_HIGH,
   POSITION_JUMP,
   SPEED_INVALID,
@@ -47,6 +48,7 @@ inline const char* gnssFailReasonString(GnssQualityFailReason reason) {
     case GnssQualityFailReason::NO_FIX: return "GPS_NO_FIX";
     case GnssQualityFailReason::DATA_STALE: return "GPS_DATA_STALE";
     case GnssQualityFailReason::SATS_TOO_LOW: return "GPS_SATS_TOO_LOW";
+    case GnssQualityFailReason::HDOP_MISSING: return "GPS_HDOP_MISSING";
     case GnssQualityFailReason::HDOP_TOO_HIGH: return "GPS_HDOP_TOO_HIGH";
     case GnssQualityFailReason::POSITION_JUMP: return "GPS_POSITION_JUMP";
     case GnssQualityFailReason::SPEED_INVALID: return "GPS_SPEED_INVALID";
@@ -66,6 +68,9 @@ inline GnssQualityFailReason evaluateGnssQuality(const GnssQualityConfig& cfg,
   }
   if (sample.sats < cfg.minSats) {
     return GnssQualityFailReason::SATS_TOO_LOW;
+  }
+  if (!sample.hasHdop || !isfinite(sample.hdop) || sample.hdop <= 0.0f) {
+    return GnssQualityFailReason::HDOP_MISSING;
   }
   if (sample.hasHdop && isfinite(sample.hdop) && sample.hdop > cfg.maxHdop) {
     return GnssQualityFailReason::HDOP_TOO_HIGH;

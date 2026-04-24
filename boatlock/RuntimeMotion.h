@@ -10,6 +10,7 @@
 #include "AnchorSupervisor.h"
 #include "DriftMonitor.h"
 #include "Logger.h"
+#include "ManualControl.h"
 #include "MotorControl.h"
 #include "Settings.h"
 #include "StepperControl.h"
@@ -108,10 +109,7 @@ public:
 
     const bool autoControlActive = coreModeUsesAnchorControl(input.mode);
     if (autoControlActive && (!input.controlGpsAvailable || driftFailActive_)) {
-      stepperTrackingActive_ = false;
-      motorHeadingAligned_ = false;
-      stepperControl_.cancelMove();
-      motor_.stop();
+      quietAutoOutputs();
       return;
     }
 
@@ -150,14 +148,10 @@ public:
         }
         motorCanRun = motorHeadingAligned_;
       } else {
-        stepperTrackingActive_ = false;
-        motorHeadingAligned_ = false;
-        stepperControl_.cancelMove();
+        quietAutoOutputs();
       }
     } else {
-      stepperTrackingActive_ = false;
-      motorHeadingAligned_ = false;
-      stepperControl_.cancelMove();
+      quietAutoOutputs();
     }
 
     const float holdRadiusMeters = max(0.5f, settings_.get("HoldRadius"));
@@ -173,19 +167,13 @@ public:
                            thrustRampPctPerS);
   }
 
-  void stopAllMotionNow(bool& manualMode, int& manualDir, int& manualSpeed) {
+  void stopAllMotionNow(ManualControl& manualControl) {
     const bool wasAnchorOn = settings_.get("AnchorEnabled") == 1;
     settings_.set("AnchorEnabled", 0);
     settings_.save();
     enterSafeHold();
-    manualMode = false;
-    manualDir = -1;
-    manualSpeed = 0;
-    stepperTrackingActive_ = false;
-    motorHeadingAligned_ = false;
-    stepperControl_.stopManual();
-    stepperControl_.cancelMove();
-    motor_.stop();
+    manualControl.stop();
+    quietAllOutputs();
     if (wasAnchorOn) {
       logMessage("[EVENT] ANCHOR_OFF reason=STOP\n");
     }
@@ -195,18 +183,13 @@ public:
     settings_.set("AnchorEnabled", 0);
     settings_.save();
     enterSafeHold();
-    stepperTrackingActive_ = false;
-    motorHeadingAligned_ = false;
-    stepperControl_.cancelMove();
-    motor_.stop();
+    quietAllOutputs();
     setSafetyReason(reason, nowMs);
     logMessage("[EVENT] ANCHOR_OFF reason=%s\n", reason ? reason : "UNKNOWN");
   }
 
   void applySupervisorDecision(const AnchorSupervisor::Decision& decision,
-                               bool& manualMode,
-                               int& manualDir,
-                               int& manualSpeed,
+                               ManualControl& manualControl,
                                unsigned long nowMs) {
     if (decision.action == AnchorSupervisor::SafeAction::NONE) {
       return;
@@ -244,6 +227,7 @@ public:
     const char* reason = failsafeReasonString(failsafeReason);
     setLastFailsafeReason(failsafeReason);
     if (decision.action == AnchorSupervisor::SafeAction::EXIT_ANCHOR) {
+      manualControl.stop();
       disableAnchorAndStop(reason, nowMs);
       return;
     }
@@ -251,22 +235,7 @@ public:
     settings_.set("AnchorEnabled", 0);
     settings_.save();
 
-    if (decision.action == AnchorSupervisor::SafeAction::MANUAL) {
-      clearSafeHold();
-      manualMode = true;
-      manualDir = -1;
-      manualSpeed = 0;
-      stepperTrackingActive_ = false;
-      motorHeadingAligned_ = false;
-      stepperControl_.stopManual();
-      stepperControl_.cancelMove();
-      motor_.stop();
-      setSafetyReason(reason, nowMs);
-      logMessage("[EVENT] FAILSAFE_TRIGGERED reason=%s action=MANUAL\n", reason);
-      return;
-    }
-
-    stopAllMotionNow(manualMode, manualDir, manualSpeed);
+    stopAllMotionNow(manualControl);
     setSafetyReason(reason, nowMs);
     logMessage("[EVENT] FAILSAFE_TRIGGERED reason=%s action=STOP\n", reason);
   }
@@ -313,4 +282,16 @@ private:
   bool safeHoldActive_ = false;
   AnchorDeniedReason lastAnchorDeniedReason_ = AnchorDeniedReason::NONE;
   FailsafeReason lastFailsafeReason_ = FailsafeReason::NONE;
+
+  void quietAutoOutputs() {
+    stepperTrackingActive_ = false;
+    motorHeadingAligned_ = false;
+    stepperControl_.cancelMove();
+    motor_.stop();
+  }
+
+  void quietAllOutputs() {
+    stepperControl_.stopManual();
+    quietAutoOutputs();
+  }
 };

@@ -26,8 +26,6 @@
 
 - Firmware build:
   - `cd boatlock && pio run -e esp32s3`
-- Alt-board build:
-  - `cd boatlock && pio run -e jc4832w535`
 - Full native tests:
   - `cd boatlock && platformio test -e native`
 - Example targeted native suites:
@@ -57,6 +55,9 @@
   - `tools/android/status.sh`
   - `tools/android/build-smoke-apk.sh`
   - `tools/android/run-smoke.sh`
+  - `tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130`
+  - `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130`
+  - `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130`
 - CI helper tests:
   - `pytest tools/ci/test_*.py`
 - Quick audit for persistence call sites:

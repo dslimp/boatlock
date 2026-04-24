@@ -17,11 +17,11 @@
 - `boatlock/RuntimeAnchorNudge.h`: anchor nudge bearing mapping and geodesic projection
 - `boatlock/RuntimeAnchorGate.h`: ordered anchor enable denial resolution
 - `boatlock/RuntimeSupervisorPolicy.h`: anchor supervisor config/input policy builders
-- `boatlock/RuntimeCompassRecovery.h`: compass retry execution and recovery log lines
 - `boatlock/RuntimeUiSnapshot.h`: display-facing UI snapshot contract with sim overrides
 - `boatlock/HoldButtonController.h`: long-press button state machine used by BOOT/STOP handlers
 - `boatlock/BleCommandHandler.h`: accepted BLE ASCII commands and removed-command behavior
-- `boatlock/BNO08xCompass.h`: BNO08x init, heading offset, quality telemetry, DCD autosave
+- `boatlock/BNO08xCompass.h`: BNO08x UART-RVC init, frame freshness, heading offset, and inertial telemetry
+- `boatlock/BnoRvcFrame.h`: UART-RVC frame checksum, decode, and stream resync parser
 - `boatlock/display.cpp`: on-device UI math and sign conventions
 - `boatlock/Settings.h`: persisted settings, defaults, ranges, schema version
 - `boatlock/AnchorControl.h`: persisted anchor-point writes
@@ -38,15 +38,16 @@
 ## Hardware Baseline
 
 - Main firmware supports BNO08x only.
-- Probe order is `0x4B` first, then `0x4A`.
-- `sh2_setDcdAutoSave(true)` is enabled during compass init.
+- Production compass transport is UART-RVC only. Do not reintroduce ESP32-S3 I2C/SH2 compass code or compatibility shims unless explicitly requested.
+- Current active development and hardware acceptance target one default ESP32-S3 bench board. Do not add new `BOATLOCK_BOARD_JC4832W535` or other board-specific runtime branches unless explicitly requested.
+- Compass integration notes and current bench evidence live in `docs/COMPASS_BNO08X.md`.
 - Current default-board pins from `boatlock/main.cpp`:
-  - I2C `SDA=47`, `SCL=48`
   - GPS `RX=17`, `TX=18`
+  - BNO08x UART-RVC `RX=12`, `RST=13`, `baud=115200`
+  - BNO08x protocol select wiring: `P0/PS0=3V3`, `P1/PS1=GND`
   - motor `PWM=7`, direction pins `5/10`
   - BOOT button `0`
   - STOP button `15`
-- `BOATLOCK_BOARD_JC4832W535` moves I2C to `4/8` because LCD QSPI uses `47/48`, and uses stepper pins `11/12/13/14`.
 - `README.md` may lag current motor-pin assignments; trust `boatlock/main.cpp`.
 
 ## Settings And Persistence
@@ -76,13 +77,17 @@
   1. hardware GPS when `gps.location.isValid()` and age `< MaxGpsAgeMs`
   2. phone GPS from `SET_PHONE_GPS` while age `<= 5000 ms`
   3. otherwise no fix
+- Control GNSS is hardware-only. Phone GPS fallback is a UI/telemetry fallback and must not pass anchor quality gate, save BOOT anchor points, or reuse hardware HDOP/sentence metrics.
 - `MaxGpsAgeMs` is configurable. Default is `1500 ms`; range is `300..20000`.
 - Hardware GPS path:
   - applies moving-average filter window `GpsFWin` (`1..20`)
   - rejects jumps above `MaxPosJumpM`
   - updates speed, HDOP, accel, and sentence counters
-- Heading is onboard BNO08x only.
-- `headingAvailable()` is true only when `compassReady`.
+- Anchor pre-enable treats HDOP as a required quality metric. Missing, non-finite, or zero HDOP maps to `GPS_HDOP_MISSING`, not to a pass.
+- GNSS status reasons must preserve exact gate names end-to-end, including `GPS_DATA_STALE`, `GPS_POSITION_JUMP`, and `GPS_HDOP_MISSING`.
+- Heading is onboard BNO08x UART-RVC only.
+- `headingAvailable()` is true only when BNO08x is initialized and fresh heading frames are arriving.
+- If the BNO08x reset GPIO logs `pulse=1`, still require fresh heading frames afterward; GPIO toggling alone does not prove sensor recovery.
 - There is no phone-heading or `SET_HEADING` fallback in current runtime logic.
 
 ## GPS-To-Compass Correction
@@ -102,7 +107,7 @@
 
 - Core runtime mode precedence is `SIM > MANUAL > ANCHOR > HOLD > IDLE`.
 - `main.cpp` should compose one `RuntimeControlInput` and pass it into `RuntimeMotion`.
-- `SET_ANCHOR` stores anchor coordinates plus current heading if compass is ready, otherwise heading `0`.
+- `SET_ANCHOR` stores anchor coordinates plus current heading only if fresh heading is available, otherwise heading `0`.
 - `ANCHOR_ON` must be denied unless anchor point exists, onboard heading is available, and GNSS quality gate passes.
 - `HOLD` is a latched quiet mode entered by emergency stop and stop-style failsafes.
 - Explicit operator actions `ANCHOR_ON`, `ANCHOR_OFF`, and manual-mode entry clear the latched `HOLD` state.
@@ -122,12 +127,13 @@
 - Keep anchor enable denial precedence in `RuntimeAnchorGate`, not inline in `main.cpp`.
 - Keep control-input derivation in `RuntimeControlInputBuilder`, not as inline mode/heading/bearing glue in `loop()`.
 - Keep compass retry cadence in `RuntimeCompassRetry`, not as raw `millis()` gating in `main.cpp`.
-- Keep compass retry execution and success/failure follow-up in `RuntimeCompassRecovery`, not as open-coded double-init logic in `loop()`.
+- Keep compass event freshness policy in `RuntimeCompassHealth`, not as loose age checks spread through runtime code.
 - `HoldHeading=1` makes bearing equal stored anchor heading.
 - Otherwise bearing is computed from GNSS course to anchor.
 - Firmware caches anchor bearing for `120000 ms` so auto mode can keep a bearing when GNSS drops briefly.
 - `DriftFail` is a containment boundary: once breached, supervisor exits anchor into latched `HOLD` instead of continuing to hunt.
-- `manualMode` cancels auto stepper tracking and drives stepper/motor directly from BLE commands.
+- Manual mode cancels auto stepper tracking and drives stepper/motor through shared `ManualControl` state.
+- Manual control is entered/refreshed atomically and expires through a short deadman TTL; split mode/dir/speed state is not allowed.
 - Random `fallbackHeading` and `fallbackBearing` are UI placeholders only.
 
 ## Safety And Buttons

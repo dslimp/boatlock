@@ -184,34 +184,8 @@ public:
   }
 
   bool gpsQualityGoodForAnchorOn(Settings& settings) {
-    GnssQualityConfig cfg;
-    cfg.maxGpsAgeMs =
-        static_cast<unsigned long>(constrain(settings.get("MaxGpsAgeMs"), 300.0f, 20000.0f));
-    cfg.minSats = constrain((int)settings.get("MinSats"), 3, 20);
-    cfg.maxHdop = constrain(settings.get("MaxHdop"), 0.5f, 10.0f);
-    cfg.maxPositionJumpM = constrain(settings.get("MaxPosJumpM"), 1.0f, 200.0f);
-    cfg.enableSpeedAccelSanity = ((int)settings.get("SpdSanity") == 1);
-    cfg.maxSpeedMps = constrain(settings.get("MaxSpdMps"), 1.0f, 60.0f);
-    cfg.maxAccelMps2 = constrain(settings.get("MaxAccMps2"), 0.5f, 20.0f);
-    cfg.requiredSentences = constrain((int)settings.get("ReqSent"), 0, 20);
-
-    GnssQualitySample sample;
-    sample.fix = controlGpsAvailable();
-    sample.ageMs = currentGpsAgeMs_;
-    sample.sats = controlGpsAvailable() ? currentSatellites_ : 0;
-    sample.hasHdop =
-        controlGpsAvailable() && isfinite(currentGpsHdop_) && currentGpsHdop_ > 0.0f;
-    sample.hdop = currentGpsHdop_;
-    sample.jumpRejected = currentPosJumpRejected_;
-    sample.jumpM = currentPosJumpM_;
-    sample.hasSpeed = isfinite(currentSpeedMps_);
-    sample.speedMps = currentSpeedMps_;
-    sample.hasAccel = currentAccelValid_ && isfinite(currentAccelMps2_);
-    sample.accelMps2 = currentAccelMps2_;
-    sample.hasSentences = controlGpsAvailable();
-    sample.sentences = controlGpsAvailable() ? (int)hwFixSamplesCount_ : 0;
-
-    lastGnssFailReason_ = evaluateGnssQuality(cfg, sample);
+    lastGnssFailReason_ =
+        evaluateGnssQuality(qualityConfigFromSettings(settings), qualitySample());
     return lastGnssFailReason_ == GnssQualityFailReason::NONE;
   }
 
@@ -219,8 +193,7 @@ public:
     if (!gpsFix_) {
       return 0;
     }
-    if (lastGnssFailReason_ == GnssQualityFailReason::NONE ||
-        gpsQualityGoodForAnchorOn(settings)) {
+    if (gpsQualityGoodForAnchorOn(settings)) {
       return 2;
     }
     return 1;
@@ -297,6 +270,39 @@ public:
   bool hasAnchorBearingCache(unsigned long nowMs) const {
     return anchorBearingCacheValid_ &&
            nowMs - anchorBearingCacheUpdatedMs_ <= kAnchorBearingCacheMaxAgeMs;
+  }
+
+  GnssQualityConfig qualityConfigFromSettings(Settings& settings) const {
+    GnssQualityConfig cfg;
+    cfg.maxGpsAgeMs =
+        static_cast<unsigned long>(constrain(settings.get("MaxGpsAgeMs"), 300.0f, 20000.0f));
+    cfg.minSats = constrain((int)settings.get("MinSats"), 3, 20);
+    cfg.maxHdop = constrain(settings.get("MaxHdop"), 0.5f, 10.0f);
+    cfg.maxPositionJumpM = constrain(settings.get("MaxPosJumpM"), 1.0f, 200.0f);
+    cfg.enableSpeedAccelSanity = ((int)settings.get("SpdSanity") == 1);
+    cfg.maxSpeedMps = constrain(settings.get("MaxSpdMps"), 1.0f, 60.0f);
+    cfg.maxAccelMps2 = constrain(settings.get("MaxAccMps2"), 0.5f, 20.0f);
+    cfg.requiredSentences = constrain((int)settings.get("ReqSent"), 0, 20);
+    return cfg;
+  }
+
+  GnssQualitySample qualitySample() const {
+    const bool controlFix = controlGpsAvailable();
+    GnssQualitySample sample;
+    sample.fix = controlFix;
+    sample.ageMs = currentGpsAgeMs_;
+    sample.sats = controlFix ? currentSatellites_ : 0;
+    sample.hasHdop = controlFix && isfinite(currentGpsHdop_) && currentGpsHdop_ > 0.0f;
+    sample.hdop = currentGpsHdop_;
+    sample.jumpRejected = currentPosJumpRejected_;
+    sample.jumpM = currentPosJumpM_;
+    sample.hasSpeed = controlFix && isfinite(currentSpeedMps_);
+    sample.speedMps = currentSpeedMps_;
+    sample.hasAccel = controlFix && currentAccelValid_ && isfinite(currentAccelMps2_);
+    sample.accelMps2 = currentAccelMps2_;
+    sample.hasSentences = controlFix;
+    sample.sentences = controlFix ? (int)hwFixSamplesCount_ : 0;
+    return sample;
   }
 
   static bool anchorPointConfigured(float anchorLat, float anchorLon) {

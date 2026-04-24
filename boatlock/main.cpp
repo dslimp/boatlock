@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <Wire.h>
 #include <TinyGPSPlus.h>
 #include <HardwareSerial.h>
 #include <EEPROM.h>
@@ -26,8 +25,9 @@
 #include "RuntimeBleParams.h"
 #include "RuntimeAnchorNudge.h"
 #include "RuntimeAnchorGate.h"
+#include "RuntimeCompassHealth.h"
 #include "RuntimeCompassRetry.h"
-#include "RuntimeCompassRecovery.h"
+#include "ManualControl.h"
 #include "RuntimeControl.h"
 #include "RuntimeControlInputBuilder.h"
 #include "RuntimeGnss.h"
@@ -63,19 +63,17 @@ constexpr int kStepIn1Pin = 11;
 constexpr int kStepIn2Pin = 12;
 constexpr int kStepIn3Pin = 13;
 constexpr int kStepIn4Pin = 14;
-// JC4832W535 display uses GPIO47/48 for LCD QSPI, so I2C must be moved.
-constexpr int kI2cSdaPin = 4;
-constexpr int kI2cSclPin = 8;
 #else
 constexpr int kStepIn1Pin = 2;
 constexpr int kStepIn2Pin = 4;
 constexpr int kStepIn3Pin = 6;
 constexpr int kStepIn4Pin = 16;
-constexpr int kI2cSdaPin = 47;
-constexpr int kI2cSclPin = 48;
 #endif
 constexpr int kGpsRxPin = 17;
 constexpr int kGpsTxPin = 18;
+constexpr int kCompassRxPin = 12;
+constexpr int kCompassResetPin = 13;
+constexpr uint32_t kCompassBaud = 115200;
 constexpr int kMotorPwmPin = 7;
 constexpr int kMotorDirPin1 = 5;
 constexpr int kMotorDirPin2 = 10;
@@ -89,6 +87,9 @@ constexpr int kPwmChannel = 0;
 constexpr int kMaxGpsFilterWindow = 20;
 constexpr unsigned long kBleNotifyIntervalMs = 1000;
 constexpr unsigned long kUiRefreshIntervalMs = 120;
+constexpr unsigned long kCompassReadIntervalMs = 50;
+constexpr unsigned long kCompassFirstEventTimeoutMs = 3000;
+constexpr unsigned long kCompassStaleEventMs = 750;
 constexpr unsigned long kBootSaveHoldMs = 1500;
 constexpr unsigned long kStopPairingHoldMs = 3000;
 constexpr unsigned long kCompassRetryIntervalMs = 5000;
@@ -99,6 +100,7 @@ constexpr unsigned long kSimResultBannerMs = 15000;
 } // namespace cfg
 
 HardwareSerial gpsSerial(1);
+HardwareSerial compassSerial(2);
 TinyGPSPlus gps;
 StepperControl stepperControl(cfg::kStepIn1Pin,
                               cfg::kStepIn2Pin,
@@ -113,6 +115,8 @@ AnchorSupervisor anchorSupervisor;
 AnchorDiagnostics anchorDiagnostics;
 
 bool compassReady = false;
+unsigned long compassReadySinceMs = 0;
+bool compassHeadingEventsReadyLogged = false;
 float fallbackHeading = 0.0f;
 float fallbackBearing = 0.0f;
 enum class FixTypeSource : uint8_t {
@@ -125,13 +129,15 @@ bool minFixTypeIgnoredLogged = false;
 unsigned long lastLoopMs = 0;
 BleSecurity bleSecurity;
 
-bool manualMode = false;
-int manualDir = -1;
-int manualSpeed = 0;
+ManualControl manualControl;
 hilsim::HilSimManager hilSim;
 unsigned long simLastWallMs = 0;
 RuntimeGnss runtimeGnss;
 RuntimeMotion runtimeMotion(settings, stepperControl, motor, driftMonitor);
+
+bool headingAvailable() {
+  return compassReady && compass.lastHeadingEventAgeMs(millis()) <= cfg::kCompassStaleEventMs;
+}
 
 void setPhoneGpsFix(float lat, float lon, float speedKmh, int satellites);
 void captureStepperBowZero();
@@ -203,7 +209,7 @@ RuntimeStatusInput currentRuntimeStatusInput(unsigned long now, std::string* saf
   input.gpsUnavailable = !gps.location.isValid() && !runtimeGnss.fix();
   input.gnssWeak = !input.gpsUnavailable && !gpsQualityGoodForAnchorOn();
   input.gnssWeakReason = input.gnssWeak ? currentGnssFailReason() : nullptr;
-  input.headingAvailable = compassReady;
+  input.headingAvailable = headingAvailable();
   input.driftFail = runtimeMotion.driftFailActive();
   input.driftAlert = runtimeMotion.driftAlertActive();
   input.anchorActive = settings.get("AnchorEnabled") == 1;
@@ -228,41 +234,6 @@ std::string buildCurrentStatusReasons(unsigned long now) {
   return buildRuntimeStatusReasons(input);
 }
 
-void logI2cInventory() {
-  uint8_t found[32] = {0};
-  size_t count = 0;
-
-  for (uint8_t addr = 1; addr < 127 && count < sizeof(found); ++addr) {
-    Wire.beginTransmission(addr);
-    if (Wire.endTransmission() == 0) {
-      found[count++] = addr;
-    }
-  }
-
-  logMessage("[I2C] SDA=%d SCL=%d devices=%u",
-             cfg::kI2cSdaPin,
-             cfg::kI2cSclPin,
-             static_cast<unsigned>(count));
-  if (count == 0) {
-    logMessage(": none\n");
-    return;
-  }
-
-  logMessage(":");
-  for (size_t i = 0; i < count; ++i) {
-    const uint8_t addr = found[i];
-    logMessage(" 0x%02X", addr);
-    if (addr == 0x4A || addr == 0x4B) {
-      logMessage("(BNO08x)");
-    } else if (addr == 0x6B || addr == 0x7E) {
-      logMessage("(imu)");
-    } else if (addr == 0x41) {
-      logMessage("(display/other)");
-    }
-  }
-  logMessage("\n");
-}
-
 float normalizeDiffDeg(float targetDeg, float currentDeg) {
   return RuntimeGnss::normalizeDiffDeg(targetDeg, currentDeg);
 }
@@ -283,17 +254,13 @@ const char* currentModeLabel() {
 
 CoreMode currentCoreMode() {
   return resolveCoreMode(hilSim.isRunning(),
-                         manualMode,
+                         manualControl.active(),
                          settings.get("AnchorEnabled") == 1,
                          runtimeMotion.safeHoldActive());
 }
 
 float currentHeadingValue() {
-  return runtimeGnss.currentHeadingValue(compassReady, compass.getAzimuth(), millis());
-}
-
-bool headingAvailable() {
-  return compassReady;
+  return runtimeGnss.currentHeadingValue(headingAvailable(), compass.getAzimuth(), millis());
 }
 
 bool controlGpsAvailable() {
@@ -320,7 +287,7 @@ void registerBleParams() {
       hilSim,
       bleSecurity,
       handleBleCommand,
-      []() { return compassReady; },
+      []() { return headingAvailable(); },
       []() { return currentHeadingValue(); },
       []() { return currentModeLabel(); },
       []() { return gnssQualityLevel(); },
@@ -388,8 +355,9 @@ void updateGpsFromSerial() {
     fix.satellites = max(0, (int)gps.satellites.value());
     fix.hdop = gps.hdop.isValid() ? (gps.hdop.value() * 0.01f) : NAN;
     fix.ageMs = gps.location.age();
+    const bool headingOk = headingAvailable();
     const RuntimeGnss::ApplyResult result = runtimeGnss.applyHardwareFix(
-        fix, settings, compassReady, compass.getAzimuth(), now);
+        fix, settings, headingOk, compass.getAzimuth(), now);
     if (result == RuntimeGnss::ApplyResult::JUMP_REJECTED &&
         now - lastGpsJumpRejectLogMs >= 1000UL) {
       logMessage("[EVENT] GPS_JUMP_REJECTED jump=%.2f max=%.2f\n",
@@ -400,7 +368,7 @@ void updateGpsFromSerial() {
     return;
   }
 
-  if (runtimeGnss.applyPhoneFallback(compassReady, compass.getAzimuth(), now)) {
+  if (runtimeGnss.applyPhoneFallback(headingAvailable(), compass.getAzimuth(), now)) {
     return;
   }
 
@@ -453,7 +421,7 @@ void handleStopButton() {
 }
 
 void updateDistanceAndBearing() {
-  runtimeGnss.updateDistanceAndBearing(manualMode,
+  runtimeGnss.updateDistanceAndBearing(manualControl.active(),
                                        settings.get("AnchorEnabled") == 1,
                                        settings.get("HoldHeading") == 1,
                                        anchor.anchorLat,
@@ -485,7 +453,7 @@ void publishBleAndUi(unsigned long now,
                                                 hasHeading ? heading : fallbackHeading,
                                                 hasHeading,
                                                 false,
-                                                compassReady ? compass.getHeadingQuality() : 0,
+                                                hasHeading ? compass.getHeadingQuality() : 0,
                                                 hasBearing ? runtimeGnss.bearingDeg() : fallbackBearing,
                                                 runtimeGnss.distanceM(),
                                                 diffDeg,
@@ -673,7 +641,7 @@ const char* currentFailsafeReason() {
 }
 
 void stopAllMotionNow() {
-  runtimeMotion.stopAllMotionNow(manualMode, manualDir, manualSpeed);
+  runtimeMotion.stopAllMotionNow(manualControl);
 }
 
 void noteControlActivityNow() {
@@ -681,7 +649,33 @@ void noteControlActivityNow() {
 }
 
 void applySupervisorDecision(const AnchorSupervisor::Decision& decision) {
-  runtimeMotion.applySupervisorDecision(decision, manualMode, manualDir, manualSpeed, millis());
+  runtimeMotion.applySupervisorDecision(decision, manualControl, millis());
+}
+
+bool setManualControlFromBle(int steer, int throttlePct, unsigned long ttlMs) {
+  const unsigned long now = millis();
+  const bool wasActive = manualControl.active();
+  if (!manualControl.apply(ManualControlSource::BLE_PHONE, steer, throttlePct, ttlMs, now)) {
+    return false;
+  }
+  if (!wasActive) {
+    setLastAnchorDeniedReason(AnchorDeniedReason::NONE);
+    setLastFailsafeReason(FailsafeReason::NONE);
+    runtimeMotion.clearSafeHold();
+    if (settings.get("AnchorEnabled") == 1) {
+      settings.set("AnchorEnabled", 0);
+      settings.save();
+      logMessage("[EVENT] ANCHOR_OFF reason=MANUAL\n");
+    }
+    stepperControl.cancelMove();
+  }
+  return true;
+}
+
+void stopManualControlFromBle() {
+  manualControl.stop();
+  stepperControl.stopManual();
+  motor.stop();
 }
 
 bool nudgeAnchorBearing(float bearingDeg, float meters) {
@@ -723,7 +717,7 @@ bool nudgeAnchorCardinal(const char* dir, float meters) {
   if (!dir) {
     return false;
   }
-  if (!compassReady) {
+  if (!headingAvailable()) {
     logMessage("[EVENT] NUDGE_DENIED reason=NO_COMPASS\n");
     return false;
   }
@@ -744,16 +738,20 @@ void setup() {
   pinMode(cfg::kBootPin, INPUT_PULLUP);
   pinMode(cfg::kStopButtonPin, INPUT_PULLUP);
 
-  Wire.begin(cfg::kI2cSdaPin, cfg::kI2cSclPin);
-  Wire.setTimeOut(20);
-  delay(250);
-  logI2cInventory();
-  compassReady = compass.init();
-  logMessage("[COMPASS] ready=%d source=%s", (int)compassReady, compass.sourceName());
-  if (compassReady) {
-    logMessage(" addr=0x%02X", compass.bnoI2cAddress());
-  }
-  logMessage("\n");
+  compass.attachResetPin(cfg::kCompassResetPin);
+  const bool compassHardwareReset = compass.hardwareReset();
+  logMessage("[COMPASS] reset pin=%d pulse=%d\n",
+             cfg::kCompassResetPin,
+             compassHardwareReset ? 1 : 0);
+
+  compassReady = compass.begin(compassSerial, cfg::kCompassRxPin, cfg::kCompassBaud);
+  compassReadySinceMs = compassReady ? millis() : 0;
+  compassHeadingEventsReadyLogged = false;
+  logMessage("[COMPASS] ready=%d source=%s rx=%d baud=%lu\n",
+             (int)compassReady,
+             compass.sourceName(),
+             compass.rxPin(),
+             (unsigned long)compass.baud());
 
   const bool displayReady = display_init();
   logMessage("[DISPLAY] ready=%d\n", (int)displayReady);
@@ -823,34 +821,54 @@ void loop() {
   handleBootButton();
   handleStopButton();
 
-  const RuntimeCompassRecoveryOutcome compassRecovery = attemptRuntimeCompassRecovery(
-      compassRetry.shouldRetry(compassReady, millis(), cfg::kCompassRetryIntervalMs),
-      []() {
-        Wire.begin(cfg::kI2cSdaPin, cfg::kI2cSclPin);
-        Wire.setTimeOut(20);
-        delay(120);
-      },
-      [&]() { return compass.init(); });
-  if (compassRecovery.attempted) {
-    compassReady = compassRecovery.ready;
-    logMessage("%s\n",
-               buildRuntimeCompassRecoveryStatusLine(
-                   compassReady, compass.sourceName(), compass.bnoI2cAddress())
-                   .c_str());
-    if (compassRecovery.shouldReloadCalibration) {
+  const unsigned long now = millis();
+  if (compassRetry.shouldRetry(compassReady, now, cfg::kCompassRetryIntervalMs)) {
+    const bool resetPulse = compass.hardwareReset();
+    compassReady = compass.begin(compassSerial, cfg::kCompassRxPin, cfg::kCompassBaud);
+    compassReadySinceMs = compassReady ? now : 0;
+    compassHeadingEventsReadyLogged = false;
+    logMessage("[COMPASS] retry ready=%d source=%s rx=%d baud=%lu reset=%d\n",
+               (int)compassReady,
+               compass.sourceName(),
+               compass.rxPin(),
+               (unsigned long)compass.baud(),
+               resetPulse ? 1 : 0);
+    if (compassReady) {
       compass.loadCalibrationFromSettings();
-      logMessage("%s\n", buildRuntimeCompassOffsetLine(compass.getHeadingOffsetDeg()).c_str());
-    } else if (compassRecovery.shouldLogInventory) {
-      logI2cInventory();
+      logMessage("[COMPASS] heading offset=%.1f\n", compass.getHeadingOffsetDeg());
+    }
+  }
+
+  if (compassReady && telemetryCadence.shouldPollCompass(now, cfg::kCompassReadIntervalMs)) {
+    const BNO08xCompassReadResult compassRead = compass.read();
+    if (compassRead.headingEvent && !compassHeadingEventsReadyLogged) {
+      compassHeadingEventsReadyLogged = true;
+      logMessage("[COMPASS] heading events ready age=%lu\n", compass.lastHeadingEventAgeMs(millis()));
     }
   }
 
   if (compassReady) {
-    compass.read();
+    const unsigned long compassHealthNow = millis();
+    RuntimeCompassHealthInput compassHealth;
+    compassHealth.compassReady = compassReady;
+    compassHealth.nowMs = compassHealthNow;
+    compassHealth.readySinceMs = compassReadySinceMs;
+    compassHealth.lastHeadingEventAgeMs = compass.lastHeadingEventAgeMs(compassHealthNow);
+    compassHealth.firstEventTimeoutMs = cfg::kCompassFirstEventTimeoutMs;
+    compassHealth.staleEventMs = cfg::kCompassStaleEventMs;
+    const RuntimeCompassLossReason lossReason = runtimeCompassLossReason(compassHealth);
+    if (lossReason != RuntimeCompassLossReason::NONE) {
+      logMessage("[COMPASS] lost reason=%s age=%lu\n",
+                 runtimeCompassLossReasonString(lossReason),
+                 compassHealth.lastHeadingEventAgeMs);
+      compassReady = false;
+      compassReadySinceMs = 0;
+      compassHeadingEventsReadyLogged = false;
+    }
   }
 
+  manualControl.update(now);
   updateDistanceAndBearing();
-  const unsigned long now = millis();
   const unsigned long loopDtMs = (lastLoopMs == 0 || now < lastLoopMs) ? 0 : (now - lastLoopMs);
   lastLoopMs = now;
   updateDriftState(now);
@@ -878,19 +896,20 @@ void loop() {
       runtimeGnss.anchorBearingAvailable(coreModeUsesAnchorControl(controlMode),
                                          settings.get("HoldHeading") == 1,
                                          now);
+  const bool headingOk = headingAvailable();
   const RuntimeControlState controlState = buildRuntimeControlState(
       now,
       controlMode,
-      manualDir,
-      manualSpeed,
+      manualControl.stepperDir(),
+      manualControl.motorPwm(),
       controlGpsAvailable(),
-      headingAvailable(),
+      headingOk,
       heading,
       anchorBearingAvailable,
       runtimeGnss.bearingDeg(),
-      compassReady,
-      compassReady ? compass.getRvAccuracyDeg() : NAN,
-      compassReady ? compass.getHeadingQuality() : 0,
+      headingOk,
+      headingOk ? compass.getRvAccuracyDeg() : NAN,
+      headingOk ? compass.getHeadingQuality() : 0,
       runtimeGnss.distanceM());
 
   const bool simRunningNow = hilSim.isRunning();

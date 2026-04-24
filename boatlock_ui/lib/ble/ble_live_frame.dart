@@ -61,11 +61,12 @@ const List<(int, String)> _reasonBits = [
   (1 << 11, 'STOP_CMD'),
   (1 << 12, 'GPS_HDOP_TOO_HIGH'),
   (1 << 13, 'GPS_SATS_TOO_LOW'),
-  (1 << 14, 'GPS_STALE'),
-  (1 << 15, 'GPS_JUMP'),
+  (1 << 14, 'GPS_DATA_STALE'),
+  (1 << 15, 'GPS_POSITION_JUMP'),
   (1 << 16, 'NUDGE_OK'),
   (1 << 17, 'NO_ANCHOR_POINT'),
   (1 << 18, 'NO_HEADING'),
+  (1 << 19, 'GPS_HDOP_MISSING'),
 ];
 
 BleLiveFrame? decodeBoatLockLiveFrame(List<int> value, {int rssi = 0}) {

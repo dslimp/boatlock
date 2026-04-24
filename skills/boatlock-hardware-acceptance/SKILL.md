@@ -40,7 +40,10 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
 3. Install and run the phone smoke flow:
    - `tools/android/run-smoke.sh`
    - or `tools/hw/nh02/android-run-smoke.sh` when the phone is attached to `nh02`
-   - if the app is already present and only the BLE stage matters, `--no-install` may be used as a temporary debug cut
+   - use `tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` after manual BLE protocol changes; this sends zero-throttle `MANUAL_SET`, verifies `MANUAL`, sends `MANUAL_OFF`, and verifies mode exit
+   - use `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` when reconnect behavior is the acceptance target
+   - use `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` when ESP32 reboot recovery is the acceptance target
+   - do not use `--no-install` as acceptance unless the user explicitly waives exact APK installation proof for that run
 4. If it fails, inspect:
   - device logcat around `BOATLOCK_SMOKE_RESULT`
   - `tools/hw/nh02/monitor.sh`
@@ -51,21 +54,28 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
 
 - Boot log is reachable over the tracked debug path.
 - Bench hardware reports:
-  - I2C inventory
-  - `BNO08x` ready
+  - `BNO08x-RVC` ready on `rx=12 baud=115200`
+  - live BNO08x UART-RVC heading frames
+  - BNO08x reset pin `13` pulse on boot/retry
   - display ready
   - EEPROM load
   - BLE init + advertising
   - stepper config
   - STOP button init
   - GPS UART activity
-- Fatal boot indicators such as panic/assert/advertising failure are not present in captured logs.
+- Fatal boot indicators such as panic/assert/advertising failure, Arduino `[E]` logs, `COMPASS lost`, or `COMPASS retry ready=0` are not present in captured logs.
+- Compass acceptance requires `[COMPASS] heading events ready`; `[COMPASS] ready=1 source=BNO08x-RVC ...` alone is not sufficient.
+- Do not count `[COMPASS] reset ... pulse=1` as recovery proof. Recovery is proven only by fresh heading frames after the pulse and a clean long acceptance capture.
+- For compass-focused changes, use a longer capture such as `--seconds 180`; a short boot-only pass can miss delayed wiring or frame-loss failures.
 
 ## What Acceptance Does Not Prove
 
 - It does not prove BLE control flow end to end.
-- Android smoke proves BLE scan/connect/telemetry only; it does not intentionally send actuation commands.
-- It does not prove mobile app reconnect/auth behavior.
+- Basic Android smoke proves BLE scan/connect/telemetry only; it does not intentionally send actuation commands.
+- Manual Android smoke proves exact APK install, BLE scan/connect/telemetry, zero-throttle `MANUAL_SET`, observed `MANUAL` mode, `MANUAL_OFF`, and observed mode exit. It is not a powered thrust test.
+- Reconnect Android smoke proves exact APK install, first telemetry, host-triggered Bluetooth outage, and telemetry recovery without app restart.
+- ESP reset Android smoke proves exact APK install, first telemetry, ESP32 reset through the tracked reset helper, and telemetry recovery without app restart.
+- Android smoke does not prove auth behavior.
 - It does not prove real anchor hold quality on water.
 - It does not replace on-device `SIM_*` checks or offline simulation.
 
@@ -86,6 +96,9 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
   - `tools/hw/nh02/android-install.sh`
   - `tools/hw/nh02/android-status.sh`
   - `tools/hw/nh02/android-run-smoke.sh`
+  - `tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130`
+  - `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130`
+  - `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --no-install`
   - `tools/android/status.sh`
   - `tools/android/build-smoke-apk.sh`
@@ -99,9 +112,11 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
 - For phones attached to `nh02`, use the tracked `android-install.sh` and `android-status.sh` path before falling back to local `adb` assumptions.
 - Record whether failure is in first install policy, later `adb install -r` update, app launch, or BLE runtime; do not collapse those into one generic "Android smoke failed" verdict.
 - Treat `android-run-smoke.sh --no-install` as BLE-runtime proof only; it does not prove that the exact just-built APK was installed on the phone.
+- If full smoke fails with `INSTALL_FAILED_USER_RESTRICTED`, stop on that blocker. Required phone-side fixes are `Install via USB`, Xiaomi/MIUI security install confirmation, and any account or policy prompts that gate ADB installs.
 - Do not interrupt a live flash, build, acceptance run, or phone smoke while it is still making forward progress.
 - If a bench or phone wrapper fails, fix that wrapper before normalizing a manual fallback.
 - If a bench or phone wrapper returns stale, wrong, or ambiguous data, fix the wrapper or its guidance before trusting the result.
+- If `tools/hw/nh02/flash.sh --no-build` fails because expected PlatformIO artifacts are missing, rerun canonical `tools/hw/nh02/flash.sh` instead of hand-copying or reconstructing artifacts.
 - Do not replace a pending or slow acceptance or phone-smoke verdict with manual `monitor.sh` or `logcat` interpretation. Use those only as blocker-debug context.
 - Before live mutation on `nh02` or an attached Android phone, prove the exact target first and keep the recovery path explicit.
 - Prefer repo-tracked scripts and remote helpers over ad-hoc inline `ssh` write commands or hand-typed mutation chains.

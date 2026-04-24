@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+### Changed
+- Standardized phone/BLE manual control on atomic `MANUAL_SET:<steer>,<throttlePct>,<ttlMs>` and `MANUAL_OFF`.
+- Manual entry now disables Anchor mode and uses a deadman TTL so app/controller loss cannot resume Anchor unexpectedly.
+
+### Removed
+- Removed legacy split manual commands `MANUAL`, `MANUAL_DIR`, and `MANUAL_SPEED` from the accepted command surface.
+
 ## [0.2.0] - 2026-03-02
 ### Added
 - Deterministic on-device HIL simulation loop (`SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, `SIM_ABORT`) with virtual clock and seeded PRNG.

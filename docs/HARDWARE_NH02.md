@@ -47,6 +47,10 @@
   - `tools/hw/nh02/android-status.sh`
 - Build, install/update, and run the Android BLE smoke app through `nh02`:
   - `tools/hw/nh02/android-run-smoke.sh`
+- Build, install/update, and run the Android BLE reconnect smoke app through `nh02`:
+  - `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130`
+- Build, install/update, and prove phone recovery after ESP32 reboot:
+  - `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130`
 - Run the smoke app without reinstalling the APK:
   - `tools/hw/nh02/android-run-smoke.sh --no-install`
 
@@ -63,12 +67,14 @@
 2. `tools/hw/nh02/android-install.sh` ensures `adb` exists on `nh02`.
 3. `tools/hw/nh02/android-status.sh` checks whether the phone is visible over USB and whether `adb devices -l` sees it.
 4. `tools/hw/nh02/android-run-smoke.sh` copies the smoke APK to `nh02`, installs or updates it with remote `adb`, launches the app, and waits for the `BOATLOCK_SMOKE_RESULT` log line.
-5. If the phone appears only as `MTP` or a vendor USB device and not in `adb devices`, the cable path is alive but USB debugging is still off on the phone.
+5. `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` additionally waits for first telemetry, cycles phone Bluetooth through ADB, and requires telemetry recovery without restarting the app.
+6. `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` waits for first telemetry, resets the ESP32-S3 with the tracked remote reset helper, and requires telemetry recovery without restarting the app.
+7. If the phone appears only as `MTP` or a vendor USB device and not in `adb devices`, the cable path is alive but USB debugging is still off on the phone.
 
 ## Xiaomi Install Note
 
 - On the current Xiaomi test phone, the first `adb install` was blocked by MIUI policy with `INSTALL_FAILED_USER_RESTRICTED`.
-- After the APK was installed manually once on the phone, the tracked `adb install -r` update path through `tools/hw/nh02/android-run-smoke.sh` succeeded.
+- The tracked `adb install -r` update path succeeded after the phone-side MIUI flow was satisfied: Xiaomi account, inserted SIM card, and `Install via USB` approval.
 - Treat first-install policy and later USB update as separate checkpoints; do not assume the first failure means all future `adb install -r` updates are blocked.
 
 ## Debug path
@@ -76,3 +82,17 @@
 - Runtime logs go through the persistent RFC2217 bridge on `nh02`.
 - `monitor.sh` uses local `pyserial-miniterm` against the RFC2217 endpoint.
 - If the monitor path fails, inspect `status.sh` before touching the USB device manually.
+
+## Compass Wiring
+
+- Production compass transport is BNO08x UART-RVC only.
+- Current `nh02` wiring:
+  - BNO08x `SDA/TX` -> ESP32-S3 `GPIO12`
+  - BNO08x `RST` -> ESP32-S3 `GPIO13`
+  - BNO08x `P0/PS0` -> `3V3`
+  - BNO08x `P1/PS1` -> `GND`
+  - UART baud `115200`
+- `GPIO12` was verified by grounding the RX line and by reading live RVC frames with `uart_rvc_probe_rx12`.
+- `GPIO13` was verified as reset by grounding the reset wire and watching `gpio_probe` transitions.
+- Hardware acceptance requires `[COMPASS] ready=1 source=BNO08x-RVC rx=12 baud=115200` plus `[COMPASS] heading events ready`.
+- The old ESP32-S3 I2C/SH2 compass path is removed from production firmware. Historical failure notes are kept in `WORKLOG.md`, not as a fallback path.

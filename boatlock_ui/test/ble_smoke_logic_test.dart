@@ -50,7 +50,10 @@ void main() {
   test('smokeTelemetryLooksHealthy requires mode and status', () {
     expect(smokeTelemetryLooksHealthy(_data()), isTrue);
     expect(smokeTelemetryLooksHealthy(_data(mode: '', status: 'OK')), isFalse);
-    expect(smokeTelemetryLooksHealthy(_data(mode: 'IDLE', status: '')), isFalse);
+    expect(
+      smokeTelemetryLooksHealthy(_data(mode: 'IDLE', status: '')),
+      isFalse,
+    );
     expect(smokeTelemetryLooksHealthy(null), isFalse);
   });
 
@@ -67,11 +70,23 @@ void main() {
     );
 
     expect(line.startsWith(kBoatLockSmokeResultPrefix), isTrue);
-    final payload = jsonDecode(line.substring(kBoatLockSmokeResultPrefix.length));
+    final payload = jsonDecode(
+      line.substring(kBoatLockSmokeResultPrefix.length),
+    );
     expect(payload['pass'], isTrue);
     expect(payload['reason'], 'telemetry_received');
     expect(payload['mode'], 'IDLE');
     expect(payload['statusReasons'], 'NO_GPS');
     expect(payload['secPaired'], isTrue);
+  });
+
+  test('encodeSmokeStageLine serializes stage marker', () {
+    final line = encodeSmokeStageLine('first_telemetry');
+
+    expect(line.startsWith(kBoatLockSmokeStagePrefix), isTrue);
+    final payload = jsonDecode(
+      line.substring(kBoatLockSmokeStagePrefix.length),
+    );
+    expect(payload['stage'], 'first_telemetry');
   });
 }

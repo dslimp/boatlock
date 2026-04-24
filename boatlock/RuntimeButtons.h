@@ -20,13 +20,15 @@ struct RuntimeButtonAction {
 
 class RuntimeButtons {
 public:
+  static constexpr unsigned long kDebounceMs = 40;
+
   RuntimeButtonAction updateBoot(bool pressed,
                                  unsigned long nowMs,
                                  unsigned long holdMs,
                                  bool controlGpsAvailable,
                                  AnchorDeniedReason deniedReason) {
     const HoldButtonController::Event event =
-        bootButton_.update(pressed, nowMs, holdMs);
+        bootButton_.update(pressed, nowMs, holdMs, kDebounceMs);
     if (!event.holdFired) {
       return {};
     }
@@ -46,7 +48,7 @@ public:
                                  unsigned long nowMs,
                                  unsigned long holdMs) {
     const HoldButtonController::Event event =
-        stopButton_.update(pressed, nowMs, holdMs);
+        stopButton_.update(pressed, nowMs, holdMs, kDebounceMs);
     if (event.pressedEdge) {
       RuntimeButtonAction action;
       action.type = RuntimeButtonActionType::EMERGENCY_STOP;

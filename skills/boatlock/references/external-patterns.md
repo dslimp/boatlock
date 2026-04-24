@@ -19,6 +19,9 @@ Use this file for:
 - ArduPilot Rover Hold Mode: <https://ardupilot.org/rover/docs/hold-mode.html>
 - ArduPilot Pre-Arm Safety Checks: <https://ardupilot.org/rover/docs/common-prearm-safety-checks.html>
 - ArduPilot Rover Failsafes: <https://ardupilot.org/rover/docs/rover-failsafes.html>
+- ArduPilot Rover GPS glitch diagnostics: <https://ardupilot.org/rover/docs/common-diagnosing-problems-using-logs.html>
+- ArduPilot Rover Motor and Servo Configuration: <https://ardupilot.org/rover/docs/rover-motor-and-servo-configuration.html>
+- ArduPilot Rover parameter reference: <https://ardupilot.org/rover/docs/parameters.html>
 - Signal K Anchor Alarm guide: <https://demo.signalk.org/documentation/Guides/Anchor_Alarm.html>
 - Signal K notifications spec: <https://signalk.org/specification/1.7.0/doc/notifications.html>
 - Signal K local/remote alerts: <https://signalk.org/2025/signalk-local-remote-alerts/>
@@ -29,6 +32,11 @@ Use this file for:
 - Minn Kota Spot-Lock: <https://minnkota.johnsonoutdoors.com/us/learn/technology/spot-lock>
 - Lowrance Ghost / Recon pages: <https://www.lowrance.com/ghost-trolling-motor/> and <https://www.lowrance.com/recon-trolling-motor>
 - MotorGuide Tour Pro / Pinpoint GPS: <https://www.motorguide.com/us/en/tour-pro.html>
+- Bluetooth Core GATT specification: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-61/out/en/host/generic-attribute-profile--gatt-.html>
+- Android BluetoothGatt API reference: <https://developer.android.com/reference/android/bluetooth/BluetoothGatt>
+- Android BluetoothGattCharacteristic API reference: <https://developer.android.com/reference/android/bluetooth/BluetoothGattCharacteristic>
+- Bluetooth HID Over GATT Profile: <https://www.bluetooth.com/specifications/specs/hid-over-gatt-profile/>
+- Material Design Floating Action Button guidance: <https://m1.material.io/components/buttons-floating-action-button.html>
 
 ## What OpenCPN Gets Right
 
@@ -74,13 +82,17 @@ Implication for BoatLock:
 
 - Pre-arm / pre-enable checks are first-class and should not be casually bypassed.
 - There is a dedicated quiet state (`Hold`) for stopping actuation.
+- Failsafe recovery is explicit: after link recovery, operator action is still required before normal manual control resumes.
 - Boat loiter behavior is radius-based:
   - inside radius, drift
   - outside radius, correct in a bounded way
 - Correction logic minimizes unnecessary rotation by choosing the shorter turn solution.
 - Speed/thrust is capped and tied to distance from the allowed zone.
 - ESC deadband compensation is treated as a real tuning concern, not ignored.
+- Throttle slew limiting is a first-class actuator protection concept.
+- GPS glitches are diagnosed through quality evidence such as HDOP and satellite count changes, not just the presence of coordinates.
 - Failsafes are explicit, typed, and mapped to deterministic actions.
+- Motor tests should start at low throttle and with the platform made mechanically safe.
 
 Implication for BoatLock:
 - `ANCHOR_ON` should stay behind a hard pre-enable gate.
@@ -88,6 +100,19 @@ Implication for BoatLock:
 - The anchor controller should remain zone-based, not continuously aggressive at the center.
 - Keep explicit typed failsafe reasons and deterministic actions.
 - Account for actuator deadband in shipped tuning defaults.
+- Treat `stop()` as a full actuator state reset, not only a PWM write.
+- Keep hard actuator stop distinct from ordinary controller idle output; failsafe/STOP should clear hidden state, while zone-control idle should preserve anti-hunt timing.
+- Keep rate limiting, max thrust, anti-windup, and anti-hunt windows in the core motor path.
+- GNSS quality checks should require fresh quality evidence and fail closed when evidence disappears.
+- Do not auto-enter manual control from failsafe. After a fault clears, operator control must be an explicit new action.
+- Treat physical button input as an unsafe raw signal. Debounce it before edges, and reserve state-changing actions such as anchor save or pairing for stable long-press paths.
+- For BLE/manual control, keep GATT as a small transport and put safety in the app protocol:
+  - use acknowledged writes for control commands where the client needs a write result
+  - keep live telemetry on notify/read characteristics
+  - make manual actuation updates atomic instead of split mode/direction/speed writes
+  - use a short deadman/lease on manual input so app crash, disconnect, or controller loss goes quiet
+  - map future BLE HID/HOGP joystick input into the same internal manual-control state instead of creating a second actuator path
+- For manual UI, avoid making actuation look like a primary one-tap FAB action. Use an explicit control surface such as a toolbar entry plus sheet/pad, and keep movement tied to press-and-hold/deadman semantics.
 
 ## What Commercial GPS Anchors Get Right
 

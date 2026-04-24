@@ -33,10 +33,21 @@ void test_ui_and_ble_cadence_are_independent() {
   TEST_ASSERT_TRUE(cadence.shouldRefreshUi(240, 120));
 }
 
+void test_compass_poll_has_independent_cadence() {
+  RuntimeTelemetryCadence cadence;
+
+  TEST_ASSERT_FALSE(cadence.shouldPollCompass(20, 25));
+  TEST_ASSERT_TRUE(cadence.shouldPollCompass(25, 25));
+  TEST_ASSERT_FALSE(cadence.shouldPollCompass(40, 25));
+  TEST_ASSERT_TRUE(cadence.shouldPollCompass(50, 25));
+  TEST_ASSERT_TRUE(cadence.shouldRefreshUi(120, 120));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_ui_refresh_fires_only_after_interval);
   RUN_TEST(test_ble_notify_fires_only_after_interval);
   RUN_TEST(test_ui_and_ble_cadence_are_independent);
+  RUN_TEST(test_compass_poll_has_independent_cadence);
   return UNITY_END();
 }

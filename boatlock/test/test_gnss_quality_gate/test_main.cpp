@@ -34,6 +34,8 @@ void test_rejects_by_age_sats_hdop_and_jump() {
   TEST_ASSERT_EQUAL(GnssQualityFailReason::SATS_TOO_LOW, evaluateGnssQuality(cfg, s));
 
   s.sats = 8;
+  TEST_ASSERT_EQUAL(GnssQualityFailReason::HDOP_MISSING, evaluateGnssQuality(cfg, s));
+
   s.hasHdop = true;
   s.hdop = 5.2f;
   TEST_ASSERT_EQUAL(GnssQualityFailReason::HDOP_TOO_HIGH, evaluateGnssQuality(cfg, s));
@@ -41,6 +43,26 @@ void test_rejects_by_age_sats_hdop_and_jump() {
   s.hdop = 1.2f;
   s.jumpM = 50.0f;
   TEST_ASSERT_EQUAL(GnssQualityFailReason::POSITION_JUMP, evaluateGnssQuality(cfg, s));
+}
+
+void test_rejects_missing_or_invalid_hdop() {
+  GnssQualityConfig cfg;
+  GnssQualitySample s;
+  s.fix = true;
+  s.ageMs = 100;
+  s.sats = 8;
+
+  TEST_ASSERT_EQUAL(GnssQualityFailReason::HDOP_MISSING, evaluateGnssQuality(cfg, s));
+
+  s.hasHdop = true;
+  s.hdop = NAN;
+  TEST_ASSERT_EQUAL(GnssQualityFailReason::HDOP_MISSING, evaluateGnssQuality(cfg, s));
+
+  s.hdop = 0.0f;
+  TEST_ASSERT_EQUAL(GnssQualityFailReason::HDOP_MISSING, evaluateGnssQuality(cfg, s));
+
+  s.hdop = 1.0f;
+  TEST_ASSERT_EQUAL(GnssQualityFailReason::NONE, evaluateGnssQuality(cfg, s));
 }
 
 void test_optional_speed_accel_and_sentences() {
@@ -78,6 +100,7 @@ int main() {
   UNITY_BEGIN();
   RUN_TEST(test_passes_with_valid_metrics);
   RUN_TEST(test_rejects_by_age_sats_hdop_and_jump);
+  RUN_TEST(test_rejects_missing_or_invalid_hdop);
   RUN_TEST(test_optional_speed_accel_and_sentences);
   return UNITY_END();
 }

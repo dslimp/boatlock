@@ -66,7 +66,7 @@ List<int> _frame() {
   _i16(out, -12);
   _i16(out, 34);
   _u8(out, 4);
-  _u32(out, (1 << 0) | (1 << 3) | (1 << 18));
+  _u32(out, (1 << 0) | (1 << 3) | (1 << 14) | (1 << 15) | (1 << 18) | (1 << 19));
   _u64(out, 0x0123456789ABCDEF);
   _u8(out, 2);
   return out.toBytes();
@@ -91,7 +91,10 @@ void main() {
     expect(decoded.data.secAuth, isTrue);
     expect(decoded.data.secPairWindowOpen, isTrue);
     expect(decoded.data.secReject, 'AUTH_REQUIRED');
-    expect(decoded.data.statusReasons, 'NO_GPS,DRIFT_FAIL,NO_HEADING');
+    expect(
+      decoded.data.statusReasons,
+      'NO_GPS,DRIFT_FAIL,GPS_DATA_STALE,GPS_POSITION_JUMP,NO_HEADING,GPS_HDOP_MISSING',
+    );
     expect(decoded.data.rssi, -61);
   });
 

@@ -5,11 +5,6 @@
 #include "AnchorSupervisor.h"
 #include "Settings.h"
 
-inline AnchorSupervisor::SafeAction runtimeSafeActionFromSetting(float rawValue) {
-  return ((int)rawValue == 1) ? AnchorSupervisor::SafeAction::MANUAL
-                              : AnchorSupervisor::SafeAction::STOP;
-}
-
 inline AnchorSupervisor::Config buildRuntimeSupervisorConfig(Settings& settings) {
   AnchorSupervisor::Config config;
   config.commTimeoutMs =
@@ -21,8 +16,6 @@ inline AnchorSupervisor::Config buildRuntimeSupervisorConfig(Settings& settings)
   config.gpsWeakGraceMs =
       static_cast<unsigned long>(constrain(settings.get("GpsWeakHys"), 0.5f, 60.0f) * 1000.0f);
   config.maxCommandThrustPct = 100;
-  config.failsafeAction = runtimeSafeActionFromSetting(settings.get("FailAct"));
-  config.nanGuardAction = runtimeSafeActionFromSetting(settings.get("NanAct"));
   return config;
 }
 

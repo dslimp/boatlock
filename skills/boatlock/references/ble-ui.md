@@ -20,6 +20,10 @@
   - `56ef`: control point write/write-no-response
   - `78ab`: log notify
 - Firmware boot logs should include BLE init and advertising result lines.
+- Firmware runs a BLE advertising watchdog:
+  - if the server has no connected clients and advertising is stopped, restart advertising
+  - if firmware state says connected but the server has no clients, clear stale BLE stream/subscription state and restart advertising
+- Do not enable continuous advertising while a client is connected until the firmware has a real multi-client model. The current control/session state is global.
 
 ## Flutter Scan And Connect Behavior
 
@@ -29,6 +33,11 @@
 - Scan is stopped immediately before connect.
 - If nothing is found, the app retries after `3 s`.
 - On disconnect, the app clears characteristics and schedules reconnect.
+- The app watches Bluetooth adapter state while running:
+  - adapter off/unavailable stops scanning and clears stale GATT state
+  - adapter on schedules a fresh scan
+- On app resume, the app schedules a fresh scan unless an active data/control link already exists.
+- Heartbeat write failure is treated as a link loss and schedules reconnect.
 - After service discovery the app subscribes to:
   - data char `34cd`
   - log char `78ab`
@@ -40,13 +49,24 @@
 - High-traffic command groups:
   - stream/control point: `STREAM_START`, `STREAM_STOP`, `SNAPSHOT`
   - anchor: `SET_ANCHOR`, `ANCHOR_ON`, `ANCHOR_OFF`, `NUDGE_*`, `SET_ANCHOR_PROFILE`, `SET_HOLD_HEADING`
+  - manual control: `MANUAL_SET`, `MANUAL_OFF`
   - safety and link: `STOP`, `HEARTBEAT`
   - GPS and compass: `SET_PHONE_GPS`, `SET_COMPASS_OFFSET`, `RESET_COMPASS_OFFSET`
-  - manual control: `MANUAL`, `MANUAL_DIR`, `MANUAL_SPEED`, `SET_STEPPER_BOW`
+  - stepper service: `SET_STEPPER_BOW`
   - stepper tuning: `SET_STEP_MAXSPD`, `SET_STEP_ACCEL`
   - simulation: `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, `SIM_ABORT`
 - Do not keep compatibility-only BLE commands in firmware or Flutter. If a command is obsolete, remove it from command handling, UI, tests, and docs in the same change.
 - Route commands, phone-heading commands, and log-export commands are removed and should stay no-op unless intentionally restored.
+
+## Multi-Client Rule
+
+- Future hardware may need a phone plus a remote/controller connected over BLE.
+- Do not implement this by simply advertising while connected.
+- Required multi-client design before enabling that:
+  - multiple read-only telemetry subscribers are allowed
+  - at most one control owner/lease can send actuation or settings commands
+  - pairing/auth/session state must be per-client or command writes from secondary clients must be rejected
+  - tests must cover two centrals attempting telemetry and control at the same time
 
 ## Security Envelope
 
@@ -85,8 +105,15 @@
 
 ## Manual UI Semantics
 
-- Manual mode button toggles `MANUAL:<0|1>`.
-- Steering buttons drive `MANUAL_DIR`.
-- Speed slider drives `MANUAL_SPEED` in range `-255..255`.
+- Manual control is core product scope for both the phone app and future BLE joystick/remotes.
+- Manual control must be source-agnostic internally: every controller feeds the same manual-control state model.
+- Phone BLE control uses `MANUAL_SET:<steer>,<throttlePct>,<ttlMs>`:
+  - `steer=-1..1`
+  - `throttlePct=-100..100`
+  - `ttlMs=100..1000`
+- Each `MANUAL_SET` is an atomic command and deadman refresh. If updates stop, firmware exits Manual and quiets outputs.
+- `MANUAL_SET` disables Anchor on entry so timeout, reconnect, or app crash cannot resume Anchor unexpectedly.
+- `MANUAL_OFF` stops Manual output explicitly.
+- Do not reintroduce split legacy commands such as `MANUAL`, `MANUAL_DIR`, or `MANUAL_SPEED`.
 - `SET_STEPPER_BOW` stores the current stepper position as bow zero.
 - Stepper geometry is fixed to `4096` steps per revolution.

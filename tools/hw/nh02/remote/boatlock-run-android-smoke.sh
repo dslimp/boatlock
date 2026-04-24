@@ -8,6 +8,9 @@ ACTIVITY=""
 WAIT_SECS=45
 SERIAL=""
 INSTALL_APP=1
+CYCLE_BLUETOOTH=0
+RESET_ESP32=0
+ESP32_RESET_BIN="${BOATLOCK_ESP32_RESET_BIN:-/opt/boatlock-hw/bin/boatlock-reset-esp32s3.sh}"
 PERMISSIONS=()
 
 while [[ $# -gt 0 ]]; do
@@ -19,6 +22,18 @@ while [[ $# -gt 0 ]]; do
     --no-install)
       INSTALL_APP=0
       shift
+      ;;
+    --cycle-bluetooth)
+      CYCLE_BLUETOOTH=1
+      shift
+      ;;
+    --reset-esp32)
+      RESET_ESP32=1
+      shift
+      ;;
+    --esp32-reset-bin)
+      ESP32_RESET_BIN="${2:?missing ESP32 reset helper path}"
+      shift 2
       ;;
     --package)
       PACKAGE="${2:?missing package name}"
@@ -63,6 +78,16 @@ if [[ "${INSTALL_APP}" -eq 1 ]]; then
   fi
 fi
 
+if [[ "${CYCLE_BLUETOOTH}" -eq 1 && "${RESET_ESP32}" -eq 1 ]]; then
+  echo "choose only one reconnect trigger: --cycle-bluetooth or --reset-esp32" >&2
+  exit 1
+fi
+
+if [[ "${RESET_ESP32}" -eq 1 && ! -x "${ESP32_RESET_BIN}" ]]; then
+  echo "ESP32 reset helper is missing or not executable: ${ESP32_RESET_BIN}" >&2
+  exit 1
+fi
+
 ADB=(adb)
 if [[ -n "${SERIAL}" ]]; then
   ADB+=(-s "${SERIAL}")
@@ -87,11 +112,29 @@ printf 'bt_state=%s\n' "${bt_state:-unknown}"
 printf 'location_mode=%s\n' "${loc_mode:-unknown}"
 
 if [[ "${INSTALL_APP}" -eq 1 ]]; then
-  if ! "${ADB[@]}" install -r "${APK}"; then
+  install_output=""
+  install_status=1
+  for attempt in 1 2 3; do
+    set +e
+    install_output="$("${ADB[@]}" install -r "${APK}" 2>&1)"
+    install_status=$?
+    set -e
+    printf '%s\n' "${install_output}"
+    if [[ "${install_status}" -eq 0 ]]; then
+      break
+    fi
+    if [[ "${install_output}" != *"INSTALL_FAILED_USER_RESTRICTED"* ]]; then
+      break
+    fi
+    printf 'adb install attempt %s hit USER_RESTRICTED; retrying canonical install\n' "${attempt}" >&2
+    sleep 2
+  done
+  if [[ "${install_status}" -ne 0 ]]; then
     manual_apk="/sdcard/Download/boatlock-smoke.apk"
     "${ADB[@]}" push "${APK}" "${manual_apk}" >/dev/null 2>&1 || true
-    echo "adb install failed; staged APK for manual phone-side install: ${manual_apk}" >&2
-    echo "unlock the phone, install boatlock-smoke.apk from Downloads, then rerun with --no-install" >&2
+    echo "adb install failed; staged APK for phone-side inspection only: ${manual_apk}" >&2
+    echo "fix the phone-side install policy, keep the phone unlocked for prompts, then rerun the same smoke command with install enabled" >&2
+    echo "--no-install is BLE-runtime debug only and is not acceptance unless explicitly waived" >&2
     exit 20
   fi
 fi
@@ -103,6 +146,30 @@ done
 "${ADB[@]}" logcat -c || true
 "${ADB[@]}" shell am force-stop "${PACKAGE}" >/dev/null 2>&1 || true
 "${ADB[@]}" shell am start -W -n "${ACTIVITY}" >/dev/null
+
+if [[ "${CYCLE_BLUETOOTH}" -eq 1 || "${RESET_ESP32}" -eq 1 ]]; then
+  ready_deadline=$(( $(date +%s) + 60 ))
+  ready_line=""
+  while [[ $(date +%s) -lt ${ready_deadline} ]]; do
+    dump="$("${ADB[@]}" logcat -d 2>/dev/null || true)"
+    ready_line="$(printf '%s\n' "${dump}" | grep 'BOATLOCK_SMOKE_STAGE .*first_telemetry' | tail -n 1 || true)"
+    if [[ -n "${ready_line}" ]]; then
+      break
+    fi
+    sleep 2
+  done
+  if [[ -z "${ready_line}" ]]; then
+    printf 'reconnect smoke did not reach first telemetry before recovery trigger\n' >&2
+    exit 1
+  fi
+  if [[ "${CYCLE_BLUETOOTH}" -eq 1 ]]; then
+    "${ADB[@]}" shell svc bluetooth disable >/dev/null 2>&1 || true
+    sleep 7
+    "${ADB[@]}" shell svc bluetooth enable >/dev/null 2>&1 || true
+  else
+    "${ESP32_RESET_BIN}"
+  fi
+fi
 
 deadline=$(( $(date +%s) + WAIT_SECS ))
 result_line=""

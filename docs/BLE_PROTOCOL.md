@@ -21,6 +21,8 @@ The live path is not a serial/JSON tunnel. The app subscribes to `34cd`, sends `
 | `ANCHOR_OFF` | none | Disable anchor mode immediately, stop current actuation, and clear any latched `HOLD` state |
 | `STOP` | none | Emergency stop: disable anchor/manual control, stop all motors, and latch runtime `HOLD` mode (highest priority) |
 | `HEARTBEAT` | none | Keep-alive command from controller/app; missing heartbeat while Anchor is active triggers failsafe |
+| `MANUAL_SET:<steer>,<throttlePct>,<ttlMs>` | `steer=-1..1`, `throttlePct=-100..100`, `ttlMs=100..1000` | Atomically enter/refresh Manual mode from the active controller; this disables Anchor mode and acts as a deadman lease |
+| `MANUAL_OFF` | none | Stop Manual mode and zero manual stepper/thruster output |
 | `NUDGE_DIR:<FWD\|BACK\|LEFT\|RIGHT>,<meters>` | direction + distance (1.0..5.0 m) | Shift anchor point in boat frame (allowed only while Anchor is active and safety checks pass) |
 | `NUDGE_BRG:<bearingDeg>,<meters>` | absolute bearing + distance (1.0..5.0 m) | Shift anchor point by bearing/distance (allowed only while Anchor is active and safety checks pass) |
 | `SET_ANCHOR_PROFILE:<quiet\|normal\|current>` | profile id | Atomically apply preset Anchor control params and persist them |
@@ -36,9 +38,6 @@ The live path is not a serial/JSON tunnel. The app subscribes to `34cd`, sends `
 | `SET_STEP_MAXSPD:<float>` | float | Maximum stepper speed (steps/s) |
 | `SET_STEP_ACCEL:<float>` | float | Stepper acceleration (steps/s²) |
 | `SET_STEPPER_BOW` | none | Save current stepper position as boat-bow zero for anchor pointing |
-| `MANUAL:<0|1>` | integer flag | Toggle manual control mode (not exposed in the main app); entering manual clears latched `HOLD` |
-| `MANUAL_DIR:<0|1>` | integer | Rudder direction: `0` = port, `1` = starboard |
-| `MANUAL_SPEED:<int>` | integer | Thruster power (-255..255) |
 | `SIM_LIST` | none | List built-in on-device HIL scenarios (`S0..S19`) |
 | `SIM_RUN:<scenario_id>[,<speedup>]` | id + speed mode (`0` fastest, `1` realtime) | Start deterministic closed-loop simulation on device |
 | `SIM_STATUS` | none | Return current simulation progress JSON |
@@ -51,6 +50,8 @@ Current built-in HIL groups:
 - `S10..S19`: randomized + hardware-failure emulation (compass/power/display/actuator)
 
 These commands correspond to the implementation in [`boatlock/BleCommandHandler.h`](../boatlock/BleCommandHandler.h) and are used by the mobile application.
+
+Manual control is intentionally a single atomic command instead of separate mode/direction/speed writes. Each `MANUAL_SET` refreshes the deadman TTL; if updates stop, firmware exits Manual mode and the normal quiet-output path stops motion. `MANUAL_SET` is a control command and must be wrapped in `SEC_CMD` when pairing/auth is enabled.
 
 ## Live State Frame
 
@@ -80,7 +81,7 @@ Flag bits:
 - bit `2`: `secAuth`
 - bit `3`: `secPairWin`
 
-Reason flags are decoded by the Flutter app into `statusReasons` strings such as `NO_GPS`, `NO_COMPASS`, `DRIFT_FAIL`, `CONTAINMENT_BREACH`, `COMM_TIMEOUT`, and GNSS gate reasons. The firmware encoder is `boatlock/RuntimeBleLiveFrame.h`; the Flutter decoder is `boatlock_ui/lib/ble/ble_live_frame.dart`.
+Reason flags are decoded by the Flutter app into `statusReasons` strings such as `NO_GPS`, `NO_COMPASS`, `DRIFT_FAIL`, `CONTAINMENT_BREACH`, `COMM_TIMEOUT`, and GNSS gate reasons like `GPS_DATA_STALE`, `GPS_HDOP_MISSING`, and `GPS_POSITION_JUMP`. The firmware encoder is `boatlock/RuntimeBleLiveFrame.h`; the Flutter decoder is `boatlock_ui/lib/ble/ble_live_frame.dart`.
 
 ## Security Envelope
 
@@ -112,7 +113,7 @@ Firmware status contract is now split:
   - `DRIFT_ALERT`
   - `DRIFT_FAIL`
   - `CONTAINMENT_BREACH`
-  - GNSS gate reasons like `GPS_HDOP_TOO_HIGH`
+  - GNSS gate reasons like `GPS_HDOP_MISSING`, `GPS_HDOP_TOO_HIGH`, `GPS_DATA_STALE`, `GPS_POSITION_JUMP`
   - current `failsafeReason`
   - active short-lived safety banner reasons like `NUDGE_OK`
 

@@ -11,8 +11,11 @@ from pathlib import Path
 
 BAUD_RATE = 115200
 REQUIRED_CHECKS = (
-    ("i2c_inventory", re.compile(r"^\[I2C\]\s")),
-    ("compass_ready", re.compile(r"^\[COMPASS\] ready=1 source=BNO08x\b")),
+    (
+        "compass_ready",
+        re.compile(r"^\[COMPASS\] ready=1 source=BNO08x-RVC\b.*\brx=12\b.*\bbaud=115200\b"),
+    ),
+    ("compass_heading_events", re.compile(r"^\[COMPASS\] heading events ready\b")),
     ("display_ready", re.compile(r"^\[DISPLAY\] ready=1\b")),
     ("eeprom_loaded", re.compile(r"^\[EEPROM\] settings loaded\b")),
     ("security_state", re.compile(r"^\[SEC\] paired=[01]\b")),
@@ -24,8 +27,11 @@ REQUIRED_CHECKS = (
 GPS_UART_CHECK = ("gps_uart", re.compile(r"^\[GPS\] UART data detected\b"))
 ERROR_PATTERNS = (
     ("compass_not_ready", re.compile(r"^\[COMPASS\] ready=0\b")),
+    ("compass_lost", re.compile(r"^\[COMPASS\] lost\b")),
+    ("compass_retry_failed", re.compile(r"^\[COMPASS\] retry ready=0\b")),
     ("display_not_ready", re.compile(r"^\[DISPLAY\] ready=0\b")),
     ("ble_advertising_failed", re.compile(r"^\[BLE\] advertising failed\b")),
+    ("arduino_error_log", re.compile(r"^\[\s*\d+\]\[E\]\[")),
     ("panic", re.compile(r"(guru meditation|panic|assert|abort|backtrace|loadprohibited|storeprohibited)", re.I)),
 )
 

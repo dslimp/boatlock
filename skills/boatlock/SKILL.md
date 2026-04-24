@@ -39,11 +39,13 @@ Use this skill for any code, review, debugging, test, or docs task in the BoatLo
 
 ## Self-Review Loop
 
-1. Before editing, identify the narrowest useful cut.
-2. After editing, inspect whether code became simpler or only moved around.
-3. After validation, record the remaining weakness, not just the pass result.
-4. If the user corrected a reusable workflow or scope assumption, capture it before continuing.
-5. Promote only stable lessons into `references/*.md` or this skill; keep temporary task notes in `WORKLOG.md`.
+1. Before editing a module, run a targeted external best-practice pass from official/primary sources for that module.
+2. Record the applied baseline in `WORKLOG.md`; promote durable patterns into `references/external-patterns.md`.
+3. Identify the narrowest useful cut.
+4. After editing, inspect whether code became simpler or only moved around.
+5. After validation, record the remaining weakness, not just the pass result.
+6. If the user corrected a reusable workflow or scope assumption, capture it before continuing.
+7. Promote only stable lessons into `references/*.md` or this skill; keep temporary task notes in `WORKLOG.md`.
 
 ## Execution Discipline
 
@@ -75,8 +77,9 @@ Use this skill for any code, review, debugging, test, or docs task in the BoatLo
 ## Working Pattern
 
 1. Read only the reference file that matches the task.
-2. Make the smallest change that fixes the problem without widening protocol or hardware scope by accident.
-3. If a BLE command, status field, or telemetry key changes, update firmware, Flutter parsing, tests, and docs together.
-4. Validate the narrowest relevant surface before finishing.
-5. Add or update a `WORKLOG.md` stage entry for every meaningful work slice.
-6. Run a brief self-review and promote only durable insights into the skill/reference files.
+2. Check the relevant official/primary external references before refactoring the module; if none apply, write that down.
+3. Make the smallest change that fixes the problem without widening protocol or hardware scope by accident.
+4. If a BLE command, status field, or telemetry key changes, update firmware, Flutter parsing, tests, and docs together.
+5. Validate the narrowest relevant surface before finishing.
+6. Add or update a `WORKLOG.md` stage entry for every meaningful work slice.
+7. Run a brief self-review and promote only durable insights into the skill/reference files.
