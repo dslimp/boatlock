@@ -2529,3 +2529,39 @@ Self-review:
 
 Promote to skill:
 - No new durable rule; existing hardware acceptance and phone-smoke cadence rules covered this batch.
+
+### 2026-04-24 Stage 80: HIL command parser narrowing
+
+Scope:
+- Start the next three-module HIL/simulation batch with `RuntimeSimCommand`.
+- Keep on-device simulation as required validation infrastructure.
+- Remove undocumented parser forms instead of preserving compatibility for a pre-alpha protocol.
+
+External baseline:
+- ArduPilot keeps simulation as a first-class validation path through SITL while still treating vehicle commands and modes as explicit contracts: <https://ardupilot.org/dev/docs/sitl-simulator-software-in-the-loop.html>.
+- PX4 documents simulation and HITL as structured test environments with defined interfaces, not loose command guessing: <https://docs.px4.io/main/en/simulation/>.
+
+Key outcomes:
+- `RuntimeSimCommand` now accepts only documented exact command names.
+- `SIM_RUN` now accepts only `SIM_RUN:<scenario_id>[,<speedup>]`.
+- `speedup` is strictly `0` or `1`; malformed values no longer collapse to `0` through `atoi`.
+- Removed undocumented JSON/space payload support and prefix lookalikes such as `SIM_RUNNER` or `SIM_REPORT_NOW`.
+- Updated `docs/BLE_PROTOCOL.md` to match current `SIM_REPORT` behavior: no scenario-id parameter.
+- Phone-smoke decision: no new Android smoke in this module slice because the change is parser-only and no app flow sends `SIM_*`; the HIL BLE surface will get a module-specific smoke when the batch reaches execution/log behavior or when a phone-visible SIM flow is added.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_sim_command -f test_runtime_sim_execution -f test_ble_command_handler` -> `48/48` passed.
+- `git diff --check` -> clean.
+- `cd boatlock && platformio test -e native` -> `257/257` passed.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `696469` bytes.
+- Full `nh02` acceptance remains deferred by the three-module cadence; this is module `1/3`.
+
+Self-review:
+- This removes code and narrows the command surface without changing documented commands.
+- The remaining risk is that there is no Android SIM smoke yet; that belongs with the execution/log module work so the smoke can assert an end-to-end result, not just parser acceptance.
+
+Promote to skill:
+- HIL parser behavior should stay strict and documented; do not add alternate payload encodings without an explicit product reason and tests.

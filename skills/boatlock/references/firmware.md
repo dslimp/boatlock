@@ -135,6 +135,7 @@
 - Core failsafe modules must apply local fail-closed timeout floors instead of relying only on upstream settings clamps.
 - Input fields that represent current control activity must refresh the matching core deadline, or the field should be removed.
 - Keep `SIM_*` command parsing in `RuntimeSimCommand`, not mixed with side effects in `main.cpp`.
+- `SIM_*` parser accepts only documented command names and payload forms. `SIM_RUN` payload is `SIM_RUN:<scenario_id>[,<0|1>]`; unsupported JSON/space payloads and prefix lookalikes are rejected.
 - Keep `SIM_*` execution outcomes and report chunking in `RuntimeSimExecution`, not as mixed run/report policy inside `main.cpp`.
 - Keep `SIM_*` log line mapping in `RuntimeSimLog`, not as a switch full of formatted strings inside `main.cpp`.
 - Keep anchor nudge math and cardinal bearing mapping in `RuntimeAnchorNudge`, not inline in `main.cpp`.

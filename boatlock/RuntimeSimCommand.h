@@ -44,50 +44,14 @@ inline bool parseRuntimeSimRunPayload(const std::string& command, std::string* s
 
   *scenarioId = "";
   *speedup = 0;
-  std::string payload;
-
   const size_t colon = command.find(':');
-  if (colon != std::string::npos && colon + 1 < command.size()) {
-    payload = command.substr(colon + 1);
-  } else {
-    const size_t space = command.find(' ');
-    if (space != std::string::npos && space + 1 < command.size()) {
-      payload = command.substr(space + 1);
-    }
-  }
-
-  payload = trimRuntimeSimAscii(payload);
-  if (payload.empty()) {
+  if (colon == std::string::npos || colon + 1 >= command.size()) {
     return false;
   }
 
-  if (payload.front() == '{') {
-    const size_t idPos = payload.find("id");
-    if (idPos != std::string::npos) {
-      size_t sep = payload.find_first_of(":=", idPos);
-      if (sep != std::string::npos) {
-        size_t start = sep + 1;
-        while (start < payload.size() &&
-               (payload[start] == ' ' || payload[start] == '"' || payload[start] == '\'')) {
-          ++start;
-        }
-        size_t end = start;
-        while (end < payload.size() && payload[end] != ',' && payload[end] != '}' &&
-               payload[end] != '"' && payload[end] != '\'') {
-          ++end;
-        }
-        *scenarioId = trimRuntimeSimAscii(payload.substr(start, end - start));
-      }
-    }
-
-    const size_t speedupPos = payload.find("speedup");
-    if (speedupPos != std::string::npos) {
-      size_t sep = payload.find_first_of(":=", speedupPos);
-      if (sep != std::string::npos) {
-        *speedup = atoi(payload.c_str() + sep + 1);
-      }
-    }
-    return !scenarioId->empty();
+  const std::string payload = trimRuntimeSimAscii(command.substr(colon + 1));
+  if (payload.empty()) {
+    return false;
   }
 
   const size_t comma = payload.find(',');
@@ -97,7 +61,13 @@ inline bool parseRuntimeSimRunPayload(const std::string& command, std::string* s
   }
 
   *scenarioId = trimRuntimeSimAscii(payload.substr(0, comma));
-  *speedup = atoi(payload.c_str() + comma + 1);
+  const std::string speedupToken = trimRuntimeSimAscii(payload.substr(comma + 1));
+  char* end = nullptr;
+  const long parsedSpeedup = strtol(speedupToken.c_str(), &end, 10);
+  if (speedupToken.empty() || !end || *end != '\0' || (parsedSpeedup != 0 && parsedSpeedup != 1)) {
+    return false;
+  }
+  *speedup = (int)parsedSpeedup;
   return !scenarioId->empty();
 }
 
@@ -117,7 +87,7 @@ inline RuntimeSimCommand parseRuntimeSimCommand(const std::string& command) {
     return parsed;
   }
 
-  if (command.rfind("SIM_RUN", 0) == 0) {
+  if (command == "SIM_RUN" || command.rfind("SIM_RUN:", 0) == 0) {
     parsed.type = RuntimeSimCommandType::RUN;
     parsed.valid = parseRuntimeSimRunPayload(command, &parsed.scenarioId, &parsed.speedup);
     return parsed;
@@ -128,7 +98,7 @@ inline RuntimeSimCommand parseRuntimeSimCommand(const std::string& command) {
     return parsed;
   }
 
-  if (command.rfind("SIM_REPORT", 0) == 0) {
+  if (command == "SIM_REPORT") {
     parsed.type = RuntimeSimCommandType::REPORT;
     return parsed;
   }

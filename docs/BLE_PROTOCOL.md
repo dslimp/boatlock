@@ -41,7 +41,7 @@ The live path is not a serial/JSON tunnel. The app subscribes to `34cd`, sends `
 | `SIM_LIST` | none | List built-in on-device HIL scenarios (`S0..S19`) |
 | `SIM_RUN:<scenario_id>[,<speedup>]` | id + speed mode (`0` fastest, `1` realtime) | Start deterministic closed-loop simulation on device |
 | `SIM_STATUS` | none | Return current simulation progress JSON |
-| `SIM_REPORT` | optional scenario id | Return final simulation report JSON (chunked in logs) |
+| `SIM_REPORT` | none | Return final simulation report JSON (chunked in logs) |
 | `SIM_ABORT` | none | Abort currently running simulation |
 
 Current built-in HIL groups:
