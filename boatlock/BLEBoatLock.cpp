@@ -1,6 +1,7 @@
 #include "BLEBoatLock.h"
 #include "BleAdvertisingWatchdog.h"
 #include "Logger.h"
+#include "RuntimeBleLogText.h"
 #include <algorithm>
 #include <cstring>
 
@@ -328,7 +329,12 @@ void BLEBoatLock::processQueuedLogs() {
         return;
     }
 
-    pLogChar->setValue(payload);
+    const std::string value = runtimeBleLogValue(payload, kLogMaxLen);
+    if (value.empty()) {
+        return;
+    }
+
+    pLogChar->setValue(value);
     if (pLogChar->notify()) {
         lastLogNotifyMs = now;
     }

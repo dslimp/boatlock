@@ -19,6 +19,7 @@
   - `34cd`: live state notify/read, 70-byte little-endian binary v2 frame
   - `56ef`: control point write/write-no-response
   - `78ab`: log notify
+- Log characteristic values are byte strings with explicit length. Firmware must set the exact text length, and Flutter must ignore trailing NUL padding defensively.
 - Firmware boot logs should include BLE init and advertising result lines.
 - Firmware runs a BLE advertising watchdog:
   - if the server has no connected clients and advertising is stopped, restart advertising

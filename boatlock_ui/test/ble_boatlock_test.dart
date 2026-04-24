@@ -172,4 +172,17 @@ void main() {
     expect(BleBoatLock.isAdapterReady(BluetoothAdapterState.off), isFalse);
     expect(BleBoatLock.isAdapterReady(BluetoothAdapterState.unknown), isFalse);
   });
+
+  test('decodeLogLine strips trailing nul padding', () {
+    expect(
+      BleBoatLock.decodeLogLine(<int>[
+        ...'[EVENT] STOP\n'.codeUnits,
+        0,
+        0,
+        120,
+      ]),
+      '[EVENT] STOP\n',
+    );
+    expect(BleBoatLock.decodeLogLine(<int>[0, 0]), '');
+  });
 }

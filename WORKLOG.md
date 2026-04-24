@@ -2424,3 +2424,41 @@ Self-review:
 Promote to skill:
 - Keep health status severity separate from informational status reason tokens; status reasons are not automatically warnings.
 - Phone-visible BLE/status/UI changes need module-specific Android smoke coverage, not only the batch smoke after three modules.
+
+### 2026-04-24 Stage 77: BLE log text length hardening
+
+Scope:
+- Continue the current low-risk batch with BLE log text delivery.
+- Fix the NUL padding exposed by the Stage 76 phone `--status` smoke in `lastDeviceLog`.
+- This is module `2/3`; full `nh02` acceptance remains due after module `3/3`, but module-specific phone smoke is required because the behavior is phone-visible.
+
+External baseline:
+- Bluetooth Core GATT treats characteristic values as byte values owned by the application/profile: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-61/out/en/host/generic-attribute-profile--gatt-.html>.
+- Android BLE clients receive characteristic values as byte arrays; app code must decode the application payload, not assume C-string semantics: <https://developer.android.com/reference/android/bluetooth/BluetoothGattCharacteristic>.
+
+Key outcomes:
+- Added `RuntimeBleLogText.h` with bounded C-string length handling for firmware log payloads.
+- `BLEBoatLock::processQueuedLogs()` now sets the log characteristic with exact string length instead of a padded queue buffer.
+- Flutter `BleBoatLock.decodeLogLine()` now decodes only up to the first NUL byte and allows malformed UTF-8 replacement instead of throwing.
+- Added native and Flutter coverage for padded and unterminated log values.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_log_text -f test_runtime_status -f test_runtime_ble_live_frame` -> `11/11` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub test/ble_boatlock_test.dart test/ble_smoke_logic_test.dart` -> passed.
+- `cd boatlock && platformio test -e native` -> `252/252` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> full suite passed (`31/31`).
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `git diff --check` -> clean.
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `696961` bytes.
+- `./tools/hw/nh02/flash.sh` -> build success, flash success, app image write `697328` bytes, hard reset via RTS.
+- `./tools/hw/nh02/android-run-smoke.sh --status --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"status_stop_alert_roundtrip",...,"lastDeviceLog":"[EVENT] FAILSAFE_TRIGGERED reason=STOP_CMD"}` with no NUL padding.
+
+Self-review:
+- This is a diagnostic transport cleanup, not a command or actuator behavior change.
+- The app-side defensive decoder protects against any future padded log value even if firmware changes regress.
+- Phone smoke proves the actual log value consumed by Android is now clean.
+
+Promote to skill:
+- BLE text/log characteristic payloads must be length-bounded at firmware and defensively decoded at the client boundary.

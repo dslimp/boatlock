@@ -369,9 +369,15 @@ class BleBoatLock with WidgetsBindingObserver {
   }
 
   void _onLogNotify(List<int> value) {
-    final line = utf8.decode(value);
+    final line = decodeLogLine(value);
     if (line.trim().isEmpty) return;
     onLog?.call(line);
+  }
+
+  static String decodeLogLine(List<int> value) {
+    final nul = value.indexOf(0);
+    final end = nul < 0 ? value.length : nul;
+    return utf8.decode(value.sublist(0, end), allowMalformed: true);
   }
 
   Future<void> setAnchor() async {
