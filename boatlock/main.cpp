@@ -185,7 +185,7 @@ const char* fixTypeSourceString(FixTypeSource src) {
 }
 
 bool anchorPointConfigured() {
-  return RuntimeGnss::anchorPointConfigured(anchor.anchorLat, anchor.anchorLon);
+  return AnchorControl::validAnchorPoint(anchor.anchorLat, anchor.anchorLon);
 }
 
 bool gpsQualityGoodForAnchorOn() {
@@ -385,8 +385,12 @@ void handleBootButton() {
   }
 
   if (action.type == RuntimeButtonActionType::SAVE_ANCHOR_POINT) {
-    anchor.saveAnchor(
-        runtimeGnss.lastLat(), runtimeGnss.lastLon(), currentHeadingValue(), false);
+    if (!anchor.saveAnchor(
+            runtimeGnss.lastLat(), runtimeGnss.lastLon(), currentHeadingValue(), false)) {
+      setLastAnchorDeniedReason(AnchorDeniedReason::INTERNAL_ERROR);
+      logMessage("[EVENT] ANCHOR_DENIED reason=GPS_INVALID source=BOOT_BUTTON\n");
+      return;
+    }
     setLastAnchorDeniedReason(AnchorDeniedReason::NONE);
     setLastFailsafeReason(FailsafeReason::NONE);
     logMessage("[EVENT] ANCHOR_POINT_SAVED source=BOOT_BUTTON\n");
@@ -703,7 +707,10 @@ bool nudgeAnchorBearing(float bearingDeg, float meters) {
     return false;
   }
 
-  anchor.saveAnchor(target.lat, target.lon, anchor.anchorHeading, true);
+  if (!anchor.saveAnchor(target.lat, target.lon, anchor.anchorHeading, true)) {
+    logMessage("[EVENT] NUDGE_DENIED reason=RANGE\n");
+    return false;
+  }
   setSafetyReason("NUDGE_OK");
   logMessage("[EVENT] NUDGE_APPLIED bearing=%.1f meters=%.2f lat=%.6f lon=%.6f\n",
              normalize360Deg(bearingDeg),

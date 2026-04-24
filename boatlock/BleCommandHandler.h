@@ -100,8 +100,11 @@ inline void handleBleCommand(const std::string& cmd) {
             return;
         }
         // Save anchor point only; arm Anchor mode via explicit ANCHOR_ON.
-        anchor.saveAnchor(lat, lon, headingAvailable() ? compass.getAzimuth() : 0.0f, false);
-        logMessage("[BLE] Anchor point saved via BLE: %.6f, %.6f\n", lat, lon);
+        if (anchor.saveAnchor(lat, lon, headingAvailable() ? compass.getAzimuth() : 0.0f, false)) {
+            logMessage("[BLE] Anchor point saved via BLE: %.6f, %.6f\n", lat, lon);
+        } else {
+            logMessage("[BLE] Anchor point rejected via BLE: %.6f, %.6f\n", lat, lon);
+        }
     } else if (command.rfind("NUDGE_DIR:", 0) == 0) {
         char dir[12] = {0};
         float meters = 0.0f;

@@ -16,7 +16,7 @@ The live path is not a serial/JSON tunnel. The app subscribes to `34cd`, sends `
 | `STREAM_START` | none | Enable periodic live-state notifications and immediately emit one live frame |
 | `STREAM_STOP` | none | Disable periodic live-state notifications and clear queued live frames |
 | `SNAPSHOT` | none | Emit one live-state frame without changing stream state |
-| `SET_ANCHOR:<lat>,<lon>` | `lat` and `lon` decimal degrees (floats) | Save anchor position with current heading |
+| `SET_ANCHOR:<lat>,<lon>` | valid non-zero `lat` and `lon` decimal degrees (floats) | Save anchor position with current heading; does not enable Anchor mode |
 | `ANCHOR_ON` | none | Enable anchor mode only if a saved anchor point exists, onboard heading is available, and GNSS quality is sufficient |
 | `ANCHOR_OFF` | none | Disable anchor mode immediately, stop current actuation, and clear any latched `HOLD` state |
 | `STOP` | none | Emergency stop: disable anchor/manual control, stop all motors, and latch runtime `HOLD` mode (highest priority) |

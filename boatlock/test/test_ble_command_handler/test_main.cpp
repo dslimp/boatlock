@@ -232,6 +232,14 @@ void test_set_anchor_saves_point_without_enabling_mode() {
   TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
 }
 
+void test_set_anchor_rejects_unconfigured_zero_point() {
+  anchor.saveAnchor(10.0f, 20.0f, 30.0f, false);
+  handleBleCommand("SET_ANCHOR:0.0,0.0");
+  TEST_ASSERT_EQUAL_FLOAT(10.0f, anchor.anchorLat);
+  TEST_ASSERT_EQUAL_FLOAT(20.0f, anchor.anchorLon);
+  TEST_ASSERT_EQUAL_FLOAT(30.0f, anchor.anchorHeading);
+}
+
 void test_set_anchor_uses_only_fresh_heading() {
   compass.az = 123.4f;
   headingAvailableStub = false;
@@ -479,6 +487,7 @@ int main() {
   RUN_TEST(test_manual_set_rejects_out_of_range_payloads);
   RUN_TEST(test_set_stepper_bow_calls_capture);
   RUN_TEST(test_set_anchor_saves_point_without_enabling_mode);
+  RUN_TEST(test_set_anchor_rejects_unconfigured_zero_point);
   RUN_TEST(test_set_anchor_uses_only_fresh_heading);
   RUN_TEST(test_anchor_on_rejected_without_anchor_point);
   RUN_TEST(test_anchor_on_rejected_on_bad_gnss);

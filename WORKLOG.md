@@ -1398,3 +1398,46 @@ Self-review:
 Promote to skill:
 - Settings persistence should be dirty-state guarded. No-op saves must not commit flash.
 - Non-finite settings values should fail closed before they reach persisted storage.
+
+### 2026-04-24 Stage 54: Anchor point persistence pass
+
+Scope:
+- Continue module-by-module refactor with `AnchorControl` and BLE/BOOT/nudge anchor-point save paths.
+- Make the anchor point a validated explicit state transition instead of a helper that can silently arm Anchor by default.
+
+External baseline:
+- OpenCPN Auto Anchor Mark creates anchor marks only after conservative conditions and deduping to avoid spurious waypoints: <https://opencpn.org/wiki/dokuwiki/doku.php?id=opencpn:manual_advanced:features:anchor_auto>.
+- Signal K Anchor Alarm separates anchor drop, rode settling, armed state, and supports moving the anchor location after setup: <https://demo.signalk.org/documentation/Guides/Anchor_Alarm.html>.
+- ArduPilot Rover boat configuration treats position holding as a deliberate Loiter capability for boats, not as a side effect of saving coordinates: <https://ardupilot.org/rover/docs/boat-configuration.html>.
+
+Key outcomes:
+- Removed the default `enableAnchor=true` from `AnchorControl::saveAnchor`; all callers must explicitly state whether saving the point should keep Anchor enabled.
+- `AnchorControl` now rejects non-finite, out-of-range, and `0,0` anchor points instead of letting `Settings::set()` clamp bad coordinates into persisted state.
+- Heading is normalized to `[0,360)` before persistence.
+- `SET_ANCHOR` still saves only the point and cannot enable Anchor; `ANCHOR_ON` remains the explicit enable gate.
+- BOOT button save and nudge paths now check the `saveAnchor()` result instead of logging success unconditionally.
+- Anchor configured detection now uses `AnchorControl::validAnchorPoint()`; duplicated GNSS helper was removed.
+- BLE protocol docs and firmware reference were updated with the explicit anchor-save behavior.
+
+Validation:
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native -f test_anchor_control -f test_ble_command_handler -f test_runtime_anchor_gate -f test_runtime_gnss` -> `45/45` passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native` -> `195/195` passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio pio run -e esp32s3` -> success, flash size `695869` bytes.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `git diff --check` -> clean.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-anchor-control-60s.log --json-out /tmp/boatlock-anchor-control-60s.json` -> `PASS`, including RVC compass, display, EEPROM `ver=22`, BLE advertising, stepper, STOP, GPS UART, and heading events.
+- Acceptance log scan found no panic/assert/Arduino `[E]`, compass loss, compass retry failure, or unexpected `ANCHOR_REJECTED`.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 100` -> exact APK install `Success`, `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact APK install `Success`, `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> first install attempt hit MIUI `USER_RESTRICTED`, canonical retry succeeded, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip",...}`.
+
+Self-review:
+- This is a small semantic tightening: invalid anchor inputs are rejected rather than clamped. That is safer for a physical hold point.
+- `0,0` remains reserved as "no anchor point", matching existing runtime behavior. If a real deployment ever needs the Gulf of Guinea coordinate, that requires a schema/state change rather than overloading default coordinates.
+- I did not add an on-device BLE test that sends invalid `SET_ANCHOR` over the phone smoke app; native BLE tests cover the parser path and Android smoke covers transport health.
+
+Promote to skill:
+- Anchor point saving must be explicit and validated. Do not add default arguments or helpers that can arm Anchor as a side effect of storing coordinates.

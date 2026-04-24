@@ -70,6 +70,7 @@ Use this skill for any code, review, debugging, test, or docs task in the BoatLo
 - Removed flows such as `SET_HEADING`, `EMU_COMPASS`, route commands, and log-export commands should stay removed unless the task explicitly restores them end-to-end.
 - Protocol compatibility shims should stay removed unless the task explicitly restores compatibility end-to-end.
 - GPS position prefers hardware fix, then phone GPS fallback. Heading comes from onboard BNO08x only, optionally corrected by movement-derived GPS course.
+- Anchor point saving must be explicit and validated; never add default arguments or helper paths that arm Anchor as a side effect of storing coordinates.
 - BLE identity and UUIDs are fixed: `BoatLock`, `12ab`, `34cd`, `56ef`, `78ab`.
 - When `secPaired=1`, control and write commands must go through `SEC_CMD`; pairing opens only from the hardware STOP long-press flow.
 - On-device HIL scenarios `S0..S19` are part of the regression surface.

@@ -305,12 +305,6 @@ public:
     return sample;
   }
 
-  static bool anchorPointConfigured(float anchorLat, float anchorLon) {
-    return isfinite(anchorLat) &&
-           isfinite(anchorLon) &&
-           !(anchorLat == 0.0f && anchorLon == 0.0f);
-  }
-
   static float normalizeDiffDeg(float targetDeg, float currentDeg) {
     float diff = targetDeg - currentDeg;
     if (diff > 180.0f) diff -= 360.0f;
