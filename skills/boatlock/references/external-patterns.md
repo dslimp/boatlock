@@ -21,6 +21,8 @@ Use this file for:
 - ArduPilot Rover Failsafes: <https://ardupilot.org/rover/docs/rover-failsafes.html>
 - ArduPilot Rover GPS glitch diagnostics: <https://ardupilot.org/rover/docs/common-diagnosing-problems-using-logs.html>
 - ArduPilot Rover Motor and Servo Configuration: <https://ardupilot.org/rover/docs/rover-motor-and-servo-configuration.html>
+- ArduPilot Rover Manual Mode: <https://ardupilot.org/rover/docs/manual-mode.html>
+- ArduPilot Rover Tuning Speed and Throttle: <https://ardupilot.org/rover/docs/rover-tuning-throttle-and-speed.html>
 - ArduPilot Rover parameter reference: <https://ardupilot.org/rover/docs/parameters.html>
 - Signal K Anchor Alarm guide: <https://demo.signalk.org/documentation/Guides/Anchor_Alarm.html>
 - Signal K notifications spec: <https://signalk.org/specification/1.7.0/doc/notifications.html>
@@ -108,6 +110,8 @@ Implication for BoatLock:
 - Keep hard actuator stop distinct from ordinary controller idle output; failsafe/STOP should clear hidden state, while zone-control idle should preserve anti-hunt timing.
 - Keep rate limiting, max thrust, anti-windup, and anti-hunt windows in the core motor path.
 - Keep actuator tuning explicit and evidence-based. Do not hide self-adaptive gain changes or gain persistence inside the runtime motor path.
+- Keep manual and auto actuator state isolated. Manual throttle output must not seed automatic throttle ramp state after a mode transition.
+- Stop/zero output paths should put both PWM and direction pins into a known idle state.
 - Stepper/servo outputs should have explicit neutral/idle behavior. Release or reduce holding current when idle if holding torque is not required, and make re-enable behavior deliberate.
 - GNSS quality checks should require fresh quality evidence and fail closed when evidence disappears.
 - Phone or app-provided positions are not equivalent to onboard GNSS for control. Keep fallback/display source state isolated from hardware-source filters, speed baselines, and jump baselines.

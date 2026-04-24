@@ -123,6 +123,37 @@ void test_anchor_auto_low_passes_distance_rate() {
   TEST_ASSERT_TRUE(rate2 > -2.5f);
 }
 
+void test_anchor_auto_distance_rate_uses_zero_timestamp_sample() {
+  MotorControl motor;
+  motor.setupPWM(7, 0, 5000, 8);
+  motor.setDirPins(5, 10);
+
+  mockSetMillis(0);
+  motor.driveAnchorAuto(20.0f, 2.0f, true);
+  TEST_ASSERT_FALSE(motor.filteredDistanceRateValid);
+
+  mockSetMillis(1000);
+  motor.driveAnchorAuto(16.0f, 2.0f, true);
+  TEST_ASSERT_TRUE(motor.filteredDistanceRateValid);
+  TEST_ASSERT_TRUE(motor.filteredDistanceRateMps < -0.5f);
+}
+
+void test_anchor_auto_distance_rate_survives_millis_rollover() {
+  MotorControl motor;
+  motor.setupPWM(7, 0, 5000, 8);
+  motor.setDirPins(5, 10);
+
+  const unsigned long nearWrap = ~0UL - 100UL;
+  mockSetMillis(nearWrap);
+  motor.driveAnchorAuto(20.0f, 2.0f, true);
+
+  mockSetMillis(50);
+  motor.driveAnchorAuto(16.0f, 2.0f, true);
+
+  TEST_ASSERT_TRUE(motor.filteredDistanceRateValid);
+  TEST_ASSERT_TRUE(motor.filteredDistanceRateMps < -0.5f);
+}
+
 void test_anchor_auto_reduces_pwm_on_fast_approach() {
   MotorControl motor;
   motor.setupPWM(7, 0, 5000, 8);
@@ -164,6 +195,41 @@ void test_stop_clears_auto_thrust_state() {
   TEST_ASSERT_EQUAL(0, motor.pwmRaw);
   TEST_ASSERT_EQUAL(0, motor.autoPwmRaw);
   TEST_ASSERT_EQUAL(1500, motor.autoThrustStateChangedMs);
+  TEST_ASSERT_EQUAL(10, g_lastDigitalPin);
+  TEST_ASSERT_EQUAL(LOW, g_lastDigitalValue);
+}
+
+void test_manual_zero_is_quiet_idle_output() {
+  MotorControl motor;
+  motor.setupPWM(7, 0, 5000, 8);
+  motor.setDirPins(5, 10);
+
+  mockSetMillis(1000);
+  motor.driveManual(0);
+
+  TEST_ASSERT_EQUAL(0, motor.pwmRaw);
+  TEST_ASSERT_EQUAL(0, motor.autoPwmRaw);
+  TEST_ASSERT_EQUAL(0, motor.autoRampUpdatedMs);
+  TEST_ASSERT_EQUAL(10, g_lastDigitalPin);
+  TEST_ASSERT_EQUAL(LOW, g_lastDigitalValue);
+}
+
+void test_manual_drive_does_not_seed_anchor_auto_ramp() {
+  MotorControl motor;
+  motor.setupPWM(7, 0, 5000, 8);
+  motor.setDirPins(5, 10);
+
+  mockSetMillis(1000);
+  motor.driveManual(255);
+  TEST_ASSERT_EQUAL(255, motor.pwmRaw);
+  TEST_ASSERT_EQUAL(0, motor.autoPwmRaw);
+  TEST_ASSERT_EQUAL(0, motor.autoRampUpdatedMs);
+
+  mockSetMillis(2000);
+  motor.driveAnchorAuto(40.0f, 2.0f, true);
+
+  TEST_ASSERT_TRUE(motor.autoThrustActive);
+  TEST_ASSERT_LESS_THAN(MotorControl::AUTO_MIN_PWM, motor.pwmRaw);
 }
 
 int main() {
@@ -173,7 +239,11 @@ int main() {
   RUN_TEST(test_anchor_auto_applies_pwm_ramp_limit);
   RUN_TEST(test_anchor_auto_anti_hunt_min_on_off_windows);
   RUN_TEST(test_anchor_auto_low_passes_distance_rate);
+  RUN_TEST(test_anchor_auto_distance_rate_uses_zero_timestamp_sample);
+  RUN_TEST(test_anchor_auto_distance_rate_survives_millis_rollover);
   RUN_TEST(test_anchor_auto_reduces_pwm_on_fast_approach);
   RUN_TEST(test_stop_clears_auto_thrust_state);
+  RUN_TEST(test_manual_zero_is_quiet_idle_output);
+  RUN_TEST(test_manual_drive_does_not_seed_anchor_auto_ramp);
   return UNITY_END();
 }

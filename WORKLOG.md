@@ -1758,3 +1758,50 @@ Self-review:
 Promote to skill:
 - Phone GPS fallback must never seed hardware GNSS filter, jump baseline, speed baseline, or acceleration baseline.
 - GNSS motion freshness must use explicit sample-valid flags. Timestamp `0` is a valid sample time, not a sentinel.
+
+### 2026-04-24 Stage 62: Motor manual-to-auto state isolation
+
+Scope:
+- Continue module-by-module refactor with `MotorControl` and the actuator output path.
+- Remove hidden coupling between manual throttle and anchor-auto thrust ramp so mode transitions start quiet and bounded.
+
+External baseline:
+- ArduPilot Rover failsafe behavior maps loss/fault conditions to explicit Hold/quiet actions, and requires explicit operator action before returning to normal control: <https://ardupilot.org/rover/docs/rover-failsafes.html>.
+- ArduPilot Rover Manual Mode still applies throttle slew, so manual control is not a bypass around actuator protection: <https://ardupilot.org/rover/docs/manual-mode.html>.
+- ArduPilot Rover speed/throttle tuning treats throttle baseline and slew limiting as first-class controller behavior: <https://ardupilot.org/rover/docs/rover-tuning-throttle-and-speed.html>.
+- PX4 actuator testing guidance requires disarmed/minimum output checks and prevents sudden motor movement until an explicit slider move: <https://docs.px4.io/main/en/config/actuators>.
+
+Key outcomes:
+- `driveManual()` no longer seeds `autoPwmRaw` or `autoRampUpdatedMs`; anchor-auto now starts from its own zero ramp after manual mode.
+- Manual zero command now writes an idle output instead of toggling direction pins with PWM `0`.
+- `stop()` and auto idle now set direction pins low with PWM `0`, reducing latent H-bridge state.
+- Motor distance-rate timing now uses unsigned elapsed-time math and treats timestamp `0` as a valid sample.
+- Shared reset/idle helpers removed repeated partial resets in the motor path.
+
+Validation:
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native -f test_motor_control -f test_runtime_motion -f test_ble_command_handler` -> `51/51` passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native` -> `214/214` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> `29/29` passed.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `git diff --check` -> clean.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio pio run -e esp32s3` -> success, flash size `695725` bytes.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter build apk --debug --no-pub` -> success.
+- `./tools/hw/nh02/status.sh` -> target ESP32-S3 `98:88:E0:03:BA:5C` visible and RFC2217 service active.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`; app image write `696096` bytes.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-motor-state-60s.log --json-out /tmp/boatlock-motor-state-60s.json` -> `PASS`, including EEPROM `ver=23`, RVC compass, display, BLE advertising, stepper, STOP, heading events, and GPS UART data.
+- Acceptance log scan found no panic/assert/Guru, Arduino `[E]`, `CONFIG_SAVE_FAILED`, `CONFIG_CRC_FAIL`, GPS UART stale/no-data warning, compass loss, compass retry failure, `Wire.cpp`, `i2cRead`, `error`, or `FAIL`.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> one MIUI `USER_RESTRICTED` install retry, canonical retry succeeded, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+
+Self-review:
+- This is a safety behavior change: leaving manual mode can no longer carry a high manual PWM into anchor-auto's ramp state.
+- The change is intentionally narrow and does not alter protocol, max thrust limits, deadband, or anchor enable rules.
+- Bench acceptance and Android manual smoke prove the firmware/app path still runs and zero-throttle manual roundtrip still exits. They do not prove powered thrust under load; that still needs a mechanically safe motor test fixture before non-zero manual or anchor thrust acceptance.
+
+Promote to skill:
+- Manual and anchor-auto actuator state must stay isolated. Manual PWM, timestamps, or ramp state must not seed anchor-auto output.
+- Any motor stop/zero path should drive PWM to zero and direction pins to a known idle state.

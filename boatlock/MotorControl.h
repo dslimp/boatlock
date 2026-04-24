@@ -55,17 +55,9 @@ public:
     }
 
     void stop() {
-        ledcWrite(pwmChannel, 0);
-        pwmRaw = 0;
-        autoThrustActive = false;
-        filteredAnchorDistance = 0.0f;
-        filteredAnchorDistanceValid = false;
-        autoPwmRaw = 0;
-        autoRampUpdatedMs = 0;
+        writeIdleOutput();
+        resetAutoState();
         autoThrustStateChangedMs = millis();
-        filteredDistanceRateValid = false;
-        filteredDistanceUpdatedMs = 0;
-        filteredDistanceRateMps = 0.0f;
     }
 
     int pwmPercent() const {
@@ -95,10 +87,7 @@ public:
             filteredDistanceRateMps = 0.0f;
             filteredDistanceUpdatedMs = now;
         } else {
-            const unsigned long dtMs =
-                (filteredDistanceUpdatedMs == 0 || now < filteredDistanceUpdatedMs)
-                    ? 0
-                    : (now - filteredDistanceUpdatedMs);
+            const unsigned long dtMs = elapsedMs(now, filteredDistanceUpdatedMs);
             filteredDistanceUpdatedMs = now;
             const float prevFilteredDistance = filteredAnchorDistance;
             filteredAnchorDistance =
@@ -120,7 +109,7 @@ public:
 
         const bool shouldBeActive = filteredAnchorDistance >= idleRadius;
         const unsigned long minStateMs = autoThrustActive ? AUTO_MIN_ON_MS : AUTO_MIN_OFF_MS;
-        const bool canToggleState = (now - autoThrustStateChangedMs) >= minStateMs;
+        const bool canToggleState = elapsedMs(now, autoThrustStateChangedMs) >= minStateMs;
         if (shouldBeActive != autoThrustActive && canToggleState) {
             autoThrustActive = shouldBeActive;
             autoThrustStateChangedMs = now;
@@ -154,7 +143,7 @@ public:
             autoRampUpdatedMs = now;
             autoPwmRaw = 0;
         }
-        float dtSec = (now - autoRampUpdatedMs) / 1000.0f;
+        float dtSec = elapsedMs(now, autoRampUpdatedMs) / 1000.0f;
         if (!isfinite(dtSec) || dtSec < 0.0f) {
             dtSec = 0.0f;
         }
@@ -187,13 +176,14 @@ public:
     }
 
     void driveManual(int speed) {
-        autoThrustActive = false;
-        filteredAnchorDistanceValid = false;
-        filteredDistanceRateValid = false;
-        filteredDistanceRateMps = 0.0f;
-        filteredDistanceUpdatedMs = 0;
-        bool forward = speed >= 0;
+        resetAutoState();
+        autoThrustStateChangedMs = millis();
         int pwmValue = constrain(abs(speed), 0, 255);
+        if (pwmValue == 0) {
+            writeIdleOutput();
+            return;
+        }
+        bool forward = speed >= 0;
         if (dirPin2 >= 0) {
             digitalWrite(dirPin1, forward ? HIGH : LOW);
             digitalWrite(dirPin2, forward ? LOW : HIGH);
@@ -202,14 +192,37 @@ public:
         }
         ledcWrite(pwmChannel, pwmValue);
         pwmRaw = pwmValue;
-        autoPwmRaw = pwmValue;
-        autoRampUpdatedMs = millis();
     }
 
 private:
-    void stopAnchorOutput() {
+    static unsigned long elapsedMs(unsigned long now, unsigned long then) {
+        return now - then;
+    }
+
+    void resetAutoState() {
+        autoThrustActive = false;
+        filteredAnchorDistance = 0.0f;
+        filteredAnchorDistanceValid = false;
+        filteredDistanceRateValid = false;
+        filteredDistanceRateMps = 0.0f;
+        filteredDistanceUpdatedMs = 0;
+        autoPwmRaw = 0;
+        autoRampUpdatedMs = 0;
+    }
+
+    void writeIdleOutput() {
+        if (dirPin2 >= 0) {
+            digitalWrite(dirPin1, LOW);
+            digitalWrite(dirPin2, LOW);
+        } else if (dirPin1 >= 0) {
+            digitalWrite(dirPin1, LOW);
+        }
         ledcWrite(pwmChannel, 0);
         pwmRaw = 0;
+    }
+
+    void stopAnchorOutput() {
+        writeIdleOutput();
         autoPwmRaw = 0;
         autoRampUpdatedMs = 0;
     }
