@@ -25,7 +25,7 @@
 - `boatlock/display.cpp`: on-device UI math and sign conventions
 - `boatlock/Settings.h`: persisted settings, defaults, ranges, schema version
 - `boatlock/AnchorControl.h`: persisted anchor-point writes
-- `boatlock/MotorControl.h`: PID tuning and PID persistence throttling
+- `boatlock/MotorControl.h`: anchor thrust output limiting, ramping, anti-hunt timing, and manual motor output
 
 ## Repo Map
 
@@ -64,11 +64,9 @@
   - stored version mismatches
   - CRC mismatches
   - persisted values need normalization
-- Do not treat PID auto-save as the only EEPROM writer.
 - Current write paths include at least:
   - BLE config and mode commands in `boatlock/BleCommandHandler.h`
   - anchor persistence in `boatlock/AnchorControl.h`
-  - PID persistence throttling in `boatlock/MotorControl.h`
   - additional runtime state changes in `boatlock/main.cpp`
 - For wear-risk or batching work, audit all `settings.save()` call sites before changing policy.
 
@@ -137,6 +135,7 @@
 - `DriftFail` is a containment boundary: once breached, supervisor exits anchor into latched `HOLD` instead of continuing to hunt.
 - Manual mode cancels auto stepper tracking and drives stepper/motor through shared `ManualControl` state.
 - Manual control is entered/refreshed atomically and expires through a short deadman TTL; split mode/dir/speed state is not allowed.
+- Motor output must stay bounded and deterministic. Do not reintroduce hidden runtime self-adaptive PID tuning or PID auto-persistence in the actuator path.
 - Random `fallbackHeading` and `fallbackBearing` are UI placeholders only.
 
 ## Safety And Buttons

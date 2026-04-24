@@ -1488,3 +1488,49 @@ Self-review:
 Promote to skill:
 - Anchor jog/nudge should remain a fixed small step. Do not add arbitrary nudge distances back into firmware or Flutter without product evidence and tests.
 - For MIUI phones, a first install-policy rejection followed by canonical retry success is a recorded retry, not a blocker; only terminal wrapper failure blocks acceptance.
+
+### 2026-04-24 Stage 56: Motor output legacy PID removal
+
+Scope:
+- Continue module-by-module refactor with `MotorControl`, actuator settings, and EEPROM schema.
+- Remove unused hidden self-adaptive PID code from the motor path; keep deterministic bounded anchor thrust behavior.
+
+External baseline:
+- ArduPilot Rover throttle tuning keeps PID tuning explicit and telemetry-based; it also treats acceleration limits and throttle slew as separate output constraints: <https://ardupilot.org/rover/docs/rover-tuning-throttle-and-speed.html>.
+- ArduPilot Rover tuning process starts from calibration and manual proof before tuning controllers, not from hidden runtime gain changes: <https://ardupilot.org/rover/docs/rover-tuning-process.html>.
+- PX4 actuator configuration treats slew rate as an explicit actuator output limit for hardware protection and stability: <https://docs.px4.io/main/en/config/actuators>.
+
+Key outcomes:
+- Removed unused `MotorControl::applyPID()`, PID filters, integral state, runtime gain adaptation, and PID auto-save code.
+- Removed boot-time `motor.loadPIDfromSettings()` call.
+- Removed obsolete settings keys `Kp`, `Ki`, `Kd`, `PidILim`, and `DistTh`.
+- Bumped `Settings::VERSION` to `0x17`; docs now reflect schema `0x17`.
+- Kept active anchor motor behavior on the already-tested bounded path: hold/deadband, max thrust, approach damping, anti-hunt windows, and thrust ramp limiting.
+- Updated firmware/external-pattern/validation references so PID auto-persistence is not treated as a current write path.
+
+Validation:
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native -f test_motor_control -f test_runtime_motion -f test_settings -f test_anchor_profiles -f test_ble_command_handler` -> `61/61` passed.
+- `python3 tools/ci/check_config_schema_version.py` -> `config schema version OK: 0x17`.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native` -> `196/196` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> `29/29` passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio pio run -e esp32s3` -> success, flash size `695541` bytes.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter build apk --debug --no-pub` -> success.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `git diff --check` -> clean.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`; app image write `695904` bytes.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-motor-no-pid-60s.log --json-out /tmp/boatlock-motor-no-pid-60s.json` -> `PASS`, including EEPROM `ver=23`, RVC compass, display, BLE advertising, stepper, STOP, heading events, and GPS UART.
+- Acceptance log scan found no panic/assert/Guru, Arduino `[E]`, `Wire.cpp`, `i2cRead`, compass loss, or compass retry failure.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 100` -> first install attempt hit MIUI `USER_RESTRICTED`, canonical retry succeeded, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip",...}`.
+
+Self-review:
+- This removes code rather than moving it. The active actuator path was already `driveAnchorAuto`; the removed PID path had no production callers and could only create future confusion or unsafe reactivation.
+- Removing settings keys intentionally resets EEPROM to schema `0x17` on deployed benches; acceptable before alpha and proven on `nh02`.
+- The remaining motor path still needs future water testing for real thrust tuning. Current proof is deterministic behavior, simulation, zero-throttle phone roundtrip, and boot/hardware health.
+
+Promote to skill:
+- Motor output should stay deterministic and bounded. Do not add hidden runtime gain adaptation or actuator-path settings persistence.
+- Obsolete config fields should be removed before alpha; bump schema and prove migration on hardware instead of carrying dead compatibility fields.

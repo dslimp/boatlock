@@ -38,7 +38,6 @@ const SettingEntry defaultEntries[] = {
     {"MaxThrustA", "Max thrust anchor", TYPE_INT,   60.0, 60.0,  10.0, 100.0,   1.0, "%", true},
     {"ThrRampA",   "Thrust ramp anchor",TYPE_FLOAT, 35.0, 35.0,  1.0, 100.0,    1.0, "%/s", true},
     {"MaxTurnRt",  "Max turn rate",     TYPE_FLOAT, 120.0,120.0, 30.0, 720.0,   1.0, "deg/s", false},
-    {"PidILim",    "PID I limit",       TYPE_FLOAT, 100.0,100.0, 1.0, 500.0,    1.0, "", false},
     {"ReacqStrat", "Reacquire strategy",TYPE_INT,   0.0,  0.0,   0.0,   1.0,    1.0, "", false},
     {"AnchorProf", "Anchor profile",    TYPE_INT,   1.0,  1.0,   0.0,   2.0,    1.0, "", true},
 
@@ -50,11 +49,6 @@ const SettingEntry defaultEntries[] = {
     {"GpsWeakHys", "GPS weak hysteresis", TYPE_FLOAT, 1.5, 1.5, 0.5, 60.0, 0.5, "s", false},
     {"EventRateMs","Event rate limit",  TYPE_INT,   1000, 1000, 100, 10000, 100.0, "ms", false},
 
-    // Runtime control params
-    {"Kp",        "Kp for PID",         TYPE_FLOAT, 20.0, 20.0,  0.01, 200.0,  0.1, "", true},
-    {"Ki",        "Ki for PID",         TYPE_FLOAT, 0.5,  0.5,   0.0,  10.0,  0.01, "", true},
-    {"Kd",        "Kd for PID",         TYPE_FLOAT, 5.0,  5.0,   0.0, 100.0,  0.1, "", true},
-    {"DistTh",    "Distance threshold", TYPE_FLOAT, 2.0,  2.0,   0.1,  10.0,  0.1, "m", true},
     {"DriftAlert","Drift alert",        TYPE_FLOAT, 6.0,  6.0,   2.0, 200.0,  0.5, "m", true},
     {"DriftFail", "Drift fail",         TYPE_FLOAT, 12.0, 12.0,  5.0, 500.0,  1.0, "m", true},
     {"AngTol",    "Angle tolerance",    TYPE_FLOAT, 3.0,  3.0,   0.1,  180.0, 1.0, "deg", true},
@@ -89,7 +83,7 @@ const char* imuTypeNames[] = { "BNO055", "MPU9250", "BNO085", "LSM9DS1", "None" 
 
 class Settings {
 public:
-    static constexpr uint8_t VERSION = 0x16;
+    static constexpr uint8_t VERSION = 0x17;
     static const int EEPROM_ADDR = 256;
     static constexpr int VALUES_BYTES = sizeof(float) * count;
     static constexpr int VALUES_ADDR = EEPROM_ADDR + sizeof(uint8_t);

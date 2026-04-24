@@ -1,12 +1,9 @@
 #include "MotorControl.h"
 #include <unity.h>
 
-Settings settings;
-
 void logMessage(const char *, ...) {}
 
 void setUp() {
-  settings.reset();
   mockSetMillis(0);
   g_lastLedcChannel = -1;
   g_lastLedcValue = -1;
@@ -148,26 +145,6 @@ void test_anchor_auto_reduces_pwm_on_fast_approach() {
   TEST_ASSERT_TRUE(nearPwm < highPwm);
 }
 
-void test_pid_anti_windup_blocks_integral_growth_when_saturated() {
-  MotorControl motor;
-  motor.setupPWM(7, 0, 5000, 8);
-  motor.setDirPins(5, 10);
-  motor.Kp = 5.0f;
-  motor.Ki = 5.0f;
-  motor.Kd = 0.0f;
-  motor.integralLimit = 500.0f;
-  motor.resetPidState();
-
-  mockSetMillis(1000);
-  for (int i = 0; i < 6; ++i) {
-    motor.applyPID(100.0f);
-    mockAdvanceMillis(1000);
-  }
-
-  TEST_ASSERT_TRUE(fabsf(motor.integral) < 5.0f);
-  TEST_ASSERT_EQUAL(255, motor.pwmRaw);
-}
-
 void test_stop_clears_auto_thrust_state() {
   MotorControl motor;
   motor.setupPWM(7, 0, 5000, 8);
@@ -197,7 +174,6 @@ int main() {
   RUN_TEST(test_anchor_auto_anti_hunt_min_on_off_windows);
   RUN_TEST(test_anchor_auto_low_passes_distance_rate);
   RUN_TEST(test_anchor_auto_reduces_pwm_on_fast_approach);
-  RUN_TEST(test_pid_anti_windup_blocks_integral_growth_when_saturated);
   RUN_TEST(test_stop_clears_auto_thrust_state);
   return UNITY_END();
 }

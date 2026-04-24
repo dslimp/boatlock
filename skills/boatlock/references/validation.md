@@ -16,7 +16,7 @@
   - update `docs/CONFIG_SCHEMA.md`
   - keep `Settings::VERSION` and CI schema checks aligned
 - EEPROM/write-policy change:
-  - audit all `settings.save()` call sites, not only PID code
+  - audit all `settings.save()` call sites, not only the file currently being changed
   - remember that `Settings::load()` can persist on boot during migration/CRC/normalization flows
   - cover both `test_settings` and the command/runtime tests that exercise the changed write paths
 - Version or release-note change:

@@ -1,8 +1,6 @@
 #pragma once
 #include <Arduino.h>
-#include <EEPROM.h>
 #include <math.h>
-#include "Settings.h"
 
 class MotorControl {
 public:
@@ -26,27 +24,6 @@ public:
 
     MotorControl() : pwmChannel(0), dirPin1(-1), dirPin2(-1), pwmRaw(0) {}
 
-    // Ссылки на PID в Settings (инициализируются в setup())
-    float Kp = 0.0f;
-    float Ki = 0.0f;
-    float Kd = 0.0f;
-    float previous_error = 0, integral = 0;
-    unsigned long lastPidTime = 0;
-    float integralLimit = 100.0f;
-    float filteredPidError = 0.0f;
-    float filteredPidDerivative = 0.0f;
-    bool filteredPidErrorValid = false;
-    bool filteredPidDerivativeValid = false;
-    static constexpr float PID_ERROR_FILTER_ALPHA = 0.22f;
-    static constexpr float PID_DERIV_FILTER_ALPHA = 0.25f;
-
-    // Параметры адаптации PID
-    float angleTolerance = 0.0f;
-    float distanceThreshold = 0.0f;
-
-    // Таймер для автосохранения коэффициентов
-    unsigned long lastSaveTime = 0;
-    const unsigned long saveInterval = 120000;
     float filteredAnchorDistance = 0.0f;
     bool filteredAnchorDistanceValid = false;
     float filteredDistanceRateMps = 0.0f;
@@ -77,123 +54,6 @@ public:
         pinMode(pin2, OUTPUT);
     }
 
-    void loadPIDfromSettings() {
-        Kp = settings.get("Kp");
-        Ki = settings.get("Ki");
-        Kd = settings.get("Kd");
-        angleTolerance    = settings.get("AngTol");
-        distanceThreshold = settings.get("HoldRadius");
-    }
-
-    void savePIDtoSettings(bool force = false) {
-        // Сохраняем только если значения реально поменялись и прошло достаточно времени
-        static float lastKp = -1, lastKi = -1, lastKd = -1;
-        static bool initialized = false;
-        unsigned long now = millis();
-
-        if (!initialized) {
-            lastKp = Kp;
-            lastKi = Ki;
-            lastKd = Kd;
-            lastSaveTime = now;
-            initialized = true;
-        }
-
-        bool changed =
-            fabs(Kp - lastKp) > 0.0005 ||
-            fabs(Ki - lastKi) > 0.0001 ||
-            fabs(Kd - lastKd) > 0.0005;
-
-        bool shouldPersist = changed && (force || (now - lastSaveTime >= saveInterval));
-
-        if (shouldPersist) {
-            settings.set("Kp", Kp);
-            settings.set("Ki", Ki);
-            settings.set("Kd", Kd);
-            settings.save();
-            lastKp = Kp; lastKi = Ki; lastKd = Kd;
-            lastSaveTime = now;
-        }
-    }
-
-    // --- Self-adaptive PID внутри applyPID ---
-    void applyPID(float dist) {
-        unsigned long now = millis();
-        float dt = (lastPidTime == 0) ? 0.0f : (now - lastPidTime) / 1000.0f;
-        lastPidTime = now;
-
-        float errorRaw = dist;
-        if (!filteredPidErrorValid) {
-            filteredPidError = errorRaw;
-            filteredPidErrorValid = true;
-        } else {
-            filteredPidError =
-                filteredPidError + (errorRaw - filteredPidError) * PID_ERROR_FILTER_ALPHA;
-        }
-        const float error = filteredPidError;
-
-        float derivativeRaw = (dt > 0.0f) ? (error - previous_error) / dt : 0.0f;
-        if (!filteredPidDerivativeValid) {
-            filteredPidDerivative = derivativeRaw;
-            filteredPidDerivativeValid = true;
-        } else {
-            filteredPidDerivative =
-                filteredPidDerivative +
-                (derivativeRaw - filteredPidDerivative) * PID_DERIV_FILTER_ALPHA;
-        }
-        const float derivative = filteredPidDerivative;
-        previous_error = error;
-
-        const float pTerm = Kp * error;
-        const float dTerm = Kd * derivative;
-        const float unsatCurrent = pTerm + Ki * integral + dTerm;
-        const float satCurrent = constrain(unsatCurrent, -255.0f, 255.0f);
-        const bool satHigh = satCurrent >= 254.5f;
-        const bool satLow = satCurrent <= -254.5f;
-        const bool pushesFurtherSaturation = (satHigh && error > 0.0f) || (satLow && error < 0.0f);
-        if (!pushesFurtherSaturation && dt > 0.0f && isfinite(dt)) {
-            integral += error * dt;
-            integral = constrain(integral, -integralLimit, integralLimit);
-        }
-
-        float output = pTerm + Ki * integral + dTerm;
-        output = constrain(output, -255.0f, 255.0f);
-
-        // --- Self-adaptive tuning ---
-        float error_threshold = 5.0;
-        float derivative_threshold = 2.0;
-        float dKp = 0.01;
-        float dKd = 0.005;
-        float dKi = 0.0005;
-
-        // Корректировка Kp
-        if (fabs(error) > error_threshold)        Kp = min(Kp + dKp,  settings.get("Kp") * 4.0f); // лимит вверх
-        else if (fabs(error) < angleTolerance)    Kp = max(Kp - dKp,  0.01f); // лимит вниз
-
-        // Корректировка Kd (чтобы не “колбасило”)
-        if (fabs(derivative) > derivative_threshold)  Kd = min(Kd + dKd,  settings.get("Kd") * 4.0f);
-        else                                         Kd = max(Kd - dKd,  0.01f);
-
-        // Корректировка Ki для долгих ошибок
-        if (fabs(integral) > 50.0)  Ki = min(Ki + dKi, 0.2f);
-        else                        Ki = max(Ki - dKi, 0.0f);
-
-        // Автосохранение коэффициентов раз в saveInterval, даже при частых изменениях
-        savePIDtoSettings(millis() - lastSaveTime > saveInterval);
-
-        // Управление мотором
-        int pwmValue = constrain((int)fabs(output), 0, 255);
-        bool forward = output >= 0;
-        if (dirPin2 >= 0) {
-            digitalWrite(dirPin1, forward ? HIGH : LOW);
-            digitalWrite(dirPin2, forward ? LOW : HIGH);
-        } else if (dirPin1 >= 0) {
-            digitalWrite(dirPin1, forward ? HIGH : LOW);
-        }
-        ledcWrite(pwmChannel, pwmValue);
-        pwmRaw = pwmValue;
-    }
-
     void stop() {
         ledcWrite(pwmChannel, 0);
         pwmRaw = 0;
@@ -206,16 +66,6 @@ public:
         filteredDistanceRateValid = false;
         filteredDistanceUpdatedMs = 0;
         filteredDistanceRateMps = 0.0f;
-    }
-
-    void resetPidState() {
-        previous_error = 0.0f;
-        integral = 0.0f;
-        lastPidTime = 0;
-        filteredPidErrorValid = false;
-        filteredPidDerivativeValid = false;
-        filteredPidError = 0.0f;
-        filteredPidDerivative = 0.0f;
     }
 
     int pwmPercent() const {

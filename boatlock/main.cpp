@@ -801,7 +801,6 @@ void setup() {
 
   motor.setupPWM(cfg::kMotorPwmPin, cfg::kPwmChannel, cfg::kPwmFreq, cfg::kPwmResolution);
   motor.setDirPins(cfg::kMotorDirPin1, cfg::kMotorDirPin2);
-  motor.loadPIDfromSettings();
 
   stepperControl.attachSettings(&settings);
   stepperControl.loadFromSettings();
