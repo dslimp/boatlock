@@ -60,6 +60,7 @@
 - `Settings::set()` rejects non-finite values, then clamps finite values to each key's configured range.
 - `Settings::setStrict()` rejects non-finite or out-of-range values and logs `CONFIG_REJECTED`.
 - `Settings::save()` is dirty-state guarded. Calling it after no-op `set()` calls must not write flash.
+- `Settings::save()` must check the EEPROM commit result. Failed commits log `CONFIG_SAVE_FAILED` and keep dirty state for a later retry.
 - `Settings::load()` may write back on boot if:
   - stored version mismatches
   - CRC mismatches

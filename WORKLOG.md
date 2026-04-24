@@ -1666,3 +1666,49 @@ Self-review:
 Promote to skill:
 - Compass event freshness must use explicit event-valid flags; never use timestamp `0` as "no event".
 - Compass health/retry timers must use unsigned elapsed-time checks and include rollover tests.
+
+### 2026-04-24 Stage 60: Settings flash commit failure handling
+
+Scope:
+- Continue module-by-module refactor with `Settings` and EEPROM persistence.
+- Keep the current blob+CRC format but make flash commit failure explicit and retryable.
+
+External baseline:
+- Arduino-ESP32 documents `Preferences` as the replacement for EEPROM and notes it stores retained data in ESP32 NVS: <https://docs.espressif.com/projects/arduino-esp32/en/latest/api/preferences.html>.
+- ESP-IDF NVS documents key-value storage, read/write status, and power-loss recovery expectations; it also states values are not durable until the commit path succeeds: <https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/storage/nvs_flash.html>.
+- ESP-IDF NVS internals include append-oriented storage and wear levelling, but still expose writes as fallible operations that callers must check.
+
+Key outcomes:
+- `Settings::save()` now returns `bool`.
+- Clean no-op saves still return success without a flash commit.
+- Failed `EEPROM.commit()` now logs `CONFIG_SAVE_FAILED` and leaves `dirty_` set so the next `save()` retries instead of silently dropping the change.
+- Native EEPROM mock now models commit success/failure.
+- Added a settings test that forces a failed commit, verifies failure is reported, then verifies a later retry commits.
+- Docs and repo references now state that failed commits are not "saved" and must retain dirty state.
+
+Validation:
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native -f test_settings -f test_anchor_control -f test_anchor_profiles -f test_runtime_motion -f test_ble_command_handler` -> `58/58` passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native` -> `206/206` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> `29/29` passed.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `git diff --check` -> clean.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio pio run -e esp32s3` -> success, flash size `695589` bytes.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter build apk --debug --no-pub` -> success.
+- `./tools/hw/nh02/status.sh` -> target ESP32-S3 `98:88:E0:03:BA:5C` visible and RFC2217 service active.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`; app image write `695952` bytes.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-settings-commit-60s.log --json-out /tmp/boatlock-settings-commit-60s.json` -> `PASS`, including EEPROM `ver=23`, RVC compass, display, BLE advertising, stepper, STOP, heading events, and GPS UART data.
+- Acceptance JSON had `errors=[]` and `warnings=[]`; log scan found no `CONFIG_SAVE_FAILED`, `CONFIG_CRC_FAIL`, panic/assert/Guru, Arduino `[E]`, compass loss, `Wire.cpp`, `i2cRead`, `error`, or `FAIL`.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> one MIUI `USER_RESTRICTED` install retry, canonical retry succeeded, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+
+Self-review:
+- This is a narrow reliability fix. It does not change EEPROM layout, schema version, command surface, or boot migration semantics.
+- Moving Settings from EEPROM emulation to `Preferences`/NVS may be a future cleanup, but doing it here would be a larger storage migration without a current failure. The current blob+CRC+dirty guard is simpler and already covered.
+- Hardware acceptance proves normal boot/load and no real-flash commit failure in the boot path. Native tests cover the failure branch because inducing NVS commit failure safely on the bench is not part of the canonical hardware wrapper.
+
+Promote to skill:
+- Treat storage commits as fallible. Do not clear dirty state or log saved until the commit result is successful.

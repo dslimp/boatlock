@@ -19,6 +19,7 @@ Write policy:
 - runtime `save()` writes EEPROM only when settings are dirty
 - setting a value equal to the current normalized value does not create a flash commit
 - non-finite runtime values are rejected instead of being persisted
+- failed EEPROM commits are logged as `CONFIG_SAVE_FAILED` and keep settings dirty for retry
 - migration, CRC recovery, and boot-time normalization still force a commit
 
 ## Groups

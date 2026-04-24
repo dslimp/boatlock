@@ -155,9 +155,9 @@ public:
         buildKeyMap();
     }
 
-    void save() {
+    bool save() {
         if (!dirty_) {
-            return;
+            return true;
         }
         EEPROM.put(EEPROM_ADDR, VERSION);
         float values[count];
@@ -166,11 +166,17 @@ public:
         EEPROM.put(VALUES_ADDR, values);
         const uint32_t crc = calcCrc32(reinterpret_cast<const uint8_t*>(values), VALUES_BYTES);
         EEPROM.put(CRC_ADDR, crc);
-        EEPROM.commit();
+        if (!EEPROM.commit()) {
+            logMessage("[EVENT] CONFIG_SAVE_FAILED ver=%d crc=0x%08lX\n",
+                       VERSION,
+                       static_cast<unsigned long>(crc));
+            return false;
+        }
         logMessage("[EEPROM] settings saved ver=%d crc=0x%08lX\n",
                    VERSION,
                    static_cast<unsigned long>(crc));
         dirty_ = false;
+        return true;
     }
 
     void load() {

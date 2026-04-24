@@ -82,6 +82,22 @@ void test_save_skips_clean_state() {
   TEST_ASSERT_EQUAL_INT(resetCommits + 1, EEPROM.commitCount);
 }
 
+void test_save_failure_keeps_dirty_for_retry() {
+  EEPROM.clear();
+  Settings s;
+  s.reset();
+  EEPROM.commitCount = 0;
+  EEPROM.commitResult = false;
+
+  TEST_ASSERT_TRUE(s.set("HoldRadius", 4.1f));
+  TEST_ASSERT_FALSE(s.save());
+  TEST_ASSERT_EQUAL_INT(1, EEPROM.commitCount);
+
+  EEPROM.commitResult = true;
+  TEST_ASSERT_TRUE(s.save());
+  TEST_ASSERT_EQUAL_INT(2, EEPROM.commitCount);
+}
+
 void test_load_valid_image_stays_clean() {
   EEPROM.clear();
   float values[count];
@@ -217,6 +233,7 @@ int main(int argc, char **argv) {
   RUN_TEST(test_get_set);
   RUN_TEST(test_save_load);
   RUN_TEST(test_save_skips_clean_state);
+  RUN_TEST(test_save_failure_keeps_dirty_for_retry);
   RUN_TEST(test_load_valid_image_stays_clean);
   RUN_TEST(test_set_rejects_nonfinite_without_dirtying);
   RUN_TEST(test_set_strict_rejects_out_of_range);
