@@ -85,6 +85,7 @@
   - applies moving-average filter window `GpsFWin` (`1..20`)
   - rejects jumps above `MaxPosJumpM`
   - updates speed, HDOP, accel, and sentence counters
+- GNSS quality gate must fail closed on invalid/non-finite config or sample values; a bad threshold or `NaN` motion sample must not silently pass anchor pre-enable.
 - Phone GPS fallback must never seed hardware GNSS filter, jump baseline, speed baseline, or acceleration baseline.
 - When GNSS leaves hardware source or loses fix, reset hardware motion/filter baselines so reacquisition starts from fresh trusted hardware data.
 - GNSS motion freshness must use explicit sample-valid flags. Timestamp `0` is a valid sample time, not a "no sample" sentinel.

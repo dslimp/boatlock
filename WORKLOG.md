@@ -3114,3 +3114,37 @@ Self-review:
 
 Promote to skill:
 - Heading and angle normalization in safety-path code must use bounded modulo-style math and must treat non-finite input as a safe value.
+
+### 2026-04-25 Stage 96: GNSS quality gate fail-closed boundaries
+
+Scope:
+- Continue the navigation/anchor batch with `GnssQualityGate`.
+- Keep accepted BLE/app behavior unchanged while hardening the anchor pre-enable quality gate against bad direct config/sample values.
+- This is module `2/5`; hardware and Android acceptance are deferred to module five because command shape, telemetry shape, app reconnect/install behavior, and hardware drivers did not change.
+
+External baseline:
+- ArduPilot pre-arm checks block arming/auto GPS-dependent modes on GPS glitch, missing 3D fix, and high HDOP rather than treating fix alone as sufficient: <https://ardupilot.org/copter/docs/common-prearm-safety-checks.html>.
+- ArduPilot GPS glitch protection rejects position jumps against predicted motion and escalates sustained glitches in GPS-dependent modes: <https://ardupilot.org/copter/docs/gps-failsafe-glitch-protection.html>.
+- PX4 position-loss failsafe treats stale aiding data and excessive horizontal position inaccuracy as invalid position evidence for modes that require position: <https://docs.px4.io/main/en/config/safety>.
+
+Key outcomes:
+- `evaluateGnssQuality()` now fails closed on invalid gate config: zero GPS age limit, invalid satellite threshold, non-finite/invalid HDOP limit, invalid position-jump limit, invalid speed/accel sanity limits, and negative required sentence count.
+- Optional speed/accel sanity now rejects present-but-invalid motion samples (`NaN` or negative speed) instead of silently passing them.
+- Non-finite jump distance now maps to `GPS_POSITION_JUMP`.
+- Added direct native tests for invalid config, invalid optional motion samples, and non-finite jump evidence.
+- Promoted the fail-closed GNSS quality gate rule into `skills/boatlock/references/firmware.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because no phone-visible command/status schema changed.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_gnss_quality_gate -f test_runtime_gnss -f test_runtime_anchor_gate -f test_ble_command_handler` -> passed (`53/53`).
+- `cd boatlock && platformio test -e native` -> passed (`278/278`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `697645` bytes.
+- `git diff --check` -> clean.
+
+Self-review:
+- This changes only bad-boundary behavior; normal valid GNSS samples and current settings-clamped production path continue to pass as before.
+- Existing reason enums were reused to avoid widening the BLE/status surface.
+- Remaining validation risk is live GNSS behavior under multipath/on-water motion; this module only hardens the deterministic gate.
+
+Promote to skill:
+- GNSS quality gates must reject invalid/non-finite config and sample evidence at the gate boundary; never rely only on upstream settings clamps for auto-mode admission.

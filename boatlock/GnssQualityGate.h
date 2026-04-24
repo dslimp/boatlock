@@ -63,30 +63,44 @@ inline GnssQualityFailReason evaluateGnssQuality(const GnssQualityConfig& cfg,
   if (!sample.fix) {
     return GnssQualityFailReason::NO_FIX;
   }
-  if (sample.ageMs > cfg.maxGpsAgeMs) {
+  if (cfg.maxGpsAgeMs == 0 || sample.ageMs > cfg.maxGpsAgeMs) {
     return GnssQualityFailReason::DATA_STALE;
   }
-  if (sample.sats < cfg.minSats) {
+  if (cfg.minSats < 1 || sample.sats < cfg.minSats) {
     return GnssQualityFailReason::SATS_TOO_LOW;
   }
   if (!sample.hasHdop || !isfinite(sample.hdop) || sample.hdop <= 0.0f) {
     return GnssQualityFailReason::HDOP_MISSING;
   }
-  if (sample.hasHdop && isfinite(sample.hdop) && sample.hdop > cfg.maxHdop) {
+  if (!isfinite(cfg.maxHdop) || cfg.maxHdop <= 0.0f || sample.hdop > cfg.maxHdop) {
     return GnssQualityFailReason::HDOP_TOO_HIGH;
   }
   if (sample.jumpRejected ||
-      (isfinite(sample.jumpM) && sample.jumpM > cfg.maxPositionJumpM)) {
+      !isfinite(cfg.maxPositionJumpM) ||
+      cfg.maxPositionJumpM <= 0.0f ||
+      !isfinite(sample.jumpM) ||
+      sample.jumpM > cfg.maxPositionJumpM) {
     return GnssQualityFailReason::POSITION_JUMP;
   }
   if (cfg.enableSpeedAccelSanity) {
-    if (sample.hasSpeed && isfinite(sample.speedMps) && sample.speedMps > cfg.maxSpeedMps) {
+    if (!isfinite(cfg.maxSpeedMps) || cfg.maxSpeedMps <= 0.0f) {
       return GnssQualityFailReason::SPEED_INVALID;
     }
-    if (sample.hasAccel && isfinite(sample.accelMps2) &&
-        fabsf(sample.accelMps2) > cfg.maxAccelMps2) {
+    if (sample.hasSpeed &&
+        (!isfinite(sample.speedMps) || sample.speedMps < 0.0f ||
+         sample.speedMps > cfg.maxSpeedMps)) {
+      return GnssQualityFailReason::SPEED_INVALID;
+    }
+    if (!isfinite(cfg.maxAccelMps2) || cfg.maxAccelMps2 <= 0.0f) {
       return GnssQualityFailReason::ACCEL_INVALID;
     }
+    if (sample.hasAccel &&
+        (!isfinite(sample.accelMps2) || fabsf(sample.accelMps2) > cfg.maxAccelMps2)) {
+      return GnssQualityFailReason::ACCEL_INVALID;
+    }
+  }
+  if (cfg.requiredSentences < 0) {
+    return GnssQualityFailReason::SENTENCES_MISSING;
   }
   if (cfg.requiredSentences > 0) {
     if (!sample.hasSentences || sample.sentences < cfg.requiredSentences) {
