@@ -130,6 +130,7 @@ Implication for BoatLock:
 - Serial/GNSS watchdogs should be non-blocking and based on elapsed-time checks; direct `now > then` comparisons are not rollover-safe.
 - Serial/GNSS watchdog restarts should start a new no-data observation window, and restart cooldowns should use explicit "restart seen" state instead of treating timestamp `0` as "never".
 - Compass/RVC watchdogs follow the same rule: track event presence separately from timestamps, then calculate age with unsigned subtraction. A timestamp value of `0` is a valid sample time.
+- Compass/RVC parsers should validate the full packet contract at the boundary: sync/header, checksum, and datasheet value ranges before changing live heading state.
 - Diagnostics follow the same rule as watchdogs: never use timestamp `0` as "not started"; use explicit seen flags and unsigned elapsed-time math.
 - Saturation diagnostics should validate the configured actuator limit before comparing output against it.
 - HIL/control-loop timers follow the same rule as watchdogs and diagnostics: use explicit seen flags plus unsigned elapsed-time math, and treat timestamp `0` as a valid sample.

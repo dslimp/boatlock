@@ -18,6 +18,12 @@ inline int16_t bnoRvcReadInt16Le(const uint8_t* data) {
                               (static_cast<uint16_t>(data[1]) << 8));
 }
 
+inline bool bnoRvcAnglesInRange(const BnoRvcSample& sample) {
+  return sample.yawDeg >= -180.0f && sample.yawDeg <= 180.0f &&
+         sample.pitchDeg >= -90.0f && sample.pitchDeg <= 90.0f &&
+         sample.rollDeg >= -180.0f && sample.rollDeg <= 180.0f;
+}
+
 inline bool bnoRvcParseFrame(const uint8_t* frame, size_t len, BnoRvcSample* out) {
   if (!frame || len != 17 || !out) {
     return false;
@@ -31,13 +37,18 @@ inline bool bnoRvcParseFrame(const uint8_t* frame, size_t len, BnoRvcSample* out
     return false;
   }
 
-  out->index = frame[0];
-  out->yawDeg = bnoRvcReadInt16Le(frame + 1) * 0.01f;
-  out->pitchDeg = bnoRvcReadInt16Le(frame + 3) * 0.01f;
-  out->rollDeg = bnoRvcReadInt16Le(frame + 5) * 0.01f;
-  out->accelXMps2 = bnoRvcReadInt16Le(frame + 7) * 0.0098067f;
-  out->accelYMps2 = bnoRvcReadInt16Le(frame + 9) * 0.0098067f;
-  out->accelZMps2 = bnoRvcReadInt16Le(frame + 11) * 0.0098067f;
+  BnoRvcSample sample;
+  sample.index = frame[0];
+  sample.yawDeg = bnoRvcReadInt16Le(frame + 1) * 0.01f;
+  sample.pitchDeg = bnoRvcReadInt16Le(frame + 3) * 0.01f;
+  sample.rollDeg = bnoRvcReadInt16Le(frame + 5) * 0.01f;
+  sample.accelXMps2 = bnoRvcReadInt16Le(frame + 7) * 0.0098067f;
+  sample.accelYMps2 = bnoRvcReadInt16Le(frame + 9) * 0.0098067f;
+  sample.accelZMps2 = bnoRvcReadInt16Le(frame + 11) * 0.0098067f;
+  if (!bnoRvcAnglesInRange(sample)) {
+    return false;
+  }
+  *out = sample;
   return true;
 }
 

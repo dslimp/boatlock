@@ -57,6 +57,33 @@ void test_bad_checksum_is_rejected() {
   TEST_ASSERT_FALSE(bnoRvcParseFrame(frame, sizeof(frame), &sample));
 }
 
+void test_out_of_range_angles_are_rejected() {
+  uint8_t frame[17];
+  buildFrame(frame);
+  putI16(frame, 3, 9001);
+  finishChecksum(frame);
+
+  BnoRvcSample sample;
+  sample.index = 99;
+  TEST_ASSERT_FALSE(bnoRvcParseFrame(frame, sizeof(frame), &sample));
+  TEST_ASSERT_EQUAL_UINT8(99, sample.index);
+}
+
+void test_angle_range_boundaries_are_accepted() {
+  uint8_t frame[17];
+  buildFrame(frame);
+  putI16(frame, 1, -18000);
+  putI16(frame, 3, 9000);
+  putI16(frame, 5, 18000);
+  finishChecksum(frame);
+
+  BnoRvcSample sample;
+  TEST_ASSERT_TRUE(bnoRvcParseFrame(frame, sizeof(frame), &sample));
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, -180.0f, sample.yawDeg);
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 90.0f, sample.pitchDeg);
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 180.0f, sample.rollDeg);
+}
+
 void test_stream_parser_resyncs_and_decodes_payload() {
   uint8_t frame[17];
   buildFrame(frame);
@@ -82,6 +109,8 @@ int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_valid_frame_is_decoded);
   RUN_TEST(test_bad_checksum_is_rejected);
+  RUN_TEST(test_out_of_range_angles_are_rejected);
+  RUN_TEST(test_angle_range_boundaries_are_accepted);
   RUN_TEST(test_stream_parser_resyncs_and_decodes_payload);
   return UNITY_END();
 }

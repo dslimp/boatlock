@@ -2782,3 +2782,35 @@ Self-review:
 
 Promote to skill:
 - GPS UART restart must reset the no-data baseline and use explicit restart-seen state.
+
+### 2026-04-25 Stage 87: BNO08x UART-RVC frame boundary validation
+
+Scope:
+- Continue the three-module refactor batch with `BnoRvcFrame`.
+- Keep compass input fail-closed before data reaches `BNO08xCompass` live heading state.
+- This is module `2/3`; hardware acceptance remains due after module `3/3`.
+
+External baseline:
+- The BNO08x datasheet defines UART-RVC as a 100 Hz 19-byte message with `0xAAAA` header, checksum over index/orientation/accel/reserved bytes, yaw range `+/-180 deg`, pitch `+/-90 deg`, and roll `+/-180 deg`: <https://docs.sparkfun.com/SparkFun_VR_IMU_Breakout_BNO086_QWIIC/assets/component_documentation/BNO080_085-Datasheet_v1.16.pdf>.
+- Adafruit's UART-RVC guide and Arduino library use 115200 baud, read the 19-byte packet, and validate header plus checksum before exposing heading data: <https://learn.adafruit.com/adafruit-9-dof-orientation-imu-fusion-breakout-bno085/uart-rvc-for-arduino> and <https://github.com/adafruit/Adafruit_BNO08x_RVC>.
+
+Key outcomes:
+- Added angle-range validation to `bnoRvcParseFrame()` after checksum and before mutating the output sample.
+- Out-of-range yaw/pitch/roll packets are rejected even if their checksum is internally consistent.
+- Added native tests for out-of-range rejection and inclusive datasheet boundaries.
+- Promoted the parser-boundary rule into `skills/boatlock/references/firmware.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added because this module changes sensor-frame validation only, not BLE/app behavior. Hardware batch remains scheduled after module `3/3`.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_bno_rvc_frame -f test_bno08x_compass` -> passed (`8/8`).
+- `cd boatlock && platformio test -e native` -> passed (`264/264`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `696981` bytes.
+- `git diff --check` -> clean.
+
+Self-review:
+- This is a boundary check, not a transport rewrite.
+- It reduces the chance of a single corrupted but checksummed frame producing a large compass jump.
+- It does not validate acceleration ranges because the datasheet exposes accel as signed mg and our current safety decision only depends on heading freshness and heading angle.
+
+Promote to skill:
+- BNO08x UART-RVC frames must pass header/checksum and datasheet orientation ranges before updating live heading state.
