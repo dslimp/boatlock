@@ -1534,3 +1534,47 @@ Self-review:
 Promote to skill:
 - Motor output should stay deterministic and bounded. Do not add hidden runtime gain adaptation or actuator-path settings persistence.
 - Obsolete config fields should be removed before alpha; bump schema and prove migration on hardware instead of carrying dead compatibility fields.
+
+### 2026-04-24 Stage 57: Stepper output stability pass
+
+Scope:
+- Continue module-by-module refactor with `StepperControl`.
+- Keep rudder/stepper behavior deterministic and quiet on cancel/idle without widening the command surface.
+
+External baseline:
+- AccelStepper documents `disableOutputs()` as setting motor pins low to save power and `run()` as a non-blocking call that must be polled frequently: <https://www.airspayce.com/mikem/arduino/AccelStepper/classAccelStepper.html>.
+- PX4 actuator guidance treats slew/trim/neutral behavior as explicit actuator configuration and uses disarmed/neutral output states to avoid unintended surface motion: <https://docs.px4.io/main/en/config/actuators>.
+- Stepper motor guidance consistently flags idle holding current as a heat/power risk; when holding torque is not required, outputs should be disabled or current reduced.
+
+Key outcomes:
+- Replaced loop-based `normalize180()` wrapping with bounded `fmodf` math.
+- `startManual(0)` now fails closed and does not enable stepper outputs.
+- `cancelMove()` now starts the idle-release timer even if there was no pending target, so STOP/failsafe/cancel paths deterministically proceed toward coil release.
+- Added native tests for bounded normalization, cancel-triggered idle release, and neutral manual input.
+
+Validation:
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native -f test_stepper_control -f test_runtime_motion -f test_ble_command_handler` -> `46/46` passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native` -> `198/198` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> `29/29` passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio pio run -e esp32s3` -> success, flash size `695545` bytes.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter build apk --debug --no-pub` -> success.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `git diff --check` -> clean.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`; app image write `695904` bytes.
+- First `./tools/hw/nh02/acceptance.sh ...` after flash hit RFC2217 `Connection refused`; `status.sh` showed the canonical service active and listening, then the same acceptance wrapper was rerun.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-stepper-stability-60s.log --json-out /tmp/boatlock-stepper-stability-60s.json` -> `PASS`, including EEPROM `ver=23`, RVC compass, display, BLE advertising, stepper, STOP, heading events, and GPS UART.
+- Acceptance log scan found no panic/assert/Guru, Arduino `[E]`, `Wire.cpp`, `i2cRead`, compass loss, or compass retry failure.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 100` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip",...}`.
+
+Self-review:
+- This is intentionally a narrow safety cleanup, not a new steering model.
+- It does not prove powered mechanical rudder behavior under load; it proves parser/runtime/bench health and zero-throttle manual BLE path.
+- The repeated RFC2217 refusal immediately after flash is a tooling race worth fixing in a future wrapper pass, but it was resolved through the canonical `status.sh` + same-wrapper retry path.
+
+Promote to skill:
+- Stepper code should use bounded angle math and fail closed on neutral/invalid manual input.
+- Cancel/STOP/failsafe paths should deterministically enter the idle coil-release path, not rely on incidental later movement state.

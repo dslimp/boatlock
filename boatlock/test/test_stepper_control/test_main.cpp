@@ -13,6 +13,7 @@ void test_normalize180_wraps_into_signed_range() {
   TEST_ASSERT_FLOAT_WITHIN(0.001f, 170.0f, StepperControl::normalize180(-190.0f));
   TEST_ASSERT_FLOAT_WITHIN(0.001f, 180.0f, StepperControl::normalize180(180.0f));
   TEST_ASSERT_FLOAT_WITHIN(0.001f, -180.0f, StepperControl::normalize180(-180.0f));
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 5.0f, StepperControl::normalize180(725.0f));
 }
 
 void test_point_to_bearing_uses_shortest_path() {
@@ -56,11 +57,37 @@ void test_run_releases_coils_after_idle_timeout() {
   TEST_ASSERT_FALSE(c.outputsEnabled);
 }
 
+void test_cancel_move_starts_idle_release_timer() {
+  StepperControl c(2, 4, 6, 16);
+  c.outputsEnabled = true;
+  c.idleSinceMs = 0;
+
+  mockSetMillis(100);
+  c.cancelMove();
+
+  TEST_ASSERT_EQUAL(100, c.idleSinceMs);
+  mockAdvanceMillis(StepperControl::COIL_RELEASE_DELAY_MS + 1);
+  c.run();
+  TEST_ASSERT_FALSE(c.outputsEnabled);
+}
+
+void test_start_manual_zero_does_not_enable_outputs() {
+  StepperControl c(2, 4, 6, 16);
+  c.outputsEnabled = false;
+
+  c.startManual(0);
+
+  TEST_ASSERT_FALSE(c.manual);
+  TEST_ASSERT_FALSE(c.outputsEnabled);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_normalize180_wraps_into_signed_range);
   RUN_TEST(test_point_to_bearing_uses_shortest_path);
   RUN_TEST(test_direction_flip_preempts_old_target);
   RUN_TEST(test_run_releases_coils_after_idle_timeout);
+  RUN_TEST(test_cancel_move_starts_idle_release_timer);
+  RUN_TEST(test_start_manual_zero_does_not_enable_outputs);
   return UNITY_END();
 }

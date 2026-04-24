@@ -136,6 +136,7 @@
 - Manual mode cancels auto stepper tracking and drives stepper/motor through shared `ManualControl` state.
 - Manual control is entered/refreshed atomically and expires through a short deadman TTL; split mode/dir/speed state is not allowed.
 - Motor output must stay bounded and deterministic. Do not reintroduce hidden runtime self-adaptive PID tuning or PID auto-persistence in the actuator path.
+- Stepper control must fail closed on neutral/invalid manual input, use bounded angle normalization, and release coils after idle/cancel through a deterministic timer.
 - Random `fallbackHeading` and `fallbackBearing` are UI placeholders only.
 
 ## Safety And Buttons

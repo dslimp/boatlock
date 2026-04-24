@@ -39,9 +39,10 @@ public:
     }
 
     static float normalize180(float deg) {
-        while (deg > 180.0f) deg -= 360.0f;
-        while (deg < -180.0f) deg += 360.0f;
-        return deg;
+        const float normalized = fmodf(deg, 360.0f);
+        if (normalized > 180.0f) return normalized - 360.0f;
+        if (normalized < -180.0f) return normalized + 360.0f;
+        return normalized;
     }
 
     static int signOf(long v) {
@@ -126,6 +127,10 @@ public:
     }
 
     void startManual(int dir) {
+        if (dir == 0) {
+            stopManual();
+            return;
+        }
         manual = true;
         ensureOutputsEnabled();
         float spd = settings ? settings->get("StepMaxSpd") : 1000;
@@ -149,11 +154,10 @@ public:
 
     void cancelMove() {
         const bool hadPendingTarget = (stepper.distanceToGo() != 0);
-        // Hard-cancel any pending target (stepper.stop() decelerates and can keep moving).
         const long nowPos = stepper.currentPosition();
         stepper.moveTo(nowPos);
         busy = false;
-        if (hadPendingTarget && idleSinceMs == 0) {
+        if ((hadPendingTarget || outputsEnabled) && idleSinceMs == 0) {
             idleSinceMs = millis();
         }
     }

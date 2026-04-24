@@ -104,6 +104,7 @@ Implication for BoatLock:
 - Keep hard actuator stop distinct from ordinary controller idle output; failsafe/STOP should clear hidden state, while zone-control idle should preserve anti-hunt timing.
 - Keep rate limiting, max thrust, anti-windup, and anti-hunt windows in the core motor path.
 - Keep actuator tuning explicit and evidence-based. Do not hide self-adaptive gain changes or gain persistence inside the runtime motor path.
+- Stepper/servo outputs should have explicit neutral/idle behavior. Release or reduce holding current when idle if holding torque is not required, and make re-enable behavior deliberate.
 - GNSS quality checks should require fresh quality evidence and fail closed when evidence disappears.
 - Do not auto-enter manual control from failsafe. After a fault clears, operator control must be an explicit new action.
 - Treat physical button input as an unsafe raw signal. Debounce it before edges, and reserve state-changing actions such as anchor save or pairing for stable long-press paths.
