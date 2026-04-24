@@ -2354,3 +2354,28 @@ Self-review:
 
 Promote to skill:
 - Runtime cadence timers must share unsigned elapsed-time logic and include direct tests for zero interval and rollover.
+
+### 2026-04-24 Stage 75: Batch hardware acceptance after modules 1-3
+
+Scope:
+- Run the scheduled `nh02` hardware and Android BLE acceptance after the three-module low-risk batch:
+  - `RuntimeBleLiveFrame`
+  - `RuntimeBleParams`
+  - `RuntimeTelemetryCadence`
+- Validate the just-pushed `main` firmware and Android smoke APK through canonical wrappers only.
+
+Validation:
+- `./tools/hw/nh02/status.sh` -> ESP32-S3 `98:88:E0:03:BA:5C` visible, RFC2217 service enabled and active.
+- `./tools/hw/nh02/flash.sh` -> build success, flash success, app image write `697120` bytes, hard reset via RTS.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-batch-telemetry-cadence-60s.log --json-out /tmp/boatlock-batch-telemetry-cadence-60s.json` -> `PASS`, including EEPROM `ver=23`, `BNO08x-RVC rx=12 baud=115200`, heading events, display, BLE advertising, stepper, STOP button, and GPS UART data.
+- Acceptance log scan found no panic/assert/Guru, Arduino `[E]`, `CONFIG_SAVE_FAILED`, `CONFIG_CRC_FAIL`, GPS UART stale/no-data warning, compass loss, compass retry failure, `Wire.cpp`, `i2cRead`, error, or fail markers.
+- `./tools/hw/nh02/android-status.sh` -> Xiaomi `220333QNY` attached as adb `device`.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> first install attempt hit MIUI `USER_RESTRICTED`, canonical retry reached `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+
+Self-review:
+- This acceptance covered the flashed ESP32 boot path, sensor readiness, BLE advertising, Android install/update, telemetry receive, manual zero-throttle roundtrip, phone reconnect, and ESP32 reboot recovery.
+- The manual run's first MIUI install prompt did not block acceptance because the canonical retry succeeded and the wrapper returned terminal pass.
+- No new durable workflow lesson emerged beyond the existing MIUI retry rule already captured in the hardware acceptance skill.
