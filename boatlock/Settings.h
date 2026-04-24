@@ -18,7 +18,6 @@ struct SettingEntry {
     bool visibleInMenu;
 };
 
-// 🔒 Константный эталон (не изменяется, хранится в flash)
 const SettingEntry defaultEntries[] = {
     // GNSS quality gate
     {"MinFixType", "Min fix type",      TYPE_INT,   3.0,  3.0,   2.0,   3.0,    1.0, "", false},
@@ -93,7 +92,13 @@ public:
     struct KeyIdx { const char* key; int idx; };
     KeyIdx keyMap[count];
 
-    SettingEntry entries[count];  // ⚠️ Копия в RAM (безопасно для EEPROM)
+    SettingEntry entries[count];
+
+    Settings() {
+        loadDefaults();
+        buildKeyMap();
+        dirty_ = false;
+    }
 
     int idxByKey(const char* key) {
         for (int i = 0; i < count; i++)
@@ -123,6 +128,7 @@ public:
             }
             if (value < entries[idx].minValue) value = entries[idx].minValue;
             if (value > entries[idx].maxValue) value = entries[idx].maxValue;
+            value = normalizeForType(entries[idx], value);
             assignValue(idx, value);
             return true;
         }
@@ -138,21 +144,16 @@ public:
             logMessage("[EVENT] CONFIG_REJECTED key=%s raw=%.5f\n", key, value);
             return false;
         }
-        if (entries[idx].type == TYPE_INT) {
-            value = roundf(value);
-        } else if (entries[idx].type == TYPE_BOOL) {
-            value = value >= 0.5f ? 1.0f : 0.0f;
-        }
+        value = normalizeForType(entries[idx], value);
         assignValue(idx, value);
         return true;
     }
 
     void reset() {
-        for (int i = 0; i < count; i++)
-            entries[i] = defaultEntries[i];
+        loadDefaults();
+        buildKeyMap();
         dirty_ = true;
         save();
-        buildKeyMap();
     }
 
     bool save() {
@@ -180,8 +181,8 @@ public:
     }
 
     void load() {
-        for (int i = 0; i < count; i++)
-            entries[i] = defaultEntries[i];
+        loadDefaults();
+        buildKeyMap();
 
         uint8_t v = 0;
         bool shouldSave = false;
@@ -225,11 +226,16 @@ public:
 
         logMessage("[EEPROM] settings loaded (ver=%d)\n", v);
 
-        buildKeyMap();
     }
 
 private:
-    bool dirty_ = true;
+    bool dirty_ = false;
+
+    void loadDefaults() {
+        for (int i = 0; i < count; i++) {
+            entries[i] = defaultEntries[i];
+        }
+    }
 
     void assignValue(int idx, float value) {
         if (entries[idx].value == value) {
@@ -251,17 +257,22 @@ private:
         return ~crc;
     }
 
+    static float normalizeForType(const SettingEntry& entry, float value) {
+        if (entry.type == TYPE_BOOL) {
+            return value >= 0.5f ? 1.0f : 0.0f;
+        }
+        if (entry.type == TYPE_INT) {
+            return roundf(value);
+        }
+        return value;
+    }
+
     static float sanitizeLoadedValue(const SettingEntry& entry, float raw) {
         if (!isfinite(raw)) {
             return entry.defaultValue;
         }
 
-        float value = raw;
-        if (entry.type == TYPE_BOOL) {
-            value = value >= 0.5f ? 1.0f : 0.0f;
-        } else if (entry.type == TYPE_INT) {
-            value = roundf(value);
-        }
+        float value = normalizeForType(entry, raw);
 
         if (value < entry.minValue || value > entry.maxValue) {
             value = entry.defaultValue;

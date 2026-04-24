@@ -1989,3 +1989,52 @@ Self-review:
 Promote to skill:
 - Mode/control-input builders must validate numeric availability at the boundary.
 - Non-finite sensor or bearing values should become unavailable and zeroed before motion code sees them.
+
+### 2026-04-24 Stage 67: Settings RAM defaults and type normalization
+
+Scope:
+- Continue module-by-module refactor with `Settings`.
+- Reduce storage risk by making settings safe before `load()`/`reset()` and keeping no-op flash saves as real no-ops.
+
+External baseline:
+- Arduino-ESP32 documents `Preferences` as the ESP32 replacement for Arduino EEPROM and recommends it for retained small values: <https://docs.espressif.com/projects/arduino-esp32/en/latest/tutorials/preferences.html>.
+- ESP-IDF NVS uses key-value storage with namespaces, wear levelling by design, and updates become durable only after commit: <https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/storage/nvs_flash.html>.
+- ESP-IDF storage docs treat flash writes as bounded resources; write paths should avoid unnecessary commits even when the backend wear-levels: <https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/storage/wear-levelling.html>.
+
+Key outcomes:
+- `Settings` now initializes RAM defaults and key map in its constructor, so accidental use before `load()`/`reset()` reads safe defaults instead of uninitialized memory.
+- The constructor stays flash-clean: `save()` on a fresh default object does not call `EEPROM.commit()`.
+- Default loading is centralized through one helper used by constructor, `reset()`, and `load()`.
+- `set()` now normalizes integer-style settings before assigning/dirtying, matching `setStrict()` and load-time normalization.
+- EEPROM image layout and `Settings::VERSION` are unchanged.
+
+Validation:
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native -f test_settings -f test_anchor_control -f test_anchor_profiles -f test_runtime_supervisor_policy -f test_ble_command_handler -f test_runtime_motion -f test_runtime_gnss` -> `73/73` passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native -f test_settings` after self-review test rename -> `16/16` passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native` -> `231/231` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> `29/29` passed.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `git diff --check` -> clean.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio pio run -e esp32s3` -> success, flash size `695985` bytes.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter build apk --debug --no-pub` -> success.
+- `./tools/hw/nh02/status.sh` -> target ESP32-S3 `98:88:E0:03:BA:5C` visible and RFC2217 service active.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`; app image write `696352` bytes.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-settings-60s.log --json-out /tmp/boatlock-settings-60s.json` -> `PASS`, including EEPROM `ver=23`, RVC compass, display, BLE advertising, stepper, STOP, heading events, and GPS UART data.
+- Acceptance log scan found no panic/assert/Guru, Arduino `[E]`, `CONFIG_SAVE_FAILED`, `CONFIG_CRC_FAIL`, GPS UART stale/no-data warning, compass loss, compass retry failure, `Wire.cpp`, `i2cRead`, `error`, or `FAIL`.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+
+Self-review:
+- This does not migrate storage backend from EEPROM emulation to Preferences/NVS yet; doing that would be a separate storage-format change with explicit migration and acceptance plan.
+- The EEPROM image format remains stable, so no version bump was needed.
+- The only runtime behavior change is safer normalization for integer-style `set()` values and safe defaults before load.
+- Hardware acceptance proves boot load still reads EEPROM `ver=23` cleanly and no save/CRC error appears in logs.
+
+Promote to skill:
+- `Settings` must be safe immediately after construction: RAM defaults and key map ready, no flash write from constructor.
+- Settings write paths must normalize values by declared type before dirtying/persisting.
+- A clean settings object must never commit flash on `save()`.

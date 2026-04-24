@@ -173,6 +173,8 @@ Implication for BoatLock:
 Implication for BoatLock:
 - Avoid write amplification in settings paths even when the backend has wear levelling.
 - A settings save with no semantic change should be a no-op.
+- A settings object should load safe RAM defaults before any storage read and must not commit flash from its constructor.
+- Normalize values by declared type before dirtying/persisting so integer and bool-like settings cannot remain fractional in RAM or storage.
 - Treat flash commits as fallible. A failed commit must not be logged as saved or clear dirty state.
 - Boot migration, CRC recovery, and value normalization are the only expected boot-time settings writes.
 - Non-finite config values must fail closed before reaching persisted storage.

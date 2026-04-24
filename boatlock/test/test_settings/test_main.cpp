@@ -54,6 +54,24 @@ void test_get_set() {
   TEST_ASSERT_EQUAL_FLOAT(20.0f, s.get("HoldRadius"));
 }
 
+void test_constructor_provides_safe_defaults_without_load_or_reset() {
+  EEPROM.clear();
+  Settings s;
+
+  TEST_ASSERT_EQUAL_FLOAT(2.5f, s.get("HoldRadius"));
+  TEST_ASSERT_EQUAL_FLOAT(4096.0f, s.get("StepSpr"));
+  TEST_ASSERT_TRUE(s.set("HoldRadius", 4.0f));
+  TEST_ASSERT_EQUAL_FLOAT(4.0f, s.get("HoldRadius"));
+}
+
+void test_default_constructor_save_is_noop() {
+  EEPROM.clear();
+  Settings s;
+
+  TEST_ASSERT_TRUE(s.save());
+  TEST_ASSERT_EQUAL_INT(0, EEPROM.commitCount);
+}
+
 void test_save_load() {
   Settings s;
   s.reset();
@@ -166,6 +184,16 @@ void test_set_strict_rounds_integer_values() {
   TEST_ASSERT_EQUAL_FLOAT(8.0f, s.get("MinSats"));
 }
 
+void test_set_normalizes_integer_values() {
+  Settings s;
+  s.reset();
+
+  TEST_ASSERT_TRUE(s.set("MinSats", 7.6f));
+  TEST_ASSERT_EQUAL_FLOAT(8.0f, s.get("MinSats"));
+  TEST_ASSERT_TRUE(s.set("HoldHeading", 0.6f));
+  TEST_ASSERT_EQUAL_FLOAT(1.0f, s.get("HoldHeading"));
+}
+
 void test_load_migrates_when_version_mismatch() {
   Settings s;
   s.reset();
@@ -231,6 +259,8 @@ void test_comm_timeout_floor_is_safe() {
 int main(int argc, char **argv) {
   UNITY_BEGIN();
   RUN_TEST(test_get_set);
+  RUN_TEST(test_constructor_provides_safe_defaults_without_load_or_reset);
+  RUN_TEST(test_default_constructor_save_is_noop);
   RUN_TEST(test_save_load);
   RUN_TEST(test_save_skips_clean_state);
   RUN_TEST(test_save_failure_keeps_dirty_for_retry);
@@ -240,6 +270,7 @@ int main(int argc, char **argv) {
   RUN_TEST(test_crc_mismatch_restores_defaults);
   RUN_TEST(test_anchor_profile_setting_bounds);
   RUN_TEST(test_set_strict_rounds_integer_values);
+  RUN_TEST(test_set_normalizes_integer_values);
   RUN_TEST(test_load_migrates_when_version_mismatch);
   RUN_TEST(test_load_sanitizes_nan_and_out_of_range_values);
   RUN_TEST(test_comm_timeout_floor_is_safe);

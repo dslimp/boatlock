@@ -57,9 +57,11 @@
   - raw float value array
   - CRC32 over the values array
 - Current schema version is `Settings::VERSION = 0x17`.
-- `Settings::set()` rejects non-finite values, then clamps finite values to each key's configured range.
+- `Settings` objects must be safe immediately after construction: RAM defaults and key map ready, with no flash write from the constructor.
+- `Settings::set()` rejects non-finite values, clamps finite values to each key's configured range, then normalizes by declared type.
 - `Settings::setStrict()` rejects non-finite or out-of-range values and logs `CONFIG_REJECTED`.
 - `Settings::save()` is dirty-state guarded. Calling it after no-op `set()` calls must not write flash.
+- A clean settings object must never commit flash on `save()`.
 - `Settings::save()` must check the EEPROM commit result. Failed commits log `CONFIG_SAVE_FAILED` and keep dirty state for a later retry.
 - `Settings::load()` may write back on boot if:
   - stored version mismatches
