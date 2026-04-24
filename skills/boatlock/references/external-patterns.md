@@ -127,6 +127,7 @@ Implication for BoatLock:
 - Saturation diagnostics should validate the configured actuator limit before comparing output against it.
 - HIL/control-loop timers follow the same rule as watchdogs and diagnostics: use explicit seen flags plus unsigned elapsed-time math, and treat timestamp `0` as a valid sample.
 - HIL core behavior needs direct boundary tests in addition to end-to-end scenarios; scenario coverage alone can miss timer sentinel bugs.
+- Periodic UI/BLE/sensor cadence should use one shared non-blocking elapsed-time helper. Test interval `0` and unsigned rollover directly instead of relying only on normal interval scenarios.
 - Do not auto-enter manual control from failsafe. After a fault clears, operator control must be an explicit new action.
 - Treat non-finite sensor/control values like unavailable inputs at module boundaries, not as values to normalize later inside actuator code.
 - Treat physical button input as an unsafe raw signal. Debounce it before edges, and reserve state-changing actions such as anchor save or pairing for stable long-press paths.

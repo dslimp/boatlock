@@ -126,6 +126,7 @@
   - `statusReasons`: comma-separated detail flags
 - Build UI-facing display state through `RuntimeUiSnapshot` before passing it into `display_draw_ui()`.
 - Keep UI refresh cadence and BLE notify cadence in `RuntimeTelemetryCadence`, not as loose timestamps in `main.cpp`.
+- Runtime cadence timers must share unsigned elapsed-time logic; interval `0` must have explicit behavior and rollover coverage.
 - Keep GPS UART no-data/stale/restart policy in `RuntimeGpsUart`, not as loose flags in `main.cpp`.
 - Keep simulation result badge state in `RuntimeSimBadge`, not as loose latched strings in `main.cpp`.
 - Keep anchor supervisor config/input assembly in `RuntimeSupervisorPolicy`, not as inline `settings.get(...)` policy code in `loop()`.

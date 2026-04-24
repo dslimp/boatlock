@@ -2319,3 +2319,38 @@ Self-review:
 Promote to skill:
 - BLE telemetry snapshots must not publish partial coordinate pairs; invalid position-like pairs clear the whole pair.
 - Snapshot builders should sample volatile readiness predicates once per frame, not once per field.
+
+### 2026-04-24 Stage 74: Telemetry cadence timer hardening
+
+Scope:
+- Continue module-by-module refactor with `RuntimeTelemetryCadence`.
+- This is module `3/3` in the current low-risk batch; `nh02` hardware and Android BLE acceptance is due after this module is committed and pushed.
+- Keep configured UI, BLE, and compass polling intervals unchanged.
+
+External baseline:
+- Arduino's Blink Without Delay pattern uses non-blocking elapsed-time checks instead of blocking delays: <https://docs.arduino.cc/built-in-examples/digital/BlinkWithoutDelay/>.
+- Bluetooth Core GATT treats characteristic values and notifications as application/profile data, so BoatLock owns the telemetry cadence policy above BLE transport: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-61/out/en/host/generic-attribute-profile--gatt-.html>.
+
+Key outcomes:
+- Replaced three duplicated elapsed-time checks with one shared `shouldRun()` helper.
+- Preserved existing non-zero interval behavior for UI refresh, BLE notify, and compass polling.
+- Made `interval=0` behavior explicit: every call runs and updates the matching timestamp.
+- Added native coverage for zero interval and unsigned `millis()` rollover.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_telemetry_cadence -f test_runtime_ble_params -f test_runtime_ble_live_frame` -> `12/12` passed.
+- `cd boatlock && platformio test -e native` -> `247/247` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> `29/29` passed.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `git diff --check` -> clean.
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `696761` bytes.
+
+Self-review:
+- This is a KISS cleanup with direct boundary tests; it does not change BLE protocol, telemetry frame layout, or configured runtime intervals.
+- The only newly documented edge behavior is `interval=0`; current production settings do not rely on zero, but tests now prevent accidental ambiguity.
+- Hardware acceptance is intentionally batched after this third module per the current cadence.
+
+Promote to skill:
+- Runtime cadence timers must share unsigned elapsed-time logic and include direct tests for zero interval and rollover.

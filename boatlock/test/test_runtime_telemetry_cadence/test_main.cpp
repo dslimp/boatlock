@@ -43,11 +43,34 @@ void test_compass_poll_has_independent_cadence() {
   TEST_ASSERT_TRUE(cadence.shouldRefreshUi(120, 120));
 }
 
+void test_zero_interval_runs_every_time_and_updates_timestamp() {
+  RuntimeTelemetryCadence cadence;
+
+  TEST_ASSERT_TRUE(cadence.shouldNotifyBle(10, 0));
+  TEST_ASSERT_EQUAL_UINT32(10, cadence.lastBleNotifyMs());
+  TEST_ASSERT_TRUE(cadence.shouldNotifyBle(10, 0));
+  TEST_ASSERT_EQUAL_UINT32(10, cadence.lastBleNotifyMs());
+  TEST_ASSERT_TRUE(cadence.shouldNotifyBle(11, 0));
+  TEST_ASSERT_EQUAL_UINT32(11, cadence.lastBleNotifyMs());
+}
+
+void test_elapsed_timer_survives_unsigned_rollover() {
+  RuntimeTelemetryCadence cadence;
+  const unsigned long nearWrap = ~0UL - 9UL;
+
+  TEST_ASSERT_TRUE(cadence.shouldRefreshUi(nearWrap, 20));
+  TEST_ASSERT_FALSE(cadence.shouldRefreshUi(5, 20));
+  TEST_ASSERT_TRUE(cadence.shouldRefreshUi(20, 20));
+  TEST_ASSERT_EQUAL_UINT32(20, cadence.lastUiRefreshMs());
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_ui_refresh_fires_only_after_interval);
   RUN_TEST(test_ble_notify_fires_only_after_interval);
   RUN_TEST(test_ui_and_ble_cadence_are_independent);
   RUN_TEST(test_compass_poll_has_independent_cadence);
+  RUN_TEST(test_zero_interval_runs_every_time_and_updates_timestamp);
+  RUN_TEST(test_elapsed_timer_survives_unsigned_rollover);
   return UNITY_END();
 }
