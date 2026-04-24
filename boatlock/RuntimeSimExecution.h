@@ -35,10 +35,13 @@ struct RuntimeSimExecutionOutcome {
 inline void buildRuntimeSimReportChunks(const std::string& json,
                                         size_t chunkSize,
                                         std::vector<std::string>* out) {
-  if (!out || chunkSize == 0) {
+  if (!out) {
     return;
   }
   out->clear();
+  if (chunkSize == 0) {
+    return;
+  }
   for (size_t i = 0; i < json.size(); i += chunkSize) {
     out->push_back(json.substr(i, chunkSize));
   }
@@ -65,9 +68,6 @@ inline RuntimeSimExecutionOutcome executeRuntimeSimCommand(const RuntimeSimComma
       out.text = hilSim.statusJson();
       return out;
     case RuntimeSimCommandType::RUN: {
-      out.shouldStopMotion = true;
-      out.shouldClearFailsafe = true;
-      out.shouldClearAnchorDenied = true;
       if (!parsed.valid) {
         out.kind = RuntimeSimExecutionKind::RUN_REJECTED;
         out.text = "invalid payload";
@@ -81,6 +81,9 @@ inline RuntimeSimExecutionOutcome executeRuntimeSimCommand(const RuntimeSimComma
         return out;
       }
       out.kind = RuntimeSimExecutionKind::RUN_STARTED;
+      out.shouldStopMotion = true;
+      out.shouldClearFailsafe = true;
+      out.shouldClearAnchorDenied = true;
       out.shouldResetSimWallClock = true;
       out.scenarioId = parsed.scenarioId;
       out.speedup = parsed.speedup;
@@ -98,6 +101,9 @@ inline RuntimeSimExecutionOutcome executeRuntimeSimCommand(const RuntimeSimComma
       }
       out.kind = RuntimeSimExecutionKind::REPORT_CHUNKS;
       buildRuntimeSimReportChunks(json, reportChunkSize, &out.reportChunks);
+      if (out.reportChunks.empty()) {
+        out.kind = RuntimeSimExecutionKind::REPORT_UNAVAILABLE;
+      }
       return out;
     }
     case RuntimeSimCommandType::UNKNOWN:

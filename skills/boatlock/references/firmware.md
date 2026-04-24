@@ -137,6 +137,7 @@
 - Keep `SIM_*` command parsing in `RuntimeSimCommand`, not mixed with side effects in `main.cpp`.
 - `SIM_*` parser accepts only documented command names and payload forms. `SIM_RUN` payload is `SIM_RUN:<scenario_id>[,<0|1>]`; unsupported JSON/space payloads and prefix lookalikes are rejected.
 - Keep `SIM_*` execution outcomes and report chunking in `RuntimeSimExecution`, not as mixed run/report policy inside `main.cpp`.
+- Failed or malformed `SIM_RUN` must not clear runtime failsafe/anchor-denial state or stop live motion; those state-clearing side effects are allowed only after a simulation run actually starts.
 - Keep `SIM_*` log line mapping in `RuntimeSimLog`, not as a switch full of formatted strings inside `main.cpp`.
 - Keep anchor nudge math and cardinal bearing mapping in `RuntimeAnchorNudge`, not inline in `main.cpp`.
 - Nudge/jog uses a fixed small `1.5 m` step. Do not re-add arbitrary distance parameters without a product reason and tests.

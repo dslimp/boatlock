@@ -29,6 +29,10 @@ while [[ $# -gt 0 ]]; do
       SMOKE_MODE="status"
       shift
       ;;
+    --sim)
+      SMOKE_MODE="sim"
+      shift
+      ;;
     --esp-reset)
       SMOKE_MODE="reconnect"
       RESET_ESP32=1

@@ -8,7 +8,7 @@ import '../ble/ble_boatlock.dart';
 import '../models/boat_data.dart';
 import 'ble_smoke_logic.dart';
 
-enum BleSmokeMode { basic, reconnect, manual, status }
+enum BleSmokeMode { basic, reconnect, manual, status, sim }
 
 class BleSmokePage extends StatefulWidget {
   const BleSmokePage({super.key, this.mode = BleSmokeMode.basic});
@@ -47,6 +47,12 @@ class _BleSmokePageState extends State<BleSmokePage> {
   bool _statusManualSetSent = false;
   bool _statusManualModeSeen = false;
   bool _statusManualOffSent = false;
+  bool _simRunSent = false;
+  bool _simModeSeen = false;
+  bool _simAbortSent = false;
+  bool _simManualSetSent = false;
+  bool _simManualModeSeen = false;
+  bool _simManualOffSent = false;
 
   @override
   void initState() {
@@ -100,6 +106,10 @@ class _BleSmokePageState extends State<BleSmokePage> {
       }
       if (widget.mode == BleSmokeMode.status) {
         _handleStatusSmokeData(data);
+        return;
+      }
+      if (widget.mode == BleSmokeMode.sim) {
+        _handleSimSmokeData(data);
         return;
       }
       if (!_firstTelemetrySeen) {
@@ -210,6 +220,69 @@ class _BleSmokePageState extends State<BleSmokePage> {
     _finish(true, 'status_stop_alert_roundtrip');
   }
 
+  void _handleSimSmokeData(BoatData data) {
+    if (!_simRunSent) {
+      _simRunSent = true;
+      _appendEvent(encodeSmokeStageLine('sim_run'));
+      _sendSimRun();
+      if (mounted) {
+        setState(() {
+          _phase = 'sim';
+          _detail = 'waiting_for_sim_mode';
+        });
+      }
+      return;
+    }
+    if (!_simModeSeen) {
+      if (data.mode != 'SIM') {
+        return;
+      }
+      _simModeSeen = true;
+      _appendEvent(encodeSmokeStageLine('sim_mode_seen'));
+      _sendSimAbort();
+      if (mounted) {
+        setState(() {
+          _phase = 'sim';
+          _detail = 'waiting_for_sim_abort';
+        });
+      }
+      return;
+    }
+    if (!_simAbortSent || data.mode == 'SIM') {
+      return;
+    }
+    if (!_simManualSetSent) {
+      _appendEvent(encodeSmokeStageLine('sim_manual_recovery'));
+      _sendSimManualSet();
+      if (mounted) {
+        setState(() {
+          _phase = 'sim';
+          _detail = 'waiting_for_manual_recovery';
+        });
+      }
+      return;
+    }
+    if (!_simManualModeSeen) {
+      if (data.mode != 'MANUAL') {
+        return;
+      }
+      _simManualModeSeen = true;
+      _appendEvent(encodeSmokeStageLine('sim_manual_mode_seen'));
+      _sendSimManualOff();
+      if (mounted) {
+        setState(() {
+          _phase = 'sim';
+          _detail = 'waiting_for_recovered_idle';
+        });
+      }
+      return;
+    }
+    if (!_simManualOffSent || !smokeStatusRecoveredAfterStop(data)) {
+      return;
+    }
+    _finish(true, 'sim_run_abort_roundtrip');
+  }
+
   Future<void> _sendManualSet() async {
     final ok = await _ble.sendManualControl(
       steer: 0,
@@ -255,6 +328,45 @@ class _BleSmokePageState extends State<BleSmokePage> {
     _appendEvent('status_manual_off ok=$ok');
     if (!ok) {
       _finish(false, 'status_manual_off_failed');
+    }
+  }
+
+  Future<void> _sendSimRun() async {
+    final ok = await _ble.sendCustomCommand('SIM_RUN:S0_hold_still_good,1');
+    _appendEvent('sim_run ok=$ok');
+    if (!ok) {
+      _finish(false, 'sim_run_failed');
+    }
+  }
+
+  Future<void> _sendSimAbort() async {
+    final ok = await _ble.sendCustomCommand('SIM_ABORT');
+    _simAbortSent = ok;
+    _appendEvent('sim_abort ok=$ok');
+    if (!ok) {
+      _finish(false, 'sim_abort_failed');
+    }
+  }
+
+  Future<void> _sendSimManualSet() async {
+    final ok = await _ble.sendManualControl(
+      steer: 0,
+      throttlePct: 0,
+      ttlMs: 1000,
+    );
+    _simManualSetSent = ok;
+    _appendEvent('sim_manual_set_zero ok=$ok');
+    if (!ok) {
+      _finish(false, 'sim_manual_set_failed');
+    }
+  }
+
+  Future<void> _sendSimManualOff() async {
+    final ok = await _ble.manualOff();
+    _simManualOffSent = ok;
+    _appendEvent('sim_manual_off ok=$ok');
+    if (!ok) {
+      _finish(false, 'sim_manual_off_failed');
     }
   }
 

@@ -81,9 +81,9 @@ void test_execute_runtime_sim_command_rejects_invalid_run_payload() {
   TEST_ASSERT_TRUE(out.handled);
   TEST_ASSERT_EQUAL((int)RuntimeSimExecutionKind::RUN_REJECTED, (int)out.kind);
   TEST_ASSERT_EQUAL_STRING("invalid payload", out.text.c_str());
-  TEST_ASSERT_TRUE(out.shouldStopMotion);
-  TEST_ASSERT_TRUE(out.shouldClearFailsafe);
-  TEST_ASSERT_TRUE(out.shouldClearAnchorDenied);
+  TEST_ASSERT_FALSE(out.shouldStopMotion);
+  TEST_ASSERT_FALSE(out.shouldClearFailsafe);
+  TEST_ASSERT_FALSE(out.shouldClearAnchorDenied);
   TEST_ASSERT_FALSE(out.shouldResetSimWallClock);
   TEST_ASSERT_EQUAL(0, sim.startCalls);
 }
@@ -99,9 +99,9 @@ void test_execute_runtime_sim_command_returns_run_error_when_start_fails() {
   TEST_ASSERT_EQUAL((int)RuntimeSimExecutionKind::RUN_REJECTED, (int)out.kind);
   TEST_ASSERT_EQUAL_STRING("S9", out.scenarioId.c_str());
   TEST_ASSERT_EQUAL_STRING("start failed", out.text.c_str());
-  TEST_ASSERT_TRUE(out.shouldStopMotion);
-  TEST_ASSERT_TRUE(out.shouldClearFailsafe);
-  TEST_ASSERT_TRUE(out.shouldClearAnchorDenied);
+  TEST_ASSERT_FALSE(out.shouldStopMotion);
+  TEST_ASSERT_FALSE(out.shouldClearFailsafe);
+  TEST_ASSERT_FALSE(out.shouldClearAnchorDenied);
   TEST_ASSERT_FALSE(out.shouldResetSimWallClock);
   TEST_ASSERT_EQUAL(1, sim.startCalls);
 }
@@ -138,6 +138,22 @@ void test_execute_runtime_sim_command_chunks_report_and_keeps_unknown_command_te
   TEST_ASSERT_EQUAL_STRING("SIM_WAT", unknown.text.c_str());
 }
 
+void test_report_chunk_zero_size_is_unavailable_and_clears_output() {
+  FakeSimManager sim;
+  sim.report = "abcdefghijklmnopqrstuvwxyz";
+
+  std::vector<std::string> chunks;
+  chunks.push_back("stale");
+  buildRuntimeSimReportChunks(sim.report, 0, &chunks);
+
+  const RuntimeSimExecutionOutcome report = executeRuntimeSimCommand(
+      parseRuntimeSimCommand("SIM_REPORT"), "SIM_REPORT", sim, 0);
+
+  TEST_ASSERT_EQUAL(0, (int)chunks.size());
+  TEST_ASSERT_EQUAL((int)RuntimeSimExecutionKind::REPORT_UNAVAILABLE, (int)report.kind);
+  TEST_ASSERT_EQUAL(0, (int)report.reportChunks.size());
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_execute_runtime_sim_command_returns_list_and_status_payloads);
@@ -146,5 +162,6 @@ int main() {
   RUN_TEST(test_execute_runtime_sim_command_returns_run_error_when_start_fails);
   RUN_TEST(test_execute_runtime_sim_command_aborts_and_reports_unavailable);
   RUN_TEST(test_execute_runtime_sim_command_chunks_report_and_keeps_unknown_command_text);
+  RUN_TEST(test_report_chunk_zero_size_is_unavailable_and_clears_output);
   return UNITY_END();
 }

@@ -24,6 +24,10 @@ Use this file for:
 - ArduPilot Rover Manual Mode: <https://ardupilot.org/rover/docs/manual-mode.html>
 - ArduPilot Rover Tuning Speed and Throttle: <https://ardupilot.org/rover/docs/rover-tuning-throttle-and-speed.html>
 - ArduPilot Rover parameter reference: <https://ardupilot.org/rover/docs/parameters.html>
+- ArduPilot SITL simulator: <https://ardupilot.org/dev/docs/sitl-simulator-software-in-the-loop.html>
+- ArduPilot Using SITL: <https://ardupilot.org/dev/docs/using-sitl-for-ardupilot-testing.html>
+- ArduPilot Simulation on Hardware: <https://ardupilot.org/dev/docs/sim-on-hardware.html>
+- PX4 Simulation: <https://docs.px4.io/main/en/simulation/>
 - Signal K Anchor Alarm guide: <https://demo.signalk.org/documentation/Guides/Anchor_Alarm.html>
 - Signal K notifications spec: <https://signalk.org/specification/1.7.0/doc/notifications.html>
 - Signal K local/remote alerts: <https://signalk.org/2025/signalk-local-remote-alerts/>
@@ -178,6 +182,25 @@ Implication for BoatLock:
 Implication for BoatLock:
 - A basic quiet-safe mode must always be available.
 - Any future advanced behavior should degrade toward simpler, safer states instead of staying half-active.
+
+## What Autopilot Simulation Gets Right
+
+- ArduPilot SITL runs the real autopilot code as a native executable and feeds it simulated sensor data from a flight dynamics model.
+- ArduPilot SITL is used to change environments, simulate failure modes, and configure optional components before real-world tests.
+- ArduPilot Simulation-on-Hardware runs both control software and simulation on the autopilot hardware, which is useful for checking mission structure, control-surface/output movement, physical failsafes, and real communications traffic without vehicle risk.
+- Simulation-on-Hardware explicitly warns to remove or disable dangerous actuators before allowing real outputs to move.
+- PX4 treats simulation as the safe pre-real-world test layer and separates SITL from HITL.
+- PX4's internal SIH path is headless, zero-dependency, and fast; this matches BoatLock's need for cheap regression loops.
+- PX4 lockstep/speed-factor guidance means simulation speed is part of the contract; faster-than-realtime runs must remain deterministic instead of racing timers unpredictably.
+
+Implication for BoatLock:
+- Keep on-device HIL and offline simulation in `main`; they are safety validation infrastructure, not optional product bloat.
+- Exercise the real control code paths in simulation rather than building a parallel fake controller.
+- Keep simulated sensors and fault injection explicit and typed so failures map to the same failsafe reasons as hardware.
+- Keep `SIM_*` commands narrow, deterministic, and documented; reject malformed payloads rather than guessing operator intent.
+- Failed or malformed simulation commands must not mutate live runtime state. State-clearing side effects belong only to a successfully started run.
+- Chunked reports and logs are a test interface contract and need direct unit tests plus a BLE smoke once the end-to-end SIM path is phone-visible.
+- On real hardware, simulation acceptance must keep dangerous actuator movement disabled or explicitly zero-throttle unless a powered bench procedure is defined.
 
 ## What ESP32 Storage Guidance Gets Right
 

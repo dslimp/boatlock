@@ -23,6 +23,8 @@ BleSmokeMode _smokeModeFromString(String value) {
       return BleSmokeMode.manual;
     case 'status':
       return BleSmokeMode.status;
+    case 'sim':
+      return BleSmokeMode.sim;
     case 'basic':
     default:
       return BleSmokeMode.basic;

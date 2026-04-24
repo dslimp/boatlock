@@ -2538,8 +2538,11 @@ Scope:
 - Remove undocumented parser forms instead of preserving compatibility for a pre-alpha protocol.
 
 External baseline:
-- ArduPilot keeps simulation as a first-class validation path through SITL while still treating vehicle commands and modes as explicit contracts: <https://ardupilot.org/dev/docs/sitl-simulator-software-in-the-loop.html>.
-- PX4 documents simulation and HITL as structured test environments with defined interfaces, not loose command guessing: <https://docs.px4.io/main/en/simulation/>.
+- ArduPilot SITL runs the real autopilot code as a native executable and feeds it simulated sensor data from a flight dynamics model: <https://ardupilot.org/dev/docs/sitl-simulator-software-in-the-loop.html>.
+- ArduPilot SITL is used for environment changes, failure-mode simulation, and optional component testing before real hardware risk: <https://ardupilot.org/dev/docs/using-sitl-for-ardupilot-testing.html>.
+- ArduPilot Simulation-on-Hardware reuses the SITL model on the autopilot hardware and is used to check mission structure, output movement, physical failsafes, and communication traffic; it explicitly warns to disable dangerous actuators before allowing outputs to move: <https://ardupilot.org/dev/docs/sim-on-hardware.html>.
+- PX4 separates SITL/HITL, treats simulation as the safe pre-real-world test layer, and documents headless SIH plus lockstep/faster-than-realtime operation as part of the simulator contract: <https://docs.px4.io/main/en/simulation/>.
+- BoatLock decision from that baseline: keep HIL in `main`, exercise the real control code path, keep simulated faults typed, keep `SIM_*` commands deterministic, and do not let failed simulation commands mutate live runtime state.
 
 Key outcomes:
 - `RuntimeSimCommand` now accepts only documented exact command names.
@@ -2565,3 +2568,67 @@ Self-review:
 
 Promote to skill:
 - HIL parser behavior should stay strict and documented; do not add alternate payload encodings without an explicit product reason and tests.
+
+### 2026-04-24 Stage 81: HIL execution side-effect hardening
+
+Scope:
+- Continue the HIL/simulation batch with `RuntimeSimExecution`.
+- Apply the deeper simulation baseline from ArduPilot/PX4: simulation is core safety validation, but the command interface must be deterministic and fail-closed.
+- This is module `2/3`.
+
+External baseline:
+- ArduPilot SITL and Simulation-on-Hardware prove real control paths against simulated sensors/faults before vehicle risk: <https://ardupilot.org/dev/docs/sitl-simulator-software-in-the-loop.html> and <https://ardupilot.org/dev/docs/sim-on-hardware.html>.
+- PX4 simulation separates SITL/HITL and treats simulator speed/lockstep behavior as part of the test contract: <https://docs.px4.io/main/en/simulation/>.
+
+Key outcomes:
+- `SIM_RUN` side effects (`stopAllMotion`, failsafe clear, anchor-denial clear, wall-clock reset) now happen only after a simulation run actually starts.
+- Invalid payloads and failed starts are reported without mutating live runtime state.
+- Report chunking now clears stale output before validating chunk size; `chunkSize=0` produces `REPORT_UNAVAILABLE` instead of leaving ambiguous empty chunks.
+- Added Android smoke mode `sim`: exact APK install, BLE telemetry, `SIM_RUN:S0_hold_still_good,1`, observed `SIM` mode, `SIM_ABORT`, observed mode exit, then zero-throttle manual recovery so the bench does not remain in `HOLD/ALERT`.
+- Phone-smoke decision: module-specific Android smoke is required because this changes the BLE-visible `SIM_*` execution path.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_sim_execution -f test_runtime_sim_command -f test_runtime_sim_log` -> `19/19` passed.
+- `cd boatlock && platformio test -e native -f test_runtime_sim_execution -f test_runtime_sim_command -f test_runtime_sim_log -f test_ble_command_handler` -> `52/52` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub test/ble_smoke_logic_test.dart` -> passed.
+- `./tools/android/build-smoke-apk.sh --mode sim` -> sandbox Gradle run failed with `java.net.SocketException: Operation not permitted`; reran host-side and built `app-debug.apk` successfully.
+- `cd boatlock && platformio test -e native` -> `258/258` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> full suite passed (`31/31`) before and after SIM smoke cleanup.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `696485` bytes.
+- `./tools/hw/nh02/flash.sh` -> build success, flash success, app image write `696848` bytes, hard reset via RTS.
+- First `./tools/hw/nh02/android-run-smoke.sh --sim --wait-secs 130` -> exact install `Success` after one canonical retry, `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"sim_run_abort_roundtrip",...,"mode":"HOLD","status":"ALERT","lastDeviceLog":"[SIM] ABORTED"}`. This proved run/abort but exposed that the smoke left the bench in `HOLD/ALERT`.
+- After adding zero-throttle manual recovery, `./tools/hw/nh02/android-run-smoke.sh --sim --no-build --wait-secs 130` -> exact install `Success`, `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"sim_run_abort_roundtrip","dataEvents":6,"deviceLogEvents":2,"mode":"IDLE","status":"WARN","statusReasons":"","secPaired":false,"secAuth":false,"rssi":-35,"lastDeviceLog":"[SIM] ABORTED"}`.
+- Full `nh02` serial acceptance remains deferred by the three-module cadence; this is module `2/3`, but module-specific phone smoke ran because `SIM_*` execution is phone-visible BLE behavior.
+
+Self-review:
+- This reduces accidental live-state mutation from malformed test commands.
+- Realtime `S0` in phone smoke keeps SIM mode observable and then aborts it; it is not a powered thrust test.
+- The first SIM smoke pass revealed a cleanup problem in the smoke flow, not in the firmware execution change; the final accepted smoke now leaves the bench out of `SIM`, out of `MANUAL`, and out of `ALERT`.
+
+Promote to skill:
+- Failed simulation commands must not mutate live runtime state; SIM smoke should prove run/abort end-to-end once execution behavior changes.
+
+### 2026-04-25 Stage 81: Environmental input research for future HIL scenarios
+
+Scope:
+- Collect raw source-backed inputs for future BoatLock simulation and hardware-in-the-loop scenarios while code refactoring continues elsewhere.
+- Cover trolling motor thrust/current classes, water-body classes, Volga/Oka/Ladoga/Onega/reservoir/Baltic examples, wind/current/wave ranges, and candidate scenario seeds.
+
+Key outcomes:
+- Added `tools/sim/research/environment_inputs.md` as a human-readable research note with source links and confidence notes.
+- Added `tools/sim/research/environment_inputs.raw.json` as a machine-readable raw dataset for later normalization.
+- Marked unresolved current data gaps explicitly for Oka, Kama, Neva, and several reservoirs instead of flattening them into false precision.
+- Kept the output as research data only; no simulator behavior, thresholds, firmware, BLE, or test code changed.
+
+Validation:
+- `python3 -m json.tool tools/sim/research/environment_inputs.raw.json` -> valid JSON.
+
+Self-review:
+- The useful durable point is that river/current data must be modeled by water-body class, reach, and condition rather than as a single per-river constant.
+- The weakest areas are Oka/Kama/Neva reach-specific current data and localized reservoir wave/current data; those need hydropost, navigation-lotsiya, or operator forecast sources before final scenario normalization.
+
+Promote to skill:
+- No skill change yet; this is a task-specific research artifact until the data is normalized into simulator/HIL inputs.
