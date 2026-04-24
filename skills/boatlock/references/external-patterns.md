@@ -59,6 +59,7 @@ Implication for BoatLock:
   - anchor radius
   - shore/obstacle exclusion point or exclusion boundary
 - Auto-created anchor points should use conservative heuristics and deduping.
+- A persisted anchor point must not be reported as saved unless the storage commit succeeds; failed persistence should preserve the previous live point.
 
 ## What Signal K Gets Right
 
@@ -182,6 +183,7 @@ Implication for BoatLock:
 - A settings object should load safe RAM defaults before any storage read and must not commit flash from its constructor.
 - Normalize values by declared type before dirtying/persisting so integer and bool-like settings cannot remain fractional in RAM or storage.
 - Treat flash commits as fallible. A failed commit must not be logged as saved or clear dirty state.
+- Runtime objects backed by persisted settings should restore previous RAM values when a commit fails instead of exposing uncommitted state as the active operating point.
 - Boot migration, CRC recovery, and value normalization are the only expected boot-time settings writes.
 - Non-finite config values must fail closed before reaching persisted storage.
 

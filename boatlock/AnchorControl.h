@@ -22,18 +22,30 @@ public:
 
         heading = normalizeHeading(heading);
         if (settings) {
+            const float prevLat = settings->get("AnchorLat");
+            const float prevLon = settings->get("AnchorLon");
+            const float prevHeading = settings->get("AnchorHead");
+            const float prevEnabled = settings->get("AnchorEnabled");
             const bool ok = settings->setStrict("AnchorLat", lat) &&
                             settings->setStrict("AnchorLon", lon) &&
                             settings->setStrict("AnchorHead", heading) &&
                             settings->setStrict("AnchorEnabled", enableAnchor ? 1.0f : 0.0f);
             if (!ok) {
+                restoreSettings(prevLat, prevLon, prevHeading, prevEnabled);
                 logMessage("[EVENT] ANCHOR_REJECTED reason=SETTINGS lat=%.6f lon=%.6f head=%.1f\n",
                            lat,
                            lon,
                            heading);
                 return false;
             }
-            settings->save();
+            if (!settings->save()) {
+                restoreSettings(prevLat, prevLon, prevHeading, prevEnabled);
+                logMessage("[EVENT] ANCHOR_REJECTED reason=SAVE lat=%.6f lon=%.6f head=%.1f\n",
+                           lat,
+                           lon,
+                           heading);
+                return false;
+            }
         }
         anchorLat = lat;
         anchorLon = lon;
@@ -50,7 +62,12 @@ public:
         if (settings) {
             anchorLat = settings->get("AnchorLat");
             anchorLon = settings->get("AnchorLon");
-            anchorHeading = settings->get("AnchorHead");
+            anchorHeading = normalizeHeading(settings->get("AnchorHead"));
+        }
+        if (!validAnchorPoint(anchorLat, anchorLon)) {
+            anchorLat = 0.0f;
+            anchorLon = 0.0f;
+            anchorHeading = 0.0f;
         }
         logMessage("[ANCHOR] loaded lat=%.6f lon=%.6f head=%.1f\n", anchorLat, anchorLon, anchorHeading);
     }
@@ -79,5 +96,16 @@ public:
         while (heading < 0.0f) heading += 360.0f;
         while (heading >= 360.0f) heading -= 360.0f;
         return heading;
+    }
+
+private:
+    void restoreSettings(float lat, float lon, float heading, float enabled) {
+        if (!settings) {
+            return;
+        }
+        settings->setStrict("AnchorLat", lat);
+        settings->setStrict("AnchorLon", lon);
+        settings->setStrict("AnchorHead", heading);
+        settings->setStrict("AnchorEnabled", enabled);
     }
 };
