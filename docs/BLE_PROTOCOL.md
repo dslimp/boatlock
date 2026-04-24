@@ -23,8 +23,8 @@ The live path is not a serial/JSON tunnel. The app subscribes to `34cd`, sends `
 | `HEARTBEAT` | none | Keep-alive command from controller/app; missing heartbeat while Anchor is active triggers failsafe |
 | `MANUAL_SET:<steer>,<throttlePct>,<ttlMs>` | `steer=-1..1`, `throttlePct=-100..100`, `ttlMs=100..1000` | Atomically enter/refresh Manual mode from the active controller; this disables Anchor mode and acts as a deadman lease |
 | `MANUAL_OFF` | none | Stop Manual mode and zero manual stepper/thruster output |
-| `NUDGE_DIR:<FWD\|BACK\|LEFT\|RIGHT>,<meters>` | direction + distance (1.0..5.0 m) | Shift anchor point in boat frame (allowed only while Anchor is active and safety checks pass) |
-| `NUDGE_BRG:<bearingDeg>,<meters>` | absolute bearing + distance (1.0..5.0 m) | Shift anchor point by bearing/distance (allowed only while Anchor is active and safety checks pass) |
+| `NUDGE_DIR:<FWD\|BACK\|LEFT\|RIGHT>` | direction | Shift anchor point by the fixed 1.5 m jog step in boat frame (allowed only while Anchor is active and safety checks pass) |
+| `NUDGE_BRG:<bearingDeg>` | absolute bearing | Shift anchor point by the fixed 1.5 m jog step on the given bearing (allowed only while Anchor is active and safety checks pass) |
 | `SET_ANCHOR_PROFILE:<quiet\|normal\|current>` | profile id | Atomically apply preset Anchor control params and persist them |
 | `PAIR_SET:<ownerSecretHex>` | 32-hex owner secret | Set/replace owner secret while pairing window is open from hardware STOP long-press |
 | `PAIR_CLEAR` | none | Clear pairing; accepted only from owner session or while pairing window is physically open |

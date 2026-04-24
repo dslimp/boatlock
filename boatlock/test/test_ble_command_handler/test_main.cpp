@@ -25,7 +25,6 @@ bool nudgeCardinalCalled = false;
 bool nudgeBearingCalled = false;
 char nudgeDirLast[16] = {0};
 float nudgeBearingLast = 0.0f;
-float nudgeMetersLast = 0.0f;
 bool nudgeCardinalResult = true;
 bool nudgeBearingResult = true;
 const char* gnssReasonStub = "GPS_HDOP_TOO_HIGH";
@@ -54,17 +53,15 @@ bool canEnableAnchorNow() { return anchorEnableAllowed; }
 bool hasAnchorPoint() { return anchorPointPresent; }
 void stopAllMotionNow() { stopAllMotionCalled = true; }
 void noteControlActivityNow() { ++controlActivityNotes; }
-bool nudgeAnchorCardinal(const char* dir, float meters) {
+bool nudgeAnchorCardinal(const char* dir) {
   nudgeCardinalCalled = true;
   strncpy(nudgeDirLast, dir ? dir : "", sizeof(nudgeDirLast) - 1);
   nudgeDirLast[sizeof(nudgeDirLast) - 1] = '\0';
-  nudgeMetersLast = meters;
   return nudgeCardinalResult;
 }
-bool nudgeAnchorBearing(float bearingDeg, float meters) {
+bool nudgeAnchorBearing(float bearingDeg) {
   nudgeBearingCalled = true;
   nudgeBearingLast = bearingDeg;
-  nudgeMetersLast = meters;
   return nudgeBearingResult;
 }
 const char* currentGnssFailReason() { return gnssReasonStub; }
@@ -150,7 +147,6 @@ void setUp() {
   nudgeBearingCalled = false;
   nudgeDirLast[0] = '\0';
   nudgeBearingLast = 0.0f;
-  nudgeMetersLast = 0.0f;
   nudgeCardinalResult = true;
   nudgeBearingResult = true;
   gnssReasonStub = "GPS_HDOP_TOO_HIGH";
@@ -334,19 +330,25 @@ void test_heartbeat_marks_control_activity_without_state_change() {
 }
 
 void test_nudge_dir_routes_to_cardinal_handler() {
-  handleBleCommand("NUDGE_DIR:LEFT,2.5");
+  handleBleCommand("NUDGE_DIR:LEFT");
   TEST_ASSERT_TRUE(nudgeCardinalCalled);
   TEST_ASSERT_EQUAL_STRING("LEFT", nudgeDirLast);
-  TEST_ASSERT_EQUAL_FLOAT(2.5f, nudgeMetersLast);
   TEST_ASSERT_FALSE(nudgeBearingCalled);
+
+  nudgeCardinalCalled = false;
+  handleBleCommand("NUDGE_DIR:LEFT,2.5");
+  TEST_ASSERT_FALSE(nudgeCardinalCalled);
 }
 
 void test_nudge_bearing_routes_to_bearing_handler() {
-  handleBleCommand("NUDGE_BRG:123.4,3.0");
+  handleBleCommand("NUDGE_BRG:123.4");
   TEST_ASSERT_TRUE(nudgeBearingCalled);
   TEST_ASSERT_EQUAL_FLOAT(123.4f, nudgeBearingLast);
-  TEST_ASSERT_EQUAL_FLOAT(3.0f, nudgeMetersLast);
   TEST_ASSERT_FALSE(nudgeCardinalCalled);
+
+  nudgeBearingCalled = false;
+  handleBleCommand("NUDGE_BRG:123.4,3.0");
+  TEST_ASSERT_FALSE(nudgeBearingCalled);
 }
 
 void test_set_phone_gps_with_speed() {

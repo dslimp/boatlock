@@ -96,34 +96,16 @@ void main() {
     expect(BleBoatLock.buildSetPhoneGpsCommand(59.0, 200.0), isNull);
   });
 
-  test('buildNudgeDirCommand validates direction and distance', () {
-    expect(
-      BleBoatLock.buildNudgeDirCommand('left', meters: 2.0),
-      'NUDGE_DIR:LEFT,2.0',
-    );
-    expect(BleBoatLock.buildNudgeDirCommand('foo', meters: 2.0), isNull);
-    expect(BleBoatLock.buildNudgeDirCommand('RIGHT', meters: 0.5), isNull);
-    expect(BleBoatLock.buildNudgeDirCommand('RIGHT', meters: 6.0), isNull);
+  test('buildNudgeDirCommand validates direction', () {
+    expect(BleBoatLock.buildNudgeDirCommand('left'), 'NUDGE_DIR:LEFT');
+    expect(BleBoatLock.buildNudgeDirCommand('foo'), isNull);
   });
 
-  test(
-    'buildNudgeBearingCommand normalizes bearing and validates distance',
-    () {
-      expect(
-        BleBoatLock.buildNudgeBearingCommand(450.0, meters: 3.0),
-        'NUDGE_BRG:90.0,3.0',
-      );
-      expect(
-        BleBoatLock.buildNudgeBearingCommand(-10.0, meters: 1.0),
-        'NUDGE_BRG:350.0,1.0',
-      );
-      expect(
-        BleBoatLock.buildNudgeBearingCommand(double.nan, meters: 2.0),
-        isNull,
-      );
-      expect(BleBoatLock.buildNudgeBearingCommand(120.0, meters: 0.9), isNull);
-    },
-  );
+  test('buildNudgeBearingCommand normalizes bearing', () {
+    expect(BleBoatLock.buildNudgeBearingCommand(450.0), 'NUDGE_BRG:90.0');
+    expect(BleBoatLock.buildNudgeBearingCommand(-10.0), 'NUDGE_BRG:350.0');
+    expect(BleBoatLock.buildNudgeBearingCommand(double.nan), isNull);
+  });
 
   test('buildSetAnchorProfileCommand validates profile values', () {
     expect(

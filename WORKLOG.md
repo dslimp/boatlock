@@ -1441,3 +1441,50 @@ Self-review:
 
 Promote to skill:
 - Anchor point saving must be explicit and validated. Do not add default arguments or helpers that can arm Anchor as a side effect of storing coordinates.
+
+### 2026-04-24 Stage 55: Anchor nudge/jog protocol simplification
+
+Scope:
+- Continue module-by-module refactor with `RuntimeAnchorNudge`, BLE command parsing, and Flutter command builders.
+- Remove arbitrary nudge distance from the live protocol before alpha; keep reposition as a small explicit jog action.
+
+External baseline:
+- Minn Kota Advanced GPS Navigation exposes Jog as a fixed small move around the locked point, not an arbitrary-distance free-form command: <https://minnkota-help.johnsonoutdoors.com/hc/en-us/articles/23607178243991-Using-Advanced-GPS-Navigation-Features-and-Manual-2023-present>.
+- Signal K Anchor Alarm treats moving the anchor location as a distinct action after setup: <https://demo.signalk.org/documentation/Guides/Anchor_Alarm.html>.
+- Commercial GPS-anchor UX generally favors small explicit reposition steps because the operator can repeat them and observe the result instead of sending a large single correction.
+
+Key outcomes:
+- `NUDGE_DIR` now accepts only `NUDGE_DIR:<FWD|BACK|LEFT|RIGHT>`.
+- `NUDGE_BRG` now accepts only `NUDGE_BRG:<bearingDeg>`.
+- Firmware applies a fixed `1.5 m` jog step and rejects stale old comma-distance payloads.
+- Nudge math is isolated in `RuntimeAnchorNudge`, validates source/target anchor coordinates, normalizes bearing/lon, and uses bounded `fmodf` math instead of loop-based wrapping.
+- Flutter builders emit the same simplified protocol; no backward-compatibility shim was kept.
+- BLE protocol docs, firmware reference, and external-pattern notes were updated.
+
+Validation:
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native -f test_runtime_anchor_nudge -f test_ble_command_handler -f test_runtime_anchor_gate -f test_anchor_control` -> `45/45` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub test/ble_boatlock_test.dart` -> passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native` -> `197/197` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> `29/29` passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio pio run -e esp32s3` -> success, flash size `695985` bytes.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter build apk --debug --no-pub` -> success.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `git diff --check` -> clean.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`; app image write `696352` bytes.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-nudge-fixed-v2-60s.log --json-out /tmp/boatlock-nudge-fixed-v2-60s.json` -> `PASS`, including RVC compass, display, EEPROM `ver=22`, BLE advertising, stepper, STOP, heading events, and GPS UART.
+- Acceptance log scan found no panic/assert/Guru, Arduino `[E]`, `Wire.cpp`, `i2cRead`, compass loss, or compass retry failure.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 100` -> first install attempt hit MIUI `USER_RESTRICTED`, canonical retry succeeded, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip",...}`.
+
+Self-review:
+- This is a deliberate protocol break, which is acceptable before alpha and removes app/firmware distance validation duplication.
+- Fixed `1.5 m` may need field tuning, but the protocol should not expose arbitrary distance until real-water tests prove a need.
+- Android smoke proves transport, reconnect, and zero-throttle manual command roundtrip; it does not yet send an actual nudge command from the phone smoke app.
+- During an earlier hardware check the RFC2217 port returned connection refused after flashing; I used `status.sh` and reran the canonical acceptance wrapper instead of accepting a manual workaround.
+
+Promote to skill:
+- Anchor jog/nudge should remain a fixed small step. Do not add arbitrary nudge distances back into firmware or Flutter without product evidence and tests.
+- For MIUI phones, a first install-policy rejection followed by canonical retry success is a recorded retry, not a blocker; only terminal wrapper failure blocks acceptance.

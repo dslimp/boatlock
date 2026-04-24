@@ -145,8 +145,8 @@ bool canEnableAnchorNow();
 bool hasAnchorPoint();
 void stopAllMotionNow();
 void noteControlActivityNow();
-bool nudgeAnchorCardinal(const char* dir, float meters);
-bool nudgeAnchorBearing(float bearingDeg, float meters);
+bool nudgeAnchorCardinal(const char* dir);
+bool nudgeAnchorBearing(float bearingDeg);
 const char* currentGnssFailReason();
 AnchorDeniedReason currentAnchorEnableDeniedReason();
 void applySupervisorDecision(const AnchorSupervisor::Decision& decision);
@@ -682,7 +682,7 @@ void stopManualControlFromBle() {
   motor.stop();
 }
 
-bool nudgeAnchorBearing(float bearingDeg, float meters) {
+bool nudgeAnchorBearing(float bearingDeg) {
   if (settings.get("AnchorEnabled") != 1) {
     logMessage("[EVENT] NUDGE_DENIED reason=ANCHOR_INACTIVE\n");
     return false;
@@ -692,17 +692,17 @@ bool nudgeAnchorBearing(float bearingDeg, float meters) {
     logMessage("[EVENT] NUDGE_DENIED reason=%s\n", anchorDeniedReasonString(enableDenyReason));
     return false;
   }
-  if (!runtimeAnchorNudgeRangeValid(meters) || !isfinite(bearingDeg)) {
+  if (!isfinite(bearingDeg)) {
     logMessage("[EVENT] NUDGE_DENIED reason=RANGE\n");
     return false;
   }
-  if (!isfinite(anchor.anchorLat) || !isfinite(anchor.anchorLon)) {
+  if (!runtimeAnchorNudgePointValid(anchor.anchorLat, anchor.anchorLon)) {
     logMessage("[EVENT] NUDGE_DENIED reason=NO_ANCHOR_POINT\n");
     return false;
   }
 
   RuntimeAnchorNudgeTarget target;
-  if (!projectRuntimeAnchorNudge(anchor.anchorLat, anchor.anchorLon, bearingDeg, meters, &target)) {
+  if (!projectRuntimeAnchorNudge(anchor.anchorLat, anchor.anchorLon, bearingDeg, &target)) {
     logMessage("[EVENT] NUDGE_DENIED reason=RANGE\n");
     return false;
   }
@@ -714,13 +714,13 @@ bool nudgeAnchorBearing(float bearingDeg, float meters) {
   setSafetyReason("NUDGE_OK");
   logMessage("[EVENT] NUDGE_APPLIED bearing=%.1f meters=%.2f lat=%.6f lon=%.6f\n",
              normalize360Deg(bearingDeg),
-             meters,
+             kRuntimeAnchorNudgeMeters,
              target.lat,
              target.lon);
   return true;
 }
 
-bool nudgeAnchorCardinal(const char* dir, float meters) {
+bool nudgeAnchorCardinal(const char* dir) {
   if (!dir) {
     return false;
   }
@@ -734,7 +734,7 @@ bool nudgeAnchorCardinal(const char* dir, float meters) {
     logMessage("[EVENT] NUDGE_DENIED reason=DIR\n");
     return false;
   }
-  return nudgeAnchorBearing(bearing, meters);
+  return nudgeAnchorBearing(bearing);
 }
 
 void setup() {

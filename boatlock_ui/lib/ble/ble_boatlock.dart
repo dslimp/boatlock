@@ -405,16 +405,16 @@ class BleBoatLock with WidgetsBindingObserver {
     await _writeCommand('STOP');
   }
 
-  Future<void> nudgeDir(String direction, {double meters = 1.0}) async {
+  Future<void> nudgeDir(String direction) async {
     if (_cmdChar == null) return;
-    final cmd = buildNudgeDirCommand(direction, meters: meters);
+    final cmd = buildNudgeDirCommand(direction);
     if (cmd == null) return;
     await _writeCommand(cmd);
   }
 
-  Future<void> nudgeBearing(double bearingDeg, {double meters = 1.0}) async {
+  Future<void> nudgeBearing(double bearingDeg) async {
     if (_cmdChar == null) return;
-    final cmd = buildNudgeBearingCommand(bearingDeg, meters: meters);
+    final cmd = buildNudgeBearingCommand(bearingDeg);
     if (cmd == null) return;
     await _writeCommand(cmd);
   }
@@ -638,23 +638,18 @@ class BleBoatLock with WidgetsBindingObserver {
     return '$base,$safeSat';
   }
 
-  static String? buildNudgeDirCommand(String direction, {double meters = 1.0}) {
+  static String? buildNudgeDirCommand(String direction) {
     final dir = direction.trim().toUpperCase();
     const allowed = {'FWD', 'BACK', 'LEFT', 'RIGHT'};
     if (!allowed.contains(dir)) return null;
-    if (!meters.isFinite || meters < 1.0 || meters > 5.0) return null;
-    return 'NUDGE_DIR:$dir,${meters.toStringAsFixed(1)}';
+    return 'NUDGE_DIR:$dir';
   }
 
-  static String? buildNudgeBearingCommand(
-    double bearingDeg, {
-    double meters = 1.0,
-  }) {
+  static String? buildNudgeBearingCommand(double bearingDeg) {
     if (!bearingDeg.isFinite) return null;
-    if (!meters.isFinite || meters < 1.0 || meters > 5.0) return null;
     var norm = bearingDeg % 360.0;
     if (norm < 0) norm += 360.0;
-    return 'NUDGE_BRG:${norm.toStringAsFixed(1)},${meters.toStringAsFixed(1)}';
+    return 'NUDGE_BRG:${norm.toStringAsFixed(1)}';
   }
 
   static String? buildSetAnchorProfileCommand(String profile) {

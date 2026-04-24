@@ -113,6 +113,7 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
 - Record whether failure is in first install policy, later `adb install -r` update, app launch, or BLE runtime; do not collapse those into one generic "Android smoke failed" verdict.
 - Treat `android-run-smoke.sh --no-install` as BLE-runtime proof only; it does not prove that the exact just-built APK was installed on the phone.
 - If full smoke fails with `INSTALL_FAILED_USER_RESTRICTED`, stop on that blocker. Required phone-side fixes are `Install via USB`, Xiaomi/MIUI security install confirmation, and any account or policy prompts that gate ADB installs.
+- A logged first-attempt `INSTALL_FAILED_USER_RESTRICTED` followed by canonical retry `Success` and a passing `BOATLOCK_SMOKE_RESULT` is not a blocker; record the retry but trust the terminal wrapper verdict.
 - Do not interrupt a live flash, build, acceptance run, or phone smoke while it is still making forward progress.
 - If a bench or phone wrapper fails, fix that wrapper before normalizing a manual fallback.
 - If a bench or phone wrapper returns stale, wrong, or ambiguous data, fix the wrapper or its guidance before trusting the result.

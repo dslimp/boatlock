@@ -20,8 +20,8 @@ bool canEnableAnchorNow();
 bool hasAnchorPoint();
 void stopAllMotionNow();
 void noteControlActivityNow();
-bool nudgeAnchorCardinal(const char* dir, float meters);
-bool nudgeAnchorBearing(float bearingDeg, float meters);
+bool nudgeAnchorCardinal(const char* dir);
+bool nudgeAnchorBearing(float bearingDeg);
 const char* currentGnssFailReason();
 AnchorDeniedReason currentAnchorEnableDeniedReason();
 AnchorDeniedReason currentGnssDeniedReason();
@@ -100,24 +100,24 @@ inline void handleBleCommand(const std::string &cmd) {
     logMessage("[BLE] Anchor point saved via BLE: %.6f, %.6f\n", lat, lon);
   } else if (command.rfind("NUDGE_DIR:", 0) == 0) {
     char dir[12] = {0};
-    float meters = 0.0f;
-    if (sscanf(command.c_str() + 10, "%11[^,],%f", dir, &meters) == 2) {
-      if (nudgeAnchorCardinal(dir, meters)) {
-        logMessage("[BLE] NUDGE_DIR accepted: %s, %.2f\n", dir, meters);
+    char extra = 0;
+    if (sscanf(command.c_str() + 10, "%11[^, \t\r\n] %c", dir, &extra) == 1) {
+      if (nudgeAnchorCardinal(dir)) {
+        logMessage("[BLE] NUDGE_DIR accepted: %s\n", dir);
       } else {
-        logMessage("[BLE] NUDGE_DIR rejected: %s, %.2f\n", dir, meters);
+        logMessage("[BLE] NUDGE_DIR rejected: %s\n", dir);
       }
     } else {
       logMessage("[BLE] Invalid NUDGE_DIR payload: %s\n", command.c_str());
     }
   } else if (command.rfind("NUDGE_BRG:", 0) == 0) {
     float bearingDeg = 0.0f;
-    float meters = 0.0f;
-    if (sscanf(command.c_str() + 10, "%f,%f", &bearingDeg, &meters) == 2) {
-      if (nudgeAnchorBearing(bearingDeg, meters)) {
-        logMessage("[BLE] NUDGE_BRG accepted: %.1f, %.2f\n", bearingDeg, meters);
+    char extra = 0;
+    if (sscanf(command.c_str() + 10, "%f %c", &bearingDeg, &extra) == 1) {
+      if (nudgeAnchorBearing(bearingDeg)) {
+        logMessage("[BLE] NUDGE_BRG accepted: %.1f\n", bearingDeg);
       } else {
-        logMessage("[BLE] NUDGE_BRG rejected: %.1f, %.2f\n", bearingDeg, meters);
+        logMessage("[BLE] NUDGE_BRG rejected: %.1f\n", bearingDeg);
       }
     } else {
       logMessage("[BLE] Invalid NUDGE_BRG payload: %s\n", command.c_str());
