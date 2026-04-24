@@ -105,6 +105,7 @@ Implication for BoatLock:
 - `SAFE_HOLD` / `HOLD` should become a real runtime mode, not an inferred combination of flags and reasons.
 - The anchor controller should remain zone-based, not continuously aggressive at the center.
 - Keep explicit typed failsafe reasons and deterministic actions.
+- Failsafe core code should keep local minimum timeout floors. Upstream configuration clamps are useful but must not be the only thing preventing a disabled safety timer.
 - Containment/drift thresholds must fail deterministic even if settings are invalid; sanitize non-finite thresholds before comparisons.
 - Motion telemetry derived from position deltas must expire or reset after long sample gaps.
 - Account for actuator deadband in shipped tuning defaults.

@@ -87,9 +87,48 @@ void test_comm_timeout_after_control_activity_deadline() {
   auto in = baseIn();
   s.noteControlActivity(1000);
 
-  in.nowMs = 6000;
+  in.nowMs = 7999;
   auto d1 = s.update(cfg, in);
-  in.nowMs = 9001;
+  in.nowMs = 8000;
+  auto d2 = s.update(cfg, in);
+
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::SafeAction::NONE, (int)d1.action);
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::SafeAction::STOP, (int)d2.action);
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::Reason::COMM_TIMEOUT, (int)d2.reason);
+}
+
+void test_input_control_activity_seen_refreshes_deadline() {
+  AnchorSupervisor s;
+  auto cfg = baseCfg();
+  auto in = baseIn();
+  s.noteControlActivity(1000);
+
+  in.nowMs = 7500;
+  in.controlActivitySeen = true;
+  auto d1 = s.update(cfg, in);
+
+  in.controlActivitySeen = false;
+  in.nowMs = 14499;
+  auto d2 = s.update(cfg, in);
+  in.nowMs = 14500;
+  auto d3 = s.update(cfg, in);
+
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::SafeAction::NONE, (int)d1.action);
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::SafeAction::NONE, (int)d2.action);
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::SafeAction::STOP, (int)d3.action);
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::Reason::COMM_TIMEOUT, (int)d3.reason);
+}
+
+void test_zero_config_does_not_disable_comm_timeout() {
+  AnchorSupervisor s;
+  auto cfg = baseCfg();
+  cfg.commTimeoutMs = 0;
+  auto in = baseIn();
+  s.noteControlActivity(1000);
+
+  in.nowMs = 3999;
+  auto d1 = s.update(cfg, in);
+  in.nowMs = 4000;
   auto d2 = s.update(cfg, in);
 
   TEST_ASSERT_EQUAL((int)AnchorSupervisor::SafeAction::NONE, (int)d1.action);
@@ -107,6 +146,18 @@ void test_control_loop_timeout_triggers_failsafe() {
   TEST_ASSERT_EQUAL((int)AnchorSupervisor::Reason::CONTROL_LOOP_TIMEOUT, (int)d.reason);
 }
 
+void test_zero_config_does_not_disable_control_loop_timeout() {
+  AnchorSupervisor s;
+  auto cfg = baseCfg();
+  cfg.controlLoopTimeoutMs = 0;
+  auto in = baseIn();
+  in.controlLoopDtMs = AnchorSupervisor::kMinControlLoopTimeoutMs + 1;
+  auto d = s.update(cfg, in);
+
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::SafeAction::STOP, (int)d.action);
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::Reason::CONTROL_LOOP_TIMEOUT, (int)d.reason);
+}
+
 void test_sensor_timeout_triggers_failsafe() {
   AnchorSupervisor s;
   auto cfg = baseCfg();
@@ -115,6 +166,21 @@ void test_sensor_timeout_triggers_failsafe() {
   auto d1 = s.update(cfg, in);
   in.nowMs = 4501;
   auto d2 = s.update(cfg, in);
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::SafeAction::NONE, (int)d1.action);
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::SafeAction::STOP, (int)d2.action);
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::Reason::SENSOR_TIMEOUT, (int)d2.reason);
+}
+
+void test_zero_config_does_not_disable_sensor_timeout() {
+  AnchorSupervisor s;
+  auto cfg = baseCfg();
+  cfg.sensorTimeoutMs = 0;
+  auto in = baseIn();
+  in.sensorsOk = false;
+  auto d1 = s.update(cfg, in);
+  in.nowMs += AnchorSupervisor::kMinSensorTimeoutMs;
+  auto d2 = s.update(cfg, in);
+
   TEST_ASSERT_EQUAL((int)AnchorSupervisor::SafeAction::NONE, (int)d1.action);
   TEST_ASSERT_EQUAL((int)AnchorSupervisor::SafeAction::STOP, (int)d2.action);
   TEST_ASSERT_EQUAL((int)AnchorSupervisor::Reason::SENSOR_TIMEOUT, (int)d2.reason);
@@ -148,6 +214,24 @@ void test_zero_timestamp_gps_weak_still_triggers() {
   TEST_ASSERT_EQUAL((int)AnchorSupervisor::SafeAction::NONE, (int)d1.action);
   TEST_ASSERT_EQUAL((int)AnchorSupervisor::SafeAction::EXIT_ANCHOR, (int)d2.action);
   TEST_ASSERT_EQUAL((int)AnchorSupervisor::Reason::GPS_WEAK, (int)d2.reason);
+}
+
+void test_zero_config_keeps_gps_weak_hysteresis_floor() {
+  AnchorSupervisor s;
+  auto cfg = baseCfg();
+  cfg.gpsWeakGraceMs = 0;
+  auto in = baseIn();
+  in.gpsQualityOk = false;
+  auto d1 = s.update(cfg, in);
+  in.nowMs += AnchorSupervisor::kMinGpsWeakGraceMs - 1;
+  auto d2 = s.update(cfg, in);
+  in.nowMs += 1;
+  auto d3 = s.update(cfg, in);
+
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::SafeAction::NONE, (int)d1.action);
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::SafeAction::NONE, (int)d2.action);
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::SafeAction::EXIT_ANCHOR, (int)d3.action);
+  TEST_ASSERT_EQUAL((int)AnchorSupervisor::Reason::GPS_WEAK, (int)d3.reason);
 }
 
 void test_nan_guard_always_stops() {
@@ -188,10 +272,15 @@ int main() {
   RUN_TEST(test_containment_breach_exits_anchor_immediately);
   RUN_TEST(test_containment_breach_has_priority_over_gps_grace);
   RUN_TEST(test_comm_timeout_after_control_activity_deadline);
+  RUN_TEST(test_input_control_activity_seen_refreshes_deadline);
+  RUN_TEST(test_zero_config_does_not_disable_comm_timeout);
   RUN_TEST(test_control_loop_timeout_triggers_failsafe);
+  RUN_TEST(test_zero_config_does_not_disable_control_loop_timeout);
   RUN_TEST(test_sensor_timeout_triggers_failsafe);
+  RUN_TEST(test_zero_config_does_not_disable_sensor_timeout);
   RUN_TEST(test_zero_timestamp_sensor_timeout_still_triggers);
   RUN_TEST(test_zero_timestamp_gps_weak_still_triggers);
+  RUN_TEST(test_zero_config_keeps_gps_weak_hysteresis_floor);
   RUN_TEST(test_nan_guard_always_stops);
   RUN_TEST(test_command_out_of_range_triggers_failsafe);
   RUN_TEST(test_inactive_anchor_resets_and_returns_none);

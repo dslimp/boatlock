@@ -3,6 +3,11 @@
 
 class AnchorSupervisor {
 public:
+  static constexpr unsigned long kMinCommTimeoutMs = 3000;
+  static constexpr unsigned long kMinControlLoopTimeoutMs = 100;
+  static constexpr unsigned long kMinSensorTimeoutMs = 300;
+  static constexpr unsigned long kMinGpsWeakGraceMs = 500;
+
   enum class SafeAction : uint8_t {
     NONE = 0,
     STOP = 1,
@@ -66,6 +71,10 @@ public:
       return {};
     }
 
+    if (in.controlActivitySeen) {
+      noteControlActivity(in.nowMs);
+    }
+
     if (in.containmentBreached) {
       return decision(SafeAction::EXIT_ANCHOR, Reason::CONTAINMENT_BREACH);
     }
@@ -84,13 +93,11 @@ public:
     }
 
     if ((controlActivitySeen_ || in.controlActivitySeen) &&
-        cfg.commTimeoutMs > 0 &&
-        in.nowMs - lastControlActivityMs_ > cfg.commTimeoutMs) {
+        elapsedMs(in.nowMs, lastControlActivityMs_) >= effectiveCommTimeoutMs(cfg)) {
       return decision(SafeAction::STOP, Reason::COMM_TIMEOUT);
     }
 
-    if (cfg.controlLoopTimeoutMs > 0 &&
-        in.controlLoopDtMs > cfg.controlLoopTimeoutMs) {
+    if (in.controlLoopDtMs > effectiveControlLoopTimeoutMs(cfg)) {
       return decision(SafeAction::STOP, Reason::CONTROL_LOOP_TIMEOUT);
     }
 
@@ -98,7 +105,7 @@ public:
       if (!gpsWeakActive_) {
         gpsWeakActive_ = true;
         gpsWeakSinceMs_ = in.nowMs;
-      } else if (in.nowMs - gpsWeakSinceMs_ >= cfg.gpsWeakGraceMs) {
+      } else if (elapsedMs(in.nowMs, gpsWeakSinceMs_) >= effectiveGpsWeakGraceMs(cfg)) {
         return decision(SafeAction::EXIT_ANCHOR, Reason::GPS_WEAK);
       }
     } else {
@@ -110,8 +117,7 @@ public:
       if (!sensorBadActive_) {
         sensorBadActive_ = true;
         sensorBadSinceMs_ = in.nowMs;
-      } else if (cfg.sensorTimeoutMs > 0 &&
-                 in.nowMs - sensorBadSinceMs_ >= cfg.sensorTimeoutMs) {
+      } else if (elapsedMs(in.nowMs, sensorBadSinceMs_) >= effectiveSensorTimeoutMs(cfg)) {
         return decision(SafeAction::STOP, Reason::SENSOR_TIMEOUT);
       }
     } else {
@@ -145,6 +151,30 @@ public:
   }
 
 private:
+  static unsigned long elapsedMs(unsigned long nowMs, unsigned long thenMs) {
+    return nowMs - thenMs;
+  }
+
+  static unsigned long floorTimeoutMs(unsigned long value, unsigned long floorMs) {
+    return value < floorMs ? floorMs : value;
+  }
+
+  static unsigned long effectiveCommTimeoutMs(const Config& cfg) {
+    return floorTimeoutMs(cfg.commTimeoutMs, kMinCommTimeoutMs);
+  }
+
+  static unsigned long effectiveControlLoopTimeoutMs(const Config& cfg) {
+    return floorTimeoutMs(cfg.controlLoopTimeoutMs, kMinControlLoopTimeoutMs);
+  }
+
+  static unsigned long effectiveSensorTimeoutMs(const Config& cfg) {
+    return floorTimeoutMs(cfg.sensorTimeoutMs, kMinSensorTimeoutMs);
+  }
+
+  static unsigned long effectiveGpsWeakGraceMs(const Config& cfg) {
+    return floorTimeoutMs(cfg.gpsWeakGraceMs, kMinGpsWeakGraceMs);
+  }
+
   static Decision decision(SafeAction action, Reason reason) {
     Decision d;
     d.action = action;

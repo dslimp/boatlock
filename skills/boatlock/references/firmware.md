@@ -125,6 +125,8 @@
 - Keep GPS UART no-data/stale/restart policy in `RuntimeGpsUart`, not as loose flags in `main.cpp`.
 - Keep simulation result badge state in `RuntimeSimBadge`, not as loose latched strings in `main.cpp`.
 - Keep anchor supervisor config/input assembly in `RuntimeSupervisorPolicy`, not as inline `settings.get(...)` policy code in `loop()`.
+- Core failsafe modules must apply local fail-closed timeout floors instead of relying only on upstream settings clamps.
+- Input fields that represent current control activity must refresh the matching core deadline, or the field should be removed.
 - Keep `SIM_*` command parsing in `RuntimeSimCommand`, not mixed with side effects in `main.cpp`.
 - Keep `SIM_*` execution outcomes and report chunking in `RuntimeSimExecution`, not as mixed run/report policy inside `main.cpp`.
 - Keep `SIM_*` log line mapping in `RuntimeSimLog`, not as a switch full of formatted strings inside `main.cpp`.

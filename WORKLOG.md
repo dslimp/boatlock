@@ -1897,3 +1897,49 @@ Promote to skill:
 - Manual control activation must require an explicit non-NONE source.
 - Invalid manual packets must not refresh the deadman lease.
 - Manual deadman tests must cover timestamp zero and unsigned rollover.
+
+### 2026-04-24 Stage 65: Anchor supervisor fail-closed timeout floors
+
+Scope:
+- Continue module-by-module refactor with `AnchorSupervisor`.
+- Make the core failsafe arbiter fail closed even if a caller passes zero timeout values directly instead of using the runtime settings builder.
+
+External baseline:
+- ArduPilot Rover failsafes map link/GCS loss to explicit actions such as Hold and require operator action to retake manual control after recovery: <https://ardupilot.org/rover/docs/rover-failsafes.html>.
+- ArduPilot Rover geofence behavior treats boundary breach as a failsafe action trigger, not as an advisory state: <https://ardupilot.org/rover/docs/common-geofencing-landing-page.html>.
+- PX4 manual-control and data-link failsafes are timeout-based, and PX4 warns that old setpoints remain active until the timeout triggers, so the timeout must stay bounded: <https://docs.px4.io/main/en/config/safety.html>.
+
+Key outcomes:
+- Added core minimum floors for comm timeout, control-loop timeout, sensor timeout, and GPS-weak grace.
+- A zero timeout in `AnchorSupervisor::Config` no longer disables the corresponding failsafe.
+- `controlActivitySeen` in `AnchorSupervisor::Input` now refreshes the supervisor deadline directly, matching the field's contract.
+- Timeout comparisons now use a single unsigned elapsed-time helper.
+- Added native tests for zero-timeout floors, exact comm-deadline behavior, and input-side control activity refresh.
+
+Validation:
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native -f test_anchor_supervisor -f test_runtime_supervisor_policy -f test_runtime_motion -f test_ble_command_handler` -> `59/59` passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native` -> `225/225` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> `29/29` passed.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `git diff --check` -> clean.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio pio run -e esp32s3` -> success, flash size `695801` bytes.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter build apk --debug --no-pub` -> success.
+- `./tools/hw/nh02/status.sh` -> target ESP32-S3 `98:88:E0:03:BA:5C` visible and RFC2217 service active.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`; app image write `696160` bytes.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-supervisor-failsafe-60s.log --json-out /tmp/boatlock-supervisor-failsafe-60s.json` -> `PASS`, including EEPROM `ver=23`, RVC compass, display, BLE advertising, stepper, STOP, heading events, and GPS UART data.
+- Acceptance log scan found no panic/assert/Guru, Arduino `[E]`, `CONFIG_SAVE_FAILED`, `CONFIG_CRC_FAIL`, GPS UART stale/no-data warning, compass loss, compass retry failure, `Wire.cpp`, `i2cRead`, `error`, or `FAIL`.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> one MIUI `USER_RESTRICTED` install retry, canonical retry succeeded, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> one MIUI `USER_RESTRICTED` install retry, canonical retry succeeded, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+
+Self-review:
+- This deliberately removes "zero disables timeout" semantics from the supervisor core. That is consistent with the current pre-alpha/no-compatibility policy and with the product safety goal.
+- Runtime behavior through `buildRuntimeSupervisorConfig()` is effectively unchanged for normal settings because it already clamps to the same minimums.
+- Hardware acceptance proves boot/sensor/BLE health after the change. The exact failsafe-floor branches are native-tested, not injected on the live bench.
+
+Promote to skill:
+- Core failsafe modules must not rely only on upstream settings clamps; apply local fail-closed floors before timeout comparisons.
+- Input fields that claim to report current control activity must refresh the relevant deadline in the core module, or be removed.
