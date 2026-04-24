@@ -34,28 +34,33 @@ public:
 
     const bool sensorsOk = gpsFix && compassReady;
     if (!sensorsOk) {
-      if (sensorBadSinceMs_ == 0) {
+      if (!sensorBadSinceSeen_) {
+        sensorBadSinceSeen_ = true;
         sensorBadSinceMs_ = nowMs;
       } else if (!sensorTimeoutLatched_ && nowMs - sensorBadSinceMs_ >= SENSOR_TIMEOUT_MS) {
         ev.sensorTimeout = true;
         sensorTimeoutLatched_ = true;
       }
     } else {
+      sensorBadSinceSeen_ = false;
       sensorBadSinceMs_ = 0;
       sensorTimeoutLatched_ = false;
     }
 
-    const bool saturated = motorPwmPercent >= motorMaxPercent;
+    const bool saturated = motorMaxPercent > 0 && motorPwmPercent >= motorMaxPercent;
     if (saturated) {
-      if (satSinceMs_ == 0) {
+      if (!satSinceSeen_) {
+        satSinceSeen_ = true;
         satSinceMs_ = nowMs;
       } else if (nowMs - satSinceMs_ >= SATURATION_MIN_MS &&
-                 (lastSatEventMs_ == 0 ||
+                 (!lastSatEventSeen_ ||
                   nowMs - lastSatEventMs_ >= SATURATION_COOLDOWN_MS)) {
         ev.controlSaturated = true;
+        lastSatEventSeen_ = true;
         lastSatEventMs_ = nowMs;
       }
     } else {
+      satSinceSeen_ = false;
       satSinceMs_ = 0;
     }
 
@@ -64,16 +69,22 @@ public:
 
   void reset() {
     driftAlertLatched_ = false;
+    sensorBadSinceSeen_ = false;
     sensorBadSinceMs_ = 0;
     sensorTimeoutLatched_ = false;
+    satSinceSeen_ = false;
     satSinceMs_ = 0;
+    lastSatEventSeen_ = false;
     lastSatEventMs_ = 0;
   }
 
 private:
   bool driftAlertLatched_ = false;
+  bool sensorBadSinceSeen_ = false;
   unsigned long sensorBadSinceMs_ = 0;
   bool sensorTimeoutLatched_ = false;
+  bool satSinceSeen_ = false;
   unsigned long satSinceMs_ = 0;
+  bool lastSatEventSeen_ = false;
   unsigned long lastSatEventMs_ = 0;
 };

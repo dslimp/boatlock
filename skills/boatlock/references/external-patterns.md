@@ -121,6 +121,8 @@ Implication for BoatLock:
 - GNSS source transitions should reset stale hardware baselines rather than comparing a new hardware fix against old phone/no-fix state.
 - Serial/GNSS watchdogs should be non-blocking and based on elapsed-time checks; direct `now > then` comparisons are not rollover-safe.
 - Compass/RVC watchdogs follow the same rule: track event presence separately from timestamps, then calculate age with unsigned subtraction. A timestamp value of `0` is a valid sample time.
+- Diagnostics follow the same rule as watchdogs: never use timestamp `0` as "not started"; use explicit seen flags and unsigned elapsed-time math.
+- Saturation diagnostics should validate the configured actuator limit before comparing output against it.
 - Do not auto-enter manual control from failsafe. After a fault clears, operator control must be an explicit new action.
 - Treat non-finite sensor/control values like unavailable inputs at module boundaries, not as values to normalize later inside actuator code.
 - Treat physical button input as an unsafe raw signal. Debounce it before edges, and reserve state-changing actions such as anchor save or pairing for stable long-press paths.

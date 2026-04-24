@@ -2085,3 +2085,48 @@ Promote to skill:
 - BLE advertising should be kept/restarted while connected when future phone + remote discovery is required.
 - Do not clear active stream/notify state on a second central connect or on disconnect while another central remains connected.
 - Multi-central support in BLE transport does not replace explicit control-source arbitration in `ManualControl`.
+
+### 2026-04-24 Stage 69: Anchor diagnostics timer hardening
+
+Scope:
+- Continue module-by-module refactor with `AnchorDiagnostics`.
+- Keep diagnostics deterministic around boot-time timestamps and invalid actuator limits without changing the event API.
+
+External baseline:
+- ArduPilot Rover failsafes require a fault condition to persist for a timeout before action, and recovery does not silently restore the old mode: <https://ardupilot.org/rover/docs/rover-failsafes.html>.
+- ArduPilot onboard logs keep typed error/event subsystems instead of ambiguous free text only: <https://ardupilot.org/rover/docs/logmessages.html>.
+- PX4 safety guidance treats failsafe conditions as explicit vehicle-safety states with configured actions, not as convenience telemetry: <https://docs.px4.io/main/en/config/safety.html>.
+
+Key outcomes:
+- `AnchorDiagnostics` no longer uses timestamp `0` as a sentinel for sensor-bad or saturation timing.
+- Sensor timeout and control saturation now work correctly when the first bad sample is observed at `millis()==0`.
+- Saturation diagnostics ignore invalid non-positive motor limits instead of treating `0 >= 0` as saturated forever.
+- Added native coverage for zero-timestamp sensor timeout, zero-timestamp saturation, and invalid motor limit handling.
+
+Validation:
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native -f test_anchor_diagnostics -f test_anchor_supervisor -f test_runtime_motion -f test_motor_control` -> `41/41` passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native` -> `235/235` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> `29/29` passed.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `git diff --check` -> clean.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio pio run -e esp32s3` -> success, flash size `696185` bytes.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter build apk --debug --no-pub` -> success.
+- `./tools/hw/nh02/status.sh` -> target ESP32-S3 `98:88:E0:03:BA:5C` visible and RFC2217 service active.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`; app image write `696544` bytes.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-anchor-diagnostics-60s.log --json-out /tmp/boatlock-anchor-diagnostics-60s.json` -> `PASS`, including EEPROM `ver=23`, RVC compass, display, BLE advertising, stepper, STOP, GPS UART data, and heading events.
+- Acceptance log scan found no panic/assert/Guru, Arduino `[E]`, `CONFIG_SAVE_FAILED`, `CONFIG_CRC_FAIL`, GPS UART stale/no-data warning, compass loss, compass retry failure, `Wire.cpp`, `i2cRead`, `error`, or `FAIL`.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> one MIUI `USER_RESTRICTED` install retry, canonical retry succeeded, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> one MIUI `USER_RESTRICTED` install retry, canonical retry succeeded, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+
+Self-review:
+- This is diagnostic correctness; it does not change control output, failsafe action, BLE protocol, or UI.
+- The module now follows the same explicit-seen-flag pattern already used in compass/GNSS watchdogs.
+- Hardware acceptance proves no boot/runtime regressions and clean sensor/BLE startup. The exact zero-timestamp diagnostic branches are native-tested, not live-injected on the bench.
+
+Promote to skill:
+- Diagnostic timers must track event presence separately from timestamp values; `0` is a valid `millis()` sample.
+- Diagnostic saturation checks must reject invalid non-positive actuator limits before comparing output against the limit.
