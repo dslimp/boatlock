@@ -31,6 +31,10 @@ inline float bearingDeg(float fromX, float fromY, float toX, float toY) {
   return wrap360f(atan2f(dx, dy) * 57.2957795f);
 }
 
+inline unsigned long elapsedMs(unsigned long now, unsigned long since) {
+  return now - since;
+}
+
 enum class GnssReason : uint8_t {
   NONE = 0,
   NO_FIX,
@@ -154,13 +158,19 @@ public:
     anchorActive_ = false;
     safeStop_ = false;
     stopReason_ = StopReason::NONE;
+    goodGnssSinceSeen_ = false;
     goodGnssSinceMs_ = 0;
+    badGnssSinceSeen_ = false;
     badGnssSinceMs_ = 0;
+    sensorBadSinceSeen_ = false;
     sensorBadSinceMs_ = 0;
+    lastTickSeen_ = false;
     lastTickMs_ = 0;
     lastThrust_ = 0.0f;
+    lastThrustSeen_ = false;
     lastThrustMs_ = 0;
     thrustBias_ = 0.0f;
+    maxThrustSinceSeen_ = false;
     maxThrustSinceMs_ = 0;
     maxThrustEventSent_ = false;
     prevFixValid_ = false;
@@ -192,8 +202,8 @@ public:
   void step(float anchorX, float anchorY) {
     ControllerTelemetry t;
     const unsigned long now = clock_->now_ms();
-    const unsigned long dtMs =
-        (lastTickMs_ == 0 || now < lastTickMs_) ? 0 : (now - lastTickMs_);
+    const unsigned long dtMs = lastTickSeen_ ? elapsedMs(now, lastTickMs_) : 0;
+    lastTickSeen_ = true;
     lastTickMs_ = now;
 
     if (cfg_.controlLoopTimeoutMs > 0 && dtMs > cfg_.controlLoopTimeoutMs) {
@@ -210,15 +220,20 @@ public:
         hdg.valid && isfinite(hdg.headingDeg) && !isnan(hdg.headingDeg) &&
         hdg.ageMs <= cfg_.sensorTimeoutMs;
     if (!headingFinite) {
-      if (sensorBadSinceMs_ == 0) {
+      if (!sensorBadSinceSeen_) {
+        sensorBadSinceSeen_ = true;
         sensorBadSinceMs_ = now;
       }
-      if (cfg_.sensorTimeoutMs == 0 ||
-          now - sensorBadSinceMs_ >= cfg_.sensorTimeoutMs) {
+      if (!sensorTimeoutLatched_ &&
+          (cfg_.sensorTimeoutMs == 0 ||
+           elapsedMs(now, sensorBadSinceMs_) >= cfg_.sensorTimeoutMs)) {
         triggerSafeStop(now, StopReason::SENSOR_TIMEOUT, "SENSOR_TIMEOUT");
+        sensorTimeoutLatched_ = true;
       }
     } else {
+      sensorBadSinceSeen_ = false;
       sensorBadSinceMs_ = 0;
+      sensorTimeoutLatched_ = false;
     }
 
     if (hdg.valid && (!isfinite(hdg.headingDeg) || isnan(hdg.headingDeg))) {
@@ -233,20 +248,25 @@ public:
 
     if (!safeStop_ && anchorRequested_) {
       if (gnssGood) {
+        badGnssSinceSeen_ = false;
         badGnssSinceMs_ = 0;
-        if (goodGnssSinceMs_ == 0) {
+        if (!goodGnssSinceSeen_) {
+          goodGnssSinceSeen_ = true;
           goodGnssSinceMs_ = now;
         }
-        if (!anchorActive_ && now - goodGnssSinceMs_ >= cfg_.minGoodTimeToEnterMs) {
+        if (!anchorActive_ && elapsedMs(now, goodGnssSinceMs_) >= cfg_.minGoodTimeToEnterMs) {
           anchorActive_ = true;
           emitEvent(now, "ANCHOR_ACTIVE", "GNSS_QUALITY_OK");
         }
       } else {
+        goodGnssSinceSeen_ = false;
         goodGnssSinceMs_ = 0;
         if (anchorActive_) {
-          if (badGnssSinceMs_ == 0) {
+          if (!badGnssSinceSeen_) {
+            badGnssSinceSeen_ = true;
             badGnssSinceMs_ = now;
-          } else if (now - badGnssSinceMs_ >= cfg_.badTimeToExitMs) {
+          }
+          if (elapsedMs(now, badGnssSinceMs_) >= cfg_.badTimeToExitMs) {
             anchorActive_ = false;
             triggerSafeStop(now, StopReason::GPS_DATA_STALE, gnssReasonStr(gnssReason));
           }
@@ -279,8 +299,8 @@ public:
       float targetThrust = 0.0f;
 
       float dtSecBias = 0.0f;
-      if (lastThrustMs_ != 0 && now > lastThrustMs_) {
-        dtSecBias = (now - lastThrustMs_) / 1000.0f;
+      if (lastThrustSeen_) {
+        dtSecBias = elapsedMs(now, lastThrustMs_) / 1000.0f;
       }
       dtSecBias = clampf(dtSecBias, 0.0f, 0.25f);
       const float errAbove = std::max(0.0f, errM - cfg_.deadbandM);
@@ -308,10 +328,11 @@ public:
         targetThrust = thrustBias_ * 0.95f;
       }
 
-      if (lastThrustMs_ == 0) {
+      if (!lastThrustSeen_) {
+        lastThrustSeen_ = true;
         lastThrustMs_ = now;
       }
-      float dtSec = (now - lastThrustMs_) / 1000.0f;
+      float dtSec = elapsedMs(now, lastThrustMs_) / 1000.0f;
       if (!isfinite(dtSec) || dtSec < 0.0f) dtSec = 0.0f;
       if (dtSec > 1.0f) dtSec = 1.0f;
       lastThrustMs_ = now;
@@ -352,14 +373,17 @@ public:
       cmd.thrust = 0.0f;
       cmd.steerDeg = 0.0f;
       lastThrust_ = 0.0f;
+      lastThrustSeen_ = true;
       lastThrustMs_ = now;
     }
 
     if (!safeStop_ && cmd.thrust >= cfg_.maxThrust - 0.01f) {
-      if (maxThrustSinceMs_ == 0) {
+      if (!maxThrustSinceSeen_) {
+        maxThrustSinceSeen_ = true;
         maxThrustSinceMs_ = now;
-      } else if (!maxThrustEventSent_ &&
-                 now - maxThrustSinceMs_ >= cfg_.maxContinuousThrustTimeMs) {
+      }
+      if (!maxThrustEventSent_ &&
+          elapsedMs(now, maxThrustSinceMs_) >= cfg_.maxContinuousThrustTimeMs) {
         maxThrustEventSent_ = true;
         emitEvent(now, "MAX_CONTINUOUS_THRUST", "LIMIT");
       }
@@ -367,6 +391,7 @@ public:
         cmd.thrust = cfg_.maxThrust * 0.75f;
       }
     } else {
+      maxThrustSinceSeen_ = false;
       maxThrustSinceMs_ = 0;
     }
 
@@ -399,7 +424,7 @@ private:
     }
 
     const bool newFixSample = (fix.ageMs == 0);
-    if (newFixSample && prevFixValid_ && now > prevFixMs_) {
+    if (newFixSample && prevFixValid_ && elapsedMs(now, prevFixMs_) > 0) {
       const float jump = hypotf(fix.xM - prevFixX_, fix.yM - prevFixY_);
       if (jump > cfg_.maxPositionJumpM) {
         // Advance reference even on rejected sample to avoid endless jump storms
@@ -410,7 +435,7 @@ private:
         emitEvent(now, "POSITION_JUMP_DETECTED", "GPS_POSITION_JUMP");
         return GnssReason::POSITION_JUMP;
       }
-      const float dt = (now - prevFixMs_) / 1000.0f;
+      const float dt = elapsedMs(now, prevFixMs_) / 1000.0f;
       // Speed sanity from position deltas is too noisy on short GNSS periods
       // (e.g. 5 Hz with ~1 m sigma). Validate speed only on >=1s baseline.
       if (dt >= 1.0f) {
@@ -469,13 +494,20 @@ private:
   bool safeStop_ = false;
   StopReason stopReason_ = StopReason::NONE;
 
+  bool goodGnssSinceSeen_ = false;
   unsigned long goodGnssSinceMs_ = 0;
+  bool badGnssSinceSeen_ = false;
   unsigned long badGnssSinceMs_ = 0;
+  bool sensorBadSinceSeen_ = false;
   unsigned long sensorBadSinceMs_ = 0;
+  bool sensorTimeoutLatched_ = false;
+  bool lastTickSeen_ = false;
   unsigned long lastTickMs_ = 0;
   float lastThrust_ = 0.0f;
+  bool lastThrustSeen_ = false;
   unsigned long lastThrustMs_ = 0;
   float thrustBias_ = 0.0f;
+  bool maxThrustSinceSeen_ = false;
   unsigned long maxThrustSinceMs_ = 0;
   bool maxThrustEventSent_ = false;
 

@@ -2130,3 +2130,49 @@ Self-review:
 Promote to skill:
 - Diagnostic timers must track event presence separately from timestamp values; `0` is a valid `millis()` sample.
 - Diagnostic saturation checks must reject invalid non-positive actuator limits before comparing output against the limit.
+
+### 2026-04-24 Stage 70: Anchor control loop timer hardening
+
+Scope:
+- Continue module-by-module refactor with `AnchorControlLoop`.
+- Keep the HIL/simulation controller deterministic around boot-time timestamps without changing the public controller API.
+- Keep simulation in `main` as mandatory regression infrastructure, not as extra product scope.
+
+External baseline:
+- ArduPilot Rover failsafes map persistent fault conditions to explicit safe actions: <https://ardupilot.org/rover/docs/rover-failsafes.html>.
+- ArduPilot log messages keep typed error/event records so failures are inspectable after the fact: <https://ardupilot.org/rover/docs/logmessages.html>.
+- PX4 safety guidance treats failsafe conditions as explicit safety states/actions rather than permissive runtime convenience: <https://docs.px4.io/main/en/config/safety.html>.
+
+Key outcomes:
+- `AnchorControlLoop` no longer treats timestamp `0` as "timer not started".
+- Added explicit seen flags for GNSS good/bad windows, sensor timeout, control-loop tick timing, thrust ramp timing, and max continuous thrust timing.
+- GNSS jump/speed baseline timing now uses unsigned elapsed-time math.
+- Added dedicated native coverage for zero-timestamp entry, sensor timeout, control-loop timeout, and bad-GNSS exit.
+
+Validation:
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native -f test_anchor_control_loop -f test_hil_sim -f test_runtime_motion -f test_anchor_supervisor` -> `39/39` passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native` -> `239/239` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> `29/29` passed.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `git diff --check` -> clean.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio pio run -e esp32s3` -> success, flash size `696273` bytes.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter build apk --debug --no-pub` -> success.
+- `./tools/hw/nh02/status.sh` -> target ESP32-S3 `98:88:E0:03:BA:5C` visible and RFC2217 service active.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`; app image write `696640` bytes.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-anchor-control-loop-60s.log --json-out /tmp/boatlock-anchor-control-loop-60s.json` -> `PASS`, including EEPROM `ver=23`, RVC compass, display, BLE advertising, stepper, STOP, compass heading events, and GPS UART data.
+- Acceptance log scan found no panic/assert/Guru, Arduino `[E]`, `CONFIG_SAVE_FAILED`, `CONFIG_CRC_FAIL`, GPS UART stale/no-data warning, compass loss, compass retry failure, `Wire.cpp`, `i2cRead`, `error`, or `FAIL`.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+
+Self-review:
+- This is internal timing correctness for HIL/simulation, not a product command-surface expansion.
+- Scenario tests still pass, but direct native tests now cover timer boundary branches that scenario-level tests can miss.
+- Hardware acceptance proves production boot/sensor/BLE health after the change; injected HIL failure branches are native/offline-tested rather than live-injected on the bench.
+
+Promote to skill:
+- HIL/control-loop timers must use explicit seen flags and unsigned elapsed-time math; timestamp `0` is a valid sample.
+- HIL core modules need direct unit tests for boundary timing behavior; scenario-level tests alone are not enough.

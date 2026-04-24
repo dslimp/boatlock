@@ -143,6 +143,8 @@
 - Runtime sensor watchdog timers must use unsigned elapsed-time math so `millis()` rollover does not disable stale/no-data detection.
 - Diagnostic timers must track event presence separately from timestamp values; `0` is a valid `millis()` sample.
 - Diagnostic saturation checks must reject invalid non-positive actuator limits before comparing output against the limit.
+- HIL/control-loop timers follow the same explicit-seen-flag rule; timestamp `0` is valid for GNSS quality windows, control-loop deadlines, sensor timers, and thrust timing.
+- HIL core modules need direct unit tests for boundary timing behavior; scenario-level tests alone are not enough.
 - `HoldHeading=1` makes bearing equal stored anchor heading.
 - Otherwise bearing is computed from GNSS course to anchor.
 - Firmware caches anchor bearing for `120000 ms` so auto mode can keep a bearing when GNSS drops briefly.
