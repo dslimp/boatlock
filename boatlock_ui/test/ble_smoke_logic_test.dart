@@ -84,6 +84,16 @@ void main() {
     );
   });
 
+  test('anchor smoke identifies denied log and safe mode', () {
+    expect(
+      smokeAnchorDeniedLogSeen('[EVENT] ANCHOR_DENIED reason=NO_GPS'),
+      isTrue,
+    );
+    expect(smokeAnchorDeniedLogSeen('[BLE] ANCHOR_ON accepted'), isFalse);
+    expect(smokeAnchorRejectedSafely(_data(mode: 'IDLE')), isTrue);
+    expect(smokeAnchorRejectedSafely(_data(mode: 'ANCHOR')), isFalse);
+  });
+
   test('encodeSmokeResultLine serializes expected payload', () {
     final line = encodeSmokeResultLine(
       buildSmokeResultPayload(

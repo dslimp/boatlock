@@ -30,6 +30,10 @@ while [[ $# -gt 0 ]]; do
       SMOKE_MODE="sim"
       shift
       ;;
+    --anchor)
+      SMOKE_MODE="anchor"
+      shift
+      ;;
     --no-build)
       BUILD_FIRST=0
       shift

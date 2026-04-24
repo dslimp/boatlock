@@ -43,6 +43,7 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
    - use `tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` after manual BLE protocol changes; this sends zero-throttle `MANUAL_SET`, verifies `MANUAL`, sends `MANUAL_OFF`, and verifies mode exit
    - use `tools/hw/nh02/android-run-smoke.sh --status --wait-secs 130` after phone-visible status/severity changes; this sends `STOP`, verifies `ALERT/STOP_CMD`, then clears through zero-throttle manual roundtrip
    - use `tools/hw/nh02/android-run-smoke.sh --sim --wait-secs 130` after `SIM_*` BLE/HIL changes; this starts realtime `S0`, verifies `SIM` mode, sends `SIM_ABORT`, then clears the safe hold through zero-throttle manual recovery
+   - use `tools/hw/nh02/android-run-smoke.sh --anchor --wait-secs 130` after phone-visible anchor command, safety gate, or anchor telemetry changes; this sends `ANCHOR_ON`, verifies the bench-side safety denial, sends `ANCHOR_OFF`, and verifies the device did not enter `ANCHOR`
    - use `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` when reconnect behavior is the acceptance target
    - use `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` when ESP32 reboot recovery is the acceptance target
    - do not use `--no-install` as acceptance unless the user explicitly waives exact APK installation proof for that run
@@ -77,6 +78,7 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
 - Manual Android smoke proves exact APK install, BLE scan/connect/telemetry, zero-throttle `MANUAL_SET`, observed `MANUAL` mode, `MANUAL_OFF`, and observed mode exit. It is not a powered thrust test.
 - Status Android smoke proves exact APK install, BLE scan/connect/telemetry, safe `STOP` command delivery, observed `ALERT/STOP_CMD`, and alert recovery through zero-throttle manual roundtrip. It is not a powered thrust test.
 - SIM Android smoke proves exact APK install, BLE scan/connect/telemetry, `SIM_RUN:S0_hold_still_good,1`, observed `SIM` mode, `SIM_ABORT`, observed mode exit, and alert recovery through zero-throttle manual roundtrip. It is not a powered thrust test.
+- Anchor Android smoke proves exact APK install, BLE scan/connect/telemetry, `ANCHOR_ON` delivery, observed `[EVENT] ANCHOR_DENIED` from the bench safety gate, `ANCHOR_OFF` cleanup, and no transition into `ANCHOR`. It is not a real anchor-hold quality test.
 - Reconnect Android smoke proves exact APK install, first telemetry, host-triggered Bluetooth outage, and telemetry recovery without app restart.
 - ESP reset Android smoke proves exact APK install, first telemetry, ESP32 reset through the tracked reset helper, and telemetry recovery without app restart.
 - Android smoke does not prove auth behavior.
@@ -103,6 +105,7 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
   - `tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --status --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --sim --wait-secs 130`
+  - `tools/hw/nh02/android-run-smoke.sh --anchor --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --no-install`

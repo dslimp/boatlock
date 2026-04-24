@@ -26,7 +26,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "${SMOKE_MODE}" in
-  basic|reconnect|manual|status|sim) ;;
+  basic|reconnect|manual|status|sim|anchor) ;;
   *)
     echo "unsupported smoke mode: ${SMOKE_MODE}" >&2
     exit 1

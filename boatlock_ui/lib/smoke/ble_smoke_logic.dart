@@ -28,6 +28,14 @@ bool smokeStatusRecoveredAfterStop(BoatData data) {
   return data.mode != 'MANUAL' && data.status != 'ALERT';
 }
 
+bool smokeAnchorDeniedLogSeen(String? line) {
+  return line != null && line.contains('[EVENT] ANCHOR_DENIED');
+}
+
+bool smokeAnchorRejectedSafely(BoatData data) {
+  return data.mode != 'ANCHOR';
+}
+
 Map<String, dynamic> buildSmokeResultPayload({
   required bool pass,
   required String reason,

@@ -2721,3 +2721,31 @@ Self-review:
 
 Promote to skill:
 - No skill change yet; this is a task-specific research artifact until the data is normalized into simulator/HIL inputs.
+
+### 2026-04-25 Stage 85: Android smoke coverage audit and anchor safety smoke
+
+Scope:
+- Audit recent module refactors for missed Android phone smokes.
+- Close the gap for phone-visible anchor command behavior without changing firmware or widening the product command surface.
+
+Key outcomes:
+- Found that earlier anchor persistence/BLE-visible anchor work had batch Android smokes, but no targeted phone smoke for anchor command delivery and safety-gate denial.
+- Added Android smoke mode `anchor`.
+- `anchor` smoke sends `ANCHOR_ON`, waits for `[EVENT] ANCHOR_DENIED`, sends `ANCHOR_OFF`, and verifies the device did not enter `ANCHOR`.
+- Added local smoke-logic tests for anchor denied log detection and safe mode check.
+- Updated `tools/android/*`, `tools/hw/nh02/android-run-smoke.sh`, and the hardware acceptance skill so future anchor-command/safety-gate changes have a canonical phone smoke path.
+
+Validation:
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub test/ble_smoke_logic_test.dart` -> passed (`5/5`).
+- `./tools/android/build-smoke-apk.sh --mode anchor` -> sandbox Gradle run failed with `java.net.SocketException: Operation not permitted`; reran host-side and built `app-debug.apk` successfully.
+- `./tools/hw/nh02/android-run-smoke.sh --anchor --no-build --wait-secs 130` -> exact APK install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"anchor_denied_roundtrip","dataEvents":4,"deviceLogEvents":2,"mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[EVENT] ANCHOR_OFF reason=BLE_CMD"}`.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> full suite passed (`32/32`).
+- `git diff --check` -> clean.
+
+Self-review:
+- This is a missing acceptance path fix, not a behavior change.
+- The smoke deliberately proves denial on the bench safety gate and cleanup, not real on-water hold quality.
+- It still does not cover `SET_ANCHOR` persistence over Android because sending that command would mutate saved anchor state; that should be a separate controlled smoke only if we add explicit setup/restore semantics.
+
+Promote to skill:
+- Added the durable `--anchor` smoke rule to `skills/boatlock-hardware-acceptance/SKILL.md`.

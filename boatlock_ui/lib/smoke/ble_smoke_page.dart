@@ -8,7 +8,7 @@ import '../ble/ble_boatlock.dart';
 import '../models/boat_data.dart';
 import 'ble_smoke_logic.dart';
 
-enum BleSmokeMode { basic, reconnect, manual, status, sim }
+enum BleSmokeMode { basic, reconnect, manual, status, sim, anchor }
 
 class BleSmokePage extends StatefulWidget {
   const BleSmokePage({super.key, this.mode = BleSmokeMode.basic});
@@ -53,6 +53,9 @@ class _BleSmokePageState extends State<BleSmokePage> {
   bool _simManualSetSent = false;
   bool _simManualModeSeen = false;
   bool _simManualOffSent = false;
+  bool _anchorOnSent = false;
+  bool _anchorDeniedSeen = false;
+  bool _anchorOffSent = false;
 
   @override
   void initState() {
@@ -110,6 +113,10 @@ class _BleSmokePageState extends State<BleSmokePage> {
       }
       if (widget.mode == BleSmokeMode.sim) {
         _handleSimSmokeData(data);
+        return;
+      }
+      if (widget.mode == BleSmokeMode.anchor) {
+        _handleAnchorSmokeData(data);
         return;
       }
       if (!_firstTelemetrySeen) {
@@ -283,6 +290,40 @@ class _BleSmokePageState extends State<BleSmokePage> {
     _finish(true, 'sim_run_abort_roundtrip');
   }
 
+  void _handleAnchorSmokeData(BoatData data) {
+    if (!_anchorOnSent) {
+      _anchorOnSent = true;
+      _appendEvent(encodeSmokeStageLine('anchor_on_denied_probe'));
+      _sendAnchorOn();
+      if (mounted) {
+        setState(() {
+          _phase = 'anchor';
+          _detail = 'waiting_for_anchor_denied';
+        });
+      }
+      return;
+    }
+    if (!_anchorDeniedSeen) {
+      return;
+    }
+    if (!_anchorOffSent) {
+      _anchorOffSent = true;
+      _appendEvent(encodeSmokeStageLine('anchor_off_cleanup'));
+      _sendAnchorOff();
+      if (mounted) {
+        setState(() {
+          _phase = 'anchor';
+          _detail = 'waiting_for_safe_idle';
+        });
+      }
+      return;
+    }
+    if (!smokeAnchorRejectedSafely(data)) {
+      return;
+    }
+    _finish(true, 'anchor_denied_roundtrip');
+  }
+
   Future<void> _sendManualSet() async {
     final ok = await _ble.sendManualControl(
       steer: 0,
@@ -370,6 +411,23 @@ class _BleSmokePageState extends State<BleSmokePage> {
     }
   }
 
+  Future<void> _sendAnchorOn() async {
+    final ok = await _ble.sendCustomCommand('ANCHOR_ON');
+    _appendEvent('anchor_on ok=$ok');
+    if (!ok) {
+      _finish(false, 'anchor_on_failed');
+    }
+  }
+
+  Future<void> _sendAnchorOff() async {
+    final ok = await _ble.sendCustomCommand('ANCHOR_OFF');
+    _appendEvent('anchor_off ok=$ok');
+    if (!ok) {
+      _anchorOffSent = false;
+      _finish(false, 'anchor_off_failed');
+    }
+  }
+
   void _checkReconnectGap() {
     if (_completed || widget.mode != BleSmokeMode.reconnect) return;
     if (!_firstTelemetrySeen || _reconnectGapSeen || _lastDataAt == null) {
@@ -391,6 +449,11 @@ class _BleSmokePageState extends State<BleSmokePage> {
     _deviceLogEvents += 1;
     _lastDeviceLog = line.trim();
     _appendEvent('device_log ${_lastDeviceLog!}');
+    if (widget.mode == BleSmokeMode.anchor &&
+        smokeAnchorDeniedLogSeen(_lastDeviceLog)) {
+      _anchorDeniedSeen = true;
+      _appendEvent(encodeSmokeStageLine('anchor_denied_seen'));
+    }
   }
 
   void _finish(bool pass, String reason) {
