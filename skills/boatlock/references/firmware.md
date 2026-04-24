@@ -56,9 +56,10 @@
   - format version
   - raw float value array
   - CRC32 over the values array
-- Current schema version is `Settings::VERSION = 0x15`.
-- `Settings::set()` clamps values to each key's configured range.
+- Current schema version is `Settings::VERSION = 0x16`.
+- `Settings::set()` rejects non-finite values, then clamps finite values to each key's configured range.
 - `Settings::setStrict()` rejects non-finite or out-of-range values and logs `CONFIG_REJECTED`.
+- `Settings::save()` is dirty-state guarded. Calling it after no-op `set()` calls must not write flash.
 - `Settings::load()` may write back on boot if:
   - stored version mismatches
   - CRC mismatches

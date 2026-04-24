@@ -123,9 +123,13 @@ public:
     bool set(const char* key, float value) {
         int idx = idxByKey(key);
         if (idx >= 0) {
+            if (!isfinite(value)) {
+                logMessage("[EVENT] CONFIG_REJECTED key=%s raw=%.5f\n", key, value);
+                return false;
+            }
             if (value < entries[idx].minValue) value = entries[idx].minValue;
             if (value > entries[idx].maxValue) value = entries[idx].maxValue;
-            entries[idx].value = value;
+            assignValue(idx, value);
             return true;
         }
         return false;
@@ -145,18 +149,22 @@ public:
         } else if (entries[idx].type == TYPE_BOOL) {
             value = value >= 0.5f ? 1.0f : 0.0f;
         }
-        entries[idx].value = value;
+        assignValue(idx, value);
         return true;
     }
 
     void reset() {
         for (int i = 0; i < count; i++)
             entries[i] = defaultEntries[i];
+        dirty_ = true;
         save();
         buildKeyMap();
     }
 
     void save() {
+        if (!dirty_) {
+            return;
+        }
         EEPROM.put(EEPROM_ADDR, VERSION);
         float values[count];
         for (int i = 0; i < count; i++)
@@ -168,6 +176,7 @@ public:
         logMessage("[EEPROM] settings saved ver=%d crc=0x%08lX\n",
                    VERSION,
                    static_cast<unsigned long>(crc));
+        dirty_ = false;
     }
 
     void load() {
@@ -208,7 +217,10 @@ public:
         }
 
         if (shouldSave) {
+            dirty_ = true;
             save();
+        } else {
+            dirty_ = false;
         }
 
         logMessage("[EEPROM] settings loaded (ver=%d)\n", v);
@@ -217,6 +229,16 @@ public:
     }
 
 private:
+    bool dirty_ = true;
+
+    void assignValue(int idx, float value) {
+        if (entries[idx].value == value) {
+            return;
+        }
+        entries[idx].value = value;
+        dirty_ = true;
+    }
+
     static uint32_t calcCrc32(const uint8_t* data, size_t len) {
         uint32_t crc = 0xFFFFFFFFu;
         for (size_t i = 0; i < len; ++i) {

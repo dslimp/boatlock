@@ -14,6 +14,13 @@ On boot:
 - if CRC mismatches, defaults are loaded and persisted
 - any loaded value outside allowed range is normalized and logged as `CONFIG_REJECTED`
 
+Write policy:
+
+- runtime `save()` writes EEPROM only when settings are dirty
+- setting a value equal to the current normalized value does not create a flash commit
+- non-finite runtime values are rejected instead of being persisted
+- migration, CRC recovery, and boot-time normalization still force a commit
+
 ## Groups
 
 ### GNSS quality gate

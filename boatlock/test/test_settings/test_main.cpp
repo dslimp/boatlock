@@ -20,6 +20,28 @@ static uint32_t crc32(const uint8_t* data, size_t len) {
   return ~crc;
 }
 
+static int defaultIdxByKey(const char* key) {
+  for (int i = 0; i < count; ++i) {
+    if (std::strcmp(defaultEntries[i].key, key) == 0) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static void fillDefaultValues(float values[count]) {
+  for (int i = 0; i < count; ++i) {
+    values[i] = defaultEntries[i].defaultValue;
+  }
+}
+
+static void storeValidValues(const float values[count]) {
+  EEPROM.put(Settings::EEPROM_ADDR, Settings::VERSION);
+  std::memcpy(EEPROM.data + Settings::VALUES_ADDR, values, Settings::VALUES_BYTES);
+  const uint32_t crc = crc32(reinterpret_cast<const uint8_t*>(values), Settings::VALUES_BYTES);
+  EEPROM.put(Settings::CRC_ADDR, crc);
+}
+
 void test_get_set() {
   Settings s;
   s.reset();
@@ -40,6 +62,52 @@ void test_save_load() {
   s.set("Kp", 10.0f);
   s.load();
   TEST_ASSERT_EQUAL_FLOAT(40.0f, s.get("Kp"));
+}
+
+void test_save_skips_clean_state() {
+  EEPROM.clear();
+  Settings s;
+  s.reset();
+  const int resetCommits = EEPROM.commitCount;
+
+  s.save();
+  TEST_ASSERT_EQUAL_INT(resetCommits, EEPROM.commitCount);
+
+  TEST_ASSERT_TRUE(s.set("Kp", s.get("Kp")));
+  s.save();
+  TEST_ASSERT_EQUAL_INT(resetCommits, EEPROM.commitCount);
+
+  TEST_ASSERT_TRUE(s.set("Kp", 41.0f));
+  s.save();
+  TEST_ASSERT_EQUAL_INT(resetCommits + 1, EEPROM.commitCount);
+}
+
+void test_load_valid_image_stays_clean() {
+  EEPROM.clear();
+  float values[count];
+  fillDefaultValues(values);
+  values[defaultIdxByKey("Kp")] = 33.0f;
+  storeValidValues(values);
+
+  Settings s;
+  s.load();
+  TEST_ASSERT_EQUAL_INT(0, EEPROM.commitCount);
+  TEST_ASSERT_EQUAL_FLOAT(33.0f, s.get("Kp"));
+
+  s.save();
+  TEST_ASSERT_EQUAL_INT(0, EEPROM.commitCount);
+}
+
+void test_set_rejects_nonfinite_without_dirtying() {
+  EEPROM.clear();
+  Settings s;
+  s.reset();
+  EEPROM.commitCount = 0;
+
+  TEST_ASSERT_FALSE(s.set("Kp", NAN));
+  TEST_ASSERT_EQUAL_FLOAT(20.0f, s.get("Kp"));
+  s.save();
+  TEST_ASSERT_EQUAL_INT(0, EEPROM.commitCount);
 }
 
 void test_set_strict_rejects_out_of_range() {
@@ -105,9 +173,7 @@ void test_load_sanitizes_nan_and_out_of_range_values() {
   s.reset();
 
   float values[count];
-  for (int i = 0; i < count; ++i) {
-    values[i] = defaultEntries[i].defaultValue;
-  }
+  fillDefaultValues(values);
 
   values[s.idxByKey("MaxHdop")] = NAN;
   values[s.idxByKey("AnchorProf")] = 9.0f;
@@ -118,7 +184,9 @@ void test_load_sanitizes_nan_and_out_of_range_values() {
   const uint32_t crc = crc32(reinterpret_cast<const uint8_t*>(values), Settings::VALUES_BYTES);
   EEPROM.put(Settings::CRC_ADDR, crc);
 
+  EEPROM.commitCount = 0;
   s.load();
+  TEST_ASSERT_EQUAL_INT(1, EEPROM.commitCount);
   TEST_ASSERT_EQUAL_FLOAT(1.8f, s.get("MaxHdop"));
   TEST_ASSERT_EQUAL_FLOAT(1.0f, s.get("AnchorProf"));
   TEST_ASSERT_EQUAL_FLOAT(8.0f, s.get("MinSats"));
@@ -132,9 +200,7 @@ void test_comm_timeout_floor_is_safe() {
   TEST_ASSERT_EQUAL_FLOAT(4000.0f, s.get("CommToutMs"));
 
   float values[count];
-  for (int i = 0; i < count; ++i) {
-    values[i] = defaultEntries[i].defaultValue;
-  }
+  fillDefaultValues(values);
   values[s.idxByKey("CommToutMs")] = 1200.0f;
 
   EEPROM.put(Settings::EEPROM_ADDR, Settings::VERSION);
@@ -150,6 +216,9 @@ int main(int argc, char **argv) {
   UNITY_BEGIN();
   RUN_TEST(test_get_set);
   RUN_TEST(test_save_load);
+  RUN_TEST(test_save_skips_clean_state);
+  RUN_TEST(test_load_valid_image_stays_clean);
+  RUN_TEST(test_set_rejects_nonfinite_without_dirtying);
   RUN_TEST(test_set_strict_rejects_out_of_range);
   RUN_TEST(test_crc_mismatch_restores_defaults);
   RUN_TEST(test_anchor_profile_setting_bounds);

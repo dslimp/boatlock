@@ -144,6 +144,18 @@ Implication for BoatLock:
 - A basic quiet-safe mode must always be available.
 - Any future advanced behavior should degrade toward simpler, safer states instead of staying half-active.
 
+## What ESP32 Storage Guidance Gets Right
+
+- Arduino-ESP32 documents `Preferences`/NVS as the ESP32 replacement for the Arduino EEPROM library for retained small values.
+- ESP-IDF NVS is append-oriented and includes flash wear levelling, but changes are only guaranteed persistent after an explicit commit.
+- Espressif's NVS FAQ treats flash writes as bounded-lifetime operations and notes that flash writes have runtime constraints.
+
+Implication for BoatLock:
+- Avoid write amplification in settings paths even when the backend has wear levelling.
+- A settings save with no semantic change should be a no-op.
+- Boot migration, CRC recovery, and value normalization are the only expected boot-time settings writes.
+- Non-finite config values must fail closed before reaching persisted storage.
+
 ## Best-Practice Decisions For BoatLock
 
 These are the durable takeaways that should influence future changes:
@@ -160,6 +172,7 @@ These are the durable takeaways that should influence future changes:
 8. Record and expose track history around anchor events.
 9. Use multi-level notifications and more than one alarm path.
 10. Surface real-world GNSS and calibration limitations in UX and docs.
+11. Persist settings only on actual state changes; no-op saves should not commit flash.
 
 ## Explicit Non-Goals
 

@@ -1354,3 +1354,47 @@ Self-review:
 
 Promote to skill:
 - Phone manual control should remain press-and-hold/deadman UI. Do not add one-tap latched manual actuation to the main map.
+
+### 2026-04-24 Stage 53: Settings EEPROM write-policy pass
+
+Scope:
+- Continue module-by-module refactor with `Settings` and EEPROM persistence.
+- Reduce flash write amplification without changing the stored schema or widening runtime behavior.
+
+External baseline:
+- Arduino-ESP32 documents `Preferences`/NVS as the ESP32 replacement for Arduino EEPROM and recommends it for retained small values: <https://docs.espressif.com/projects/arduino-esp32/en/latest/tutorials/preferences.html>.
+- ESP-IDF NVS is append-oriented, includes flash wear levelling, and requires explicit commit for guaranteed persistence: <https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/storage/nvs_flash.html>.
+- Espressif FAQ says NVS has internal wear levelling and is designed to resist accidental power loss, but flash writes remain a bounded-lifetime/runtime-constrained operation: <https://docs.espressif.com/projects/esp-faq/en/latest/software-framework/storage/nvs.html>.
+
+Key outcomes:
+- Kept the storage schema unchanged at `Settings::VERSION = 0x16`; no EEPROM/NVS migration in this slice.
+- Added dirty-state guarding to `Settings::save()`, so no-op `set()` calls and clean post-load state do not commit flash.
+- Kept forced persistence for version migration, CRC recovery, and boot-time value normalization.
+- Made `Settings::set()` reject non-finite runtime values instead of allowing NaN to enter RAM and later EEPROM.
+- Extended native EEPROM mock with `commitCount` and reset support so tests can prove write policy, not only values.
+- Updated config docs and repo skill references with the new write-policy invariant.
+
+Validation:
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native -f test_settings -f test_ble_command_handler -f test_runtime_motion -f test_motor_control` -> `59/59` passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native` -> `192/192` passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio pio run -e esp32s3` -> success, flash size `695257` bytes.
+- `python3 tools/ci/check_config_schema_version.py` -> `config schema version OK: 0x16`.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `git diff --check` -> clean.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-settings-dirty-60s.log --json-out /tmp/boatlock-settings-dirty-60s.json` -> `PASS`, including RVC compass, display, EEPROM `ver=22`, BLE advertising, stepper, STOP, GPS UART, and heading events.
+- Acceptance log check found `[EEPROM] settings loaded (ver=22)` and no `[EEPROM] settings saved`, proving clean boot did not rewrite settings.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 100` -> exact APK install `Success`, `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact APK install `Success`, `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact APK install `Success`, `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip",...}`.
+
+Self-review:
+- This is intentionally not a Preferences/NVS migration. The safe cut is to remove unnecessary commits first while preserving the known CRC/versioned image.
+- Dirty guarding depends on every write path using `Settings::set()` or `setStrict()` before `save()`. Current audited call sites do that.
+- The next deeper storage pass should consider moving settings and security records to typed NVS namespaces, but only as a separate migration with rollback/acceptance planning.
+
+Promote to skill:
+- Settings persistence should be dirty-state guarded. No-op saves must not commit flash.
+- Non-finite settings values should fail closed before they reach persisted storage.
