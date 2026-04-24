@@ -3,12 +3,6 @@
 #include <algorithm>
 #include <cstring>
 
-namespace {
-bool startsWith(const std::string& text, const char* prefix) {
-    return text.rfind(prefix, 0) == 0;
-}
-} // namespace
-
 // --- Server callbacks ---
 class BLEBoatLock::ServerCallbacks : public NimBLEServerCallbacks {
     BLEBoatLock* parent;
@@ -17,8 +11,10 @@ public:
     void onConnect(NimBLEServer* server, NimBLEConnInfo& connInfo) override {
         if (parent) {
             parent->bleStatus = CONNECTED;
+            parent->clearQueuedData();
             parent->dataNotifyEnabled = false;
             parent->logNotifyEnabled = false;
+            parent->streamEnabled = false;
             parent->lastDataNotifyMs = 0;
             parent->lastLogNotifyMs = 0;
             parent->lastConnParamReqMs = 0;
@@ -52,8 +48,10 @@ public:
     void onDisconnect(NimBLEServer*, NimBLEConnInfo& connInfo, int reason) override {
         if (parent) {
             parent->bleStatus = ADVERTISING;
+            parent->clearQueuedData();
             parent->dataNotifyEnabled = false;
             parent->logNotifyEnabled = false;
+            parent->streamEnabled = false;
             parent->lastConnParamReqMs = 0;
             parent->connEstablishedMs = 0;
         }
@@ -70,9 +68,9 @@ class BLEBoatLock::CmdCallbacks : public NimBLECharacteristicCallbacks {
 public:
     CmdCallbacks(BLEBoatLock* p) : parent(p) {}
     void onWrite(NimBLECharacteristic* pCharacteristic, NimBLEConnInfo&) override {
-        std::string param = pCharacteristic->getValue();
-        logMessage("[BLE] Param request: %s\n", param.c_str());
-        if (parent) parent->handleParamRequest(param);
+        std::string command = pCharacteristic->getValue();
+        logMessage("[BLE] Control point: %s\n", command.c_str());
+        if (parent) parent->handleControlPoint(command);
     }
 };
 
@@ -108,13 +106,13 @@ void BLEBoatLock::begin() {
     pServer->setCallbacks(new ServerCallbacks(this));
     pService = pServer->createService("12ab");
 
-    // Data char: отправка значений/JSON
+    // Live state characteristic: compact binary telemetry frames.
     pDataChar = pService->createCharacteristic(
         "34cd", NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::READ
     );
     pDataChar->setCallbacks(new NotifyCallbacks(this, false));
 
-    // Command char: получение запроса на параметр
+    // Control point: stream control and runtime commands.
     pCmdChar = pService->createCharacteristic(
         "56ef", NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR
     );
@@ -150,15 +148,16 @@ void BLEBoatLock::begin() {
             logMessage("[BLE] log queue create failed\n");
         }
     }
-
-    // Регистрируем базовые параметры (можно добавить свои!)
-    registerParam("distance", [this]() { char buf[16]; snprintf(buf, sizeof(buf), "%.2f", distance); return std::string(buf); });
-    registerParam("battery", [this]() { return std::to_string(battery); });
-    registerParam("status", [this]() { return status; });
+    if (!dataQueue) {
+        dataQueue = xQueueCreate(kDataQueueLen, sizeof(DataPacket));
+        if (!dataQueue) {
+            logMessage("[BLE] data queue create failed\n");
+        }
+    }
 }
 
-void BLEBoatLock::registerParam(const std::string& name, ParamGetter getter) {
-    paramMap[name] = getter;
+void BLEBoatLock::setTelemetryProvider(TelemetryProvider provider) {
+    telemetryProvider = provider;
 }
 
 void BLEBoatLock::setCommandHandler(CommandHandler handler) {
@@ -167,33 +166,34 @@ void BLEBoatLock::setCommandHandler(CommandHandler handler) {
 
 void BLEBoatLock::loop() {
     processQueuedCommands();
+    processQueuedData();
     maintainConnParams();
     processQueuedLogs();
 }
 
-void BLEBoatLock::handleParamRequest(const std::string& param) {
-    // Если пришёл специальный запрос "all" — отправляем все параметры JSON-ом
-    if (param == "all") {
-        std::string all = collectAllParams();
-        notifyDataValue(all);
+void BLEBoatLock::handleControlPoint(const std::string& command) {
+    if (command == "STREAM_START") {
+        streamEnabled = true;
+        clearQueuedData();
+        enqueueLiveFrame();
+        logMessage("[BLE] stream start\n");
         return;
     }
 
-    // Если в paramMap есть такой параметр — отдаём его значение
-    auto it = paramMap.find(param);
-    if (it != paramMap.end()) {
-        notifyDataValue(it->second());
+    if (command == "STREAM_STOP") {
+        streamEnabled = false;
+        clearQueuedData();
+        logMessage("[BLE] stream stop\n");
         return;
     }
 
-    if (likelyCommand(param)) {
-        // Handle SET_*/SIM_*/control commands from the main loop context.
-        enqueueCommand(param);
+    if (command == "SNAPSHOT") {
+        clearQueuedData();
+        enqueueLiveFrame();
         return;
     }
 
-    // Unknown read-like request.
-    notifyDataValue("N/A");
+    enqueueCommand(command);
 }
 
 void BLEBoatLock::enqueueCommand(const std::string& cmd) {
@@ -220,6 +220,66 @@ void BLEBoatLock::processQueuedCommands() {
     while (xQueueReceive(cmdQueue, payload, 0) == pdTRUE) {
         payload[kCmdMaxLen - 1] = '\0';
         cmdHandler(std::string(payload));
+    }
+}
+
+void BLEBoatLock::clearQueuedData() {
+    if (!dataQueue) {
+        return;
+    }
+
+    DataPacket payload;
+    while (xQueueReceive(dataQueue, &payload, 0) == pdTRUE) {
+    }
+}
+
+void BLEBoatLock::enqueueDataPacket(const std::vector<uint8_t>& payload) {
+    if (!dataQueue || payload.empty() || payload.size() > kDataMaxLen) {
+        return;
+    }
+
+    DataPacket item;
+    item.len = (uint16_t)payload.size();
+    memcpy(item.bytes, payload.data(), payload.size());
+
+    if (xQueueSend(dataQueue, &item, 0) == pdTRUE) {
+        return;
+    }
+
+    DataPacket dropped;
+    if (xQueueReceive(dataQueue, &dropped, 0) == pdTRUE) {
+        (void)xQueueSend(dataQueue, &item, 0);
+    }
+}
+
+void BLEBoatLock::enqueueLiveFrame() {
+    if (!telemetryProvider) {
+        return;
+    }
+
+    const RuntimeBleLiveTelemetry telemetry = telemetryProvider();
+    enqueueDataPacket(runtimeBleEncodeLiveFrame(telemetry, ++liveSequence));
+}
+
+void BLEBoatLock::processQueuedData() {
+    if (!dataQueue || !pDataChar || bleStatus != CONNECTED || !dataNotifyEnabled) {
+        return;
+    }
+
+    const unsigned long now = millis();
+    if (now - lastDataNotifyMs < kMinDataNotifyGapMs) {
+        return;
+    }
+
+    DataPacket payload;
+    if (xQueueReceive(dataQueue, &payload, 0) != pdTRUE) {
+        return;
+    }
+
+    std::string value(reinterpret_cast<const char*>(payload.bytes), payload.len);
+    pDataChar->setValue(value);
+    if (pDataChar->notify()) {
+        lastDataNotifyMs = now;
     }
 }
 
@@ -291,59 +351,12 @@ void BLEBoatLock::maintainConnParams() {
                conn.getConnInterval(), conn.getConnTimeout());
 }
 
-bool BLEBoatLock::notifyDataValue(const std::string& payload) {
-    if (!pDataChar || bleStatus != CONNECTED || !dataNotifyEnabled) {
-        return false;
+void BLEBoatLock::notifyLive() {
+    if (!streamEnabled) {
+        return;
     }
 
-    const unsigned long now = millis();
-    if (now - lastDataNotifyMs < kMinDataNotifyGapMs) {
-        return false;
-    }
-
-    pDataChar->setValue(payload);
-    if (pDataChar->notify()) {
-        lastDataNotifyMs = now;
-        return true;
-    }
-    return false;
-}
-
-bool BLEBoatLock::likelyCommand(const std::string& text) {
-    if (text.empty()) {
-        return false;
-    }
-
-    if (text.find(':') != std::string::npos || text.find('=') != std::string::npos) {
-        return true;
-    }
-
-    return startsWith(text, "SET_") ||
-           startsWith(text, "SIM_") ||
-           startsWith(text, "AUTH_") ||
-           startsWith(text, "PAIR_") ||
-           startsWith(text, "SEC_CMD:") ||
-           startsWith(text, "ANCHOR_") ||
-           startsWith(text, "MANUAL_") ||
-           startsWith(text, "NUDGE_") ||
-           text == "STOP" ||
-           text == "HEARTBEAT";
-}
-
-std::string BLEBoatLock::collectAllParams() {
-    std::string json = "{";
-    bool first = true;
-    for (auto& pair : paramMap) {
-        if (!first) json += ",";
-        json += "\"" + pair.first + "\":\"" + pair.second() + "\"";
-        first = false;
-    }
-    json += "}";
-    return json;
-}
-
-void BLEBoatLock::notifyAll() {
-    notifyDataValue(collectAllParams());
+    enqueueLiveFrame();
 }
 
 void BLEBoatLock::sendLog(const char* line) {

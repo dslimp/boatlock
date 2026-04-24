@@ -161,7 +161,6 @@ class _MapPageState extends State<MapPage> {
                 builder: (_) => SettingsPage(
                   ble: ble,
                   holdHeading: boatData?.holdHeading ?? false,
-                  stepSpr: boatData?.stepSpr ?? 4096,
                   stepMaxSpd: boatData?.stepMaxSpd ?? 1000,
                   stepAccel: boatData?.stepAccel ?? 500,
                   compassOffset: boatData?.compassOffset ?? 0.0,
@@ -410,7 +409,7 @@ class _MapPageState extends State<MapPage> {
           FloatingActionButton(
             heroTag: 'refresh',
             tooltip: "Обновить данные",
-            onPressed: () => ble.requestAllParams(),
+            onPressed: () => ble.requestSnapshot(),
             child: const Icon(Icons.refresh),
           ),
           const SizedBox(width: 12),

@@ -12,6 +12,8 @@ remote_shell "mkdir -p '${BOATLOCK_NH02_REMOTE_ROOT}/bin' '${BOATLOCK_NH02_REMOT
   "${SCRIPT_DIR}/remote/boatlock-flash-esp32s3.sh" \
   "${SCRIPT_DIR}/remote/boatlock-reset-esp32s3.sh" \
   "${SCRIPT_DIR}/remote/boatlock-ensure-android-tools.sh" \
+  "${SCRIPT_DIR}/remote/boatlock-run-android-smoke.sh" \
+  "${SCRIPT_DIR}/remote/boatlock-prepare-android-debug.sh" \
   "${BOATLOCK_NH02_SSH_TARGET}:/tmp/boatlock-hw-install/"
 
 remote_shell "set -e
@@ -24,6 +26,8 @@ fi
 install -m 0755 /tmp/boatlock-hw-install/boatlock-flash-esp32s3.sh '${BOATLOCK_NH02_REMOTE_ROOT}/bin/boatlock-flash-esp32s3.sh'
 install -m 0755 /tmp/boatlock-hw-install/boatlock-reset-esp32s3.sh '${BOATLOCK_NH02_REMOTE_ROOT}/bin/boatlock-reset-esp32s3.sh'
 install -m 0755 /tmp/boatlock-hw-install/boatlock-ensure-android-tools.sh '${BOATLOCK_NH02_REMOTE_ROOT}/bin/boatlock-ensure-android-tools.sh'
+install -m 0755 /tmp/boatlock-hw-install/boatlock-run-android-smoke.sh '${BOATLOCK_NH02_REMOTE_ROOT}/bin/boatlock-run-android-smoke.sh'
+install -m 0755 /tmp/boatlock-hw-install/boatlock-prepare-android-debug.sh '${BOATLOCK_NH02_REMOTE_ROOT}/bin/boatlock-prepare-android-debug.sh'
 install -m 0644 /tmp/boatlock-hw-install/boatlock-esp32s3-rfc2217.service /etc/systemd/system/${BOATLOCK_NH02_REMOTE_RFC2217_SERVICE}
 systemctl daemon-reload
 systemctl enable '${BOATLOCK_NH02_REMOTE_RFC2217_SERVICE}'

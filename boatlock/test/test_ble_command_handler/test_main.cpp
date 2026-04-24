@@ -152,12 +152,6 @@ void test_set_hold_heading() {
   TEST_ASSERT_EQUAL_FLOAT(1.0f, settings.get("HoldHeading"));
 }
 
-void test_set_step_spr() {
-  handleBleCommand("SET_STEP_SPR:400");
-  TEST_ASSERT_EQUAL_FLOAT(4096.0f, settings.get("StepSpr"));
-  TEST_ASSERT_TRUE(stepperControl.loadCalled);
-}
-
 void test_manual_on_cancels_stepper_move() {
   handleBleCommand("MANUAL:1");
   TEST_ASSERT_TRUE(manualMode);
@@ -427,7 +421,6 @@ void test_non_sim_command_still_runs_when_sim_handler_declines() {
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_set_hold_heading);
-  RUN_TEST(test_set_step_spr);
   RUN_TEST(test_manual_on_cancels_stepper_move);
   RUN_TEST(test_manual_off);
   RUN_TEST(test_manual_dir_and_speed);

@@ -679,3 +679,86 @@ Self-review:
 
 Promote to skill:
 - When the phone is attached to `nh02`, check physical USB enumeration and `adb devices -l` on `nh02` itself before assuming anything about the app, BLE, or cable path.
+
+### 2026-04-24 Stage 31: Android install semantics corrected and captured
+
+Scope:
+- Record the proven Android install/update behavior on the Xiaomi phone and fix the canonical notes so the install verdict does not stay only in chat history.
+
+Key outcomes:
+- Confirmed that the first `adb install` attempt was blocked by MIUI policy with `INSTALL_FAILED_USER_RESTRICTED`, which required one manual install on the phone.
+- Confirmed separately that after that first manual install, the tracked `adb install -r` path through `tools/hw/nh02/android-run-smoke.sh` succeeds, so USB APK updates are valid on this phone.
+- Added `--no-install` to the documented Android smoke workflow as a temporary debug cut for already-installed builds.
+- Captured the more important correction: the current phone-smoke blocker is no longer APK install but BLE telemetry after connect.
+
+Validation:
+- `./tools/hw/nh02/android-run-smoke.sh --no-build --wait-secs 90`
+- terminal output included `Performing Streamed Install` and `Success`
+- later terminal result still failed on `BOATLOCK_SMOKE_RESULT ... timeout_waiting_for_telemetry`
+
+Self-review:
+- I missed this in the canonical notes on the first pass even though the terminal wrapper had already separated install success from the later BLE failure.
+- That was a workflow error, not a target issue: I corrected the conclusion in chat, but the durable repo notes lagged behind and needed an explicit repair step.
+
+Promote to skill:
+- For Android USB smoke, record first-install policy, later `adb install -r` update, app launch, and BLE runtime as separate checkpoints; do not collapse them into one "install failed" or "Android smoke failed" label.
+
+### 2026-04-24 Stage 32: BLE live path replaced with binary v2 frames
+
+Scope:
+- Replace the old live BLE data path with a clean GATT-style control point + live observation model.
+- Do not keep backward compatibility shims in code; the app is not released and the old JSON/`all` live path was already failing on hardware.
+
+Key outcomes:
+- Removed the JSON notify/parameter-read live path and deleted the obsolete `ParamHelpers.h` helper.
+- Added `RuntimeBleLiveFrame.h`: one 70-byte little-endian v2 live frame with explicit mode/status codes, flags, scaled numeric fields, security nonce, reject code, and status reason bitmask.
+- Replaced firmware string telemetry registration with a typed `RuntimeBleLiveTelemetry` provider in `RuntimeBleParams.h`.
+- Updated the Flutter BLE client to send `STREAM_START` + `SNAPSHOT`, decode binary frames through `ble_live_frame.dart`, and use `SNAPSHOT` for auth/pairing refreshes.
+- Increased the Android smoke page timeout from `30 s` to `75 s` after real logcat showed the Xiaomi phone could connect and receive telemetry after the old page timeout had already failed.
+- Updated BLE protocol docs and BLE/UI skill notes so the canonical contract is binary live frames, not a JSON tunnel.
+- Updated Android smoke wrappers so a phone-side `adb install` restriction stages the APK to `Downloads/boatlock-smoke.apk` and reports a clear install-stage blocker.
+
+Validation:
+- `cd boatlock && platformio test -e native` -> `169/169`
+- `cd boatlock && pio run -e esp32s3` -> success
+- `cd boatlock_ui && flutter test --no-pub` -> all tests passed
+- `cd boatlock_ui && flutter analyze` -> clean
+- `bash -n tools/android/run-smoke.sh tools/hw/nh02/android-run-smoke.sh tools/hw/nh02/remote/boatlock-run-android-smoke.sh tools/hw/nh02/install.sh tools/hw/nh02/common.sh`
+- `pytest -q tools/hw/nh02/test_acceptance.py` -> `2 passed`
+- `pytest -q tools/ci/test_*.py` -> `9 passed`
+- `./tools/hw/nh02/install.sh`
+- `./tools/hw/nh02/flash.sh`
+- `./tools/hw/nh02/acceptance.sh --seconds 15 --log-out /tmp/boatlock-boot.log --json-out /tmp/boatlock-acceptance.json` -> `PASS`
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 100` -> `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received","dataEvents":1,...}`
+
+Self-review:
+- This change removes a real failure mode instead of layering chunking on top of it: ATT notifications now carry one small fixed frame, and the app no longer waits for a giant JSON snapshot.
+- The remaining limitation is intentional: detailed config/debug telemetry is not in the live frame. If it is needed, add an explicit frame type or event instead of reviving ad-hoc parameter reads.
+
+Promote to skill:
+- Treat live BLE as a fixed, versioned binary observation stream. Use the control point for stream lifecycle and commands; do not reintroduce JSON snapshots or parameter-read tunnels for live state.
+
+### 2026-04-24 Stage 33: No backward-compatibility rule made global
+
+Scope:
+- Promote the corrected product assumption into repo rules: BoatLock is not released, so code must not preserve obsolete behavior for backward compatibility unless the user explicitly asks for it.
+
+Key outcomes:
+- Added the global no-compatibility rule to `AGENTS.md` and `skills/boatlock/SKILL.md` for firmware, Flutter, tooling, and docs.
+- Added BLE-specific guidance: compatibility-only commands must be removed from firmware, Flutter, tests, and docs together.
+- Removed the current compatibility-only `SET_STEP_SPR` command handler, Flutter sender, settings UI row, protocol docs row, and command-handler tests.
+- Kept `StepSpr` only as fixed runtime geometry/telemetry, not as a user-facing or protocol command.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_ble_command_handler` -> `29/29`
+- `cd boatlock_ui && flutter test --no-pub test/settings_page_test.dart` -> passed
+- `cd boatlock_ui && flutter analyze` -> clean
+- `git diff --check` -> clean
+- `rg 'SET_STEP_SPR|setStepSprFixed|compatibility-only|protocol compatibility|Legacy/general' boatlock boatlock_ui docs skills AGENTS.md` -> no runtime/code hits
+
+Self-review:
+- The rule is now enforceable, not just prose: the one existing no-op compatibility command was removed from all touched components.
+- Existing historical mentions remain only in `WORKLOG.md`, which is the intended place for removed behavior context.
+
+Promote to skill:
+- Until explicitly overridden by the user, delete obsolete compatibility behavior from code across all components and keep the reason only in `WORKLOG.md`.

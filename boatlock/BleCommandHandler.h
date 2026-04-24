@@ -177,12 +177,6 @@ inline void handleBleCommand(const std::string& cmd) {
         } else {
             logMessage("[BLE] Invalid phone GPS payload: %s\n", command.c_str());
         }
-    } else if (command.rfind("SET_STEP_SPR:",0) == 0) {
-        // Legacy STEP/DIR support removed. Keep command for protocol compatibility.
-        settings.set("StepSpr", 4096);
-        settings.save();
-        stepperControl.loadFromSettings();
-        logMessage("[BLE] SET_STEP_SPR ignored (28BYJ fixed 4096)\n");
     } else if (command.rfind("SET_STEP_MAXSPD:",0) == 0) {
         float v = atof(command.c_str() + 16);
         settings.set("StepMaxSpd", v);

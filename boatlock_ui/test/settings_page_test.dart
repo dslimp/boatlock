@@ -56,7 +56,6 @@ SettingsPage _page(FakeBleBoatLock ble) {
   return SettingsPage(
     ble: ble,
     holdHeading: false,
-    stepSpr: 4096,
     stepMaxSpd: 1000,
     stepAccel: 500,
     compassOffset: 0,

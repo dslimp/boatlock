@@ -54,7 +54,7 @@ const SettingEntry defaultEntries[] = {
     {"GpsWeakHys", "GPS weak hysteresis", TYPE_FLOAT, 1.5, 1.5, 0.5, 60.0, 0.5, "s", false},
     {"EventRateMs","Event rate limit",  TYPE_INT,   1000, 1000, 100, 10000, 100.0, "ms", false},
 
-    // Legacy/general params kept for compatibility
+    // Runtime control params
     {"Kp",        "Kp for PID",         TYPE_FLOAT, 20.0, 20.0,  0.01, 200.0,  0.1, "", true},
     {"Ki",        "Ki for PID",         TYPE_FLOAT, 0.5,  0.5,   0.0,  10.0,  0.01, "", true},
     {"Kd",        "Kd for PID",         TYPE_FLOAT, 5.0,  5.0,   0.0, 100.0,  0.1, "", true},

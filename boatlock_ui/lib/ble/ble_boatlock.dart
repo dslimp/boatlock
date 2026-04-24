@@ -7,6 +7,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/boat_data.dart';
+import 'ble_live_frame.dart';
 
 typedef BoatDataCallback = void Function(BoatData? data);
 typedef LogCallback = void Function(String line);
@@ -194,7 +195,8 @@ class BleBoatLock {
           }
         }
       }
-      await requestAllParams();
+      await _setStreamEnabled(true);
+      await requestSnapshot();
       _startHeartbeat();
     } catch (e) {
       _log('connect failed: $e');
@@ -209,10 +211,7 @@ class BleBoatLock {
     _heartbeatTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
       if (_cmdChar == null) return;
       try {
-        await _cmdChar!.write(
-          utf8.encode('HEARTBEAT'),
-          withoutResponse: false,
-        );
+        await _writeControlPoint('HEARTBEAT', withoutResponse: true);
       } catch (_) {
         // reconnect flow handles link issues
       }
@@ -226,47 +225,45 @@ class BleBoatLock {
     });
   }
 
-  Future<void> requestAllParams() async {
-    if (_cmdChar != null) {
-      await _cmdChar!.write(utf8.encode("all"), withoutResponse: false);
-    }
+  Future<void> requestSnapshot() async {
+    await _writeControlPoint('SNAPSHOT');
+  }
+
+  Future<void> _setStreamEnabled(bool enabled) async {
+    final cmd = enabled ? 'STREAM_START' : 'STREAM_STOP';
+    await _writeControlPoint(cmd);
   }
 
   void _onNotify(List<int> value) async {
-    final jsonString = utf8.decode(value);
-    if (jsonString.trim().isEmpty) return;
     try {
-      final data = jsonDecode(jsonString);
-      if (data is Map<String, dynamic>) {
-        _secPaired = int.tryParse(data['secPaired']?.toString() ?? '0') == 1;
-        _secAuth = int.tryParse(data['secAuth']?.toString() ?? '0') == 1;
-        _secPairWindowOpen =
-            int.tryParse(data['secPairWin']?.toString() ?? '0') == 1;
-        _secNonceHex =
-            _normalizeNonceHex(data['secNonce']?.toString() ?? '') ??
-            '0000000000000000';
-        _secReject = data['secReject']?.toString() ?? 'NONE';
-        if (!_secPaired) {
-          _secAuth = false;
-          _secCounter = 0;
-        }
-      }
-      try {
-        _lastRssi = await _device?.readRssi() ?? _lastRssi;
-      } catch (_) {}
-      _lastData = BoatData.fromJson(data, rssi: _lastRssi);
-      onData(_lastData);
-      final now = DateTime.now();
-      if (_lastDataLogAt == null ||
-          now.difference(_lastDataLogAt!).inSeconds >= 2) {
-        _lastDataLogAt = now;
-        _log(
-          'data mode=${_lastData!.mode} '
-          'lat=${_lastData!.lat.toStringAsFixed(6)} lon=${_lastData!.lon.toStringAsFixed(6)}',
-        );
-      }
-    } catch (_) {
-      // ignore parse errors for noise
+      _lastRssi = await _device?.readRssi() ?? _lastRssi;
+    } catch (_) {}
+
+    final frame = decodeBoatLockLiveFrame(value, rssi: _lastRssi);
+    if (frame == null) {
+      return;
+    }
+
+    _lastData = frame.data;
+    _secPaired = frame.data.secPaired;
+    _secAuth = frame.data.secAuth;
+    _secPairWindowOpen = frame.data.secPairWindowOpen;
+    _secNonceHex = frame.secNonceHex;
+    _secReject = frame.data.secReject;
+    if (!_secPaired) {
+      _secAuth = false;
+      _secCounter = 0;
+    }
+
+    onData(_lastData);
+    final now = DateTime.now();
+    if (_lastDataLogAt == null ||
+        now.difference(_lastDataLogAt!).inSeconds >= 2) {
+      _lastDataLogAt = now;
+      _log(
+        'data seq=${frame.sequence} mode=${_lastData!.mode} '
+        'lat=${_lastData!.lat.toStringAsFixed(6)} lon=${_lastData!.lon.toStringAsFixed(6)}',
+      );
     }
   }
 
@@ -365,10 +362,6 @@ class BleBoatLock {
     return _writeCommand('RESET_COMPASS_OFFSET');
   }
 
-  Future<bool> setStepSprFixed() async {
-    return _writeCommand('SET_STEP_SPR:4096');
-  }
-
   Future<bool> setStepMaxSpeed(double value) async {
     if (!value.isFinite) return false;
     return _writeCommand('SET_STEP_MAXSPD:${value.round()}');
@@ -405,7 +398,7 @@ class BleBoatLock {
       withoutResponse: false,
     );
     await Future.delayed(const Duration(milliseconds: 120));
-    await requestAllParams();
+    await requestSnapshot();
     await Future.delayed(const Duration(milliseconds: 120));
     return _secPaired;
   }
@@ -413,7 +406,7 @@ class BleBoatLock {
   Future<bool> authenticateOwner([String? secret]) async {
     setOwnerSecret(secret ?? _ownerSecret);
     final ok = await _ensureSecuritySession(forceRenew: true);
-    await requestAllParams();
+    await requestSnapshot();
     return ok && _secAuth;
   }
 
@@ -426,7 +419,7 @@ class BleBoatLock {
       await _cmdChar!.write(utf8.encode('PAIR_CLEAR'), withoutResponse: false);
     }
     await Future.delayed(const Duration(milliseconds: 120));
-    await requestAllParams();
+    await requestSnapshot();
     _secCounter = 0;
     if (!_secPaired) {
       _secAuth = false;
@@ -444,14 +437,14 @@ class BleBoatLock {
 
     await _cmdChar!.write(utf8.encode('AUTH_HELLO'), withoutResponse: false);
     await Future.delayed(const Duration(milliseconds: 120));
-    await requestAllParams();
+    await requestSnapshot();
     await Future.delayed(const Duration(milliseconds: 120));
     if (_secNonceHex == '0000000000000000') return false;
 
     final proof = buildAuthProofHex(secret, _secNonceHex);
     await _cmdChar!.write(utf8.encode('AUTH_PROVE:$proof'), withoutResponse: false);
     await Future.delayed(const Duration(milliseconds: 120));
-    await requestAllParams();
+    await requestSnapshot();
     await Future.delayed(const Duration(milliseconds: 120));
     if (!_secAuth) return false;
 
@@ -462,7 +455,7 @@ class BleBoatLock {
   Future<bool> _writeCommand(String cmd) async {
     if (_cmdChar == null) return false;
     if (_isPlainAllowed(cmd)) {
-      await _cmdChar!.write(utf8.encode(cmd), withoutResponse: false);
+      await _writeControlPoint(cmd);
       return true;
     }
 
@@ -472,7 +465,7 @@ class BleBoatLock {
       return false;
     }
     if (!_secPaired) {
-      await _cmdChar!.write(utf8.encode(cmd), withoutResponse: false);
+      await _writeControlPoint(cmd);
       return true;
     }
 
@@ -487,11 +480,21 @@ class BleBoatLock {
     return true;
   }
 
+  Future<void> _writeControlPoint(
+    String cmd, {
+    bool withoutResponse = false,
+  }) async {
+    if (_cmdChar == null) return;
+    await _cmdChar!.write(utf8.encode(cmd), withoutResponse: withoutResponse);
+  }
+
   bool _isPlainAllowed(String cmd) {
     return cmd == 'STOP' ||
         cmd == 'ANCHOR_OFF' ||
         cmd == 'HEARTBEAT' ||
-        cmd == 'all' ||
+        cmd == 'STREAM_START' ||
+        cmd == 'STREAM_STOP' ||
+        cmd == 'SNAPSHOT' ||
         cmd.startsWith('AUTH_') ||
         cmd.startsWith('PAIR_SET:') ||
         (cmd == 'PAIR_CLEAR' && (!_secPaired || _secPairWindowOpen)) ||
@@ -692,6 +695,7 @@ class BleBoatLock {
     _dataChar = null;
     _cmdChar = null;
     _logChar = null;
+    _lastData = null;
     _secAuth = false;
     _secPairWindowOpen = false;
     _secCounter = 0;

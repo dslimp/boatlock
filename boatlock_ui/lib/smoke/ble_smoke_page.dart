@@ -16,7 +16,7 @@ class BleSmokePage extends StatefulWidget {
 }
 
 class _BleSmokePageState extends State<BleSmokePage> {
-  static const Duration _smokeTimeout = Duration(seconds: 30);
+  static const Duration _smokeTimeout = Duration(seconds: 75);
 
   late final BleBoatLock _ble;
   Timer? _timeoutTimer;

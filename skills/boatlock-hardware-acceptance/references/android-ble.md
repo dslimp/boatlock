@@ -12,7 +12,15 @@
 - `nh02` can also act as the Android USB host, not only as the ESP32-S3 host.
 - Use `tools/hw/nh02/android-install.sh` to ensure `adb` exists on `nh02`.
 - Use `tools/hw/nh02/android-status.sh` to check USB enumeration and `adb devices -l` on `nh02`.
+- Use `tools/hw/nh02/android-run-smoke.sh` to copy the smoke APK to `nh02`, install or update it on the attached phone, launch it, and wait for `BOATLOCK_SMOKE_RESULT`.
 - If `nh02` shows the phone only as `MTP` or a vendor USB device and not in `adb devices`, the cable path is alive but USB debugging is still off on the phone.
+
+## Install / Update Semantics Seen On The Xiaomi Test Phone
+
+- Initial `adb install` can be blocked by MIUI with `INSTALL_FAILED_USER_RESTRICTED` until the app is installed manually on the phone.
+- After that first manual install, `adb install -r` was proven to succeed from `nh02` on the same phone, so USB update is a valid tracked path for subsequent APK refreshes.
+- `tools/hw/nh02/android-run-smoke.sh --no-install` exists for cases where the install step must be skipped temporarily, but it is a fallback for already-installed builds, not the preferred steady-state update path.
+- Current proven blocker is no longer APK install; it is BLE telemetry after connect on the smoke app.
 
 ## What Can Be Done Today
 
@@ -22,6 +30,7 @@
 - Install and run the smoke app with `tools/android/run-smoke.sh`.
 - Use the phone as the real BLE central against the BoatLock bench.
 - Read device logs with `adb logcat`.
+- Update an already-installed smoke APK over USB with `adb install -r` through the tracked smoke wrapper.
 - Drive assisted/manual smoke tests while watching:
   - phone logs
   - bench serial logs via `tools/hw/nh02/monitor.sh`
@@ -57,5 +66,5 @@
   - `tools/hw/nh02/android-install.sh`
   - `tools/hw/nh02/android-status.sh`
 - Then run:
-  - `tools/android/run-smoke.sh`
+  - `tools/hw/nh02/android-run-smoke.sh`
 - After that, if stronger coverage is needed, add a narrow app-side flow for connect + auth + heartbeat + anchor-on deny/allow checks.

@@ -45,6 +45,10 @@
   - `tools/hw/nh02/android-install.sh`
 - Check Android USB and `adb` visibility on `nh02`:
   - `tools/hw/nh02/android-status.sh`
+- Build, install/update, and run the Android BLE smoke app through `nh02`:
+  - `tools/hw/nh02/android-run-smoke.sh`
+- Run the smoke app without reinstalling the APK:
+  - `tools/hw/nh02/android-run-smoke.sh --no-install`
 
 ## Deploy path
 
@@ -58,7 +62,14 @@
 1. Rerun `tools/hw/nh02/install.sh` after changing tracked Android helpers.
 2. `tools/hw/nh02/android-install.sh` ensures `adb` exists on `nh02`.
 3. `tools/hw/nh02/android-status.sh` checks whether the phone is visible over USB and whether `adb devices -l` sees it.
-4. If the phone appears only as `MTP` or a vendor USB device and not in `adb devices`, the cable path is alive but USB debugging is still off on the phone.
+4. `tools/hw/nh02/android-run-smoke.sh` copies the smoke APK to `nh02`, installs or updates it with remote `adb`, launches the app, and waits for the `BOATLOCK_SMOKE_RESULT` log line.
+5. If the phone appears only as `MTP` or a vendor USB device and not in `adb devices`, the cable path is alive but USB debugging is still off on the phone.
+
+## Xiaomi Install Note
+
+- On the current Xiaomi test phone, the first `adb install` was blocked by MIUI policy with `INSTALL_FAILED_USER_RESTRICTED`.
+- After the APK was installed manually once on the phone, the tracked `adb install -r` update path through `tools/hw/nh02/android-run-smoke.sh` succeeded.
+- Treat first-install policy and later USB update as separate checkpoints; do not assume the first failure means all future `adb install -r` updates are blocked.
 
 ## Debug path
 

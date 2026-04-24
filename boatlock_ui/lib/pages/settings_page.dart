@@ -4,7 +4,6 @@ import '../ble/ble_boatlock.dart';
 class SettingsPage extends StatefulWidget {
   final BleBoatLock ble;
   final bool holdHeading;
-  final int stepSpr;
   final double stepMaxSpd;
   final double stepAccel;
   final double compassOffset;
@@ -26,7 +25,6 @@ class SettingsPage extends StatefulWidget {
     super.key,
     required this.ble,
     required this.holdHeading,
-    required this.stepSpr,
     required this.stepMaxSpd,
     required this.stepAccel,
     required this.compassOffset,
@@ -51,7 +49,6 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   late bool holdHeading;
-  late int stepSpr;
   late double stepMaxSpd;
   late double stepAccel;
   late double compassOffset;
@@ -74,7 +71,6 @@ class _SettingsPageState extends State<SettingsPage> {
   void initState() {
     super.initState();
     holdHeading = widget.holdHeading;
-    stepSpr = widget.stepSpr;
     stepMaxSpd = widget.stepMaxSpd;
     stepAccel = widget.stepAccel;
     compassOffset = widget.compassOffset;
@@ -163,17 +159,6 @@ class _SettingsPageState extends State<SettingsPage> {
     final ok = await widget.ble.resetCompassOffset();
     if (!ok) {
       setState(() => compassOffset = previous);
-      _showMessage('Команда отклонена: ${widget.ble.secReject}');
-    }
-  }
-
-  Future<void> _editStepSpr() async {
-    if (!isConnected) return;
-    final ok = await widget.ble.setStepSprFixed();
-    if (ok) {
-      setState(() => stepSpr = 4096);
-      _showMessage('Для 28BYJ шагов/оборот фиксировано: 4096');
-    } else {
       _showMessage('Команда отклонена: ${widget.ble.secReject}');
     }
   }
@@ -338,13 +323,6 @@ class _SettingsPageState extends State<SettingsPage> {
             title: const Text('Поддерживать курс носа'),
             value: holdHeading,
             onChanged: isConnected ? _toggleHoldHeading : null,
-          ),
-          ListTile(
-            title: const Text('Шагов за оборот'),
-            subtitle: Text('$stepSpr (фиксировано для 28BYJ)'),
-            trailing: const Icon(Icons.lock),
-            enabled: isConnected,
-            onTap: isConnected ? _editStepSpr : null,
           ),
           ListTile(
             title: const Text('Макс. скорость'),

@@ -5,8 +5,10 @@
 - `docs/BLE_PROTOCOL.md`: documented command/status surface
 - `boatlock/BleCommandHandler.h`: current accepted command handlers
 - `boatlock/BLEBoatLock.cpp`: BLE service, characteristics, advertising, queues
-- `boatlock/main.cpp`: published telemetry params and security state
+- `boatlock/RuntimeBleLiveFrame.h`: live binary telemetry frame encoder and enum mapping
+- `boatlock/RuntimeBleParams.h`: typed runtime telemetry provider
 - `boatlock_ui/lib/ble/ble_boatlock.dart`: scan/connect/auth/write behavior
+- `boatlock_ui/lib/ble/ble_live_frame.dart`: live binary telemetry decoder
 - `boatlock_ui/lib/models/boat_data.dart`: telemetry fields parsed by Flutter
 
 ## BLE Identity
@@ -14,8 +16,8 @@
 - Device name: `BoatLock`
 - Service UUID: `12ab`
 - Characteristics:
-  - `34cd`: data notify/read
-  - `56ef`: command write/write-no-response
+  - `34cd`: live state notify/read, 70-byte little-endian binary v2 frame
+  - `56ef`: control point write/write-no-response
   - `78ab`: log notify
 - Firmware boot logs should include BLE init and advertising result lines.
 
@@ -30,19 +32,20 @@
 - After service discovery the app subscribes to:
   - data char `34cd`
   - log char `78ab`
-- The app requests `"all"` params after connect.
+- The app sends `STREAM_START`, then `SNAPSHOT`, after connect.
 - Heartbeat is sent every `1 s` once connected.
 
 ## Command Surface
 
 - High-traffic command groups:
+  - stream/control point: `STREAM_START`, `STREAM_STOP`, `SNAPSHOT`
   - anchor: `SET_ANCHOR`, `ANCHOR_ON`, `ANCHOR_OFF`, `NUDGE_*`, `SET_ANCHOR_PROFILE`, `SET_HOLD_HEADING`
   - safety and link: `STOP`, `HEARTBEAT`
   - GPS and compass: `SET_PHONE_GPS`, `SET_COMPASS_OFFSET`, `RESET_COMPASS_OFFSET`
   - manual control: `MANUAL`, `MANUAL_DIR`, `MANUAL_SPEED`, `SET_STEPPER_BOW`
-  - stepper tuning: `SET_STEP_MAXSPD`, `SET_STEP_ACCEL`, `SET_STEP_SPR`
+  - stepper tuning: `SET_STEP_MAXSPD`, `SET_STEP_ACCEL`
   - simulation: `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, `SIM_ABORT`
-- `SET_STEP_SPR` is compatibility-only and remains fixed to `4096`.
+- Do not keep compatibility-only BLE commands in firmware or Flutter. If a command is obsolete, remove it from command handling, UI, tests, and docs in the same change.
 - Route commands, phone-heading commands, and log-export commands are removed and should stay no-op unless intentionally restored.
 
 ## Security Envelope
@@ -61,7 +64,10 @@
 
 ## Telemetry Coupling
 
-- Flutter `BoatData` currently parses these fields:
+- Live telemetry is a fixed binary v2 frame, not JSON and not a parameter-read tunnel.
+- Firmware builds one typed `RuntimeBleLiveTelemetry` snapshot and encodes it through `RuntimeBleLiveFrame.h`.
+- Flutter decodes `34cd` notifications through `ble_live_frame.dart`; `BoatData.fromJson()` remains only for model-level unit tests and non-BLE helpers.
+- Flutter `BoatData` currently receives these fields from the live frame:
   - `lat`, `lon`
   - `anchorLat`, `anchorLon`, `anchorHead`
   - `distance`, `heading`
@@ -73,14 +79,9 @@
   - `rvAcc`, `magNorm`, `gyroNorm`
   - `pitch`, `roll`
   - `secPaired`, `secAuth`, `secPairWin`, `secReject`
-- Firmware also publishes more fields that are not fully modeled in `BoatData`, including:
-  - `gnssQ`
-  - `anchorProfile`, `anchorProfileName`
-  - `anchorDeniedReason`, `failsafeReason`
-  - `secNonce`
-  - `simState`, `simScenario`, `simProgress`, `simPass`
+- The auth nonce is carried as binary `uint64` in the live frame and rendered by Flutter as 16 hex chars.
 - `status` is a short health summary (`OK|WARN|ALERT`), while `mode` is the runtime mode and `statusReasons` carries comma-separated detail flags.
-- If you add or rename telemetry, update firmware `registerBleParams()`, Flutter parsing, any affected widgets/tests, and `docs/BLE_PROTOCOL.md`.
+- If you add telemetry, update `RuntimeBleLiveFrame.h`, `ble_live_frame.dart`, affected tests, and `docs/BLE_PROTOCOL.md` together.
 
 ## Manual UI Semantics
 

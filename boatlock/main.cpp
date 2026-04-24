@@ -9,7 +9,6 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
-#include "ParamHelpers.h"
 #include "Settings.h"
 #include "Logger.h"
 #include "AnchorControl.h"

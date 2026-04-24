@@ -226,7 +226,8 @@ public:
     if (!paired_) {
       return false;
     }
-    if (cmd == "STOP" || cmd == "ANCHOR_OFF" || cmd == "HEARTBEAT" || cmd == "all") {
+    if (cmd == "STOP" || cmd == "ANCHOR_OFF" || cmd == "HEARTBEAT" ||
+        cmd == "STREAM_START" || cmd == "STREAM_STOP" || cmd == "SNAPSHOT") {
       return false;
     }
     if (cmd.rfind("AUTH_", 0) == 0 || cmd.rfind("PAIR_SET:", 0) == 0 ||

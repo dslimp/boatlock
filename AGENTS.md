@@ -47,6 +47,8 @@
 ## Product Scope
 
 - Current target for `main`: the app and anchor-point hold.
+- Do not keep backward compatibility in code for any component unless the user explicitly asks for it in the current task.
+- Because the product is not released, remove obsolete commands, fields, shims, and UI flows instead of preserving legacy behavior; record historical context only in `WORKLOG.md`.
 - `main` must stay releasable for:
   - Flutter app connect/reconnect over BLE
   - set anchor, enable anchor, disable anchor, emergency stop
@@ -143,7 +145,7 @@
   - auth flow is `AUTH_HELLO` -> read `secNonce` -> `AUTH_PROVE`
   - `PAIR_CLEAR` is accepted only from owner session or while pairing window is physically open
   - when `secPaired=1`, control/write commands must be wrapped in `SEC_CMD`
-- `SET_STEP_SPR` is compatibility-only and remains fixed at `4096`.
+- Do not keep protocol commands only for compatibility; remove obsolete commands from firmware, Flutter, tests, and docs together.
 
 ## Simulation And Validation
 

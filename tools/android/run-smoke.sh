@@ -6,12 +6,17 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/common.sh"
 
 BUILD_FIRST=1
+INSTALL_APP=1
 WAIT_SECS=45
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --no-build)
       BUILD_FIRST=0
+      shift
+      ;;
+    --no-install)
+      INSTALL_APP=0
       shift
       ;;
     --wait-secs)
@@ -37,7 +42,16 @@ if ! "${BOATLOCK_ANDROID_ADB_BIN}" get-state >/dev/null 2>&1; then
   exit 1
 fi
 
-"${BOATLOCK_ANDROID_ADB_BIN}" install -r "${BOATLOCK_ANDROID_APK}"
+if [[ "${INSTALL_APP}" -eq 1 ]]; then
+  if ! "${BOATLOCK_ANDROID_ADB_BIN}" install -r "${BOATLOCK_ANDROID_APK}"; then
+    manual_apk="/sdcard/Download/boatlock-smoke.apk"
+    "${BOATLOCK_ANDROID_ADB_BIN}" push "${BOATLOCK_ANDROID_APK}" "${manual_apk}" >/dev/null 2>&1 || true
+    echo "adb install failed; staged APK for manual phone-side install: ${manual_apk}" >&2
+    echo "unlock the phone, install boatlock-smoke.apk from Downloads, then rerun with --no-install" >&2
+    exit 20
+  fi
+fi
+
 for perm in "${ADB_PERMISSIONS[@]}"; do
   "${BOATLOCK_ANDROID_ADB_BIN}" shell pm grant "${BOATLOCK_ANDROID_PACKAGE}" "${perm}" >/dev/null 2>&1 || true
 done
