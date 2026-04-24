@@ -23,7 +23,8 @@
 - Firmware runs a BLE advertising watchdog:
   - if the server has no connected clients and advertising is stopped, restart advertising
   - if firmware state says connected but the server has no clients, clear stale BLE stream/subscription state and restart advertising
-- Do not enable continuous advertising while a client is connected until the firmware has a real multi-client model. The current control/session state is global.
+  - if at least one client is connected and advertising is stopped, restart advertising without clearing active stream/subscription state
+- BLE callback code must not clear active stream/notify state on a second central connect or on disconnect while another central remains connected.
 
 ## Flutter Scan And Connect Behavior
 
@@ -61,8 +62,9 @@
 ## Multi-Client Rule
 
 - Future hardware may need a phone plus a remote/controller connected over BLE.
-- Do not implement this by simply advertising while connected.
-- Required multi-client design before enabling that:
+- Advertising while connected is allowed so future phone + remote setups can discover the ESP32 without a power-cycle.
+- Multi-central transport support does not replace control-source arbitration.
+- Required multi-client design before accepting real simultaneous control:
   - multiple read-only telemetry subscribers are allowed
   - at most one control owner/lease can send actuation or settings commands
   - pairing/auth/session state must be per-client or command writes from secondary clients must be rejected

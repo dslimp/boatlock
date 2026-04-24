@@ -2038,3 +2038,50 @@ Promote to skill:
 - `Settings` must be safe immediately after construction: RAM defaults and key map ready, no flash write from constructor.
 - Settings write paths must normalize values by declared type before dirtying/persisting.
 - A clean settings object must never commit flash on `save()`.
+
+### 2026-04-24 Stage 68: BLE connected advertising watchdog
+
+Scope:
+- Continue module-by-module refactor with `BleAdvertisingWatchdog` and the production `BLEBoatLock` callback glue.
+- Prepare the BLE transport for phone + external remote/joystick discovery without adding a second control protocol or compatibility shim.
+
+External baseline:
+- Silicon Labs BLE multi-central guidance states that advertising stops when a connection opens and must be restarted after the opened event to allow more centrals: <https://docs.silabs.com/bluetooth/6.0.0/bluetooth-fundamentals-connections/multi-central-topology>.
+- Silicon Labs BLE role docs define the phone as central and the ESP32 as peripheral; centrals initiate connections to advertising peripherals: <https://docs.silabs.com/bluetooth/3.2/bluetooth-general-connections/>.
+- Bluetooth's LE multi-central article states that a peripheral may keep a connection while also advertising and may maintain more than one central connection: <https://www.bluetooth.com/zh-cn/blog/how-one-wearable-can-connect-with-multiple-smartphones-or-tablets-simultaneously/>.
+
+Key outcomes:
+- `BleAdvertisingWatchdog` now has an explicit `START_CONNECTED_ADVERTISING` action when clients exist but advertising stopped.
+- `BLEBoatLock::maintainAdvertising()` restarts advertising without clearing queues/subscription state while at least one client remains connected.
+- `onConnect()` only clears stream/notify state for the first client, so a second central connect does not drop the active client's telemetry stream.
+- `onDisconnect()` only clears stream/notify state when the last client disconnects; if another client remains, status stays `CONNECTED`.
+- Single-client reconnect behavior remains covered by the existing Android reconnect and ESP-reset smokes.
+
+Validation:
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native -f test_ble_advertising_watchdog -f test_ble_command_handler -f test_runtime_ble_live_frame` -> `41/41` passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native` -> `232/232` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> `29/29` passed.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `git diff --check` -> clean.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio pio run -e esp32s3` -> success, flash size `696145` bytes.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter build apk --debug --no-pub` -> success.
+- `./tools/hw/nh02/status.sh` -> target ESP32-S3 `98:88:E0:03:BA:5C` visible and RFC2217 service active.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`; app image write `696512` bytes.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-ble-advertising-60s.log --json-out /tmp/boatlock-ble-advertising-60s.json` -> `PASS`, including EEPROM `ver=23`, RVC compass, display, BLE advertising, stepper, STOP, heading events, and GPS UART data.
+- Acceptance log scan found no panic/assert/Guru, Arduino `[E]`, `CONFIG_SAVE_FAILED`, `CONFIG_CRC_FAIL`, GPS UART stale/no-data warning, compass loss, compass retry failure, `Wire.cpp`, `i2cRead`, `error`, or `FAIL`.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+
+Self-review:
+- This is transport availability hardening, not multi-controller arbitration. Manual-control ownership/priority for simultaneous phone + remote still needs a separate product rule before a real remote is added.
+- The hardware bench currently has one Android phone, so connected advertising for a second central is unit-tested and production-compiled, but not proven with a second central device.
+- The existing app reconnect paths still pass after the advertising policy change, including ESP reset recovery.
+
+Promote to skill:
+- BLE advertising should be kept/restarted while connected when future phone + remote discovery is required.
+- Do not clear active stream/notify state on a second central connect or on disconnect while another central remains connected.
+- Multi-central support in BLE transport does not replace explicit control-source arbitration in `ManualControl`.

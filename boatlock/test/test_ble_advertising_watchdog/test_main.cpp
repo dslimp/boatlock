@@ -5,14 +5,19 @@
 void setUp() {}
 void tearDown() {}
 
-void test_no_action_when_connected_state_matches_clients() {
+void test_no_action_when_connected_state_matches_clients_and_advertising_active() {
   TEST_ASSERT_EQUAL((int)BleAdvertisingWatchdogAction::NONE,
-                    (int)bleAdvertisingWatchdogAction(true, true, false));
+                    (int)bleAdvertisingWatchdogAction(true, true, true));
 }
 
 void test_marks_connected_when_server_has_clients() {
   TEST_ASSERT_EQUAL((int)BleAdvertisingWatchdogAction::MARK_CONNECTED,
                     (int)bleAdvertisingWatchdogAction(false, true, false));
+}
+
+void test_starts_advertising_while_connected_when_it_stops() {
+  TEST_ASSERT_EQUAL((int)BleAdvertisingWatchdogAction::START_CONNECTED_ADVERTISING,
+                    (int)bleAdvertisingWatchdogAction(true, true, false));
 }
 
 void test_restarts_when_status_is_connected_without_clients() {
@@ -32,8 +37,9 @@ void test_no_action_when_advertising_without_clients() {
 
 int main() {
   UNITY_BEGIN();
-  RUN_TEST(test_no_action_when_connected_state_matches_clients);
+  RUN_TEST(test_no_action_when_connected_state_matches_clients_and_advertising_active);
   RUN_TEST(test_marks_connected_when_server_has_clients);
+  RUN_TEST(test_starts_advertising_while_connected_when_it_stops);
   RUN_TEST(test_restarts_when_status_is_connected_without_clients);
   RUN_TEST(test_restarts_when_advertising_stopped_without_clients);
   RUN_TEST(test_no_action_when_advertising_without_clients);

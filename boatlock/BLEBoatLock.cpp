@@ -10,16 +10,19 @@ class BLEBoatLock::ServerCallbacks : public NimBLEServerCallbacks {
 public:
     ServerCallbacks(BLEBoatLock* p) : parent(p) {}
     void onConnect(NimBLEServer* server, NimBLEConnInfo& connInfo) override {
+        const bool firstClient = !server || server->getConnectedCount() <= 1;
         if (parent) {
             parent->bleStatus = CONNECTED;
-            parent->clearQueuedData();
-            parent->dataNotifyEnabled = false;
-            parent->logNotifyEnabled = false;
-            parent->streamEnabled = false;
-            parent->lastDataNotifyMs = 0;
-            parent->lastLogNotifyMs = 0;
-            parent->lastConnParamReqMs = 0;
-            parent->connEstablishedMs = millis();
+            if (firstClient) {
+                parent->clearQueuedData();
+                parent->dataNotifyEnabled = false;
+                parent->logNotifyEnabled = false;
+                parent->streamEnabled = false;
+                parent->lastDataNotifyMs = 0;
+                parent->lastLogNotifyMs = 0;
+                parent->lastConnParamReqMs = 0;
+                parent->connEstablishedMs = millis();
+            }
         }
 
         // Request stable params for control traffic.
@@ -46,20 +49,24 @@ public:
             connInfo.getConnTimeout());
     }
 
-    void onDisconnect(NimBLEServer*, NimBLEConnInfo& connInfo, int reason) override {
+    void onDisconnect(NimBLEServer* server, NimBLEConnInfo& connInfo, int reason) override {
+        const bool stillConnected = server && server->getConnectedCount() > 0;
         if (parent) {
-            parent->bleStatus = ADVERTISING;
-            parent->clearQueuedData();
-            parent->dataNotifyEnabled = false;
-            parent->logNotifyEnabled = false;
-            parent->streamEnabled = false;
-            parent->lastConnParamReqMs = 0;
-            parent->connEstablishedMs = 0;
+            parent->bleStatus = stillConnected ? CONNECTED : ADVERTISING;
+            if (!stillConnected) {
+                parent->clearQueuedData();
+                parent->dataNotifyEnabled = false;
+                parent->logNotifyEnabled = false;
+                parent->streamEnabled = false;
+                parent->lastConnParamReqMs = 0;
+                parent->connEstablishedMs = 0;
+            }
         }
         logMessage("[BLE] Client disconnected! Address: %s, Reason: %d\n",
             connInfo.getAddress().toString().c_str(), reason);
-        NimBLEDevice::getAdvertising()->start();
-        logMessage("[BLE] Restart advertising\n");
+        NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
+        const bool advOk = advertising && (advertising->isAdvertising() || advertising->start());
+        logMessage("[BLE] Restart advertising %s\n", advOk ? "started" : "failed");
     }
 };
 
@@ -381,6 +388,12 @@ void BLEBoatLock::maintainAdvertising() {
 
     if (action == BleAdvertisingWatchdogAction::MARK_CONNECTED) {
         bleStatus = CONNECTED;
+        return;
+    }
+
+    if (action == BleAdvertisingWatchdogAction::START_CONNECTED_ADVERTISING) {
+        const bool advOk = advertising->start();
+        logMessage("[BLE] connected advertising restart %s\n", advOk ? "started" : "failed");
         return;
     }
 
