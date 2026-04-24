@@ -105,6 +105,8 @@ Implication for BoatLock:
 - `SAFE_HOLD` / `HOLD` should become a real runtime mode, not an inferred combination of flags and reasons.
 - The anchor controller should remain zone-based, not continuously aggressive at the center.
 - Keep explicit typed failsafe reasons and deterministic actions.
+- Containment/drift thresholds must fail deterministic even if settings are invalid; sanitize non-finite thresholds before comparisons.
+- Motion telemetry derived from position deltas must expire or reset after long sample gaps.
 - Account for actuator deadband in shipped tuning defaults.
 - Treat `stop()` as a full actuator state reset, not only a PWM write.
 - Keep hard actuator stop distinct from ordinary controller idle output; failsafe/STOP should clear hidden state, while zone-control idle should preserve anti-hunt timing.

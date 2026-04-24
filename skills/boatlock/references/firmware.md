@@ -139,6 +139,8 @@
 - Otherwise bearing is computed from GNSS course to anchor.
 - Firmware caches anchor bearing for `120000 ms` so auto mode can keep a bearing when GNSS drops briefly.
 - `DriftFail` is a containment boundary: once breached, supervisor exits anchor into latched `HOLD` instead of continuing to hunt.
+- Drift/containment thresholds must sanitize non-finite input before comparisons.
+- Drift-speed telemetry must reset after long data gaps instead of surviving as stale motion evidence.
 - Manual mode cancels auto stepper tracking and drives stepper/motor through shared `ManualControl` state.
 - Manual control is entered/refreshed atomically and expires through a short deadman TTL; split mode/dir/speed state is not allowed.
 - Motor output must stay bounded and deterministic. Do not reintroduce hidden runtime self-adaptive PID tuning or PID auto-persistence in the actuator path.

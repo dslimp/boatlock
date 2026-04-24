@@ -1805,3 +1805,49 @@ Self-review:
 Promote to skill:
 - Manual and anchor-auto actuator state must stay isolated. Manual PWM, timestamps, or ramp state must not seed anchor-auto output.
 - Any motor stop/zero path should drive PWM to zero and direction pins to a known idle state.
+
+### 2026-04-24 Stage 63: Drift monitor threshold and freshness hardening
+
+Scope:
+- Continue module-by-module refactor with `DriftMonitor`.
+- Keep drift alert/fail behavior deterministic when settings are invalid and keep drift-speed telemetry from staying stale after data gaps.
+
+External baseline:
+- OpenCPN Anchor Watch treats GPS loss as an alarm condition, not as a silent degraded state: <https://opencpn.org/wiki/dokuwiki/doku.php?id=opencpn:manual_advanced:features:auto_anchor>.
+- ArduPilot Rover fences declare breach and execute configured actions, with Rover falling back to HOLD for hard boundary failures: <https://ardupilot.org/rover/docs/common-geofencing-landing-page.html>.
+- ArduPilot Cylindrical Fence guidance warns that fence safety depends on GPS/EKF health checks and should not run when position truth is unavailable: <https://ardupilot.org/rover/docs/common-ac2_simple_geofence.html>.
+
+Key outcomes:
+- `DriftMonitor` now sanitizes non-finite drift thresholds to the same safe defaults used by Settings (`6 m` alert, `12 m` fail).
+- Fail threshold remains at least `alert + 0.5 m`, preserving ordered alert-before-fail behavior even with invalid input.
+- Drift speed timing now uses an explicit unsigned elapsed-time helper.
+- Long sample gaps clear drift speed to `0` instead of keeping stale speed telemetry alive.
+- Added native tests for non-finite thresholds, `millis()` rollover, and stale speed reset.
+
+Validation:
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native -f test_drift_monitor -f test_anchor_supervisor -f test_runtime_motion` -> first run caught a test interval below the rate filter minimum; after correcting the test to a valid interval, `25/25` passed.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio platformio test -e native` -> `217/217` passed.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> `29/29` passed.
+- `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
+- `pytest tools/ci/test_*.py` -> `9/9` passed.
+- `git diff --check` -> clean.
+- `cd boatlock && env PIO_HOME_DIR=/tmp/boatlock-pio pio run -e esp32s3` -> success, flash size `695805` bytes.
+- `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter build apk --debug --no-pub` -> success.
+- `./tools/hw/nh02/status.sh` -> target ESP32-S3 `98:88:E0:03:BA:5C` visible and RFC2217 service active.
+- `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`; app image write `696176` bytes.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-drift-monitor-60s.log --json-out /tmp/boatlock-drift-monitor-60s.json` -> `PASS`, including EEPROM `ver=23`, RVC compass, display, BLE advertising, stepper, STOP, heading events, and GPS UART data.
+- Acceptance log scan found no panic/assert/Guru, Arduino `[E]`, `CONFIG_SAVE_FAILED`, `CONFIG_CRC_FAIL`, GPS UART stale/no-data warning, compass loss, compass retry failure, `Wire.cpp`, `i2cRead`, `error`, or `FAIL`.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect",...}`.
+
+Self-review:
+- This is defensive runtime hardening, not new drift behavior for valid settings.
+- Threshold fallback is deliberately conservative and mirrors current persisted defaults instead of inventing new product thresholds.
+- Hardware acceptance proves normal boot/sensor/BLE health. It does not inject a live drift breach on the bench; native tests cover the threshold and freshness branches.
+
+Promote to skill:
+- Drift/containment thresholds must sanitize non-finite input before comparisons.
+- Drift-speed telemetry must not survive long data gaps as stale motion evidence.
