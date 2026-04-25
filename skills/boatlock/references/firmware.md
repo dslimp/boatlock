@@ -137,6 +137,7 @@
 - GPS UART restart must reset the no-data baseline so post-restart silence gets a fresh grace window instead of an immediate no-data warning.
 - GPS UART restart cooldown must use an explicit restart-seen flag; timestamp `0` is a valid restart time, not a sentinel.
 - GPS UART watchdog timing config must have local minimum floors; zero values must not create no-data or restart thrash.
+- Runtime logs should be formatted into a bounded buffer and emitted with the known formatted byte count; do not rely on C-string scanning after truncation.
 - Keep simulation result badge state in `RuntimeSimBadge`, not as loose latched strings in `main.cpp`.
 - Simulation result badge expiry uses start-time plus duration with unsigned elapsed-time math. Duration `0` means hidden, and rollover behavior must be covered by direct tests.
 - Keep anchor supervisor config/input assembly in `RuntimeSupervisorPolicy`, not as inline `settings.get(...)` policy code in `loop()`.

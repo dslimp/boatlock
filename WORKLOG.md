@@ -3489,3 +3489,31 @@ Self-review:
 - This removes normal heartbeat log noise without changing heartbeat handling or link activity semantics.
 - The helper keeps the rule explicit and directly testable instead of burying a string comparison inside a callback.
 - Remaining risk is that the previous `Reas9` line may also involve serial transport byte loss; scheduled module-five hardware acceptance will verify whether lower log volume improves capture readability.
+
+### 2026-04-25 Stage 107: Logger bounded write helper
+
+Scope:
+- Continue the diagnostics/readability batch with `Logger`.
+- Keep log content and BLE forwarding policy the same, but make serial emission length-bounded from the `vsnprintf` result instead of relying on C-string scanning.
+- This is module `2/5`; hardware and Android acceptance are deferred to module five because runtime behavior and protocols are unchanged.
+
+External baseline:
+- ESP-IDF logging guidance says log strings are first written into a memory buffer and then sent to UART, and that callbacks can be invoked from multiple thread contexts: <https://docs.espressif.com/projects/esp-idf/en/v5.4.1/esp32/api-reference/system/log.html>.
+- The same guidance treats high-volume logging as a performance concern, so the logger should keep deterministic bounded work in the normal path.
+
+Key outcomes:
+- Added `RuntimeLogText.h` with testable helpers for bounded formatted length and the existing BLE-forwarding filter.
+- `logMessage()` now checks `vsnprintf` result, writes the exact bounded byte count with `Serial.write()`, and returns on formatting failure or empty output.
+- The existing rule that `[BLE]` lines are not forwarded back over BLE logs is preserved through the helper.
+- Promoted the bounded logger-write rule into `skills/boatlock/references/firmware.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because BLE schema, command behavior, reconnect, install, and UI behavior are unchanged.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_log_text -f test_runtime_ble_log_text -f test_runtime_ble_command_log` -> passed (`8/8`).
+- `cd boatlock && platformio test -e native` -> passed (`291/291`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `697893` bytes.
+
+Self-review:
+- This keeps emitted log text and BLE forwarding semantics stable while bounding the serial write path by `vsnprintf`'s contract.
+- The helper gives native coverage for formatting failures, truncation, and the `[BLE]` forwarding filter.
+- Remaining risk is live serial transport byte loss or line interleaving under bench load; module-five hardware acceptance will check the canonical log path.
