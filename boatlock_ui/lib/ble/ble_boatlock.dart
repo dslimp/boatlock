@@ -201,18 +201,21 @@ class BleBoatLock with WidgetsBindingObserver {
       _log('Services discovered: ${services.length}');
       _clearCharacteristics();
       for (var s in services) {
+        if (!isBoatLockUuid(s.uuid.toString(), boatLockServiceUuid)) {
+          continue;
+        }
         for (var c in s.characteristics) {
           final uuid = c.uuid.toString().toLowerCase();
-          if (uuid.contains(boatLockDataCharacteristicUuid)) {
+          if (isBoatLockUuid(uuid, boatLockDataCharacteristicUuid)) {
             _dataChar = c;
             await _dataChar!.setNotifyValue(true);
             _dataSub?.cancel();
             _dataSub = _dataChar!.lastValueStream.listen(_onNotify);
           }
-          if (uuid.contains(boatLockCommandCharacteristicUuid)) {
+          if (isBoatLockUuid(uuid, boatLockCommandCharacteristicUuid)) {
             _cmdChar = c;
           }
-          if (uuid.contains(boatLockLogCharacteristicUuid)) {
+          if (isBoatLockUuid(uuid, boatLockLogCharacteristicUuid)) {
             _logChar = c;
             await _logChar!.setNotifyValue(true);
             _logSub?.cancel();

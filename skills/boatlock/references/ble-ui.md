@@ -28,6 +28,8 @@
   - `56ef`: control point write/write-no-response
   - `78ab`: log notify
 - Flutter UUID/name constants live in `ble_ids.dart`; do not hardcode these identifiers in scan, discovery, or tests.
+- Flutter UUID matching should go through `isBoatLockUuid()` from `ble_ids.dart`, accepting only the exact 16-bit form or the Bluetooth base UUID expansion. Do not use substring matching for services or characteristics.
+- Service discovery should inspect BoatLock characteristics only under service `12ab`; a matching characteristic UUID under another service is not a valid BoatLock control/data/log endpoint.
 - Live notify payload length must be validated before `setValue()`; producer-side packets whose length is not exactly the live-frame size are dropped rather than padded, truncated, or read past the packet buffer.
 - Flutter must reject live-frame payloads whose length is not exactly 70 bytes; accepting padded frames hides characteristic-value bugs and can mask protocol drift.
 - Flutter live-frame decoding must reject unknown mode/status/security-reject enum codes while the frame version is unchanged; `UNKNOWN` display fallbacks hide firmware/app schema drift.

@@ -45,6 +45,14 @@ void main() {
       ),
       isFalse,
     );
+    expect(
+      isBoatLockAdvertisement(
+        advertisedName: '',
+        platformName: '',
+        serviceUuids: const ['112ab0'],
+      ),
+      isFalse,
+    );
   });
 
   test('isBluetoothAdapterReady accepts only on state', () {

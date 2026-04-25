@@ -4374,3 +4374,30 @@ Validation:
 Self-review:
 - The change is intentionally narrow: scan filtering changed, connection/auth/write logic did not.
 - Hardware smoke proves current ESP32 advertising includes the service UUID and the phone still discovers/connects through the canonical path.
+
+### 2026-04-25 Stage 140: Tighten Flutter GATT UUID discovery
+
+Scope:
+- Continue the refactor batch with module `13/15`: Flutter BLE service/characteristic UUID matching.
+- Replace substring UUID matching with exact 16-bit/Bluetooth-base UUID matching and scope characteristic discovery to BoatLock service `12ab`.
+
+External baseline:
+- Android GATT scanning/discovery APIs operate on service and characteristic UUIDs; `ScanFilter.getServiceUuid()` and `BluetoothLeScanner.startScan(filters, ...)` model UUIDs as exact filter/discovery keys, not substring text: <https://developer.android.com/reference/android/bluetooth/le/ScanFilter> and <https://developer.android.com/reference/android/bluetooth/le/BluetoothLeScanner>.
+- Bluetooth GATT treats services and characteristics as UUID-addressed attributes, so accepting a characteristic UUID outside the expected service widens the client binding surface: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-61/out/en/host/generic-attribute-profile--gatt-.html>.
+
+Key outcomes:
+- Added `boatLockFullUuid()` and `isBoatLockUuid()` to `ble_ids.dart`.
+- Updated advertisement matching to reject substring service UUID matches such as `112ab0`.
+- Updated service discovery to ignore non-BoatLock services and match `34cd`, `56ef`, and `78ab` through the exact UUID helper.
+- Added focused UUID helper tests and extended advertisement matching tests.
+- Updated BLE/UI and external-pattern references.
+- Phone-smoke decision: Android BLE smoke required because service/characteristic discovery behavior changed.
+
+Validation:
+- `cd boatlock_ui && flutter test test/ble_ids_test.dart test/ble_device_match_test.dart` -> PASS (`6/6`).
+- `cd boatlock_ui && flutter test` -> PASS (`49/49`).
+- `tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> PASS; first Xiaomi install attempt hit `INSTALL_FAILED_USER_RESTRICTED`, canonical retry returned `Success`, `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received","dataEvents":1,"mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","rssi":-36,...}`.
+
+Self-review:
+- This removes a real false-positive binding class without changing BoatLock UUID values.
+- Android smoke proves the current firmware advertises/discovers with canonical UUID forms accepted by the stricter helper.

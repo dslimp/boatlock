@@ -19,7 +19,7 @@ bool isBoatLockAdvertisement({
       devName.contains(boatLockDeviceNameLower);
 
   final serviceMatch = serviceUuids.any(
-    (uuid) => uuid.toLowerCase().contains(boatLockServiceUuid),
+    (uuid) => isBoatLockUuid(uuid, boatLockServiceUuid),
   );
 
   return nameMatch || serviceMatch;
