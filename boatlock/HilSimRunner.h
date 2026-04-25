@@ -12,6 +12,7 @@
 #include "AnchorControlLoop.h"
 #include "ControlInterfaces.h"
 #include "HilSimEvents.h"
+#include "HilSimExpect.h"
 #include "HilSimJson.h"
 #include "HilSimTime.h"
 
@@ -215,22 +216,6 @@ struct EnvironmentConfig {
   std::vector<TimedCurrent> gusts;
 };
 
-struct ScenarioExpect {
-  enum class Type : uint8_t {
-    HOLD = 0,
-    FAILSAFE = 1,
-  };
-
-  Type type = Type::HOLD;
-  float p95ErrorMaxM = -1.0f;
-  float maxErrorMaxM = -1.0f;
-  float timeInDeadbandMinPct = -1.0f;
-  float timeSaturatedMaxPct = -1.0f;
-  float dirChangesPerMinMax = -1.0f;
-  float maxBadGnssInAnchorMaxS = -1.0f;
-  std::vector<std::string> requiredEvents;
-};
-
 struct SimScenario {
   std::string id;
   unsigned long durationMs = 600000;
@@ -367,20 +352,6 @@ private:
   float headingBiasDeg_ = 0.0f;
   GnssFix fix_;
   HeadingSample heading_;
-};
-
-struct SimMetrics {
-  float p95ErrorM = 0.0f;
-  float maxErrorM = 0.0f;
-  float timeInDeadbandPct = 0.0f;
-  float timeSaturatedPct = 0.0f;
-  float dirChangesPerMin = 0.0f;
-  uint32_t rampViolations = 0;
-  float maxBadGnssInAnchorS = 0.0f;
-  bool nanDetected = false;
-  bool outOfRangeCommand = false;
-  bool hardFailure = false;
-  std::string hardFailureReason;
 };
 
 class HilScenarioRunner : public simctl::IControlEventSink {
@@ -857,54 +828,9 @@ private:
     result_.metrics.maxBadGnssInAnchorS = maxBadGnssAnchorMs_ / 1000.0f;
 
     const ScenarioExpect& ex = scenario_.expect;
-    bool pass = true;
-    std::string reason = "PASS";
-    bool expectsInternalNan = false;
-    for (const std::string& required : ex.requiredEvents) {
-      if (required == "INTERNAL_ERROR_NAN") {
-        expectsInternalNan = true;
-        break;
-      }
-    }
-    const bool allowNanAsExpectedFailsafe =
-        (ex.type == ScenarioExpect::Type::FAILSAFE) && expectsInternalNan;
-
-    if (result_.metrics.nanDetected && !allowNanAsExpectedFailsafe) {
-      pass = false;
-      reason = "NAN_DETECTED";
-    }
-    if (pass && result_.metrics.outOfRangeCommand) {
-      pass = false;
-      reason = "COMMAND_OUT_OF_RANGE";
-    }
-    if (pass && ex.p95ErrorMaxM > 0.0f && result_.metrics.p95ErrorM > ex.p95ErrorMaxM) {
-      pass = false;
-      reason = "P95_ERROR";
-    }
-    if (pass && ex.maxErrorMaxM > 0.0f && result_.metrics.maxErrorM > ex.maxErrorMaxM) {
-      pass = false;
-      reason = "MAX_ERROR";
-    }
-    if (pass && ex.timeInDeadbandMinPct >= 0.0f &&
-        result_.metrics.timeInDeadbandPct < ex.timeInDeadbandMinPct) {
-      pass = false;
-      reason = "DEADBAND_PCT";
-    }
-    if (pass && ex.timeSaturatedMaxPct >= 0.0f &&
-        result_.metrics.timeSaturatedPct > ex.timeSaturatedMaxPct) {
-      pass = false;
-      reason = "SATURATED_PCT";
-    }
-    if (pass && ex.dirChangesPerMinMax >= 0.0f &&
-        result_.metrics.dirChangesPerMin > ex.dirChangesPerMinMax) {
-      pass = false;
-      reason = "DIR_CHANGES";
-    }
-    if (pass && ex.maxBadGnssInAnchorMaxS >= 0.0f &&
-        result_.metrics.maxBadGnssInAnchorS > ex.maxBadGnssInAnchorMaxS) {
-      pass = false;
-      reason = "BAD_GNSS_TIME";
-    }
+    SimExpectationEval eval = evaluateSimMetrics(ex, result_.metrics);
+    bool pass = eval.pass;
+    std::string reason = eval.reason;
     if (pass) {
       for (const std::string& required : ex.requiredEvents) {
         if (!wasEventSeen(required)) {

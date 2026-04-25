@@ -4632,3 +4632,29 @@ Validation:
 Self-review:
 - This reduces `HilScenarioRunner` responsibility without changing scenario semantics or BLE-visible output for valid scenarios.
 - Remaining risk is report/status serialization still living in the runner; a later HIL module can extract status/report formatting if it stays behavior-preserving.
+
+### 2026-04-25 Stage 150: HIL expectation metric evaluator
+
+Scope:
+- Continue the refactor batch with module `7/15`: HIL pass/fail expectation evaluation.
+- Move metric threshold and failure-priority policy out of `HilScenarioRunner::finalize()`.
+
+External baseline:
+- ArduPilot AutoTest frames simulation tests as repeatable behavior locks that prevent regressions; BoatLock expectation policy therefore needs direct tests for reason priority and allowed failures: <https://ardupilot.org/dev/docs/the-ardupilot-autotest-framework.html>.
+- PX4 SIH emphasizes deterministic and reproducible simulation; deterministic output includes deterministic pass/fail reason selection, not only physics timing: <https://docs.px4.io/main/en/sim_sih/index>.
+
+Key outcomes:
+- Added `HilSimExpect.h` with `ScenarioExpect`, `SimMetrics`, `SimExpectationEval`, and `evaluateSimMetrics()`.
+- Removed metric policy branching from `HilScenarioRunner`; the runner now computes facts, calls the pure evaluator, then checks required event tokens.
+- Added `test_hil_sim_expect` covering expected NaN failsafe allowance, failure-priority stability, and threshold-specific reasons.
+- Promoted the durable expectation-evaluator rule into `external-patterns.md`.
+- Phone-smoke decision: no Android smoke required because scenario execution behavior, valid `SIM_*` BLE payloads, and telemetry schemas are unchanged; this is local HIL pass/fail policy extraction with native tests.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_hil_sim_expect` -> PASS (`3/3`).
+- `cd boatlock && platformio test -e native -f test_hil_sim` -> PASS (`11/11`).
+- `cd boatlock && platformio test -e native -f test_hil_sim_events -f test_hil_sim_json` -> PASS (`5/5`).
+
+Self-review:
+- This makes failure-reason priority explicit and easier to review without stepping through the runner loop.
+- Remaining risk is that `hardFailure` remains collected but not evaluated by existing behavior; changing that would be semantic and should be a separate safety module with scenario coverage.
