@@ -13,6 +13,7 @@ import 'ble_ids.dart';
 import 'ble_live_frame.dart';
 import 'ble_log_line.dart';
 import 'ble_reconnect_policy.dart';
+import 'ble_rssi_throttle.dart';
 import 'ble_scan_config.dart';
 import 'ble_security_codec.dart';
 
@@ -51,6 +52,7 @@ class BleBoatLock with WidgetsBindingObserver {
   Timer? _reconnectTimer;
   Timer? _heartbeatTimer;
   final BleReconnectPolicy _reconnectPolicy = BleReconnectPolicy();
+  final BleRssiThrottle _rssiThrottle = BleRssiThrottle();
   bool _isConnecting = false;
   bool _isDisposed = false;
   DateTime? _lastDataLogAt;
@@ -362,9 +364,12 @@ class BleBoatLock with WidgetsBindingObserver {
   }
 
   void _onNotify(List<int> value) async {
-    try {
-      _lastRssi = await _device?.readRssi() ?? _lastRssi;
-    } catch (_) {}
+    final now = DateTime.now();
+    if (_rssiThrottle.shouldRead(now)) {
+      try {
+        _lastRssi = await _device?.readRssi() ?? _lastRssi;
+      } catch (_) {}
+    }
 
     final frame = decodeBoatLockLiveFrame(value, rssi: _lastRssi);
     if (frame == null) {
@@ -383,7 +388,6 @@ class BleBoatLock with WidgetsBindingObserver {
     }
 
     onData(_lastData);
-    final now = DateTime.now();
     if (_lastDataLogAt == null ||
         now.difference(_lastDataLogAt!).inSeconds >= 2) {
       _lastDataLogAt = now;
@@ -662,6 +666,7 @@ class BleBoatLock with WidgetsBindingObserver {
     _secPairWindowOpen = false;
     _secCounter = 0;
     _secNonceHex = '0000000000000000';
+    _rssiThrottle.reset();
   }
 
   void _log(String msg) {

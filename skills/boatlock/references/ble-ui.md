@@ -12,6 +12,7 @@
 - `boatlock_ui/lib/ble/ble_device_match.dart`: adapter readiness and BoatLock advertisement matching
 - `boatlock_ui/lib/ble/ble_discovery_check.dart`: required GATT characteristic completeness checks
 - `boatlock_ui/lib/ble/ble_scan_config.dart`: scan service filter and scan timing constants
+- `boatlock_ui/lib/ble/ble_rssi_throttle.dart`: app-side RSSI read throttling policy
 - `boatlock_ui/lib/ble/ble_commands.dart`: pure command builders and value allowlists for app-originated commands
 - `boatlock_ui/lib/ble/ble_security_codec.dart`: owner-secret normalization, owner auth proof, and secure command envelope formatting
 - `boatlock_ui/lib/ble/ble_live_frame.dart`: live binary telemetry decoder
@@ -68,6 +69,7 @@
   - adapter on schedules a fresh scan
 - On app resume, the app schedules a fresh scan unless an active data/control link already exists.
 - Heartbeat write failure is treated as a link loss and schedules reconnect.
+- RSSI reads should be throttled through `ble_rssi_throttle.dart`; do not call GATT RSSI reads on every telemetry notification.
 - Firmware logs should suppress high-frequency `HEARTBEAT` command lines while preserving operator/service commands.
 - Immediate BLE transport commands are exact-match only: `STREAM_START`, `STREAM_STOP`, and `SNAPSHOT`. Prefixes, suffixes, and decorated variants must fall through to the normal command path and be rejected there if invalid.
 - App command builders should remain pure top-level functions in `ble_commands.dart`; do not hide value formatting/range checks inside the stateful BLE transport class.

@@ -4428,3 +4428,30 @@ Validation:
 Self-review:
 - This is a fail-closed behavior change on malformed/incomplete GATT service discovery only; normal BoatLock path remains unchanged and was proven on hardware.
 - Remaining risk is if we later make the log characteristic optional; that must be an explicit protocol/smoke change, not an accidental missing endpoint.
+
+### 2026-04-25 Stage 142: Throttle Flutter BLE RSSI reads
+
+Scope:
+- Complete the current refactor batch with module `15/15`: Flutter BLE RSSI read cadence.
+- Reduce GATT operation overhead by avoiding `readRssi()` on every telemetry notification.
+
+External baseline:
+- Android `BluetoothGatt.readRemoteRssi()` is a GATT operation whose result is delivered through `BluetoothGattCallback.onReadRemoteRssi()`, not a free local field read: <https://developer.android.com/reference/android/bluetooth/BluetoothGatt> and <https://developer.android.com/reference/android/bluetooth/BluetoothGattCallback>.
+- Android BLE client guidance keeps GATT operations explicit and callback-driven; hot-path telemetry should not add unnecessary extra GATT reads: <https://developer.android.com/develop/connectivity/bluetooth/ble/connect-gatt-server>.
+
+Key outcomes:
+- Added `ble_rssi_throttle.dart` with a simple 5-second RSSI read throttle and reset hook.
+- Updated `BleBoatLock._onNotify()` to read RSSI immediately on a fresh link and then reuse the last value inside the throttle interval.
+- Reset the throttle when characteristics/link state are cleared so reconnect gets a fresh RSSI sample.
+- Added focused tests for first-read, suppression, interval boundary, and reset behavior.
+- Updated BLE/UI and external-pattern references.
+- Phone-smoke decision: Android BLE smoke required because telemetry hot path and RSSI sourcing changed.
+
+Validation:
+- `cd boatlock_ui && flutter test test/ble_rssi_throttle_test.dart` -> PASS (`3/3`).
+- `cd boatlock_ui && flutter test` -> PASS (`54/54`).
+- `tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> PASS; install `Success`, `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received","dataEvents":1,"mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","rssi":-34,...}`.
+
+Self-review:
+- This is a hot-path overhead reduction with no protocol or UI surface change.
+- First telemetry still has RSSI because the throttle permits the first read immediately; subsequent freshness is intentionally lower-rate link metadata.
