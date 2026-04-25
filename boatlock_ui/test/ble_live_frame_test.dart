@@ -104,4 +104,10 @@ void main() {
     bad[2] = 1;
     expect(decodeBoatLockLiveFrame(bad), isNull);
   });
+
+  test('decodeBoatLockLiveFrame rejects padded payloads', () {
+    final padded = [..._frame(), 0];
+
+    expect(decodeBoatLockLiveFrame(padded), isNull);
+  });
 }

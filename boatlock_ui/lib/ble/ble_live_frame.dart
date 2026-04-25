@@ -18,6 +18,7 @@ const int _flagHoldHeading = 1 << 0;
 const int _flagSecPaired = 1 << 1;
 const int _flagSecAuth = 1 << 2;
 const int _flagSecPairWindow = 1 << 3;
+const int _liveFrameSize = 70;
 
 const Map<int, String> _modeByCode = {
   0: 'IDLE',
@@ -70,7 +71,7 @@ const List<(int, String)> _reasonBits = [
 ];
 
 BleLiveFrame? decodeBoatLockLiveFrame(List<int> value, {int rssi = 0}) {
-  if (value.length < 70) {
+  if (value.length != _liveFrameSize) {
     return null;
   }
   final bytes = Uint8List.fromList(value);

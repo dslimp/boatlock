@@ -55,7 +55,7 @@ Manual control is intentionally a single atomic command instead of separate mode
 
 ## Live State Frame
 
-`34cd` notifications carry one 70-byte little-endian binary frame:
+`34cd` notifications carry exactly one 70-byte little-endian binary frame. Receivers reject shorter or longer payloads rather than treating the live path as a padded stream:
 
 - bytes `0..1`: magic `BL`
 - byte `2`: protocol version, currently `2`

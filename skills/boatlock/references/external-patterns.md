@@ -174,6 +174,7 @@ Implication for BoatLock:
   - clamp binary telemetry values before integer rounding/casting so invalid runtime values cannot corrupt the wire representation
   - sanitize direct numeric telemetry fields before packing fixed binary characteristics; out-of-range or non-finite floats must not be cast directly into integers
   - keep fixed binary telemetry frames length-stable and map enum/flag fields from one explicit table rather than duplicated branching
+  - fixed-length GATT telemetry should be rejected on the client when the characteristic value length differs from the documented frame size; padded acceptance hides producer bugs
   - treat text/log characteristic values as length-delimited byte strings, not implicit C strings; trim defensive padding at the client boundary
 - For manual UI, avoid making actuation look like a primary one-tap FAB action. Use an explicit control surface such as a toolbar entry plus sheet/pad, and keep movement tied to press-and-hold/deadman semantics.
 

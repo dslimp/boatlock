@@ -3791,3 +3791,29 @@ Validation:
 Self-review:
 - This is a readability/safety refactor: output compatibility is preserved, but the code now makes severity ownership explicit.
 - Remaining risk is app presentation of WARN/ALERT, which is outside this firmware-only module and already covered by existing Flutter status tests.
+
+### 2026-04-25 Stage 118: BLE live-frame exact length
+
+Scope:
+- Continue the refactor batch with module `7/15`: Flutter live-frame decoder contract for characteristic `34cd`.
+- Remove padded-frame tolerance from the unreleased app; the live characteristic is a fixed 70-byte binary value, not a stream.
+
+External baseline:
+- Bluetooth Core GATT defines characteristic values as the value carried by read/notify procedures and notifications as characteristic-value updates without an ATT acknowledgment; the Client Characteristic Configuration descriptor enables notifications: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-61/out/en/host/generic-attribute-profile--gatt-.html>.
+- Android BLE docs deliver characteristic changes to the app through `onCharacteristicChanged()` after notifications are enabled: <https://developer.android.com/develop/connectivity/bluetooth/ble/transfer-ble-data> and <https://developer.android.com/reference/android/bluetooth/BluetoothGatt#setCharacteristicNotification(android.bluetooth.BluetoothGattCharacteristic,%20boolean)>.
+
+Key outcomes:
+- `decodeBoatLockLiveFrame()` now requires exactly 70 bytes instead of accepting longer padded payloads.
+- Added a Flutter unit test for padded-frame rejection.
+- Promoted the exact-length live-frame rule into `docs/BLE_PROTOCOL.md`, `skills/boatlock/references/ble-ui.md`, and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: Android BLE smoke is required for this module because the phone-visible decoder gate changed.
+
+Validation:
+- `cd boatlock_ui && flutter test test/ble_live_frame_test.dart test/ble_smoke_logic_test.dart` -> PASS (`8/8`).
+- `cd boatlock_ui && flutter test` -> PASS (`33/33`).
+- `tools/hw/nh02/android-status.sh` -> phone visible as ADB device `68b657f0`, model `220333QNY`.
+- `tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> exact install `Success`, `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received","dataEvents":1,"mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","rssi":-34,...}`.
+
+Self-review:
+- This intentionally removes compatibility tolerance before alpha release; it should expose producer/padding bugs immediately instead of hiding protocol drift.
+- The remaining risk is real-phone BLE stack behavior; local decoder tests alone are not enough, so the module must include Android smoke.
