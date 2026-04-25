@@ -178,6 +178,7 @@ Implication for BoatLock:
   - treat command-derived log fields as untrusted event data: redact owner/session/secure-envelope payloads, neutralize CR/LF/control characters, and bound the field before formatting
   - reject overlong command writes at the server boundary instead of truncating them into a possibly different valid command
   - reject embedded NUL/control/non-ASCII command bytes before queueing; never let a byte-string command become a shorter valid C string downstream
+  - classify transport-only control commands with exact allowlist matches; prefix/suffix variants should not trigger immediate side effects
   - clamp binary telemetry values before integer rounding/casting so invalid runtime values cannot corrupt the wire representation
   - sanitize direct numeric telemetry fields before packing fixed binary characteristics; out-of-range or non-finite floats must not be cast directly into integers
   - treat quality/confidence fields as bounded enums and fail invalid ordinals to the lowest confidence state instead of clamping upward

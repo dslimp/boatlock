@@ -5,6 +5,7 @@
 #include "RuntimeBleCommandQueue.h"
 #include "RuntimeBleConnectionLog.h"
 #include "RuntimeBleDataPacket.h"
+#include "RuntimeBleImmediateCommand.h"
 #include "RuntimeBleLogText.h"
 #include <cstring>
 
@@ -200,25 +201,24 @@ void BLEBoatLock::loop() {
 }
 
 void BLEBoatLock::handleControlPoint(const std::string& command) {
-    if (command == "STREAM_START") {
-        streamEnabled = true;
-        clearQueuedData();
-        enqueueLiveFrame();
-        logMessage("[BLE] stream start\n");
-        return;
-    }
-
-    if (command == "STREAM_STOP") {
-        streamEnabled = false;
-        clearQueuedData();
-        logMessage("[BLE] stream stop\n");
-        return;
-    }
-
-    if (command == "SNAPSHOT") {
-        clearQueuedData();
-        enqueueLiveFrame();
-        return;
+    switch (runtimeBleParseImmediateCommand(command)) {
+        case RuntimeBleImmediateCommand::STREAM_START:
+            streamEnabled = true;
+            clearQueuedData();
+            enqueueLiveFrame();
+            logMessage("[BLE] stream start\n");
+            return;
+        case RuntimeBleImmediateCommand::STREAM_STOP:
+            streamEnabled = false;
+            clearQueuedData();
+            logMessage("[BLE] stream stop\n");
+            return;
+        case RuntimeBleImmediateCommand::SNAPSHOT:
+            clearQueuedData();
+            enqueueLiveFrame();
+            return;
+        case RuntimeBleImmediateCommand::NONE:
+            break;
     }
 
     enqueueCommand(command);

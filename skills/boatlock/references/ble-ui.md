@@ -49,6 +49,7 @@
 - On app resume, the app schedules a fresh scan unless an active data/control link already exists.
 - Heartbeat write failure is treated as a link loss and schedules reconnect.
 - Firmware logs should suppress high-frequency `HEARTBEAT` command lines while preserving operator/service commands.
+- Immediate BLE transport commands are exact-match only: `STREAM_START`, `STREAM_STOP`, and `SNAPSHOT`. Prefixes, suffixes, and decorated variants must fall through to the normal command path and be rejected there if invalid.
 - After service discovery the app subscribes to:
   - data char `34cd`
   - log char `78ab`

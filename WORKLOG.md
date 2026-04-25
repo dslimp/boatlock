@@ -4007,3 +4007,31 @@ Validation:
 Self-review:
 - This completes the command queue boundary from the previous module: length and byte contract now live in one helper.
 - Remaining risk is that special non-queued commands (`STREAM_START`, `STREAM_STOP`, `SNAPSHOT`) are still checked directly in `handleControlPoint`; malformed variants are not accepted because they require exact string equality.
+
+### 2026-04-25 Stage 126: BLE immediate command exact-match classifier
+
+Scope:
+- Complete the refactor batch with module `15/15`: BLE immediate transport command classification.
+- Move `STREAM_START`, `STREAM_STOP`, and `SNAPSHOT` exact matching out of `BLEBoatLock` branching into a pure, directly tested helper.
+
+External baseline:
+- Bluetooth Core GATT treats writes as characteristic values; BoatLock owns the application-level command grammar and must not let transport convenience commands accept alternate encodings: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-61/out/en/host/generic-attribute-profile--gatt-.html>.
+- OWASP Input Validation Cheat Sheet recommends allowlist validation for small sets of string parameters and exact server-side validation before processing: <https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html>.
+
+Key outcomes:
+- Added `RuntimeBleImmediateCommand.h` with a tiny exact-match classifier.
+- `BLEBoatLock::handleControlPoint()` now switches on the classifier instead of carrying local string branches.
+- Added native tests proving exact accepted commands and prefix/suffix/control-byte variants do not trigger immediate side effects.
+- Promoted the exact-match immediate command rule into `skills/boatlock/references/ble-ui.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no standalone Android smoke added inside this module because valid phone-visible commands and reconnect behavior are unchanged; full Android BLE smoke is required now as part of the 15-module batch acceptance.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_immediate_command -f test_runtime_ble_command_queue` -> PASS (`9/9`).
+- `cd boatlock && platformio test -e native` -> PASS (`316/316`).
+- `cd boatlock && pio run -e esp32s3` -> PASS (`699761` bytes flash).
+- Pending after commit/push: `tools/hw/nh02/acceptance.sh`.
+- Pending after commit/push: `tools/hw/nh02/android-run-smoke.sh --wait-secs 130`.
+
+Self-review:
+- This is mostly structure and proof: immediate command behavior is unchanged, but it is now hard to accidentally widen with a prefix match.
+- Remaining risk is end-to-end BLE transport behavior, so batch acceptance must flash and smoke the real nh02 + Android path after this commit.
