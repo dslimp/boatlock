@@ -4113,3 +4113,27 @@ Validation:
 Self-review:
 - This keeps the live parser simple and stricter instead of adding compatibility branches before alpha.
 - Android smoke proved the stricter decoder still accepts current nh02 telemetry; remaining risk is future enum additions without a version bump, now intentionally rejected instead of silently downgraded.
+
+### 2026-04-25 Stage 130: Remove legacy Flutter JSON telemetry parser
+
+Scope:
+- Continue the refactor batch with module `3/15`: Flutter telemetry model cleanup.
+- Remove an unused legacy JSON parser from `BoatData` now that the app consumes the fixed binary live frame.
+
+External baseline:
+- Bluetooth Core GATT notifications deliver a characteristic Attribute Value, while BoatLock's current `34cd` profile defines that value as one fixed binary frame, not a JSON stream: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-60/out/en/host/generic-attribute-profile--gatt-.html>.
+- OWASP Input Validation guidance favors explicit allowlisted formats over permissive multi-format parsing; keeping an unused parser is a hidden alternate input surface: <https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html>.
+
+Key outcomes:
+- Deleted `BoatData.fromJson()` and its single legacy unit test.
+- Kept `BoatData` as a plain immutable telemetry container populated by `decodeBoatLockLiveFrame()`.
+- Promoted the no-parallel-JSON-telemetry rule into the BLE/UI repo reference and external patterns.
+- Phone-smoke decision: no Android smoke required for this module because no runtime app path changed; the previous module already proved current binary telemetry on the phone.
+
+Validation:
+- `rg -n "BoatData\\.fromJson|fromJson\\(" boatlock_ui/lib boatlock_ui/test` -> PASS; references removed.
+- `cd boatlock_ui && flutter test` -> PASS (`36/36`).
+
+Self-review:
+- This removes code instead of moving it. If JSON telemetry is ever restored, it must be a deliberate protocol path with docs and tests, not a leftover helper.
+- Reference search and full Flutter tests covered the removal; remaining risk is external ad-hoc tooling expecting JSON, which is intentionally unsupported in `main` before alpha.

@@ -62,41 +62,4 @@ class BoatData {
     required this.secPairWindowOpen,
     required this.secReject,
   });
-
-  factory BoatData.fromJson(Map<String, dynamic> json, {int rssi = 0}) {
-    return BoatData(
-      lat: double.tryParse(json['lat']?.toString() ?? '') ?? 0,
-      lon: double.tryParse(json['lon']?.toString() ?? '') ?? 0,
-      anchorLat: double.tryParse(json['anchorLat']?.toString() ?? '') ?? 0,
-      anchorLon: double.tryParse(json['anchorLon']?.toString() ?? '') ?? 0,
-      anchorHeading: double.tryParse(json['anchorHead']?.toString() ?? '') ?? 0,
-      distance: double.tryParse(json['distance']?.toString() ?? '') ?? 0,
-      heading: double.tryParse(json['heading']?.toString() ?? '') ?? 0,
-      battery: int.tryParse(json['battery']?.toString() ?? '') ?? 0,
-      status: json['status']?.toString() ?? '',
-      statusReasons: json['statusReasons']?.toString() ?? '',
-      mode: json['mode']?.toString() ?? '',
-      rssi: rssi,
-      holdHeading: int.tryParse(json['holdHeading']?.toString() ?? '') == 1,
-      stepSpr: int.tryParse(json['stepSpr']?.toString() ?? '') ?? 4096,
-      stepMaxSpd: double.tryParse(json['stepMaxSpd']?.toString() ?? '') ?? 1000,
-      stepAccel: double.tryParse(json['stepAccel']?.toString() ?? '') ?? 500,
-      headingRaw: double.tryParse(json['headingRaw']?.toString() ?? '') ?? 0,
-      compassOffset:
-          double.tryParse(json['compassOffset']?.toString() ?? '') ?? 0,
-      compassQ: int.tryParse(json['compassQ']?.toString() ?? '') ?? 0,
-      magQ: int.tryParse(json['magQ']?.toString() ?? '') ?? 0,
-      gyroQ: int.tryParse(json['gyroQ']?.toString() ?? '') ?? 0,
-      rvAcc: double.tryParse(json['rvAcc']?.toString() ?? '') ?? 0,
-      magNorm: double.tryParse(json['magNorm']?.toString() ?? '') ?? 0,
-      gyroNorm: double.tryParse(json['gyroNorm']?.toString() ?? '') ?? 0,
-      pitch: double.tryParse(json['pitch']?.toString() ?? '') ?? 0,
-      roll: double.tryParse(json['roll']?.toString() ?? '') ?? 0,
-      secPaired: int.tryParse(json['secPaired']?.toString() ?? '') == 1,
-      secAuth: int.tryParse(json['secAuth']?.toString() ?? '') == 1,
-      secPairWindowOpen:
-          int.tryParse(json['secPairWin']?.toString() ?? '') == 1,
-      secReject: json['secReject']?.toString() ?? 'NONE',
-    );
-  }
 }
