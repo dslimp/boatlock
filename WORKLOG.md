@@ -4860,3 +4860,20 @@ Validation:
 Self-review:
 - HIL JSON status/report assembly is now outside the scenario runner and directly tested.
 - Remaining risk is live Android SIM command/report transport after these phone-visible test-interface changes; this is covered by the required post-module-15 hardware/Android acceptance.
+
+### 2026-04-25 Stage 159: 15-module HIL batch hardware and Android acceptance
+
+Scope:
+- Run the mandatory real-hardware gate after completing modules `1/15..15/15` of the HIL refactor batch.
+- Validate current `main` on `nh02` with canonical target proof, flash, hardware acceptance, and Android USB/BLE SIM smoke.
+
+Validation:
+- `tools/hw/nh02/status.sh` -> PASS target proof; `boatlock-esp32s3-rfc2217.service` enabled/active, ESP32-S3 USB target `98:88:E0:03:BA:5C`, RFC2217 listener on `:4000`.
+- `tools/hw/nh02/flash.sh` -> PASS; PlatformIO `esp32s3` build success, RAM `11.5%`, flash `21.0%`, upload/write/verify success, hard reset via RTS.
+- `tools/hw/nh02/acceptance.sh` -> PASS (`[ACCEPT] PASS lines=29`): BNO08x-RVC ready on `rx=12 baud=115200`, heading events ready, display ready, EEPROM `ver=23`, security unpaired, BLE init/advertising, stepper cfg, STOP button, GPS UART data.
+- `tools/hw/nh02/android-status.sh` -> PASS; ADB target `68b657f0`, Xiaomi `220333QNY`, device `rain`.
+- `tools/hw/nh02/android-run-smoke.sh --sim --wait-secs 130` -> PASS; first install attempt hit `INSTALL_FAILED_USER_RESTRICTED`, canonical retry returned `Success`, `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"sim_run_abort_roundtrip","dataEvents":6,"deviceLogEvents":2,"mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","secPaired":false,"secAuth":false,"rssi":-34,"lastDeviceLog":"[SIM] ABORTED"}`.
+
+Self-review:
+- The batch heavily refactored HIL internals and touched phone-visible `SIM_STATUS`/`SIM_REPORT`; native tests covered structure and the Android SIM smoke proved scan/connect/telemetry plus `SIM_RUN`/`SIM_ABORT` roundtrip after a fresh flash.
+- No new durable workflow rule emerged; the existing module-15 hardware gate and MIUI canonical retry rule matched this run.
