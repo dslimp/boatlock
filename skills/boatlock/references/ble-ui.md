@@ -10,6 +10,7 @@
 - `boatlock_ui/lib/ble/ble_boatlock.dart`: scan/connect/auth/write behavior
 - `boatlock_ui/lib/ble/ble_ids.dart`: Flutter BLE device name, service UUID, and characteristic UUID constants
 - `boatlock_ui/lib/ble/ble_device_match.dart`: adapter readiness and BoatLock advertisement matching
+- `boatlock_ui/lib/ble/ble_discovery_check.dart`: required GATT characteristic completeness checks
 - `boatlock_ui/lib/ble/ble_scan_config.dart`: scan service filter and scan timing constants
 - `boatlock_ui/lib/ble/ble_commands.dart`: pure command builders and value allowlists for app-originated commands
 - `boatlock_ui/lib/ble/ble_security_codec.dart`: owner-secret normalization, owner auth proof, and secure command envelope formatting
@@ -30,6 +31,7 @@
 - Flutter UUID/name constants live in `ble_ids.dart`; do not hardcode these identifiers in scan, discovery, or tests.
 - Flutter UUID matching should go through `isBoatLockUuid()` from `ble_ids.dart`, accepting only the exact 16-bit form or the Bluetooth base UUID expansion. Do not use substring matching for services or characteristics.
 - Service discovery should inspect BoatLock characteristics only under service `12ab`; a matching characteristic UUID under another service is not a valid BoatLock control/data/log endpoint.
+- A connected GATT service is usable only when data `34cd`, command `56ef`, and log `78ab` characteristics are all found. Partial discovery must clear the link and retry instead of leaving the app half-connected.
 - Live notify payload length must be validated before `setValue()`; producer-side packets whose length is not exactly the live-frame size are dropped rather than padded, truncated, or read past the packet buffer.
 - Flutter must reject live-frame payloads whose length is not exactly 70 bytes; accepting padded frames hides characteristic-value bugs and can mask protocol drift.
 - Flutter live-frame decoding must reject unknown mode/status/security-reject enum codes while the frame version is unchanged; `UNKNOWN` display fallbacks hide firmware/app schema drift.

@@ -4401,3 +4401,30 @@ Validation:
 Self-review:
 - This removes a real false-positive binding class without changing BoatLock UUID values.
 - Android smoke proves the current firmware advertises/discovers with canonical UUID forms accepted by the stricter helper.
+
+### 2026-04-25 Stage 141: Fail closed on partial Flutter GATT discovery
+
+Scope:
+- Continue the refactor batch with module `14/15`: Flutter BLE GATT completeness after service discovery.
+- Prevent half-connected app state when the BoatLock service is present but one of the required data/command/log characteristics is missing.
+
+External baseline:
+- Android `BluetoothGatt.discoverServices()` discovers services plus characteristics/descriptors offered by the remote device, and client operations require discovery to have completed for the associated characteristic: <https://developer.android.com/reference/android/bluetooth/BluetoothGatt>.
+- Android's GATT server/client guide frames service discovery and characteristic notification setup as prerequisites before using device data/control paths: <https://developer.android.com/develop/connectivity/bluetooth/ble/connect-gatt-server>.
+
+Key outcomes:
+- Added `ble_discovery_check.dart` with pure completeness and missing-endpoint description helpers.
+- Updated `BleBoatLock._connectToDevice()` to require all current BoatLock characteristics: data `34cd`, command `56ef`, and log `78ab`.
+- On partial discovery, the app logs the missing endpoints and applies the reconnect policy's `connectFailed()` decision instead of proceeding silently.
+- Added focused tests for complete and missing-characteristic cases.
+- Updated BLE/UI and external-pattern references.
+- Phone-smoke decision: Android BLE smoke required because connected service discovery behavior changed.
+
+Validation:
+- `cd boatlock_ui && flutter test test/ble_discovery_check_test.dart` -> PASS (`2/2`).
+- `cd boatlock_ui && flutter test` -> PASS (`51/51`).
+- `tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> PASS; install `Success`, `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received","dataEvents":1,"mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","rssi":-34,...}`.
+
+Self-review:
+- This is a fail-closed behavior change on malformed/incomplete GATT service discovery only; normal BoatLock path remains unchanged and was proven on hardware.
+- Remaining risk is if we later make the log characteristic optional; that must be an explicit protocol/smoke change, not an accidental missing endpoint.

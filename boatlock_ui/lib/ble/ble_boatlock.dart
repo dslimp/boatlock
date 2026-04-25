@@ -8,6 +8,7 @@ import '../models/boat_data.dart';
 import 'ble_commands.dart';
 import 'ble_command_text.dart';
 import 'ble_device_match.dart';
+import 'ble_discovery_check.dart';
 import 'ble_ids.dart';
 import 'ble_live_frame.dart';
 import 'ble_log_line.dart';
@@ -200,6 +201,9 @@ class BleBoatLock with WidgetsBindingObserver {
       List<BluetoothService> services = await _device!.discoverServices();
       _log('Services discovered: ${services.length}');
       _clearCharacteristics();
+      var dataFound = false;
+      var commandFound = false;
+      var logFound = false;
       for (var s in services) {
         if (!isBoatLockUuid(s.uuid.toString(), boatLockServiceUuid)) {
           continue;
@@ -208,20 +212,34 @@ class BleBoatLock with WidgetsBindingObserver {
           final uuid = c.uuid.toString().toLowerCase();
           if (isBoatLockUuid(uuid, boatLockDataCharacteristicUuid)) {
             _dataChar = c;
+            dataFound = true;
             await _dataChar!.setNotifyValue(true);
             _dataSub?.cancel();
             _dataSub = _dataChar!.lastValueStream.listen(_onNotify);
           }
           if (isBoatLockUuid(uuid, boatLockCommandCharacteristicUuid)) {
             _cmdChar = c;
+            commandFound = true;
           }
           if (isBoatLockUuid(uuid, boatLockLogCharacteristicUuid)) {
             _logChar = c;
+            logFound = true;
             await _logChar!.setNotifyValue(true);
             _logSub?.cancel();
             _logSub = _logChar!.lastValueStream.listen(_onLogNotify);
           }
         }
+      }
+      if (!boatLockDiscoveryComplete(
+        dataFound: dataFound,
+        commandFound: commandFound,
+        logFound: logFound,
+      )) {
+        _log(
+          'BoatLock characteristics missing ${describeMissingBoatLockCharacteristics(dataFound: dataFound, commandFound: commandFound, logFound: logFound)}',
+        );
+        await _applyReconnectDecision(_reconnectPolicy.connectFailed());
+        return;
       }
       await _setStreamEnabled(true);
       await requestSnapshot();

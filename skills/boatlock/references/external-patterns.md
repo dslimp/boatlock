@@ -194,6 +194,7 @@ Implication for BoatLock:
   - treat text/log characteristic values as length-delimited byte strings, not implicit C strings; trim defensive padding at the client boundary
   - use a service UUID scan filter for the phone app before app-side advertisement validation; unfiltered Android scans are less stable under screen/power constraints and produce unnecessary scan-result traffic
   - match GATT service/characteristic UUIDs exactly, allowing only canonical 16-bit and Bluetooth base UUID forms; substring UUID matching can bind the app to the wrong service or characteristic
+  - fail closed on partial GATT discovery. If a device lacks any required BoatLock characteristic, disconnect/retry instead of keeping a half-usable link with silent command or telemetry loss
 - For manual UI, avoid making actuation look like a primary one-tap FAB action. Use an explicit control surface such as a toolbar entry plus sheet/pad, and keep movement tied to press-and-hold/deadman semantics.
 - Compile-time test-app modes should use one typed allowlist parser and a small unit test, then a real APK build for the entrypoint that consumes the define. This keeps device smoke wrappers from silently drifting away from Flutter code.
 - Shell wrappers that share protocol/test vocabulary should source one common helper and have a cheap CI drift test against the app-side enum/parser. Duplicated case lists make acceptance scripts fail silently when new modes are added.
