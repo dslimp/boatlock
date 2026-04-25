@@ -3844,3 +3844,30 @@ Validation:
 Self-review:
 - This is a small fail-safe hardening cut: bad producer values can no longer appear as high confidence in the phone UI or future tooling.
 - Remaining risk is that GNSS quality is not currently displayed by Flutter; the value is still part of the binary frame and should stay bounded for future use.
+
+### 2026-04-25 Stage 120: BLE data packet exact producer length
+
+Scope:
+- Continue the refactor batch with module `9/15`: firmware live-data queue boundary before GATT `setValue()`.
+- Align the producer-side notify path with the exact 70-byte live-frame contract introduced on the Flutter decoder side.
+
+External baseline:
+- Bluetooth Core GATT treats notifications as characteristic-value updates configured through CCCD, not as an arbitrary byte stream; characteristic-value shape is an application/profile contract: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-61/out/en/host/generic-attribute-profile--gatt-.html>.
+- Android receives notification values through `onCharacteristicChanged()` after notification enablement, so rejecting malformed characteristic values at the producer boundary keeps app-side parsing deterministic: <https://developer.android.com/develop/connectivity/bluetooth/ble/transfer-ble-data>.
+
+Key outcomes:
+- Replaced max-length notify acceptance with `runtimeBleFixedNotifyPayloadLength()`.
+- `BLEBoatLock` data queue now uses the live-frame size as its packet capacity.
+- Firmware drops non-70-byte live data packets before queueing and again before `setValue()`.
+- Updated native tests to reject short, padded, and old max-size packets.
+- Promoted the producer/client exact-length rule into `skills/boatlock/references/ble-ui.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because valid live-frame bytes, BLE schema, reconnect/install, and UI behavior are unchanged; malformed producer packets are now dropped earlier.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_data_packet -f test_runtime_ble_live_frame` -> PASS (`6/6`).
+- `cd boatlock && platformio test -e native` -> PASS (`301/301`).
+- `cd boatlock && pio run -e esp32s3` -> PASS (`698085` bytes flash).
+
+Self-review:
+- This removes a stale generic-data escape hatch from the live characteristic and makes future frame-size drift fail visibly.
+- Remaining risk is future non-live frame types: they should be added as explicit frame types with tests rather than reopening a generic length range.

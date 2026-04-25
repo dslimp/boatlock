@@ -261,7 +261,8 @@ void BLEBoatLock::clearQueuedData() {
 }
 
 void BLEBoatLock::enqueueDataPacket(const std::vector<uint8_t>& payload) {
-    if (!dataQueue || payload.empty() || payload.size() > kDataMaxLen) {
+    if (!dataQueue ||
+        runtimeBleFixedNotifyPayloadLength(payload.size(), kDataMaxLen) == 0) {
         return;
     }
 
@@ -303,7 +304,7 @@ void BLEBoatLock::processQueuedData() {
         return;
     }
 
-    const size_t payloadLen = runtimeBleNotifyPayloadLength(payload.len, kDataMaxLen);
+    const size_t payloadLen = runtimeBleFixedNotifyPayloadLength(payload.len, kDataMaxLen);
     if (payloadLen == 0) {
         return;
     }

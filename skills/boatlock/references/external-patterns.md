@@ -175,7 +175,7 @@ Implication for BoatLock:
   - sanitize direct numeric telemetry fields before packing fixed binary characteristics; out-of-range or non-finite floats must not be cast directly into integers
   - treat quality/confidence fields as bounded enums and fail invalid ordinals to the lowest confidence state instead of clamping upward
   - keep fixed binary telemetry frames length-stable and map enum/flag fields from one explicit table rather than duplicated branching
-  - fixed-length GATT telemetry should be rejected on the client when the characteristic value length differs from the documented frame size; padded acceptance hides producer bugs
+  - fixed-length GATT telemetry should be rejected on both producer and client sides when the characteristic value length differs from the documented frame size; padded acceptance hides producer bugs
   - treat text/log characteristic values as length-delimited byte strings, not implicit C strings; trim defensive padding at the client boundary
 - For manual UI, avoid making actuation look like a primary one-tap FAB action. Use an explicit control surface such as a toolbar entry plus sheet/pad, and keep movement tied to press-and-hold/deadman semantics.
 

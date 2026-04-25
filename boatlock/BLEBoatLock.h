@@ -35,7 +35,7 @@ public:
 private:
     static constexpr size_t kCmdMaxLen = 192;
     static constexpr size_t kCmdQueueLen = 16;
-    static constexpr size_t kDataMaxLen = 96;
+    static constexpr size_t kDataMaxLen = kRuntimeBleLiveFrameSize;
     static constexpr size_t kDataQueueLen = 24;
     static constexpr size_t kLogMaxLen = 244;
     static constexpr size_t kLogQueueLen = 32;
