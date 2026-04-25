@@ -53,6 +53,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+boatlock_validate_smoke_mode "${SMOKE_MODE}"
+
 if [[ "${BUILD_FIRST}" -eq 1 ]]; then
   "${SCRIPT_DIR}/build-smoke-apk.sh" --mode "${SMOKE_MODE}" >/dev/null
 fi

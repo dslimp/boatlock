@@ -65,6 +65,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+boatlock_validate_smoke_mode "${SMOKE_MODE}"
+
 if [[ "${CYCLE_BLUETOOTH}" -eq 1 && "${RESET_ESP32}" -eq 1 ]]; then
   echo "choose only one reconnect trigger: --reconnect or --esp-reset" >&2
   exit 1

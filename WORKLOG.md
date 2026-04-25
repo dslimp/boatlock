@@ -4319,3 +4319,31 @@ Validation:
 Self-review:
 - This removes test-invisible mode parsing from `main_smoke.dart` without changing accepted mode names.
 - Remaining risk is wrapper/code list drift when a new mode is added; the validation reference now requires parser tests plus smoke APK build for that contract.
+
+### 2026-04-25 Stage 138: Centralize Android smoke wrapper modes
+
+Scope:
+- Continue the refactor batch with module `11/15`: Android smoke shell wrapper mode validation.
+- Remove duplicated smoke mode allowlists from individual wrappers and add a CI drift check against the Flutter smoke mode enum.
+
+External baseline:
+- Google Shell Style Guide favors reusable sourced helpers for shared shell logic and keeping scripts consistent rather than repeating policy branches: <https://google.github.io/styleguide/shellguide.html>.
+- Android testing strategy guidance keeps cheap local checks in front of device tests; wrapper mode drift is a local contract bug and should be caught before any nh02/phone run: <https://developer.android.com/training/testing/fundamentals/strategies>.
+
+Key outcomes:
+- Added `BOATLOCK_SMOKE_MODES`, `boatlock_is_smoke_mode()`, and `boatlock_validate_smoke_mode()` to `tools/android/common.sh`.
+- Updated `tools/android/build-smoke-apk.sh`, `tools/android/run-smoke.sh`, and `tools/hw/nh02/android-run-smoke.sh` to use the shared validator.
+- Added `tools/ci/test_android_smoke_modes.py` to compare the shell allowlist with the Flutter `BleSmokeMode` enum and prevent hardcoded wrapper case-list regressions.
+- Updated validation and external-pattern references with the new shared wrapper rule.
+- Phone-smoke decision: no Android BLE smoke required because wrapper mode validation and APK build path changed, not BLE scan/connect/write/telemetry behavior.
+
+Validation:
+- `bash -n tools/android/common.sh tools/android/build-smoke-apk.sh tools/android/run-smoke.sh tools/hw/nh02/android-run-smoke.sh` -> PASS.
+- `pytest -q tools/ci/test_android_smoke_modes.py` -> PASS (`2/2`).
+- `tools/android/build-smoke-apk.sh --mode unsupported` -> expected reject with supported-mode list.
+- `tools/android/build-smoke-apk.sh --mode basic` -> PASS, produced `boatlock_ui/build/app/outputs/flutter-apk/app-debug.apk`.
+- `pytest -q tools/ci/test_*.py` -> PASS (`11/11`).
+
+Self-review:
+- This removes one duplicated acceptance-contract list without changing accepted flags or default mode.
+- Remaining risk is a future mode added to shell but not implemented in smoke page behavior; the enum/list drift test catches names, while mode behavior still needs a targeted smoke-page or Android run when the new mode is real.

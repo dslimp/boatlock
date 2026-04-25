@@ -25,13 +25,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-case "${SMOKE_MODE}" in
-  basic|reconnect|manual|status|sim|anchor) ;;
-  *)
-    echo "unsupported smoke mode: ${SMOKE_MODE}" >&2
-    exit 1
-    ;;
-esac
+boatlock_validate_smoke_mode "${SMOKE_MODE}"
 
 (
   cd "${FLUTTER_DIR}"

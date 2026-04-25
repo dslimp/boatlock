@@ -44,6 +44,7 @@ Use this file for:
 - Bluetooth HID Over GATT Profile: <https://www.bluetooth.com/specifications/specs/hid-over-gatt-profile/>
 - Dart `String.fromEnvironment` API: <https://api.dart.dev/dart-core/String/String.fromEnvironment.html>
 - Android Testing Strategies: <https://developer.android.com/training/testing/fundamentals/strategies>
+- Google Shell Style Guide: <https://google.github.io/styleguide/shellguide.html>
 - OWASP Logging Cheat Sheet: <https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html>
 - OWASP Input Validation Cheat Sheet: <https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html>
 - Material Design Floating Action Button guidance: <https://m1.material.io/components/buttons-floating-action-button.html>
@@ -191,6 +192,7 @@ Implication for BoatLock:
   - treat text/log characteristic values as length-delimited byte strings, not implicit C strings; trim defensive padding at the client boundary
 - For manual UI, avoid making actuation look like a primary one-tap FAB action. Use an explicit control surface such as a toolbar entry plus sheet/pad, and keep movement tied to press-and-hold/deadman semantics.
 - Compile-time test-app modes should use one typed allowlist parser and a small unit test, then a real APK build for the entrypoint that consumes the define. This keeps device smoke wrappers from silently drifting away from Flutter code.
+- Shell wrappers that share protocol/test vocabulary should source one common helper and have a cheap CI drift test against the app-side enum/parser. Duplicated case lists make acceptance scripts fail silently when new modes are added.
 
 ## What Commercial GPS Anchors Get Right
 

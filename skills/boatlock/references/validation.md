@@ -58,7 +58,9 @@
   - `tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130`
-- Smoke APK mode constants and parser live in `boatlock_ui/lib/smoke/ble_smoke_mode.dart`; when that entrypoint contract changes, run its unit test plus `tools/android/build-smoke-apk.sh --mode <mode>` at minimum.
+- Smoke APK mode constants and parser live in `boatlock_ui/lib/smoke/ble_smoke_mode.dart`.
+- Shell smoke wrapper mode allowlist lives in `tools/android/common.sh`; do not duplicate `basic|reconnect|manual|status|sim|anchor` case lists in individual wrappers.
+- When the smoke mode contract changes, run its Flutter unit test, `pytest -q tools/ci/test_android_smoke_modes.py`, and `tools/android/build-smoke-apk.sh --mode <mode>` at minimum.
 - CI helper tests:
   - `pytest tools/ci/test_*.py`
 - Quick audit for persistence call sites:
