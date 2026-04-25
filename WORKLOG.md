@@ -3817,3 +3817,30 @@ Validation:
 Self-review:
 - This intentionally removes compatibility tolerance before alpha release; it should expose producer/padding bugs immediately instead of hiding protocol drift.
 - The remaining risk is real-phone BLE stack behavior; local decoder tests alone are not enough, so the module must include Android smoke.
+
+### 2026-04-25 Stage 119: RuntimeBleParams quality ordinals
+
+Scope:
+- Continue the refactor batch with module `8/15`: runtime-to-BLE telemetry snapshot quality fields.
+- Keep the binary frame layout unchanged while preventing invalid quality ordinals from looking like high-confidence evidence.
+
+External baseline:
+- The BNO08X datasheet defines sensor report Status bits `1:0` as four accuracy states: `0` unreliable, `1` low, `2` medium, `3` high: <https://docs.sparkfun.com/SparkFun_VR_IMU_Breakout_BNO086_QWIIC/assets/component_documentation/BNO080_085-Datasheet_v1.16.pdf>.
+- Signal K's model guidance treats structured/object and enum-like data as semantically bounded values for consumers; producers should not rely on clients guessing meaning outside the schema: <https://signalk.org/specification/1.7.0/doc/data_model.html>.
+
+Key outcomes:
+- Added `runtimeBleTelemetryQuality()` for bounded quality ordinals.
+- Compass, magnetometer, and gyroscope quality now publish only `0..3`; invalid values publish as `0`.
+- GNSS quality now publishes only `0..2`; invalid values publish as `0`.
+- Added native tests for negative and too-high quality ordinals.
+- Promoted the bounded-quality rule into `skills/boatlock/references/ble-ui.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because valid wire values, frame layout, commands, reconnect/install, and UI behavior are unchanged; invalid values are hardened to lower confidence.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_params -f test_runtime_ble_live_frame` -> PASS (`9/9`).
+- `cd boatlock && platformio test -e native` -> PASS (`301/301`).
+- `cd boatlock && pio run -e esp32s3` -> PASS (`698101` bytes flash).
+
+Self-review:
+- This is a small fail-safe hardening cut: bad producer values can no longer appear as high confidence in the phone UI or future tooling.
+- Remaining risk is that GNSS quality is not currently displayed by Flutter; the value is still part of the binary frame and should stay bounded for future use.

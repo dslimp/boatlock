@@ -66,6 +66,13 @@ inline uint16_t runtimeBleTelemetryU16(float value) {
   return (uint16_t)value;
 }
 
+inline uint8_t runtimeBleTelemetryQuality(int value, uint8_t maxValue) {
+  if (value < 0 || value > maxValue) {
+    return 0;
+  }
+  return (uint8_t)value;
+}
+
 inline void registerRuntimeBleParams(const RuntimeBleParamContext& context) {
   BLEBoatLock* ble = &context.ble;
   Settings* settings = &context.settings;
@@ -96,9 +103,15 @@ inline void registerRuntimeBleParams(const RuntimeBleParamContext& context) {
     telemetry.headingRawDeg = compassReadyNow ? compass->getRawAzimuth() : 0.0f;
     telemetry.compassOffsetDeg =
         compassReadyNow ? compass->getHeadingOffsetDeg() : settings->get("MagOffX");
-    telemetry.compassQ = compassReadyNow ? (uint8_t)compass->getHeadingQuality() : 0;
-    telemetry.magQ = compassReadyNow ? (uint8_t)compass->getMagQuality() : 0;
-    telemetry.gyroQ = compassReadyNow ? (uint8_t)compass->getGyroQuality() : 0;
+    telemetry.compassQ = compassReadyNow
+                              ? runtimeBleTelemetryQuality(compass->getHeadingQuality(), 3)
+                              : 0;
+    telemetry.magQ = compassReadyNow
+                         ? runtimeBleTelemetryQuality(compass->getMagQuality(), 3)
+                         : 0;
+    telemetry.gyroQ = compassReadyNow
+                          ? runtimeBleTelemetryQuality(compass->getGyroQuality(), 3)
+                          : 0;
     telemetry.rvAccDeg = compassReadyNow ? compass->getRvAccuracyDeg() : 0.0f;
     telemetry.magNorm = compassReadyNow ? compass->getMagNormUT() : 0.0f;
     telemetry.gyroNorm = compassReadyNow ? compass->getGyroNormDps() : 0.0f;
@@ -112,7 +125,7 @@ inline void registerRuntimeBleParams(const RuntimeBleParamContext& context) {
     telemetry.status = ble->runtimeStatus();
     telemetry.statusReasons = buildStatusReasons();
     telemetry.secReject = std::string(security->lastRejectString());
-    telemetry.gnssQ = (uint8_t)gnssQualityLevel();
+    telemetry.gnssQ = runtimeBleTelemetryQuality(gnssQualityLevel(), 2);
     return telemetry;
   });
 }

@@ -69,11 +69,21 @@ void test_runtime_ble_telemetry_u16_saturates_bad_values() {
   TEST_ASSERT_EQUAL_UINT16(UINT16_MAX, runtimeBleTelemetryU16(70000.0f));
 }
 
+void test_runtime_ble_telemetry_quality_rejects_invalid_ordinals() {
+  TEST_ASSERT_EQUAL_UINT8(0, runtimeBleTelemetryQuality(-1, 3));
+  TEST_ASSERT_EQUAL_UINT8(0, runtimeBleTelemetryQuality(4, 3));
+  TEST_ASSERT_EQUAL_UINT8(0, runtimeBleTelemetryQuality(255, 3));
+  TEST_ASSERT_EQUAL_UINT8(0, runtimeBleTelemetryQuality(3, 2));
+  TEST_ASSERT_EQUAL_UINT8(2, runtimeBleTelemetryQuality(2, 3));
+  TEST_ASSERT_EQUAL_UINT8(3, runtimeBleTelemetryQuality(3, 3));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_anchor_telemetry_accepts_valid_anchor_and_normalizes_heading);
   RUN_TEST(test_anchor_telemetry_clears_invalid_anchor_pair);
   RUN_TEST(test_anchor_telemetry_clears_nonfinite_heading);
   RUN_TEST(test_runtime_ble_telemetry_u16_saturates_bad_values);
+  RUN_TEST(test_runtime_ble_telemetry_quality_rejects_invalid_ordinals);
   return UNITY_END();
 }

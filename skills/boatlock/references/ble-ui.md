@@ -114,6 +114,7 @@
 - Binary live-frame reason flags should be generated from one explicit token-to-bit table and matched as exact CSV tokens, not substring checks.
 - Firmware live-frame scaling must clamp in floating-point space before integer rounding/casting; non-finite values map to neutral `0`.
 - Firmware telemetry snapshot builders must sanitize direct integer fields before assigning them into the live-frame struct; do not rely on later encoder casts to make bad float settings safe.
+- Telemetry quality ordinals are bounded enums: compass/mag/gyro quality must be `0..3`, GNSS quality must be `0..2`, and out-of-range values publish as `0` rather than a high-confidence value.
 - If you add telemetry, update `RuntimeBleLiveFrame.h`, `ble_live_frame.dart`, affected tests, and `docs/BLE_PROTOCOL.md` together.
 - Pure range-hardening inside existing fields does not require a frame-version bump when the byte layout and decoder contract are unchanged.
 

@@ -173,6 +173,7 @@ Implication for BoatLock:
   - build queued BLE log payloads with bounded source scans and explicit zero-fill; do not call C string functions on length-unknown buffers
   - clamp binary telemetry values before integer rounding/casting so invalid runtime values cannot corrupt the wire representation
   - sanitize direct numeric telemetry fields before packing fixed binary characteristics; out-of-range or non-finite floats must not be cast directly into integers
+  - treat quality/confidence fields as bounded enums and fail invalid ordinals to the lowest confidence state instead of clamping upward
   - keep fixed binary telemetry frames length-stable and map enum/flag fields from one explicit table rather than duplicated branching
   - fixed-length GATT telemetry should be rejected on the client when the characteristic value length differs from the documented frame size; padded acceptance hides producer bugs
   - treat text/log characteristic values as length-delimited byte strings, not implicit C strings; trim defensive padding at the client boundary
