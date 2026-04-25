@@ -1,5 +1,7 @@
 #include "RuntimeControlInputBuilder.h"
 
+#include <math.h>
+
 #include <unity.h>
 
 void setUp() {}
@@ -78,6 +80,22 @@ void test_builder_keeps_manual_gps_flag_when_distance_is_invalid_outside_auto() 
   TEST_ASSERT_TRUE(state.input.controlGpsAvailable);
 }
 
+void test_builder_sanitizes_compass_accuracy_and_quality() {
+  const RuntimeControlState highQuality = buildRuntimeControlState(
+      8000, CoreMode::ANCHOR, -1, 0, true, true, 20.0f, true, 30.0f, true, 1.5f, 3, 4.0f);
+  const RuntimeControlState badHighQuality = buildRuntimeControlState(
+      8000, CoreMode::ANCHOR, -1, 0, true, true, 20.0f, true, 30.0f, true, INFINITY, 99, 4.0f);
+  const RuntimeControlState badLowQuality = buildRuntimeControlState(
+      8000, CoreMode::ANCHOR, -1, 0, true, true, 20.0f, true, 30.0f, true, -1.0f, -1, 4.0f);
+
+  TEST_ASSERT_EQUAL_FLOAT(1.5f, highQuality.input.rvAccuracyDeg);
+  TEST_ASSERT_EQUAL(3, highQuality.input.rvQuality);
+  TEST_ASSERT_TRUE(isnan(badHighQuality.input.rvAccuracyDeg));
+  TEST_ASSERT_EQUAL(0, badHighQuality.input.rvQuality);
+  TEST_ASSERT_TRUE(isnan(badLowQuality.input.rvAccuracyDeg));
+  TEST_ASSERT_EQUAL(0, badLowQuality.input.rvQuality);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_builder_keeps_manual_fields_and_disables_bearing_outside_anchor_mode);
@@ -87,5 +105,6 @@ int main() {
   RUN_TEST(test_builder_rejects_nonfinite_bearing_as_unavailable);
   RUN_TEST(test_builder_sanitizes_invalid_distance);
   RUN_TEST(test_builder_keeps_manual_gps_flag_when_distance_is_invalid_outside_auto);
+  RUN_TEST(test_builder_sanitizes_compass_accuracy_and_quality);
   return UNITY_END();
 }

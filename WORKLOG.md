@@ -3664,3 +3664,29 @@ Self-review:
 - This is intentionally a small refactor: changing arbitration code would add risk without simplifying the already-clear priority chain.
 - The useful safety gain is test coverage around every conflicting mode combination, especially manual/anchor/hold and sim/manual overlap.
 - Hardware acceptance is not required for this module under the fifteen-module cadence because no hardware driver, pinout, actuator, BLE reconnect/install, or phone-visible protocol behavior changed.
+
+### 2026-04-25 Stage 113: RuntimeControlInputBuilder compass evidence sanitation
+
+Scope:
+- Continue the refactor batch with module `2/15`: runtime control input boundary.
+- Keep the builder as the single place that converts raw sensor/mode evidence into motion input.
+
+External baseline:
+- SEI CERT FLP04-C recommends checking floating-point inputs for exceptional values before using them because NaN and infinity can propagate into later calculations and corrupt behavior: <https://wiki.sei.cmu.edu/confluence/display/c/FLP04-C.+Check+floating-point+inputs+for+exceptional+values>.
+
+Key outcomes:
+- `RuntimeControlInputBuilder` now sanitizes BNO rotation-vector accuracy before motion control: non-finite or negative values become unknown (`NAN`).
+- Out-of-range BNO quality values now map to `0`, the worst quality bucket, instead of accidentally behaving like high quality.
+- Added native tests for valid quality preservation and invalid high/low quality fail-closed behavior.
+- Promoted the sensor-evidence sanitation rule into `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because no phone-visible BLE, command, reconnect, install, UI, or telemetry schema behavior changed.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_control_input_builder -f test_runtime_motion` -> passed (`16/16`).
+- `cd boatlock && platformio test -e native` -> passed (`298/298`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `698105` bytes.
+
+Self-review:
+- This is a small semantic hardening at a module boundary, not a runtime behavior rewrite.
+- The change only affects corrupted/impossible compass metadata; normal valid BNO inputs are preserved.
+- Hardware acceptance is not required for this module under the fifteen-module cadence because this does not change drivers, pinout, deploy/debug wrappers, BLE reconnect/install, or phone-visible behavior.

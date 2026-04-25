@@ -44,6 +44,7 @@ Use this file for:
 - Bluetooth HID Over GATT Profile: <https://www.bluetooth.com/specifications/specs/hid-over-gatt-profile/>
 - Material Design Floating Action Button guidance: <https://m1.material.io/components/buttons-floating-action-button.html>
 - W3C SCXML state-machine specification: <https://www.w3.org/TR/scxml/>
+- SEI CERT FLP04-C floating-point input checks: <https://wiki.sei.cmu.edu/confluence/display/c/FLP04-C.+Check+floating-point+inputs+for+exceptional+values>
 - CEVA BNO08X Datasheet: <https://www.ceva-ip.com/wp-content/uploads/2019/10/BNO080_085-Datasheet.pdf>
 - Adafruit BNO085 UART-RVC guide: <https://learn.adafruit.com/adafruit-9-dof-orientation-imu-fusion-breakout-bno085/uart-rvc-for-arduino>
 - Adafruit BNO085 pinout/mode-select guide: <https://learn.adafruit.com/adafruit-9-dof-orientation-imu-fusion-breakout-bno085/pinouts>
@@ -137,6 +138,7 @@ Implication for BoatLock:
 - GNSS source transitions should reset stale hardware baselines rather than comparing a new hardware fix against old phone/no-fix state.
 - GNSS quality gates should reject invalid/non-finite thresholds and samples at the gate boundary; corrupted config or `NaN` sensor evidence must not loosen auto-mode entry checks.
 - Angle/heading normalization in safety paths must use bounded modulo-style math, not unbounded loops over input magnitude.
+- Compass accuracy and quality inputs should be sanitized before reaching motion control. Non-finite or negative accuracy is unknown, and out-of-range quality maps to the worst quality bucket.
 - Serial/GNSS watchdogs should be non-blocking and based on elapsed-time checks; direct `now > then` comparisons are not rollover-safe.
 - Serial/GNSS watchdog restarts should start a new no-data observation window, and restart cooldowns should use explicit "restart seen" state instead of treating timestamp `0` as "never".
 - Serial/GNSS watchdog timing config needs local minimum floors so zero or corrupted intervals cannot cause busy warning/restart loops.
