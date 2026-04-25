@@ -4,12 +4,14 @@ BoatLock uses one custom GATT service for the app and bench tooling:
 
 - Service UUID `12ab`
 - Live state characteristic `34cd`: notify/read, compact binary v2 frame
-- Control point characteristic `56ef`: write/write-no-response, ASCII commands
+- Control point characteristic `56ef`: write/write-no-response, printable ASCII commands
 - Device log characteristic `78ab`: notify, text log lines
 
 The live path is not a serial/JSON tunnel. The app subscribes to `34cd`, sends `STREAM_START`, and receives fixed-size binary live frames. Large snapshots and legacy parameter reads are not part of the protocol.
 
 ## Control Point Commands
+
+Control point payloads are application-level command byte strings, not a text stream. Valid command writes are `1..191` printable ASCII bytes (`0x20..0x7E`). Clients must reject empty, overlong, control-byte, embedded-NUL, and non-ASCII commands before writing `56ef`; firmware rejects the same malformed payloads before queueing.
 
 | Command | Parameters | Description |
 |--------|------------|-------------|

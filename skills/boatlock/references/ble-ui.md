@@ -27,6 +27,7 @@
 - BLE command-derived log fields must go through `RuntimeBleCommandLog`: suppress high-rate `HEARTBEAT`, redact `PAIR_SET`, `AUTH_PROVE`, and `SEC_CMD`, neutralize control bytes, and bound field length.
 - BLE command queue writes must reject overlong commands before enqueueing; do not truncate a command into a different syntactically valid command.
 - BLE command queue writes must accept printable ASCII command bytes only; embedded NUL/control/non-ASCII bytes must fail before any C-string conversion.
+- Flutter must validate the same command byte contract before writing `56ef`: non-empty, max `191` printable ASCII bytes.
 - Firmware boot logs should include BLE init and advertising result lines.
 - Firmware runs a BLE advertising watchdog:
   - if the server has no connected clients and advertising is stopped, restart advertising

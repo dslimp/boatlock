@@ -7,6 +7,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter/widgets.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/boat_data.dart';
+import 'ble_command_text.dart';
 import 'ble_live_frame.dart';
 import 'ble_reconnect_policy.dart';
 
@@ -503,10 +504,8 @@ class BleBoatLock with WidgetsBindingObserver {
     final normalized = normalizeOwnerSecret(secret ?? _ownerSecret);
     if (normalized == null) return false;
     _ownerSecret = normalized;
-    await _cmdChar!.write(
-      utf8.encode('PAIR_SET:$normalized'),
-      withoutResponse: false,
-    );
+    final wrote = await _writeControlPoint('PAIR_SET:$normalized');
+    if (!wrote) return false;
     await Future.delayed(const Duration(milliseconds: 120));
     await requestSnapshot();
     await Future.delayed(const Duration(milliseconds: 120));
@@ -526,7 +525,8 @@ class BleBoatLock with WidgetsBindingObserver {
       final ok = await _writeCommand('PAIR_CLEAR');
       if (!ok) return false;
     } else {
-      await _cmdChar!.write(utf8.encode('PAIR_CLEAR'), withoutResponse: false);
+      final wrote = await _writeControlPoint('PAIR_CLEAR');
+      if (!wrote) return false;
     }
     await Future.delayed(const Duration(milliseconds: 120));
     await requestSnapshot();
@@ -545,17 +545,16 @@ class BleBoatLock with WidgetsBindingObserver {
     final secret = _ownerSecret;
     if (secret == null) return false;
 
-    await _cmdChar!.write(utf8.encode('AUTH_HELLO'), withoutResponse: false);
+    final helloSent = await _writeControlPoint('AUTH_HELLO');
+    if (!helloSent) return false;
     await Future.delayed(const Duration(milliseconds: 120));
     await requestSnapshot();
     await Future.delayed(const Duration(milliseconds: 120));
     if (_secNonceHex == '0000000000000000') return false;
 
     final proof = buildAuthProofHex(secret, _secNonceHex);
-    await _cmdChar!.write(
-      utf8.encode('AUTH_PROVE:$proof'),
-      withoutResponse: false,
-    );
+    final proofSent = await _writeControlPoint('AUTH_PROVE:$proof');
+    if (!proofSent) return false;
     await Future.delayed(const Duration(milliseconds: 120));
     await requestSnapshot();
     await Future.delayed(const Duration(milliseconds: 120));
@@ -568,8 +567,7 @@ class BleBoatLock with WidgetsBindingObserver {
   Future<bool> _writeCommand(String cmd) async {
     if (_cmdChar == null) return false;
     if (_isPlainAllowed(cmd)) {
-      await _writeControlPoint(cmd);
-      return true;
+      return _writeControlPoint(cmd);
     }
 
     final ok = await _ensureSecuritySession();
@@ -578,8 +576,7 @@ class BleBoatLock with WidgetsBindingObserver {
       return false;
     }
     if (!_secPaired) {
-      await _writeControlPoint(cmd);
-      return true;
+      return _writeControlPoint(cmd);
     }
 
     _secCounter += 1;
@@ -589,16 +586,23 @@ class BleBoatLock with WidgetsBindingObserver {
       payload: cmd,
       counter: _secCounter,
     );
-    await _cmdChar!.write(utf8.encode(secure), withoutResponse: false);
-    return true;
+    return _writeControlPoint(secure);
   }
 
-  Future<void> _writeControlPoint(
+  Future<bool> _writeControlPoint(
     String cmd, {
     bool withoutResponse = false,
   }) async {
-    if (_cmdChar == null) return;
-    await _cmdChar!.write(utf8.encode(cmd), withoutResponse: withoutResponse);
+    if (_cmdChar == null) return false;
+    final bytes = encodeBoatLockCommandText(cmd);
+    if (bytes == null) {
+      _log(
+        'control point write rejected reason=${validateBoatLockCommandText(cmd)}',
+      );
+      return false;
+    }
+    await _cmdChar!.write(bytes, withoutResponse: withoutResponse);
+    return true;
   }
 
   bool _isPlainAllowed(String cmd) {

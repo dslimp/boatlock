@@ -4060,3 +4060,30 @@ Validation:
 Self-review:
 - The acceptance blocker was in the canonical wrapper, not the bench; it was fixed at the source before rerunning validation.
 - The Android first-attempt install restriction is not a blocker when the canonical retry returns `Success` and the smoke verdict passes; keep recording it because it is important phone-side evidence.
+
+### 2026-04-25 Stage 128: Flutter command write byte contract
+
+Scope:
+- Start the next refactor batch with module `1/15`: Flutter BLE command write boundary.
+- Align the app-side `56ef` writer with the firmware command queue byte contract.
+
+External baseline:
+- Android `BluetoothGatt.writeCharacteristic()` writes a caller-provided `byte[]` characteristic value, so the app owns the exact byte payload it sends: <https://developer.android.com/reference/android/bluetooth/BluetoothGatt#writeCharacteristic(android.bluetooth.BluetoothGattCharacteristic,byte[],int)>.
+- OWASP Input Validation Cheat Sheet recommends allowlist validation plus min/max length checks before processing input: <https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html>.
+
+Key outcomes:
+- Added `ble_command_text.dart` with the shared Flutter-side command contract: non-empty, max `191` printable ASCII bytes.
+- Routed control-point writes, pairing, auth, secure envelopes, and direct `PAIR_CLEAR` through the same validator/encoder before writing `56ef`.
+- Fixed `_writeCommand()` to return `false` when a plain or unpaired command fails the app-side write gate.
+- Updated `docs/BLE_PROTOCOL.md` and `skills/boatlock/references/ble-ui.md` with the client/server command byte contract.
+- Added Flutter unit tests for valid max-length commands, empty/overlong rejection, and control/non-ASCII byte rejection.
+- Phone-smoke decision: Android BLE smoke is required for this module because the Flutter writer used by `STREAM_START`, `SNAPSHOT`, and `HEARTBEAT` changed.
+
+Validation:
+- `cd boatlock_ui && flutter test test/ble_command_text_test.dart test/ble_boatlock_test.dart` -> PASS (`15/15`).
+- `cd boatlock_ui && flutter test` -> PASS (`36/36`).
+- `tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> PASS; install `Success`, `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received","dataEvents":1,"mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","rssi":-35,...}`.
+
+Self-review:
+- This intentionally duplicates the firmware boundary in the app, not as trust in the client but as earlier failure and clearer diagnostics.
+- Android smoke closed the valid-write risk for the telemetry/control heartbeat path; remaining risk is command-specific semantics, which stay covered by the dedicated manual/status/sim/anchor smokes when those modules change.
