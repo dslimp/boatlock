@@ -3953,3 +3953,30 @@ Validation:
 Self-review:
 - This centralizes the command-log policy instead of adding local ad-hoc redaction at each log site.
 - Remaining risk is future new secret-bearing command prefixes; they must be added to `RuntimeBleCommandLog` in the same change as the command handler.
+
+### 2026-04-25 Stage 124: BLE command queue overlong write rejection
+
+Scope:
+- Continue the refactor batch with module `13/15`: BLE command queue boundary.
+- Replace silent command truncation with deterministic rejection before enqueueing.
+
+External baseline:
+- Bluetooth Core GATT says invalid or too-long write-without-response characteristic values must not succeed, and acknowledged writes should return errors for too-long or invalid values: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-61/out/en/host/generic-attribute-profile--gatt-.html>.
+- OWASP Input Validation Cheat Sheet recommends enforcing minimum/maximum length checks server-side before processing input: <https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html>.
+
+Key outcomes:
+- Added `RuntimeBleCommandQueue.h` as the single bounded copy helper for command queue payloads.
+- Overlong command writes are now rejected before queueing instead of being truncated to `kCmdMaxLen - 1`.
+- Queue rejection logs use the sanitized/redacted command log helper.
+- Added native tests for max-size acceptance, overlong rejection without truncation, missing destination, and zero-length slots.
+- Promoted the no-truncation command boundary rule into `skills/boatlock/references/ble-ui.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because valid app commands remain below the queue slot size and phone-visible protocol shape is unchanged; malformed overlong writes now fail closed.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_command_queue -f test_runtime_ble_command_log` -> PASS (`9/9`).
+- `cd boatlock && platformio test -e native` -> PASS (`311/311`).
+- `cd boatlock && pio run -e esp32s3` -> PASS (`699617` bytes flash).
+
+Self-review:
+- This reduces ambiguity at the BLE boundary with less code in `BLEBoatLock.cpp`; truncation is not an acceptable compatibility layer before alpha.
+- Remaining risk is that NimBLE may already truncate above ATT MTU before the callback; the app protocol still must treat any received callback value as complete and validate its own queue slot boundary.

@@ -2,10 +2,10 @@
 #include "BleAdvertisingWatchdog.h"
 #include "Logger.h"
 #include "RuntimeBleCommandLog.h"
+#include "RuntimeBleCommandQueue.h"
 #include "RuntimeBleConnectionLog.h"
 #include "RuntimeBleDataPacket.h"
 #include "RuntimeBleLogText.h"
-#include <algorithm>
 #include <cstring>
 
 // --- Server callbacks ---
@@ -230,9 +230,11 @@ void BLEBoatLock::enqueueCommand(const std::string& cmd) {
     }
 
     char payload[kCmdMaxLen];
-    memset(payload, 0, sizeof(payload));
-    const size_t n = std::min(cmd.size(), kCmdMaxLen - 1);
-    memcpy(payload, cmd.data(), n);
+    if (!runtimeBleCopyCommandForQueue(payload, sizeof(payload), cmd)) {
+        const std::string logCommand = runtimeBleLogCommandText(cmd);
+        logMessage("[BLE] command queue reject reason=too_long command=%s\n", logCommand.c_str());
+        return;
+    }
 
     if (xQueueSend(cmdQueue, payload, 0) != pdTRUE) {
         const std::string logCommand = runtimeBleLogCommandText(std::string(payload));

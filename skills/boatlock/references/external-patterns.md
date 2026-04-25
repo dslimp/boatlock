@@ -43,6 +43,7 @@ Use this file for:
 - Android BluetoothGattCharacteristic API reference: <https://developer.android.com/reference/android/bluetooth/BluetoothGattCharacteristic>
 - Bluetooth HID Over GATT Profile: <https://www.bluetooth.com/specifications/specs/hid-over-gatt-profile/>
 - OWASP Logging Cheat Sheet: <https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html>
+- OWASP Input Validation Cheat Sheet: <https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html>
 - Material Design Floating Action Button guidance: <https://m1.material.io/components/buttons-floating-action-button.html>
 - W3C SCXML state-machine specification: <https://www.w3.org/TR/scxml/>
 - SEI CERT FLP04-C floating-point input checks: <https://wiki.sei.cmu.edu/confluence/display/c/FLP04-C.+Check+floating-point+inputs+for+exceptional+values>
@@ -175,6 +176,7 @@ Implication for BoatLock:
   - build queued BLE log payloads with bounded source scans and explicit zero-fill; do not call C string functions on length-unknown buffers
   - keep BLE log characteristic notifications single-line by trimming trailing CR/LF and neutralizing embedded control bytes
   - treat command-derived log fields as untrusted event data: redact owner/session/secure-envelope payloads, neutralize CR/LF/control characters, and bound the field before formatting
+  - reject overlong command writes at the server boundary instead of truncating them into a possibly different valid command
   - clamp binary telemetry values before integer rounding/casting so invalid runtime values cannot corrupt the wire representation
   - sanitize direct numeric telemetry fields before packing fixed binary characteristics; out-of-range or non-finite floats must not be cast directly into integers
   - treat quality/confidence fields as bounded enums and fail invalid ordinals to the lowest confidence state instead of clamping upward
