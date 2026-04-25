@@ -4759,3 +4759,28 @@ Validation:
 Self-review:
 - The actuator boundary is now isolated and covered with the safe default that matters for accidental-motion review.
 - Remaining risk is that the world model still applies thrust/steer in `HilSimRunner.h`; that should be the next pure extraction.
+
+### 2026-04-25 Stage 155: HIL world model extraction
+
+Scope:
+- Continue the refactor batch with module `12/15`: HIL 2D boat world model.
+- Move `Vec2`, boat world config/state, clamp helper, and `BoatSim2D` out of `HilSimRunner`.
+
+External baseline:
+- PX4 SIH runs a C++ physics model that reads actuator outputs and updates vehicle state every timestep; BoatLock's physics update should be an isolated module: <https://docs.px4.io/main/en/sim_sih/index>.
+- ArduPilot simulation receives firmware servo/motor outputs and returns vehicle status/position/velocities; this validates keeping actuator-output-to-state conversion as a tested boundary: <https://ardupilot.ardupilot.org/dev/docs/simulation-2.html>.
+
+Key outcomes:
+- Added `HilSimWorld.h` with `Vec2`, `BoatWorldConfig`, `BoatWorldState`, `clampf()`, and `BoatSim2D`.
+- Removed the world model implementation from `HilSimRunner.h`.
+- Added direct tests for reset behavior, passive current drift, thrust clamping, and turn-rate application.
+- Promoted the durable world-model boundary rule into `external-patterns.md`.
+- Phone-smoke decision: no Android smoke required because this only changes internal HIL physics ownership; default scenario results and valid `SIM_*` BLE behavior are unchanged.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_hil_sim_world` -> PASS (`3/3`).
+- `cd boatlock && platformio test -e native -f test_hil_sim -f test_hil_sim_metrics` -> PASS (`15/15`).
+
+Self-review:
+- The runner now orchestrates a world object instead of owning physics details, which is closer to the external SIH/SITL pattern.
+- Remaining risk is `SimSensorHub` still lives in the runner header and should be the next high-value extraction because sensors are the other half of the physics/control boundary.

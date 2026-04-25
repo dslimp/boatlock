@@ -262,6 +262,7 @@ Implication for BoatLock:
 - HIL randomness must be seed-owned, deterministic, and directly tested; zero seeds should normalize to a non-zero state so simulated noise cannot collapse silently.
 - HIL time should be owned by an explicit virtual clock; helpers should be tested for set, advance, and unsigned wrap instead of depending on wall-clock timing.
 - HIL actuator capture should keep the last command as explicit simulation input and default to the safe stopped actuator state.
+- HIL world/physics updates should be isolated from scenario orchestration and directly test actuator-output-to-state transitions.
 - On real hardware, simulation acceptance must keep dangerous actuator movement disabled or explicitly zero-throttle unless a powered bench procedure is defined.
 
 ## What ESP32 Storage Guidance Gets Right
