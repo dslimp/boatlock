@@ -4471,3 +4471,31 @@ Validation:
 Self-review:
 - The batch changed Flutter BLE scanning, GATT discovery, smoke tooling, command validation, and app-side parsers; final hardware acceptance confirms firmware boot/sensors are still healthy and current Android app still scans/connects/receives telemetry after a fresh ESP32 flash.
 - No new durable workflow rule emerged beyond the already-recorded MIUI retry rule and wrapper-first acceptance discipline.
+
+### 2026-04-25 Stage 144: HIL time-window helper
+
+Scope:
+- Start the next refactor batch with module `1/15`: on-device HIL simulation timing.
+- Replace the local `inWindow(now, at, duration)` helper in `HilSimRunner.h` with one rollover-safe helper and direct tests.
+
+External baseline:
+- PX4 SIH documents lockstep simulation and deterministic/reproducible results; BoatLock HIL timing helpers must therefore be explicit and deterministic across boundary cases: <https://docs.px4.io/main/en/sim_sih/index>.
+- ArduPilot SITL runs autopilot code as ordinary C++ and feeds simulated sensor data from a flight dynamics model, matching BoatLock's strategy of testing real control code through simulated sensor injections: <https://ardupilot.org/dev/docs/sitl-simulator-software-in-the-loop.html>.
+- Arduino's non-blocking timing pattern uses elapsed-time checks around `millis()` instead of delay/absolute expiry; the same unsigned elapsed-time style is needed for long HIL runs and wrap boundaries: <https://docs.arduino.cc/built-in-examples/digital/BlinkWithoutDelay/>.
+
+Key outcomes:
+- Added `HilSimTime.h` with `simTimeWindowContains(nowMs, atMs, durationMs)`.
+- Replaced all timed HIL injection windows in `HilSimRunner.h` with the shared helper.
+- Added `test_hil_sim_time` for zero-duration, start/end boundary, pre-start rejection, and unsigned rollover.
+- Promoted the durable rule into `external-patterns.md`.
+- Phone-smoke decision: no Android smoke required because this module changes only local/on-device HIL timing helpers and does not change BLE command/telemetry schema or app behavior.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_hil_sim_time` -> PASS (`4/4`).
+- `cd boatlock && platformio test -e native -f test_hil_sim` -> PASS (`11/11`).
+- `python3 tools/sim/test_sim_core.py` -> PASS (`4/4`).
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> PASS for all offline scenarios.
+
+Self-review:
+- This is a small safety refactor with one behavior hardening at wrap boundaries; normal scenario timings remain unchanged.
+- Remaining risk is that `HilSimRunner.h` is still too large; next modules should keep extracting pure HIL pieces without changing scenario expectations.

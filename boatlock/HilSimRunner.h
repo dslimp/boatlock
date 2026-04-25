@@ -11,6 +11,7 @@
 
 #include "AnchorControlLoop.h"
 #include "ControlInterfaces.h"
+#include "HilSimTime.h"
 
 namespace hilsim {
 
@@ -23,11 +24,6 @@ inline float clampf(float v, float lo, float hi) {
   if (v < lo) return lo;
   if (v > hi) return hi;
   return v;
-}
-
-inline bool inWindow(unsigned long nowMs, unsigned long atMs, unsigned long durationMs) {
-  if (nowMs < atMs) return false;
-  return nowMs < (atMs + durationMs);
 }
 
 class XorShift32 {
@@ -289,14 +285,14 @@ public:
         simctl::wrap360f(st.psiDeg + headingBiasDeg_ + rng->gauss(cfg_.headingSigmaDeg));
     heading_.ageMs = 0;
     for (const TimedNanHeading& inj : cfg_.nanHeading) {
-      if (inWindow(nowMs, inj.atMs, inj.durationMs)) {
+      if (simTimeWindowContains(nowMs, inj.atMs, inj.durationMs)) {
         heading_.headingDeg = NAN;
         heading_.valid = true;
         break;
       }
     }
     for (const TimedHeadingDropout& inj : cfg_.headingDropouts) {
-      if (inWindow(nowMs, inj.atMs, inj.durationMs)) {
+      if (simTimeWindowContains(nowMs, inj.atMs, inj.durationMs)) {
         heading_.valid = false;
         heading_.headingDeg = 0.0f;
         heading_.ageMs = 999999UL;
@@ -313,7 +309,7 @@ public:
 
     bool dropped = false;
     for (const TimedDropout& d : cfg_.dropouts) {
-      if (inWindow(nowMs, d.atMs, d.durationMs)) {
+      if (simTimeWindowContains(nowMs, d.atMs, d.durationMs)) {
         dropped = true;
         break;
       }
@@ -333,7 +329,7 @@ public:
     float x = st.xM + rng->gauss(cfg_.posSigmaM);
     float y = st.yM + rng->gauss(cfg_.posSigmaM);
     for (const TimedJump& j : cfg_.jumps) {
-      if (inWindow(nowMs, j.atMs, j.durationMs)) {
+      if (simTimeWindowContains(nowMs, j.atMs, j.durationMs)) {
         x += j.jumpM.x;
         y += j.jumpM.y;
       }
@@ -341,14 +337,14 @@ public:
 
     float hdop = cfg_.hdop;
     for (const TimedHdop& h : cfg_.hdopChanges) {
-      if (inWindow(nowMs, h.atMs, h.durationMs)) {
+      if (simTimeWindowContains(nowMs, h.atMs, h.durationMs)) {
         hdop = h.hdop;
       }
     }
 
     int sats = cfg_.sats;
     for (const TimedSats& s : cfg_.satsChanges) {
-      if (inWindow(nowMs, s.atMs, s.durationMs)) {
+      if (simTimeWindowContains(nowMs, s.atMs, s.durationMs)) {
         sats = s.sats;
       }
     }
@@ -785,7 +781,7 @@ private:
   Vec2 currentAtMs(unsigned long nowMs) const {
     Vec2 current = scenario_.env.baseCurrentMps;
     for (const TimedCurrent& g : scenario_.env.gusts) {
-      if (inWindow(nowMs, g.atMs, g.durationMs)) {
+      if (simTimeWindowContains(nowMs, g.atMs, g.durationMs)) {
         current = g.currentMps;
       }
     }
@@ -794,7 +790,7 @@ private:
 
   bool inHeadingDropout(unsigned long nowMs) const {
     for (const TimedHeadingDropout& d : scenario_.sensors.headingDropouts) {
-      if (inWindow(nowMs, d.atMs, d.durationMs)) {
+      if (simTimeWindowContains(nowMs, d.atMs, d.durationMs)) {
         return true;
       }
     }
@@ -803,7 +799,7 @@ private:
 
   bool inPowerLoss(unsigned long nowMs) const {
     for (const TimedPowerLoss& p : scenario_.powerLosses) {
-      if (inWindow(nowMs, p.atMs, p.durationMs)) {
+      if (simTimeWindowContains(nowMs, p.atMs, p.durationMs)) {
         return true;
       }
     }
@@ -812,7 +808,7 @@ private:
 
   bool inDisplayLoss(unsigned long nowMs) const {
     for (const TimedDisplayLoss& d : scenario_.displayLosses) {
-      if (inWindow(nowMs, d.atMs, d.durationMs)) {
+      if (simTimeWindowContains(nowMs, d.atMs, d.durationMs)) {
         return true;
       }
     }
@@ -822,7 +818,7 @@ private:
   float actuatorScaleAtMs(unsigned long nowMs) const {
     float scale = 1.0f;
     for (const TimedActuatorDerate& d : scenario_.actuatorDerates) {
-      if (inWindow(nowMs, d.atMs, d.durationMs)) {
+      if (simTimeWindowContains(nowMs, d.atMs, d.durationMs)) {
         scale = std::min(scale, clampf(d.thrustScale, 0.0f, 1.0f));
       }
     }
@@ -861,7 +857,7 @@ private:
 
   unsigned long effectiveDtMs(unsigned long nowMs, unsigned long defaultDtMs) const {
     for (const TimedLoopStall& s : scenario_.loopStalls) {
-      if (inWindow(nowMs, s.atMs, s.durationMs)) {
+      if (simTimeWindowContains(nowMs, s.atMs, s.durationMs)) {
         return s.dtMs;
       }
     }

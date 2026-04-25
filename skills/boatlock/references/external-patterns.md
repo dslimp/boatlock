@@ -157,6 +157,7 @@ Implication for BoatLock:
 - Saturation diagnostics should validate the configured actuator limit before comparing output against it.
 - HIL/control-loop timers follow the same rule as watchdogs and diagnostics: use explicit seen flags plus unsigned elapsed-time math, and treat timestamp `0` as a valid sample.
 - HIL core behavior needs direct boundary tests in addition to end-to-end scenarios; scenario coverage alone can miss timer sentinel bugs.
+- HIL fault-injection windows must use one rollover-safe elapsed-time helper. Do not compare `now < at + duration`; absolute expiry math can silently break when simulated time wraps.
 - HIL command surfaces should be narrow and deterministic: accept only documented commands and reject malformed payloads instead of guessing alternate encodings.
 - HIL logs are part of the test interface. Keep log records single-line, bounded, and neutralize CR/LF/control characters before logging command-derived fields.
 - Periodic UI/BLE/sensor cadence should use one shared non-blocking elapsed-time helper. Floor interval `0` instead of allowing same-timestamp bursts, and test unsigned rollover directly instead of relying only on normal interval scenarios.
