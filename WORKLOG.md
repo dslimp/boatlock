@@ -4137,3 +4137,28 @@ Validation:
 Self-review:
 - This removes code instead of moving it. If JSON telemetry is ever restored, it must be a deliberate protocol path with docs and tests, not a leftover helper.
 - Reference search and full Flutter tests covered the removal; remaining risk is external ad-hoc tooling expecting JSON, which is intentionally unsupported in `main` before alpha.
+
+### 2026-04-25 Stage 131: Extract Flutter BLE command builders
+
+Scope:
+- Continue the refactor batch with module `4/15`: Flutter app-originated BLE command builders.
+- Move pure command formatting and value allowlists out of the stateful BLE transport class.
+
+External baseline:
+- Dart Effective Dart recommends narrow public APIs and notes that Dart does not require all code to live inside classes; top-level functions are appropriate when state is not needed: <https://dart.dev/effective-dart/design>.
+- OWASP Input Validation recommends syntactic and semantic validation with exact allowed values and min/max range checks before processing structured input: <https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html>.
+
+Key outcomes:
+- Added `ble_commands.dart` for pure builders: anchor, phone GPS, nudge, anchor profile, and manual deadman commands.
+- Removed those static helper methods from `BleBoatLock`, keeping the transport class focused on scan/connect/auth/write state.
+- Moved command-builder tests from `ble_boatlock_test.dart` into `ble_commands_test.dart`.
+- Updated the BLE/UI reference to mark `ble_commands.dart` as the canonical app command-builder module.
+- Phone-smoke decision: no Android smoke required because command bytes and runtime app behavior are unchanged; this is a pure extraction with existing command-builder tests.
+
+Validation:
+- `cd boatlock_ui && flutter test test/ble_commands_test.dart test/ble_boatlock_test.dart` -> PASS (`12/12`).
+- `cd boatlock_ui && flutter test` -> PASS (`36/36`).
+
+Self-review:
+- This reduces the central BLE class without introducing a compatibility wrapper for the removed static methods.
+- Targeted and full Flutter tests covered import/reference drift; remaining risk is command-builder growth, so future app commands should go into this pure module with local tests first.
