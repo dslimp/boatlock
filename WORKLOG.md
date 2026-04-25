@@ -3925,3 +3925,31 @@ Validation:
 Self-review:
 - This is diagnostic hardening only; it does not affect NimBLE connection state or reconnect behavior.
 - Remaining risk is that a future stack may render addresses in a non-hex token format, in which case the log will fall back to `unknown` until explicitly allowed.
+
+### 2026-04-25 Stage 123: BLE command log redaction and sanitation
+
+Scope:
+- Continue the refactor batch with module `12/15`: BLE control-point and auth-required diagnostic fields.
+- Keep command execution behavior unchanged while preventing command-derived diagnostics from leaking secrets or forging log records.
+
+External baseline:
+- OWASP Logging Cheat Sheet treats event data from other trust zones as untrusted, requires sanitization against CR/LF/delimiter log injection, warns against logging secrets/tokens, and requires verification tests for logging behavior: <https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html>.
+- Bluetooth Core GATT keeps command writes as characteristic values; BoatLock's command text remains an application-layer payload and must be validated/sanitized before diagnostics, not treated as trusted log text: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-61/out/en/host/generic-attribute-profile--gatt-.html>.
+
+Key outcomes:
+- Added `runtimeBleLogCommandText()` as the single BLE command diagnostic formatter.
+- Redacted `PAIR_SET`, `AUTH_PROVE`, and `SEC_CMD` payloads from command logs.
+- Neutralized ASCII control bytes and bounded command log fields.
+- Applied the formatter to control-point logs, command-queue-full logs, and auth-required logs.
+- Added native tests for sensitive command redaction, control-byte sanitation, and length bounding.
+- Promoted the rule into `skills/boatlock/references/ble-ui.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because BLE command execution, telemetry, reconnect/install, and phone-visible UI behavior are unchanged; only diagnostic text is redacted/sanitized.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_command_log -f test_runtime_ble_log_text` -> PASS (`12/12`).
+- `cd boatlock && platformio test -e native` -> PASS (`307/307`).
+- `cd boatlock && pio run -e esp32s3` -> PASS (`699501` bytes flash).
+
+Self-review:
+- This centralizes the command-log policy instead of adding local ad-hoc redaction at each log site.
+- Remaining risk is future new secret-bearing command prefixes; they must be added to `RuntimeBleCommandLog` in the same change as the command handler.

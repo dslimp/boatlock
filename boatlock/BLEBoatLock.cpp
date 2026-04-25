@@ -94,7 +94,8 @@ public:
     void onWrite(NimBLECharacteristic* pCharacteristic, NimBLEConnInfo&) override {
         std::string command = pCharacteristic->getValue();
         if (runtimeBleShouldLogCommand(command)) {
-            logMessage("[BLE] Control point: %s\n", command.c_str());
+            const std::string logCommand = runtimeBleLogCommandText(command);
+            logMessage("[BLE] Control point: %s\n", logCommand.c_str());
         }
         if (parent) parent->handleControlPoint(command);
     }
@@ -234,7 +235,8 @@ void BLEBoatLock::enqueueCommand(const std::string& cmd) {
     memcpy(payload, cmd.data(), n);
 
     if (xQueueSend(cmdQueue, payload, 0) != pdTRUE) {
-        logMessage("[BLE] command queue full, dropped: %s\n", payload);
+        const std::string logCommand = runtimeBleLogCommandText(std::string(payload));
+        logMessage("[BLE] command queue full, dropped: %s\n", logCommand.c_str());
     }
 }
 

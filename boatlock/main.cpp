@@ -38,6 +38,7 @@
 #include "RuntimeSimLog.h"
 #include "RuntimeSimBadge.h"
 #include "RuntimeStatus.h"
+#include "RuntimeBleCommandLog.h"
 #include "RuntimeSupervisorPolicy.h"
 #include "RuntimeTelemetryCadence.h"
 #include "RuntimeUiSnapshot.h"
@@ -591,7 +592,8 @@ bool preprocessSecureCommand(const std::string& incoming, std::string* effective
   }
 
   if (bleSecurity.commandNeedsAuth(incoming)) {
-    logMessage("[EVENT] AUTH_REQUIRED command=%s\n", incoming.c_str());
+    const std::string logCommand = runtimeBleLogCommandText(incoming);
+    logMessage("[EVENT] AUTH_REQUIRED command=%s\n", logCommand.c_str());
     return false;
   }
 

@@ -24,6 +24,7 @@
 - Log characteristic values are byte strings with explicit length. Firmware must set the exact text length, and Flutter must ignore trailing NUL padding defensively.
 - BLE log queue writes must build bounded, NUL-terminated payload slots without `strlen()` on untrusted or length-unknown input.
 - BLE log notifications must stay single-line: trim trailing CR/LF and neutralize embedded ASCII control bytes before enqueueing or publishing over `78ab`.
+- BLE command-derived log fields must go through `RuntimeBleCommandLog`: suppress high-rate `HEARTBEAT`, redact `PAIR_SET`, `AUTH_PROVE`, and `SEC_CMD`, neutralize control bytes, and bound field length.
 - Firmware boot logs should include BLE init and advertising result lines.
 - Firmware runs a BLE advertising watchdog:
   - if the server has no connected clients and advertising is stopped, restart advertising
