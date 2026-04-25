@@ -4658,3 +4658,29 @@ Validation:
 Self-review:
 - This makes failure-reason priority explicit and easier to review without stepping through the runner loop.
 - Remaining risk is that `hardFailure` remains collected but not evaluated by existing behavior; changing that would be semantic and should be a separate safety module with scenario coverage.
+
+### 2026-04-25 Stage 151: HIL error histogram extraction
+
+Scope:
+- Continue the refactor batch with module `8/15`: HIL error metric accumulation.
+- Move p95/error histogram ownership out of `HilScenarioRunner`.
+
+External baseline:
+- ArduPilot SITL documents accessing logs and graphing vehicle state/internal variables after simulation; BoatLock's aggregate metrics should be explicit evidence, not hidden loop state: <https://ardupilot.org/dev/docs/using-sitl-for-ardupilot-testing.html>.
+- PX4 simulation docs note that simulated sensor data can be logged and compared for analysis/debugging; invalid numeric inputs must be contained before they distort metrics: <https://docs.px4.io/main/en/simulation/>.
+
+Key outcomes:
+- Added `HilSimMetrics.h` with `SimErrorHistogram`.
+- Replaced runner-owned histogram bins and p95 calculation helpers with one metrics helper.
+- Added direct tests for empty histogram behavior, p95 bin centers, invalid value fail-closed behavior, and reset.
+- Promoted the durable HIL metrics rule into `external-patterns.md`.
+- Phone-smoke decision: no Android smoke required because this only changes internal HIL metric accumulation; valid `SIM_*` command/output behavior is unchanged and covered by native scenarios.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_hil_sim_metrics` -> PASS (`4/4`).
+- `cd boatlock && platformio test -e native -f test_hil_sim` -> PASS (`11/11`).
+- `cd boatlock && platformio test -e native -f test_hil_sim_expect` -> PASS (`3/3`).
+
+Self-review:
+- The runner now delegates timing, events, expectation policy, and p95 histogram to focused helpers.
+- Remaining risk is that `SimMetrics` itself still mixes collected facts with currently-unused `hardFailure`; handle that separately only when adding a tested semantic policy for hard failures.

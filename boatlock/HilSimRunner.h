@@ -4,7 +4,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <algorithm>
-#include <array>
 #include <string>
 #include <utility>
 #include <vector>
@@ -14,6 +13,7 @@
 #include "HilSimEvents.h"
 #include "HilSimExpect.h"
 #include "HilSimJson.h"
+#include "HilSimMetrics.h"
 #include "HilSimTime.h"
 
 namespace hilsim {
@@ -418,7 +418,7 @@ public:
     controller_.reset();
     controller_.requestAnchor(true);
 
-    clearErrorHist();
+    errorHist_.clear();
     eventLog_.clear();
     compassLossActive_ = false;
     powerLossActive_ = false;
@@ -561,7 +561,7 @@ public:
       result_.metrics.hardFailure = true;
       result_.metrics.hardFailureReason = "ERR_NAN";
     }
-    recordErrorSample(errTrue);
+    errorHist_.add(errTrue);
     samples_++;
     result_.metrics.maxErrorM = std::max(result_.metrics.maxErrorM, errTrue);
     if (errTrue <= controller_.config().deadbandM) {
@@ -770,36 +770,6 @@ private:
     return scale;
   }
 
-  void clearErrorHist() { errorHist_.fill(0); }
-
-  void recordErrorSample(float errTrue) {
-    float err = errTrue;
-    if (!isfinite(err) || err < 0.0f) {
-      err = kErrorHistMaxM;
-    }
-    size_t idx = (size_t)floorf(err / kErrorHistBinM);
-    if (idx >= kErrorHistBins) {
-      idx = kErrorHistBins - 1;
-    }
-    errorHist_[idx]++;
-  }
-
-  float p95FromHist() const {
-    if (samples_ == 0) {
-      return 0.0f;
-    }
-    const uint32_t target = (uint32_t)ceilf(0.95f * (float)samples_);
-    uint32_t acc = 0;
-    for (size_t i = 0; i < kErrorHistBins; ++i) {
-      acc += errorHist_[i];
-      if (acc >= target) {
-        const float center = ((float)i + 0.5f) * kErrorHistBinM;
-        return center;
-      }
-    }
-    return result_.metrics.maxErrorM;
-  }
-
   unsigned long effectiveDtMs(unsigned long nowMs, unsigned long defaultDtMs) const {
     for (const TimedLoopStall& s : scenario_.loopStalls) {
       if (simTimeWindowContains(nowMs, s.atMs, s.durationMs)) {
@@ -820,7 +790,7 @@ private:
       return;
     }
 
-    result_.metrics.p95ErrorM = p95FromHist();
+    result_.metrics.p95ErrorM = errorHist_.p95(result_.metrics.maxErrorM);
     result_.metrics.timeInDeadbandPct = 100.0f * ((float)deadbandCount_ / (float)samples_);
     result_.metrics.timeSaturatedPct = 100.0f * ((float)saturatedCount_ / (float)samples_);
     const float minutes = (scenario_.durationMs / 1000.0f) / 60.0f;
@@ -851,9 +821,6 @@ private:
   }
 
   static constexpr size_t maxEventsInReport_ = 64;
-  static constexpr float kErrorHistBinM = 0.1f;
-  static constexpr float kErrorHistMaxM = 64.0f;
-  static constexpr size_t kErrorHistBins = (size_t)(kErrorHistMaxM / kErrorHistBinM) + 1;
 
   SimScenario scenario_;
   State state_ = State::IDLE;
@@ -869,7 +836,7 @@ private:
   simctl::AnchorControlLoop controller_;
   XorShift32 rng_;
 
-  std::array<uint32_t, kErrorHistBins> errorHist_{};
+  SimErrorHistogram errorHist_;
   SimEventLog eventLog_;
   Result result_;
   LiveTelemetry live_;
