@@ -3620,3 +3620,21 @@ Self-review:
 - The diagnostics/readability batch passed local unit/UI tests, was flashed to `nh02`, boot-accepted, and passed the current Android BLE smoke suite with exact APK installs.
 - The prior cosmetic `Reas9` disconnect artifact did not reappear in the 60s acceptance log; connection logs now preserve address and raw reason fields in shorter key=value form.
 - Remaining validation gaps are real GNSS fix behavior, powered actuator load, multi-controller arbitration, and on-water hold quality; this bench still reports `NO_GPS` in Android smokes.
+
+### 2026-04-25 Stage 111: Module cadence changed to fifteen
+
+Scope:
+- Capture the user's corrected default cadence before continuing module refactors.
+
+Key outcomes:
+- Default refactor batch size is now fifteen modules.
+- Per-module requirements remain unchanged: targeted external baseline, smallest useful refactor, local tests, phone-smoke decision, `WORKLOG.md` self-review, commit, and push.
+- Scheduled `nh02` flash, hardware acceptance, serial log scan, and Android BLE smoke suite now run after every fifteenth module.
+- High-risk changes still trigger immediate hardware or Android acceptance instead of waiting for the fifteenth module.
+
+Validation:
+- Documentation-only workflow change; `git diff --check` is the relevant local validation.
+
+Self-review:
+- The longer cadence reduces bench churn for low-risk local-only refactors.
+- The main risk is a larger local-only window, so the immediate hardware gate for drivers, pinout, deploy/debug, actuator safety, BLE reconnect/install, and other unbounded paths must stay strict.
