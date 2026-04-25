@@ -45,6 +45,38 @@ bool smokeAnchorRejectedSafely(BoatData data) {
   return data.mode != 'ANCHOR';
 }
 
+bool smokeCompassCalStartLogSeen(String? line) {
+  return line != null && line.contains('[EVENT] COMPASS_CAL_START');
+}
+
+bool smokeCompassDcdAutosaveLogSeen(String? line) {
+  return line != null && line.contains('[EVENT] COMPASS_DCD_AUTOSAVE');
+}
+
+bool smokeCompassDcdSaveLogSeen(String? line) {
+  return line != null && line.contains('[EVENT] COMPASS_DCD_SAVE');
+}
+
+bool smokeGpsFixLooksHealthy(BoatData data) {
+  if (data.gnssQ <= 0) {
+    return false;
+  }
+  if (!data.lat.isFinite ||
+      !data.lon.isFinite ||
+      data.lat < -90.0 ||
+      data.lat > 90.0 ||
+      data.lon < -180.0 ||
+      data.lon > 180.0) {
+    return false;
+  }
+  if (data.lat.abs() < 0.000001 && data.lon.abs() < 0.000001) {
+    return false;
+  }
+  return !smokeStatusHasReason(data, 'NO_GPS') &&
+      !smokeStatusHasReason(data, 'GPS_DATA_STALE') &&
+      !smokeStatusHasReason(data, 'GPS_HDOP_MISSING');
+}
+
 Map<String, dynamic> buildSmokeResultPayload({
   required bool pass,
   required String reason,
@@ -64,6 +96,9 @@ Map<String, dynamic> buildSmokeResultPayload({
     'secPaired': data?.secPaired ?? false,
     'secAuth': data?.secAuth ?? false,
     'rssi': data?.rssi ?? 0,
+    'lat': data?.lat ?? 0.0,
+    'lon': data?.lon ?? 0.0,
+    'gnssQ': data?.gnssQ ?? 0,
     'lastDeviceLog': lastDeviceLog ?? '',
   };
 }

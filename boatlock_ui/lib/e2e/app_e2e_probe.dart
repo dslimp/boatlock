@@ -20,9 +20,11 @@ class BoatLockAppE2eProbe {
     : _ble = ble,
       _mode = mode {
     _log('starting_app_e2e mode=${_mode.name}');
-    final timeout = _mode == BleSmokeMode.reconnect
-        ? const Duration(seconds: 150)
-        : const Duration(seconds: 75);
+    final timeout = switch (_mode) {
+      BleSmokeMode.reconnect => const Duration(seconds: 150),
+      BleSmokeMode.gps => const Duration(seconds: 180),
+      _ => const Duration(seconds: 75),
+    };
     _timeoutTimer = Timer(timeout, () {
       _finish(false, 'app_${_mode.name}_timeout');
     });
@@ -62,6 +64,11 @@ class BoatLockAppE2eProbe {
   bool _anchorOnSent = false;
   bool _anchorDeniedSeen = false;
   bool _anchorOffSent = false;
+  bool _compassCommandsSent = false;
+  bool _compassCalLogSeen = false;
+  bool _compassAutosaveLogSeen = false;
+  bool _compassDcdSaveLogSeen = false;
+  bool _gpsWaitingLogged = false;
 
   static BoatLockAppE2eProbe? maybeCreate(BleBoatLock ble) {
     if (kBoatLockAppE2eModeName.isEmpty) {
@@ -82,7 +89,9 @@ class BoatLockAppE2eProbe {
     _dataEvents += 1;
     _log(
       'telemetry mode=${data.mode} status=${data.status} '
-      'paired=${data.secPaired} auth=${data.secAuth} rssi=${data.rssi}',
+      'paired=${data.secPaired} auth=${data.secAuth} rssi=${data.rssi} '
+      'lat=${data.lat.toStringAsFixed(6)} lon=${data.lon.toStringAsFixed(6)} '
+      'gnssQ=${data.gnssQ}',
     );
     if (!smokeTelemetryLooksHealthy(data)) {
       return;
@@ -101,6 +110,10 @@ class BoatLockAppE2eProbe {
         _handleSimData(data);
       case BleSmokeMode.anchor:
         _handleAnchorData(data);
+      case BleSmokeMode.compass:
+        _handleCompassData();
+      case BleSmokeMode.gps:
+        _handleGpsData(data);
     }
   }
 
@@ -115,6 +128,21 @@ class BoatLockAppE2eProbe {
         smokeAnchorDeniedLogSeen(_lastDeviceLog)) {
       _anchorDeniedSeen = true;
       _stage('anchor_denied_seen');
+    }
+    if (_mode == BleSmokeMode.compass) {
+      if (smokeCompassCalStartLogSeen(_lastDeviceLog)) {
+        _compassCalLogSeen = true;
+        _stage('compass_cal_start_seen');
+      }
+      if (smokeCompassDcdAutosaveLogSeen(_lastDeviceLog)) {
+        _compassAutosaveLogSeen = true;
+        _stage('compass_dcd_autosave_seen');
+      }
+      if (smokeCompassDcdSaveLogSeen(_lastDeviceLog)) {
+        _compassDcdSaveLogSeen = true;
+        _stage('compass_dcd_save_seen');
+      }
+      _finishCompassIfReady();
     }
   }
 
@@ -248,6 +276,27 @@ class BoatLockAppE2eProbe {
     _finish(true, 'app_anchor_denied_roundtrip');
   }
 
+  void _handleCompassData() {
+    if (!_compassCommandsSent) {
+      _compassCommandsSent = true;
+      _stage('compass_commands');
+      unawaited(_sendCompassCommands());
+      return;
+    }
+    _finishCompassIfReady();
+  }
+
+  void _handleGpsData(BoatData data) {
+    if (smokeGpsFixLooksHealthy(data)) {
+      _finish(true, 'app_gps_fix_received');
+      return;
+    }
+    if (!_gpsWaitingLogged) {
+      _gpsWaitingLogged = true;
+      _stage('gps_waiting_fix');
+    }
+  }
+
   Future<void> _sendManualSet() async {
     final ok = await _ble.sendManualControl(
       steer: 0,
@@ -349,6 +398,28 @@ class BoatLockAppE2eProbe {
     if (!ok) {
       _anchorOffSent = false;
       _finish(false, 'app_anchor_off_failed');
+    }
+  }
+
+  Future<void> _sendCompassCommands() async {
+    final calOk = await _ble.sendCustomCommand('COMPASS_CAL_START');
+    final autosaveOffOk = await _ble.sendCustomCommand(
+      'COMPASS_DCD_AUTOSAVE_OFF',
+    );
+    final saveOk = await _ble.sendCustomCommand('COMPASS_DCD_SAVE');
+    _log(
+      'compass_commands cal=$calOk autosaveOff=$autosaveOffOk dcdSave=$saveOk',
+    );
+    if (!calOk || !autosaveOffOk || !saveOk) {
+      _finish(false, 'app_compass_command_write_failed');
+    }
+  }
+
+  void _finishCompassIfReady() {
+    if (_compassCalLogSeen &&
+        _compassAutosaveLogSeen &&
+        _compassDcdSaveLogSeen) {
+      _finish(true, 'app_compass_command_logs_received');
     }
   }
 

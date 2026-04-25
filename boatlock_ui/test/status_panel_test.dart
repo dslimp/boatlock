@@ -36,6 +36,7 @@ void main() {
       secAuth: false,
       secPairWindowOpen: false,
       secReject: 'NONE',
+      gnssQ: 0,
     );
     await tester.pumpWidget(MaterialApp(home: StatusPanel(data: data)));
     expect(find.text('WARN'), findsOneWidget);

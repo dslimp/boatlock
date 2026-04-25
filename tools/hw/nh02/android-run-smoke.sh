@@ -37,6 +37,14 @@ while [[ $# -gt 0 ]]; do
       SMOKE_MODE="anchor"
       shift
       ;;
+    --compass)
+      SMOKE_MODE="compass"
+      shift
+      ;;
+    --gps)
+      SMOKE_MODE="gps"
+      shift
+      ;;
     --esp-reset)
       SMOKE_MODE="reconnect"
       RESET_ESP32=1

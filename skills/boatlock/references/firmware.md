@@ -38,12 +38,16 @@
 ## Hardware Baseline
 
 - Main firmware supports BNO08x only.
-- Production compass transport is UART-RVC only. Do not reintroduce ESP32-S3 I2C/SH2 compass code or compatibility shims unless explicitly requested.
+- Accepted bench compass transport is currently UART-RVC. Full BNO08x DCD/calibration
+  work uses the explicit `esp32s3_bno08x_sh2_uart` build target and requires
+  rewiring PS0/PS1 plus BNO RX/TX before flashing that target.
+- BNO08x UART-RVC is a one-way heading stream and cannot perform SH2 commands
+  such as DCD save, dynamic calibration config, or tare.
 - Current active development and hardware acceptance target one default ESP32-S3 bench board. Do not add new `BOATLOCK_BOARD_JC4832W535` or other board-specific runtime branches unless explicitly requested.
 - Compass integration notes and current bench evidence live in `docs/COMPASS_BNO08X.md`.
 - Current default-board pins from `boatlock/main.cpp`:
   - GPS `RX=17`, `TX=18`
-  - BNO08x UART-RVC `RX=12`, `RST=13`, `baud=115200`
+  - BNO08x UART-RVC `RX=12`, `TX=11` reserved for SH2 UART, `RST=13`, `baud=115200`
   - BNO08x protocol select wiring: `P0/PS0=3V3`, `P1/PS1=GND`
   - motor `PWM=7`, direction pins `5/10`
   - BOOT button `0`

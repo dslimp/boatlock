@@ -148,6 +148,20 @@ inline void handleBleCommand(const std::string &cmd) {
     compass.setHeadingOffsetDeg(0.0f);
     settings.set("MagOffX", 0.0f);
     settings.save();
+  } else if (command == "COMPASS_CAL_START") {
+    compass.startDynamicCalibration(false);
+  } else if (command == "COMPASS_DCD_SAVE") {
+    compass.saveDynamicCalibration();
+  } else if (command == "COMPASS_DCD_AUTOSAVE_ON") {
+    compass.setDcdAutoSave(true);
+  } else if (command == "COMPASS_DCD_AUTOSAVE_OFF") {
+    compass.setDcdAutoSave(false);
+  } else if (command == "COMPASS_TARE_Z") {
+    compass.tareHeadingNow();
+  } else if (command == "COMPASS_TARE_SAVE") {
+    compass.saveTare();
+  } else if (command == "COMPASS_TARE_CLEAR") {
+    compass.clearTare();
   } else if (command.rfind("SET_PHONE_GPS:", 0) == 0) {
     float lat = 0.0f, lon = 0.0f, speedKmh = 0.0f;
     int satellites = 0;

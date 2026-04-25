@@ -2,8 +2,9 @@
 
 ## Production Rule
 
-BoatLock production firmware uses BNO08x UART-RVC only. The old ESP32-S3 I2C/SH2
-path is removed from `main`, not kept as a fallback.
+Current accepted bench firmware uses BNO08x UART-RVC. A SH2-UART build target
+exists for the DCD/calibration migration, but it must not be flashed as the
+bench acceptance target until the module is physically rewired out of RVC mode.
 
 Runtime heading is valid only when fresh UART-RVC frames are arriving. A boot
 line, reset pulse, cached heading, or historical I2C address visibility is not
@@ -18,6 +19,26 @@ enough for anchor control.
 - UART baud: `115200`
 - Frame format: `0xAA 0xAA` sync, 17-byte payload, checksum over payload bytes
 
+## SH2-UART DCD Migration Wiring
+
+Use this only when switching from the simple RVC stream to full SH2 command mode:
+
+- BNO08x `TXO` -> ESP32-S3 `GPIO12` (`RX`)
+- BNO08x `RXI` -> ESP32-S3 `GPIO11` (`TX`)
+- BNO08x `RST` -> ESP32-S3 `GPIO13`
+- BNO08x `P0/PS0` -> `GND`
+- BNO08x `P1/PS1` -> `3V3`
+- UART baud: `3000000`
+- Build target: `cd boatlock && pio run -e esp32s3_bno08x_sh2_uart`
+
+SparkFun's protocol-selection table is the source of truth for the PS pins:
+`PS0=1,PS1=0` is UART-RVC; `PS0=0,PS1=1` is SH2 UART; `PS0=1,PS1=1` is SPI.
+
+The SH2 build enables rotation vector, calibrated magnetometer, calibrated gyro,
+accelerometer, dynamic calibration config, DCD save, DCD autosave control, and
+Z-axis tare commands. Do not run `COMPASS_TARE_Z` casually: it changes the
+heading basis and can make anchor control point the wrong way.
+
 `GPIO12` and `GPIO13` were verified on the `nh02` bench with the tracked probe
 firmware. After the BNO08x header contacts were re-soldered, the RVC probe read
 thousands of valid frames with stable yaw/pitch/roll and checksum OK.
@@ -26,6 +47,9 @@ thousands of valid frames with stable yaw/pitch/roll and checksum OK.
 
 - `BNO08xCompass.h` owns UART-RVC parsing, heading offset, freshness, pitch,
   roll, and acceleration telemetry.
+- In the SH2-UART build, `BNO08xCompass.h` owns the SHTP UART frame transport,
+  rotation-vector heading, quality fields, dynamic calibration, DCD save, and
+  tare commands.
 - `BnoRvcFrame.h` owns the small frame parser and native unit coverage.
 - `headingAvailable()` uses `lastHeadingEventAgeMs`.
 - `FIRST_EVENT_TIMEOUT` and `EVENT_STALE` both make compass unavailable.
@@ -39,8 +63,11 @@ thousands of valid frames with stable yaw/pitch/roll and checksum OK.
 Local:
 
 - `cd boatlock && platformio test -e native -f test_bno_rvc_frame -f test_runtime_compass_health`
+- `cd boatlock && platformio test -e native -f test_bno08x_compass`
+- `cd boatlock && platformio test -e native -f test_ble_command_handler`
 - `pytest tools/hw/nh02/test_acceptance.py`
 - `cd boatlock && pio run -e esp32s3`
+- `cd boatlock && pio run -e esp32s3_bno08x_sh2_uart`
 
 Hardware:
 
@@ -51,6 +78,14 @@ Acceptance requires both lines in the same clean capture:
 
 - `[COMPASS] ready=1 source=BNO08x-RVC rx=12 baud=115200`
 - `[COMPASS] heading events ready ...`
+
+Android:
+
+- `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130`
+
+On current RVC wiring this Android smoke proves only BLE command delivery and
+device-log acknowledgements (`ok=0 source=BNO08x-RVC`). DCD/tare success requires
+SH2-UART wiring and the explicit SH2 build target.
 
 Acceptance remains red if later logs contain `COMPASS lost`, `COMPASS retry
 ready=0`, Arduino `[E]` logs, panic/assert/backtrace, or BLE/display boot

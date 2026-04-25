@@ -1,4 +1,5 @@
 #include "BNO08xCompass.h"
+#include "BNO08xMath.h"
 
 #include <unity.h>
 #include <climits>
@@ -90,10 +91,35 @@ void test_hardware_reset_clears_event_state() {
   TEST_ASSERT_EQUAL(0xFFFFFFFFUL, compass.lastHeadingEventAgeMs(millis()));
 }
 
+void test_quaternion_heading_math_normalizes_yaw() {
+  const float half = 0.70710678f;
+  const BNO08xEulerDeg euler = bno08xEulerFromQuaternion(0.0f, 0.0f, half, half);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 90.0f, euler.yaw);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, euler.pitch);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, euler.roll);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 350.0f, bno08xNormalize360(-10.0f));
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, -170.0f, bno08xNormalize180(190.0f));
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, bno08xNormalize360(NAN));
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, bno08xNormalize180(INFINITY));
+}
+
+void test_rvc_backend_rejects_sh2_calibration_commands() {
+  BNO08xCompass compass;
+  TEST_ASSERT_FALSE(compass.sh2Enabled());
+  TEST_ASSERT_FALSE(compass.startDynamicCalibration(false));
+  TEST_ASSERT_FALSE(compass.saveDynamicCalibration());
+  TEST_ASSERT_FALSE(compass.setDcdAutoSave(true));
+  TEST_ASSERT_FALSE(compass.tareHeadingNow());
+  TEST_ASSERT_FALSE(compass.saveTare());
+  TEST_ASSERT_FALSE(compass.clearTare());
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_heading_event_at_zero_has_real_age_and_quality);
   RUN_TEST(test_heading_age_survives_unsigned_millis_wrap);
   RUN_TEST(test_hardware_reset_clears_event_state);
+  RUN_TEST(test_quaternion_heading_math_normalizes_yaw);
+  RUN_TEST(test_rvc_backend_rejects_sh2_calibration_commands);
   return UNITY_END();
 }

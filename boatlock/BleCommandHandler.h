@@ -159,6 +159,31 @@ inline void handleBleCommand(const std::string& cmd) {
         settings.set("MagOffX", 0.0f);
         settings.save();
         logMessage("[BLE] CompassOffset reset\n");
+    } else if (command == "COMPASS_CAL_START") {
+        const bool ok = compass.startDynamicCalibration(false);
+        logMessage("[EVENT] COMPASS_CAL_START ok=%d source=%s\n", ok ? 1 : 0, compass.sourceName());
+    } else if (command == "COMPASS_DCD_SAVE") {
+        const bool ok = compass.saveDynamicCalibration();
+        logMessage("[EVENT] COMPASS_DCD_SAVE ok=%d source=%s\n", ok ? 1 : 0, compass.sourceName());
+    } else if (command == "COMPASS_DCD_AUTOSAVE_ON") {
+        const bool ok = compass.setDcdAutoSave(true);
+        logMessage("[EVENT] COMPASS_DCD_AUTOSAVE enabled=1 ok=%d source=%s\n",
+                   ok ? 1 : 0,
+                   compass.sourceName());
+    } else if (command == "COMPASS_DCD_AUTOSAVE_OFF") {
+        const bool ok = compass.setDcdAutoSave(false);
+        logMessage("[EVENT] COMPASS_DCD_AUTOSAVE enabled=0 ok=%d source=%s\n",
+                   ok ? 1 : 0,
+                   compass.sourceName());
+    } else if (command == "COMPASS_TARE_Z") {
+        const bool ok = compass.tareHeadingNow();
+        logMessage("[EVENT] COMPASS_TARE_Z ok=%d source=%s\n", ok ? 1 : 0, compass.sourceName());
+    } else if (command == "COMPASS_TARE_SAVE") {
+        const bool ok = compass.saveTare();
+        logMessage("[EVENT] COMPASS_TARE_SAVE ok=%d source=%s\n", ok ? 1 : 0, compass.sourceName());
+    } else if (command == "COMPASS_TARE_CLEAR") {
+        const bool ok = compass.clearTare();
+        logMessage("[EVENT] COMPASS_TARE_CLEAR ok=%d source=%s\n", ok ? 1 : 0, compass.sourceName());
     } else if (command.rfind("SET_PHONE_GPS:", 0) == 0) {
         float lat = 0.0f, lon = 0.0f, speedKmh = 0.0f;
         int satellites = 0;

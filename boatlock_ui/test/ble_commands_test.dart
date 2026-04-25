@@ -34,6 +34,7 @@ BoatData _data({required double lat, required double lon}) {
     secAuth: false,
     secPairWindowOpen: false,
     secReject: 'NONE',
+    gnssQ: 0,
   );
 }
 

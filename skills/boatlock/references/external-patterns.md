@@ -283,6 +283,19 @@ Implication for BoatLock:
 - Boot migration, CRC recovery, and value normalization are the only expected boot-time settings writes.
 - Non-finite config values must fail closed before reaching persisted storage.
 
+## What BNO08x SH2 Integration Gets Right
+
+- UART-RVC is a one-way heading stream. It is useful for a simple, robust bench path, but it cannot configure dynamic calibration, save Dynamic Calibration Data, or perform tare.
+- SH2 features such as rotation-vector reports, dynamic calibration config, DCD save/autosave, and tare require a bidirectional SH2 transport: SH2 UART, SPI, or I2C.
+- On this bench, I2C was rejected by hardware evidence, so SH2-UART is the preferred migration path. Keep it behind an explicit build target until the module is physically rewired.
+- Tare changes the heading basis and can make control point the wrong way. Do not run tare casually in generic smokes; keep it as an explicit service/calibration action.
+
+Implication for BoatLock:
+- Keep the accepted RVC production path buildable and testable while SH2-UART is being brought up.
+- Treat RVC compass smokes as routing proof only (`ok=0` is expected for SH2-only commands).
+- Require SH2-UART wiring plus the explicit `esp32s3_bno08x_sh2_uart` target before accepting DCD/tare success.
+- Keep compass command smokes safe by avoiding tare unless the test's purpose is explicitly tare acceptance.
+
 ## Best-Practice Decisions For BoatLock
 
 These are the durable takeaways that should influence future changes:

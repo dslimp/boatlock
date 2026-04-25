@@ -73,8 +73,13 @@ constexpr int kStepIn4Pin = 16;
 constexpr int kGpsRxPin = 17;
 constexpr int kGpsTxPin = 18;
 constexpr int kCompassRxPin = 12;
+constexpr int kCompassTxPin = 11;
 constexpr int kCompassResetPin = 13;
+#if BOATLOCK_COMPASS_SH2_UART
+constexpr uint32_t kCompassBaud = 3000000;
+#else
 constexpr uint32_t kCompassBaud = 115200;
+#endif
 constexpr int kMotorPwmPin = 7;
 constexpr int kMotorDirPin1 = 5;
 constexpr int kMotorDirPin2 = 10;
@@ -753,13 +758,15 @@ void setup() {
              cfg::kCompassResetPin,
              compassHardwareReset ? 1 : 0);
 
-  compassReady = compass.begin(compassSerial, cfg::kCompassRxPin, cfg::kCompassBaud);
+  compassReady =
+      compass.begin(compassSerial, cfg::kCompassRxPin, cfg::kCompassTxPin, cfg::kCompassBaud);
   compassReadySinceMs = compassReady ? millis() : 0;
   compassHeadingEventsReadyLogged = false;
-  logMessage("[COMPASS] ready=%d source=%s rx=%d baud=%lu\n",
+  logMessage("[COMPASS] ready=%d source=%s rx=%d tx=%d baud=%lu\n",
              (int)compassReady,
              compass.sourceName(),
              compass.rxPin(),
+             compass.txPin(),
              (unsigned long)compass.baud());
 
   const bool displayReady = display_init();
@@ -832,13 +839,15 @@ void loop() {
   const unsigned long now = millis();
   if (compassRetry.shouldRetry(compassReady, now, cfg::kCompassRetryIntervalMs)) {
     const bool resetPulse = compass.hardwareReset();
-    compassReady = compass.begin(compassSerial, cfg::kCompassRxPin, cfg::kCompassBaud);
+    compassReady =
+        compass.begin(compassSerial, cfg::kCompassRxPin, cfg::kCompassTxPin, cfg::kCompassBaud);
     compassReadySinceMs = compassReady ? now : 0;
     compassHeadingEventsReadyLogged = false;
-    logMessage("[COMPASS] retry ready=%d source=%s rx=%d baud=%lu reset=%d\n",
+    logMessage("[COMPASS] retry ready=%d source=%s rx=%d tx=%d baud=%lu reset=%d\n",
                (int)compassReady,
                compass.sourceName(),
                compass.rxPin(),
+               compass.txPin(),
                (unsigned long)compass.baud(),
                resetPulse ? 1 : 0);
     if (compassReady) {

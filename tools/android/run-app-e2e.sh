@@ -35,6 +35,16 @@ while [[ $# -gt 0 ]]; do
       PASS_ARGS+=("$1")
       shift
       ;;
+    --compass)
+      MODE="compass"
+      PASS_ARGS+=("$1")
+      shift
+      ;;
+    --gps)
+      MODE="gps"
+      PASS_ARGS+=("$1")
+      shift
+      ;;
     --no-build)
       BUILD_FIRST=0
       PASS_ARGS+=("$1")

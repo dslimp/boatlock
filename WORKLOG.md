@@ -4908,3 +4908,93 @@ Validation:
 Self-review:
 - The production app now has direct BLE e2e proof for connect/telemetry and safe command roundtrips without replacing the existing smoke APK path.
 - Remaining app-e2e gaps are `sim`, `reconnect`, `esp-reset`, and a future `gps-field` mode for BLE-only GNSS validation when ESP32 is powered from a powerbank away from `nh02`.
+
+### 2026-04-25 Stage 161: BNO08x SH2-UART DCD migration target
+
+Scope:
+- Add the full BNO08x SH2 feature path needed for Dynamic Calibration Data, calibration control, and tare without breaking the accepted UART-RVC bench firmware.
+- Keep current `main` safe on the existing RVC wiring and put SH2-UART behind an explicit PlatformIO target until the hardware is rewired.
+
+External baseline:
+- Adafruit's BNO08x library exposes SH2 UART and uses the same SH2 C API for `begin_UART`, report enabling, and sensor event decode: <https://github.com/adafruit/Adafruit_BNO08x>.
+- The Adafruit SH2 dependency exposes `sh2_saveDcdNow`, `sh2_setCalConfig`, `sh2_setDcdAutoSave`, `sh2_setTareNow`, `sh2_persistTare`, and `sh2_clearTare`.
+- SparkFun's BNO08x library documents the sensor as a fused IMU with UART/SPI/I2C capability and exposes calibration/DCD/tare concepts in its SH2 wrapper: <https://github.com/sparkfun/SparkFun_BNO08x_Arduino_Library>.
+
+Key outcomes:
+- Added `BNO08xMath.h` for bounded heading/quaternion math and made non-finite angle normalization fail to `0`.
+- Reworked `BNO08xCompass.h` so the default firmware remains BNO08x UART-RVC, while `esp32s3_bno08x_sh2_uart` builds a bidirectional SH2-UART backend at `3000000` baud.
+- SH2-UART backend enables rotation vector, calibrated magnetometer, calibrated gyro, accelerometer, dynamic calibration config, DCD save/autosave control, and Z-axis tare APIs.
+- Added BLE command routing for `COMPASS_CAL_START`, `COMPASS_DCD_SAVE`, `COMPASS_DCD_AUTOSAVE_ON/OFF`, `COMPASS_TARE_Z`, `COMPASS_TARE_SAVE`, and `COMPASS_TARE_CLEAR`.
+- Added safe Android/app compass smoke mode that sends only `COMPASS_CAL_START`, `COMPASS_DCD_AUTOSAVE_OFF`, and `COMPASS_DCD_SAVE`, then requires device-log acknowledgements. Tare is intentionally excluded from generic smoke because it changes heading basis.
+- Updated compass/hardware/protocol docs and promoted the durable RVC-vs-SH2 rule into the repo skill references.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_bno08x_compass -f test_ble_command_handler -f test_bno_rvc_frame -f test_runtime_compass_health` -> PASS (`51/51`).
+- Earlier full native suite after this firmware slice: `cd boatlock && platformio test -e native` -> PASS (`359/359`).
+- `cd boatlock && pio run -e esp32s3` -> PASS, RAM `11.5%`, flash `21.0%`.
+- `cd boatlock && pio run -e esp32s3_bno08x_sh2_uart` -> PASS, RAM `12.5%`, flash `21.3%`.
+- `bash -n tools/android/build-app-apk.sh tools/android/run-app-e2e.sh tools/android/run-smoke.sh tools/android/build-smoke-apk.sh tools/hw/nh02/android-run-app-e2e.sh tools/hw/nh02/android-run-smoke.sh` -> PASS.
+- `pytest -q tools/ci/test_android_smoke_modes.py tools/hw/nh02/test_acceptance.py` -> PASS (`9/9`).
+- `cd boatlock_ui && flutter test` -> PASS (`56/56`).
+- `tools/android/build-app-apk.sh --e2e-mode compass` -> PASS.
+- `tools/android/build-smoke-apk.sh --mode compass` -> PASS.
+- `tools/hw/nh02/status.sh` -> `boatlock-esp32s3-rfc2217.service` active, but ESP32 USB target missing at `/dev/serial/by-id/...`; hardware flash/serial acceptance is blocked until the board is back on `nh02` USB.
+
+Self-review:
+- Default RVC firmware remains the accepted bench path and builds without the Adafruit dependency; SH2-UART is opt-in only.
+- The SH2 UART HAL is build-validated and based on the Adafruit framing, but not hardware-accepted yet because the module is still wired for RVC. Real DCD/tare acceptance requires rewiring BNO `RXI/TXO`, `PS0=GND`, `PS1=3V3`, then flashing `esp32s3_bno08x_sh2_uart`.
+- RVC Android compass smoke will prove BLE command delivery only (`ok=0 source=BNO08x-RVC` expected). It must not be recorded as DCD success.
+
+### 2026-04-25 Stage 162: Production app GPS e2e mode
+
+Scope:
+- Add the missing production-app e2e mode for BLE-visible hardware GNSS fix while the ESP32 can be powered away from `nh02` USB for sky view.
+- Run the new mode against the Android phone on `nh02` after the user reported that GPS likely caught.
+
+Key outcomes:
+- Added `gnssQ` to the Flutter `BoatData` model and decoded byte `69` from the v2 live frame.
+- Added `gps` mode to the shared smoke-mode parser, smoke APK, production app e2e hook, local wrappers, and `nh02` wrappers.
+- GPS smoke passes only on valid non-zero coordinates plus `gnssQ > 0`, while rejecting `NO_GPS`, `GPS_DATA_STALE`, and `GPS_HDOP_MISSING`.
+- Smoke result payload now includes `lat`, `lon`, and `gnssQ` so failed field captures show whether BLE is alive but GNSS is absent.
+- Updated hardware/validation docs with `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180`.
+
+Validation:
+- `bash -n tools/android/build-app-apk.sh tools/android/run-app-e2e.sh tools/android/run-smoke.sh tools/android/build-smoke-apk.sh tools/hw/nh02/android-run-app-e2e.sh tools/hw/nh02/android-run-smoke.sh` -> PASS.
+- `pytest -q tools/ci/test_android_smoke_modes.py tools/hw/nh02/test_acceptance.py` -> PASS (`9/9`).
+- `cd boatlock_ui && flutter test` -> PASS (`57/57`).
+- `tools/android/build-app-apk.sh --e2e-mode gps` -> PASS.
+- `tools/android/build-smoke-apk.sh --mode gps` -> PASS.
+- `tools/hw/nh02/android-status.sh` -> PASS, ADB target `68b657f0`, Xiaomi `220333QNY`.
+- `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180` -> FAIL after exact APK install succeeded. Result: `{"pass":false,"reason":"app_gps_timeout","dataEvents":176,"deviceLogEvents":0,"mode":"IDLE","status":"WARN","statusReasons":"","secPaired":false,"secAuth":false,"rssi":-54,"lat":0.0,"lon":0.0,"gnssQ":0,"lastDeviceLog":""}`.
+
+Self-review:
+- The BLE/app path is proven alive by 176 live frames, but the ESP32 firmware did not publish a hardware GNSS fix during the run.
+- Because ESP32 USB was not present on `nh02`, serial GPS diagnostics and reflashing the new diagnostic-capable firmware remain blocked until the board is back on USB.
+- Do not count GPS module LED/fix indication as firmware GNSS proof; acceptance proof is live frame `lat/lon` plus `gnssQ`, or serial logs from the canonical hardware path.
+
+### 2026-04-25 Stage 163: GitHub CI test and firmware artifact packaging
+
+Scope:
+- Tighten the GitHub Actions pipeline so CI runs the repo CI helper tests and publishes an explicit firmware binary artifact bundle.
+
+External baseline:
+- GitHub's `actions/upload-artifact` docs support explicit artifact names, path inputs, and `if-no-files-found: error`; v4+ artifacts are immutable, so firmware and simulation reports should be uploaded under distinct names.
+
+Key outcomes:
+- Added `python3 -m pytest tools/ci/test_*.py` to the firmware CI job so helper scripts such as release notes and Android smoke mode checks are covered on every run.
+- Kept schema and firmware version checks as execution checks after their tests.
+- Added a `dist/firmware-esp32s3` packaging step that copies `firmware.bin`, `bootloader.bin`, `partitions.bin`, and `firmware.elf`, then writes `BUILD_INFO.txt` and `SHA256SUMS`.
+- Split simulation reports into a separate `simulation-reports` artifact while keeping them attached to tagged GitHub releases.
+
+Validation:
+- `git diff --check -- .github/workflows/ci.yml WORKLOG.md` -> PASS.
+- Python YAML parse of `.github/workflows/ci.yml` -> PASS.
+- `python3 -m pytest tools/ci/test_*.py` -> PASS (`13/13`).
+- `python3 tools/ci/check_config_schema_version.py && python3 tools/ci/check_firmware_version.py` -> PASS (`0x17`, `0.2.0`).
+- `cd boatlock && pio run -e esp32s3` -> PASS, flash `701457` bytes.
+- Local run of the firmware packaging shell step produced `firmware.bin`, `bootloader.bin`, `partitions.bin`, `firmware.elf`, `BUILD_INFO.txt`, and `SHA256SUMS`; generated `dist/firmware-esp32s3` was removed after validation.
+- Ruby YAML parse was not usable on this host because the local rbenv Ruby links against an incompatible-architecture `gmp`; Python YAML parse covered syntax instead.
+
+Self-review:
+- This is pipeline-only and does not change firmware, BLE, Flutter, or hardware behavior.
+- Remaining risk is only GitHub runner behavior for artifact upload/download shape; the paths are explicit and `if-no-files-found: error` keeps missing binaries from passing silently.

@@ -34,6 +34,14 @@ while [[ $# -gt 0 ]]; do
       SMOKE_MODE="anchor"
       shift
       ;;
+    --compass)
+      SMOKE_MODE="compass"
+      shift
+      ;;
+    --gps)
+      SMOKE_MODE="gps"
+      shift
+      ;;
     --no-build)
       BUILD_FIRST=0
       shift

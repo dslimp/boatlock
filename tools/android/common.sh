@@ -11,7 +11,7 @@ BOATLOCK_ANDROID_ADB_BIN="${BOATLOCK_ANDROID_ADB_BIN:-/usr/local/bin/adb}"
 BOATLOCK_ANDROID_PACKAGE="${BOATLOCK_ANDROID_PACKAGE:-com.example.boatlock_ui}"
 BOATLOCK_ANDROID_ACTIVITY="${BOATLOCK_ANDROID_ACTIVITY:-${BOATLOCK_ANDROID_PACKAGE}/.MainActivity}"
 BOATLOCK_ANDROID_APK="${BOATLOCK_ANDROID_APK:-${FLUTTER_DIR}/build/app/outputs/flutter-apk/app-debug.apk}"
-BOATLOCK_SMOKE_MODES=(basic reconnect manual status sim anchor)
+BOATLOCK_SMOKE_MODES=(basic reconnect manual status sim anchor compass gps)
 
 FLUTTER_ENV=(
   env

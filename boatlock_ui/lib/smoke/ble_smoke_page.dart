@@ -21,6 +21,7 @@ class BleSmokePage extends StatefulWidget {
 class _BleSmokePageState extends State<BleSmokePage> {
   static const Duration _basicTimeout = Duration(seconds: 75);
   static const Duration _reconnectTimeout = Duration(seconds: 150);
+  static const Duration _gpsTimeout = Duration(seconds: 180);
   static const Duration _reconnectGap = Duration(seconds: 4);
 
   late final BleBoatLock _ble;
@@ -55,6 +56,11 @@ class _BleSmokePageState extends State<BleSmokePage> {
   bool _anchorOnSent = false;
   bool _anchorDeniedSeen = false;
   bool _anchorOffSent = false;
+  bool _compassCommandsSent = false;
+  bool _compassCalLogSeen = false;
+  bool _compassAutosaveLogSeen = false;
+  bool _compassDcdSaveLogSeen = false;
+  bool _gpsWaitingLogged = false;
 
   @override
   void initState() {
@@ -65,9 +71,11 @@ class _BleSmokePageState extends State<BleSmokePage> {
 
   Future<void> _start() async {
     _appendEvent('starting_ble_smoke');
-    final timeout = widget.mode == BleSmokeMode.reconnect
-        ? _reconnectTimeout
-        : _basicTimeout;
+    final timeout = switch (widget.mode) {
+      BleSmokeMode.reconnect => _reconnectTimeout,
+      BleSmokeMode.gps => _gpsTimeout,
+      _ => _basicTimeout,
+    };
     _timeoutTimer = Timer(timeout, () {
       _finish(false, 'timeout_waiting_for_telemetry');
     });
@@ -95,7 +103,9 @@ class _BleSmokePageState extends State<BleSmokePage> {
     _dataEvents += 1;
     _appendEvent(
       'telemetry mode=${data.mode} status=${data.status} '
-      'paired=${data.secPaired} auth=${data.secAuth} rssi=${data.rssi}',
+      'paired=${data.secPaired} auth=${data.secAuth} rssi=${data.rssi} '
+      'lat=${data.lat.toStringAsFixed(6)} lon=${data.lon.toStringAsFixed(6)} '
+      'gnssQ=${data.gnssQ}',
     );
     if (!_completed && smokeTelemetryLooksHealthy(data)) {
       if (widget.mode == BleSmokeMode.basic) {
@@ -116,6 +126,14 @@ class _BleSmokePageState extends State<BleSmokePage> {
       }
       if (widget.mode == BleSmokeMode.anchor) {
         _handleAnchorSmokeData(data);
+        return;
+      }
+      if (widget.mode == BleSmokeMode.compass) {
+        _handleCompassSmokeData();
+        return;
+      }
+      if (widget.mode == BleSmokeMode.gps) {
+        _handleGpsSmokeData(data);
         return;
       }
       if (!_firstTelemetrySeen) {
@@ -323,6 +341,39 @@ class _BleSmokePageState extends State<BleSmokePage> {
     _finish(true, 'anchor_denied_roundtrip');
   }
 
+  void _handleCompassSmokeData() {
+    if (!_compassCommandsSent) {
+      _compassCommandsSent = true;
+      _appendEvent(encodeSmokeStageLine('compass_commands'));
+      _sendCompassCommands();
+      if (mounted) {
+        setState(() {
+          _phase = 'compass';
+          _detail = 'waiting_for_compass_command_logs';
+        });
+      }
+      return;
+    }
+    _finishCompassIfReady();
+  }
+
+  void _handleGpsSmokeData(BoatData data) {
+    if (smokeGpsFixLooksHealthy(data)) {
+      _finish(true, 'gps_fix_received');
+      return;
+    }
+    if (!_gpsWaitingLogged) {
+      _gpsWaitingLogged = true;
+      _appendEvent(encodeSmokeStageLine('gps_waiting_fix'));
+      if (mounted) {
+        setState(() {
+          _phase = 'gps';
+          _detail = 'waiting_for_hardware_fix';
+        });
+      }
+    }
+  }
+
   Future<void> _sendManualSet() async {
     final ok = await _ble.sendManualControl(
       steer: 0,
@@ -427,6 +478,28 @@ class _BleSmokePageState extends State<BleSmokePage> {
     }
   }
 
+  Future<void> _sendCompassCommands() async {
+    final calOk = await _ble.sendCustomCommand('COMPASS_CAL_START');
+    final autosaveOffOk = await _ble.sendCustomCommand(
+      'COMPASS_DCD_AUTOSAVE_OFF',
+    );
+    final saveOk = await _ble.sendCustomCommand('COMPASS_DCD_SAVE');
+    _appendEvent(
+      'compass_commands cal=$calOk autosaveOff=$autosaveOffOk dcdSave=$saveOk',
+    );
+    if (!calOk || !autosaveOffOk || !saveOk) {
+      _finish(false, 'compass_command_write_failed');
+    }
+  }
+
+  void _finishCompassIfReady() {
+    if (_compassCalLogSeen &&
+        _compassAutosaveLogSeen &&
+        _compassDcdSaveLogSeen) {
+      _finish(true, 'compass_command_logs_received');
+    }
+  }
+
   void _checkReconnectGap() {
     if (_completed || widget.mode != BleSmokeMode.reconnect) return;
     if (!_firstTelemetrySeen || _reconnectGapSeen || _lastDataAt == null) {
@@ -452,6 +525,21 @@ class _BleSmokePageState extends State<BleSmokePage> {
         smokeAnchorDeniedLogSeen(_lastDeviceLog)) {
       _anchorDeniedSeen = true;
       _appendEvent(encodeSmokeStageLine('anchor_denied_seen'));
+    }
+    if (widget.mode == BleSmokeMode.compass) {
+      if (smokeCompassCalStartLogSeen(_lastDeviceLog)) {
+        _compassCalLogSeen = true;
+        _appendEvent(encodeSmokeStageLine('compass_cal_start_seen'));
+      }
+      if (smokeCompassDcdAutosaveLogSeen(_lastDeviceLog)) {
+        _compassAutosaveLogSeen = true;
+        _appendEvent(encodeSmokeStageLine('compass_dcd_autosave_seen'));
+      }
+      if (smokeCompassDcdSaveLogSeen(_lastDeviceLog)) {
+        _compassDcdSaveLogSeen = true;
+        _appendEvent(encodeSmokeStageLine('compass_dcd_save_seen'));
+      }
+      _finishCompassIfReady();
     }
   }
 
@@ -537,6 +625,10 @@ class _BleSmokePageState extends State<BleSmokePage> {
             if (_lastData != null) ...[
               const SizedBox(height: 8),
               Text('mode=${_lastData!.mode} status=${_lastData!.status}'),
+              Text(
+                'gps=${_lastData!.lat.toStringAsFixed(6)}, '
+                '${_lastData!.lon.toStringAsFixed(6)} q=${_lastData!.gnssQ}',
+              ),
               Text('statusReasons=${_lastData!.statusReasons}'),
               Text(
                 'secPaired=${_lastData!.secPaired} '

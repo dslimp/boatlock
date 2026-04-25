@@ -23,18 +23,17 @@ jobs:
       - name: Install cppcheck
         run: sudo apt-get update && sudo apt-get install -y cppcheck
 
-      - name: Install PlatformIO
-        run: pip install platformio
+      - name: Install Python tools
+        run: python3 -m pip install platformio pytest
+
+      - name: Run CI helper tests
+        run: python3 -m pytest tools/ci/test_*.py
 
       - name: Check config schema version
-        run: |
-          python3 tools/ci/test_check_config_schema_version.py
-          python3 tools/ci/check_config_schema_version.py
+        run: python3 tools/ci/check_config_schema_version.py
 
       - name: Check firmware semver
-        run: |
-          python3 tools/ci/test_check_firmware_version.py
-          python3 tools/ci/check_firmware_version.py
+        run: python3 tools/ci/check_firmware_version.py
 
       - name: Firmware warnings as errors (critical modules)
         run: bash tools/ci/check_firmware_werror.sh
@@ -57,16 +56,40 @@ jobs:
         working-directory: boatlock
         run: pio run -e esp32s3
 
-      - name: Upload firmware artifacts
+      - name: Pack firmware binary artifact
+        run: |
+          set -euo pipefail
+          artifact_dir="dist/firmware-esp32s3"
+          build_dir="boatlock/.pio/build/esp32s3"
+          mkdir -p "${artifact_dir}"
+          cp "${build_dir}/firmware.bin" "${artifact_dir}/firmware.bin"
+          cp "${build_dir}/bootloader.bin" "${artifact_dir}/bootloader.bin"
+          cp "${build_dir}/partitions.bin" "${artifact_dir}/partitions.bin"
+          cp "${build_dir}/firmware.elf" "${artifact_dir}/firmware.elf"
+
+          firmware_version="$(python3 tools/ci/check_firmware_version.py --print-only)"
+          {
+            echo "firmware_version=${firmware_version}"
+            echo "platformio_env=esp32s3"
+            echo "github_ref=${GITHUB_REF}"
+            echo "github_sha=${GITHUB_SHA}"
+          } > "${artifact_dir}/BUILD_INFO.txt"
+
+          (cd "${artifact_dir}" && sha256sum firmware.bin bootloader.bin partitions.bin firmware.elf > SHA256SUMS)
+
+      - name: Upload firmware binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: firmware-esp32s3
           if-no-files-found: error
+          path: dist/firmware-esp32s3/*
+
+      - name: Upload simulation reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulation-reports
+          if-no-files-found: error
           path: |
-            boatlock/.pio/build/esp32s3/firmware.bin
-            boatlock/.pio/build/esp32s3/bootloader.bin
-            boatlock/.pio/build/esp32s3/partitions.bin
-            boatlock/.pio/build/esp32s3/firmware.elf
             tools/sim/report.json
             tools/sim/soak_report.json
 
@@ -159,4 +182,5 @@ jobs:
           body_path: release-notes.md
           files: |
             artifacts/firmware-esp32s3/*
+            artifacts/simulation-reports/*
             artifacts/flutter-android-web/*

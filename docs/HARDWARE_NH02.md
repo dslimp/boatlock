@@ -51,6 +51,10 @@
   - `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130`
 - Build, install/update, and prove phone recovery after ESP32 reboot:
   - `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130`
+- Build, install/update, and prove compass calibration command delivery:
+  - `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130`
+- Build, install/update, and prove BLE-visible hardware GPS fix:
+  - `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180`
 - Run the smoke app without reinstalling the APK:
   - `tools/hw/nh02/android-run-smoke.sh --no-install`
 
@@ -69,7 +73,9 @@
 4. `tools/hw/nh02/android-run-smoke.sh` copies the smoke APK to `nh02`, installs or updates it with remote `adb`, launches the app, and waits for the `BOATLOCK_SMOKE_RESULT` log line.
 5. `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` additionally waits for first telemetry, cycles phone Bluetooth through ADB, and requires telemetry recovery without restarting the app.
 6. `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` waits for first telemetry, resets the ESP32-S3 with the tracked remote reset helper, and requires telemetry recovery without restarting the app.
-7. If the phone appears only as `MTP` or a vendor USB device and not in `adb devices`, the cable path is alive but USB debugging is still off on the phone.
+7. `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130` sends safe compass-service commands (`COMPASS_CAL_START`, `COMPASS_DCD_AUTOSAVE_OFF`, `COMPASS_DCD_SAVE`) and requires device log acknowledgements.
+8. `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180` waits for production-app BLE telemetry with non-zero valid coordinates and GNSS quality `>0`; this can run while ESP32 is powered away from USB if BLE remains reachable.
+9. If the phone appears only as `MTP` or a vendor USB device and not in `adb devices`, the cable path is alive but USB debugging is still off on the phone.
 
 ## Xiaomi Install Note
 
@@ -85,14 +91,22 @@
 
 ## Compass Wiring
 
-- Production compass transport is BNO08x UART-RVC only.
+- Accepted bench compass transport is currently BNO08x UART-RVC.
 - Current `nh02` wiring:
   - BNO08x `SDA/TX` -> ESP32-S3 `GPIO12`
   - BNO08x `RST` -> ESP32-S3 `GPIO13`
   - BNO08x `P0/PS0` -> `3V3`
   - BNO08x `P1/PS1` -> `GND`
   - UART baud `115200`
+- SH2-UART DCD migration target:
+  - BNO08x `TXO` -> ESP32-S3 `GPIO12`
+  - BNO08x `RXI` -> ESP32-S3 `GPIO11`
+  - BNO08x `RST` -> ESP32-S3 `GPIO13`
+  - BNO08x `P0/PS0` -> `GND`
+  - BNO08x `P1/PS1` -> `3V3`
+  - build with `BOATLOCK_PIO_ENV=esp32s3_bno08x_sh2_uart`
+- Full DCD/tare functionality is not accepted on the current RVC wiring. RVC can only prove command delivery with `ok=0`; SH2-UART acceptance needs the wiring above plus a fresh flash of the explicit SH2 target.
 - `GPIO12` was verified by grounding the RX line and by reading live RVC frames with `uart_rvc_probe_rx12`.
 - `GPIO13` was verified as reset by grounding the reset wire and watching `gpio_probe` transitions.
-- Hardware acceptance requires `[COMPASS] ready=1 source=BNO08x-RVC rx=12 baud=115200` plus `[COMPASS] heading events ready`.
-- The old ESP32-S3 I2C/SH2 compass path is removed from production firmware. Historical failure notes are kept in `WORKLOG.md`, not as a fallback path.
+- Hardware acceptance requires `[COMPASS] ready=1 source=BNO08x-RVC rx=12 ... baud=115200` plus `[COMPASS] heading events ready`.
+- The old ESP32-S3 I2C compass path is removed from production firmware. Historical failure notes are kept in `WORKLOG.md`, not as a fallback path.

@@ -1,4 +1,13 @@
-enum BleSmokeMode { basic, reconnect, manual, status, sim, anchor }
+enum BleSmokeMode {
+  basic,
+  reconnect,
+  manual,
+  status,
+  sim,
+  anchor,
+  compass,
+  gps,
+}
 
 const kBoatLockSmokeModeDefine = 'BOATLOCK_SMOKE_MODE';
 const kBoatLockDefaultSmokeModeName = 'basic';
@@ -15,6 +24,10 @@ BleSmokeMode boatLockSmokeModeFromString(String value) {
       return BleSmokeMode.sim;
     case 'anchor':
       return BleSmokeMode.anchor;
+    case 'compass':
+      return BleSmokeMode.compass;
+    case 'gps':
+      return BleSmokeMode.gps;
     case 'basic':
     default:
       return BleSmokeMode.basic;

@@ -36,6 +36,16 @@ while [[ $# -gt 0 ]]; do
       PASS_ARGS+=("$1")
       shift
       ;;
+    --compass)
+      MODE="compass"
+      PASS_ARGS+=("$1")
+      shift
+      ;;
+    --gps)
+      MODE="gps"
+      PASS_ARGS+=("$1")
+      shift
+      ;;
     --esp-reset)
       MODE="reconnect"
       PASS_ARGS+=("$1")

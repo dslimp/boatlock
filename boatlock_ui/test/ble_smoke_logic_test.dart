@@ -5,16 +5,19 @@ import 'package:boatlock_ui/smoke/ble_smoke_logic.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 BoatData _data({
+  double lat = 0,
+  double lon = 0,
   String mode = 'IDLE',
   String status = 'OK',
   String statusReasons = '',
   bool secPaired = false,
   bool secAuth = false,
   int rssi = -52,
+  int gnssQ = 0,
 }) {
   return BoatData(
-    lat: 0,
-    lon: 0,
+    lat: lat,
+    lon: lon,
     anchorLat: 0,
     anchorLon: 0,
     anchorHeading: 0,
@@ -43,6 +46,7 @@ BoatData _data({
     secAuth: secAuth,
     secPairWindowOpen: false,
     secReject: 'NONE',
+    gnssQ: gnssQ,
   );
 }
 
@@ -102,6 +106,55 @@ void main() {
     expect(smokeAnchorRejectedSafely(_data(mode: 'ANCHOR')), isFalse);
   });
 
+  test('compass smoke identifies calibration command logs', () {
+    expect(
+      smokeCompassCalStartLogSeen('[EVENT] COMPASS_CAL_START ok=0'),
+      isTrue,
+    );
+    expect(
+      smokeCompassDcdAutosaveLogSeen(
+        '[EVENT] COMPASS_DCD_AUTOSAVE enabled=0 ok=0',
+      ),
+      isTrue,
+    );
+    expect(smokeCompassDcdSaveLogSeen('[EVENT] COMPASS_DCD_SAVE ok=0'), isTrue);
+    expect(smokeCompassDcdSaveLogSeen('[BLE] COMPASS_DCD_SAVE'), isFalse);
+  });
+
+  test('gps smoke requires real coordinates and live GNSS quality', () {
+    expect(
+      smokeGpsFixLooksHealthy(_data(lat: 59.938631, lon: 30.314112, gnssQ: 1)),
+      isTrue,
+    );
+    expect(
+      smokeGpsFixLooksHealthy(
+        _data(
+          lat: 59.938631,
+          lon: 30.314112,
+          gnssQ: 2,
+          statusReasons: 'GPS_WEAK',
+        ),
+      ),
+      isTrue,
+    );
+    expect(smokeGpsFixLooksHealthy(_data(lat: 0, lon: 0, gnssQ: 2)), isFalse);
+    expect(
+      smokeGpsFixLooksHealthy(_data(lat: 59.938631, lon: 30.314112, gnssQ: 0)),
+      isFalse,
+    );
+    expect(
+      smokeGpsFixLooksHealthy(
+        _data(
+          lat: 59.938631,
+          lon: 30.314112,
+          gnssQ: 2,
+          statusReasons: 'NO_GPS',
+        ),
+      ),
+      isFalse,
+    );
+  });
+
   test('encodeSmokeResultLine serializes expected payload', () {
     final line = encodeSmokeResultLine(
       buildSmokeResultPayload(
@@ -123,6 +176,9 @@ void main() {
     expect(payload['mode'], 'IDLE');
     expect(payload['statusReasons'], 'NO_GPS');
     expect(payload['secPaired'], isTrue);
+    expect(payload['lat'], 0.0);
+    expect(payload['lon'], 0.0);
+    expect(payload['gnssQ'], 0);
   });
 
   test('encodeSmokeStageLine serializes stage marker', () {

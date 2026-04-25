@@ -37,6 +37,13 @@ Control point payloads are application-level command byte strings, not a text st
 | `SET_PHONE_GPS:<lat>,<lon>[,<speedKmh>[,<satellites>]]` | latitude, longitude, optional speed in km/h, optional satellites used in fix | External tooling command; the main app control path does not use phone GPS as an anchor-control source |
 | `SET_COMPASS_OFFSET:<deg>` | heading offset in degrees (float) | Set persistent yaw offset for onboard BNO08x heading |
 | `RESET_COMPASS_OFFSET` | none | Reset persistent BNO08x heading offset to `0` |
+| `COMPASS_CAL_START` | none | SH2-UART build only: enable BNO08x dynamic calibration for accel/gyro/mag/planar sensors with DCD autosave disabled |
+| `COMPASS_DCD_SAVE` | none | SH2-UART build only: request immediate BNO08x Dynamic Calibration Data save |
+| `COMPASS_DCD_AUTOSAVE_ON` | none | SH2-UART build only: enable BNO08x automatic DCD save |
+| `COMPASS_DCD_AUTOSAVE_OFF` | none | SH2-UART build only: disable BNO08x automatic DCD save |
+| `COMPASS_TARE_Z` | none | SH2-UART build only: tare Z/heading basis from the current rotation vector; use only during controlled calibration |
+| `COMPASS_TARE_SAVE` | none | SH2-UART build only: persist the last tare operation |
+| `COMPASS_TARE_CLEAR` | none | SH2-UART build only: clear the persisted tare |
 | `SET_STEP_MAXSPD:<float>` | float | Maximum stepper speed (steps/s) |
 | `SET_STEP_ACCEL:<float>` | float | Stepper acceleration (steps/s²) |
 | `SET_STEPPER_BOW` | none | Save current stepper position as boat-bow zero for anchor pointing |

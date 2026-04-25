@@ -132,6 +132,13 @@ void setUp() {
   motor.stopCalled = false;
   headingAvailableStub = false;
   compass.az = 0.0f;
+  compass.startDynamicCalibrationCalls = 0;
+  compass.saveDynamicCalibrationCalls = 0;
+  compass.setDcdAutoSaveCalls = 0;
+  compass.tareHeadingNowCalls = 0;
+  compass.saveTareCalls = 0;
+  compass.clearTareCalls = 0;
+  compass.lastDcdAutoSave = false;
   manualControl.stop();
   phoneGpsFixSet = false;
   phoneGpsLat = 0.0f;
@@ -406,6 +413,25 @@ void test_set_compass_offset() {
   TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("MagOffX"));
 }
 
+void test_compass_calibration_commands_are_routed_to_compass() {
+  handleBleCommand("COMPASS_CAL_START");
+  handleBleCommand("COMPASS_DCD_SAVE");
+  handleBleCommand("COMPASS_DCD_AUTOSAVE_ON");
+  TEST_ASSERT_TRUE(compass.lastDcdAutoSave);
+  handleBleCommand("COMPASS_DCD_AUTOSAVE_OFF");
+  TEST_ASSERT_FALSE(compass.lastDcdAutoSave);
+  handleBleCommand("COMPASS_TARE_Z");
+  handleBleCommand("COMPASS_TARE_SAVE");
+  handleBleCommand("COMPASS_TARE_CLEAR");
+
+  TEST_ASSERT_EQUAL(1, compass.startDynamicCalibrationCalls);
+  TEST_ASSERT_EQUAL(1, compass.saveDynamicCalibrationCalls);
+  TEST_ASSERT_EQUAL(2, compass.setDcdAutoSaveCalls);
+  TEST_ASSERT_EQUAL(1, compass.tareHeadingNowCalls);
+  TEST_ASSERT_EQUAL(1, compass.saveTareCalls);
+  TEST_ASSERT_EQUAL(1, compass.clearTareCalls);
+}
+
 void test_set_anchor_profile_applies_bundle() {
   handleBleCommand("SET_ANCHOR_PROFILE:quiet");
   TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorProf"));
@@ -507,6 +533,7 @@ int main() {
   RUN_TEST(test_removed_route_commands_do_not_change_state);
   RUN_TEST(test_removed_compass_and_log_commands_do_not_change_state);
   RUN_TEST(test_set_compass_offset);
+  RUN_TEST(test_compass_calibration_commands_are_routed_to_compass);
   RUN_TEST(test_set_anchor_profile_applies_bundle);
   RUN_TEST(test_set_anchor_profile_rejects_invalid_payload);
   RUN_TEST(test_security_rejects_plain_control_command_when_wrapper_required);

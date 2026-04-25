@@ -95,6 +95,7 @@ void main() {
     expect(decoded.data.secAuth, isTrue);
     expect(decoded.data.secPairWindowOpen, isTrue);
     expect(decoded.data.secReject, 'AUTH_REQUIRED');
+    expect(decoded.data.gnssQ, 2);
     expect(
       decoded.data.statusReasons,
       'NO_GPS,DRIFT_FAIL,GPS_DATA_STALE,GPS_POSITION_JUMP,NO_HEADING,GPS_HDOP_MISSING',

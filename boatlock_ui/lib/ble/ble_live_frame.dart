@@ -57,6 +57,7 @@ const int _offsetRoll = 54;
 const int _offsetSecReject = 56;
 const int _offsetReasonFlags = 57;
 const int _offsetSecNonce = 61;
+const int _offsetGnssQ = 69;
 
 const Map<int, String> _modeByCode = {
   0: 'IDLE',
@@ -162,6 +163,7 @@ BleLiveFrame? decodeBoatLockLiveFrame(List<int> value, {int rssi = 0}) {
     secAuth: (flags & _flagSecAuth) != 0,
     secPairWindowOpen: (flags & _flagSecPairWindow) != 0,
     secReject: secReject,
+    gnssQ: view.getUint8(_offsetGnssQ),
   );
 
   return BleLiveFrame(

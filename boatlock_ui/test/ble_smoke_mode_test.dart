@@ -9,6 +9,8 @@ void main() {
     expect(boatLockSmokeModeFromString('status'), BleSmokeMode.status);
     expect(boatLockSmokeModeFromString('sim'), BleSmokeMode.sim);
     expect(boatLockSmokeModeFromString('anchor'), BleSmokeMode.anchor);
+    expect(boatLockSmokeModeFromString('compass'), BleSmokeMode.compass);
+    expect(boatLockSmokeModeFromString('gps'), BleSmokeMode.gps);
   });
 
   test('boatLockSmokeModeFromString defaults unknown values to basic', () {

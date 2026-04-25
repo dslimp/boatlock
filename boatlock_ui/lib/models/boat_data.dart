@@ -29,6 +29,7 @@ class BoatData {
   final bool secAuth;
   final bool secPairWindowOpen;
   final String secReject;
+  final int gnssQ;
 
   BoatData({
     required this.lat,
@@ -61,5 +62,6 @@ class BoatData {
     required this.secAuth,
     required this.secPairWindowOpen,
     required this.secReject,
+    required this.gnssQ,
   });
 }
