@@ -3599,10 +3599,24 @@ Validation:
 - `cd boatlock_ui && flutter test test/ble_live_frame_test.dart test/ble_boatlock_test.dart` -> passed (`14/14`).
 - `cd boatlock && platformio test -e native` -> passed (`299/299`).
 - `cd boatlock && platformio run -e esp32s3` -> success, flash size `698105` bytes.
-- Pending `nh02` flash/acceptance.
-- Pending Android BLE smoke suite.
+- `./tools/hw/nh02/status.sh` -> RFC2217 active, ESP32-S3 USB serial `98:88:E0:03:BA:5C`, port `4000`.
+- `./tools/hw/nh02/flash.sh` -> build success, flash success, app image write `698464` bytes, hard reset via RTS.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-diagnostics-batch-60s.log --json-out /tmp/boatlock-diagnostics-batch-60s.json` -> `[ACCEPT] PASS lines=29`.
+- Acceptance matched BNO08x-RVC ready on `rx=12 baud=115200`, fresh compass heading events, display ready, EEPROM loaded `ver=23`, security state `paired=0`, BLE init and advertising, stepper config, STOP button, and GPS UART data.
+- Error scan over `/tmp/boatlock-diagnostics-batch-60s.log` for panic/assert/Guru/config save/CRC/GPS stale/no UART/compass loss/I2C/Arduino `[E]`/fail/error tokens -> no matches.
+- Acceptance log confirmed new concise BLE diagnostics, including `[BLE] connect addr=...` and later stream/subscribe events.
+- `./tools/hw/nh02/android-status.sh` -> Xiaomi `220333QNY`, adb state `device`, USB serial `68b657f0`.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","rssi":-36}`.
+- `./tools/hw/nh02/android-run-smoke.sh --status --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"status_stop_alert_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[EVENT] FAILSAFE_TRIGGERED reason=STOP_CMD"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --anchor --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"anchor_denied_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[EVENT] ANCHOR_OFF reason=BLE_CMD"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --sim --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"sim_run_abort_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[SIM] ABORTED"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
 
 Self-review:
 - Local tests cover the guard boundary and the normal frame encoder/decoder contract.
 - The guard drops only invalid internal packets; the normal live frame remains the same binary v2 payload.
-- Remaining risk is live hardware delivery and Android reconnect behavior; that is the required post-module-five acceptance step.
+- The diagnostics/readability batch passed local unit/UI tests, was flashed to `nh02`, boot-accepted, and passed the current Android BLE smoke suite with exact APK installs.
+- The prior cosmetic `Reas9` disconnect artifact did not reappear in the 60s acceptance log; connection logs now preserve address and raw reason fields in shorter key=value form.
+- Remaining validation gaps are real GNSS fix behavior, powered actuator load, multi-controller arbitration, and on-water hold quality; this bench still reports `NO_GPS` in Android smokes.
