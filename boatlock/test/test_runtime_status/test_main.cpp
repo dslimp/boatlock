@@ -69,6 +69,22 @@ void test_runtime_status_summary_treats_unknown_safety_reason_as_warning() {
   TEST_ASSERT_EQUAL_STRING("WARN", buildRuntimeStatusSummary(input, reasons));
 }
 
+void test_runtime_status_reason_tokens_are_sanitized_and_bounded() {
+  RuntimeStatusInput input;
+  input.safetyReason = "BAD,NO_GPS\nX\tY";
+
+  std::string reasons = buildRuntimeStatusReasons(input);
+
+  TEST_ASSERT_EQUAL_STRING("BAD_NO_GPS_X_Y", reasons.c_str());
+  TEST_ASSERT_EQUAL_STRING("WARN", buildRuntimeStatusSummary(input, reasons));
+
+  input.safetyReason = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789TAIL";
+  reasons = buildRuntimeStatusReasons(input);
+
+  TEST_ASSERT_EQUAL_UINT32(kRuntimeStatusReasonMaxLen, reasons.size());
+  TEST_ASSERT_EQUAL_STRING("ABCDEFGHIJKLMNOPQRSTUVWXYZ012345", reasons.c_str());
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_runtime_status_reasons_collect_expected_flags);
@@ -76,5 +92,6 @@ int main() {
   RUN_TEST(test_runtime_status_summary_uses_alert_warn_ok_levels);
   RUN_TEST(test_runtime_status_summary_keeps_info_reason_ok);
   RUN_TEST(test_runtime_status_summary_treats_unknown_safety_reason_as_warning);
+  RUN_TEST(test_runtime_status_reason_tokens_are_sanitized_and_bounded);
   return UNITY_END();
 }

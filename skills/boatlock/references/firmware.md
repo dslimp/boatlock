@@ -128,6 +128,7 @@
   - `status`: `OK|WARN|ALERT`
   - `mode`: `IDLE|HOLD|ANCHOR|MANUAL|SIM`
   - `statusReasons`: comma-separated detail flags
+- `statusReasons` tokens are phone/BLE-facing protocol values: keep them single-token, bounded, and free of comma/control characters before publishing.
 - `statusReasons` may include informational operator acknowledgements such as `NUDGE_OK`; those must not elevate `status` above `OK` without a real health warning.
 - Build UI-facing display state through `RuntimeUiSnapshot` before passing it into `display_draw_ui()`.
 - Keep UI refresh cadence and BLE notify cadence in `RuntimeTelemetryCadence`, not as loose timestamps in `main.cpp`.

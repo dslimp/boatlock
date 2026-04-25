@@ -3,6 +3,8 @@
 #include <cstring>
 #include <string>
 
+static constexpr size_t kRuntimeStatusReasonMaxLen = 32;
+
 struct RuntimeStatusInput {
   bool gpsUnavailable = false;
   bool gnssWeak = false;
@@ -25,14 +27,28 @@ inline bool runtimeStatusReasonIsInformational(const char* reason) {
   return reason && strcmp(reason, "NUDGE_OK") == 0;
 }
 
+inline bool runtimeStatusReasonCharAllowed(char ch) {
+  return (ch >= 'A' && ch <= 'Z') ||
+         (ch >= 'a' && ch <= 'z') ||
+         (ch >= '0' && ch <= '9') ||
+         ch == '_';
+}
+
 inline void appendRuntimeStatusReason(std::string* out, const char* reason) {
   if (!out || !runtimeStatusReasonPresent(reason)) {
+    return;
+  }
+  std::string token;
+  for (size_t i = 0; reason[i] != '\0' && token.size() < kRuntimeStatusReasonMaxLen; ++i) {
+    token += runtimeStatusReasonCharAllowed(reason[i]) ? reason[i] : '_';
+  }
+  if (token.empty()) {
     return;
   }
   if (!out->empty()) {
     *out += ",";
   }
-  *out += reason;
+  *out += token;
 }
 
 inline std::string buildRuntimeStatusReasons(const RuntimeStatusInput& input) {

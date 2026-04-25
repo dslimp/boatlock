@@ -3354,3 +3354,33 @@ Self-review:
 
 Promote to skill:
 - Cadence helpers must floor zero intervals instead of allowing same-timestamp bursts.
+
+### 2026-04-25 Stage 103: Runtime status reason token hygiene
+
+Scope:
+- Continue the watchdog/telemetry batch with `RuntimeStatus`.
+- Keep the existing `status|mode|statusReasons` schema, but harden `statusReasons` against malformed future reason strings.
+- This is module `3/5`; hardware and Android acceptance are deferred to module five because normal reason constants and BLE schema stay unchanged.
+
+External baseline:
+- Signal K notifications model alarms/alerts as structured state and keys under a notifications tree, not as free-form delimited text: <https://signalk.org/specification/1.7.0/doc/notifications.html>.
+- Signal K's anchor alarm guide keeps monitoring authoritative on the boat/server and shows status/current-data indicators in the client: <https://demo.signalk.org/documentation/Guides/Anchor_Alarm.html>.
+
+Key outcomes:
+- Added a bounded token sanitizer for runtime status reasons.
+- Comma, whitespace, newline, tab, and other unsupported characters are neutralized before a reason enters the comma-separated BLE/app field.
+- Reason tokens are capped at `32` characters to keep the status payload deterministic.
+- Existing normal reason constants and severity behavior are unchanged.
+- Promoted the status-token hygiene rule into `skills/boatlock/references/firmware.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because phone-visible schema and normal emitted constants did not change; malformed/future reason handling is covered by native tests.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_status -f test_runtime_ble_live_frame -f test_runtime_ble_params -f test_ble_command_handler` -> passed (`45/45`).
+- `cd boatlock && platformio test -e native` -> passed (`284/284`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `698069` bytes.
+- `git diff --check` -> clean.
+
+Self-review:
+- This does not change normal emitted status constants, so app parsing should stay behaviorally unchanged.
+- The sanitizer is intentionally narrow: it protects the existing CSV contract instead of adding a new protocol field mid-batch.
+- Remaining risk is any future reason that intentionally needs punctuation; that should be a protocol/schema decision, not an accidental runtime string.

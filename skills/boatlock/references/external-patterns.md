@@ -91,6 +91,7 @@ Implication for BoatLock:
   - warning radius / drift alert
   - emergency containment breach
 - Keep health status severity separate from informational status reason tokens.
+- Phone/BLE-facing status reason fields should stay structured and bounded: do not let separator or control characters from a reason string create extra reason tokens or corrupt client parsing.
 
 ## What ArduPilot Gets Right
 
