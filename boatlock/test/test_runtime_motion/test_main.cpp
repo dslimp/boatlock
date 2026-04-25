@@ -1,10 +1,32 @@
 #include "RuntimeMotion.h"
 
+#include <cstdarg>
+#include <cstdio>
+#include <cstring>
+
 #include <unity.h>
 
-void logMessage(const char*, ...) {}
+static char gLogBuffer[1024];
 
-void setUp() {}
+static void resetLogBuffer() {
+  gLogBuffer[0] = '\0';
+}
+
+void logMessage(const char* fmt, ...) {
+  if (!fmt) {
+    return;
+  }
+  const size_t used = std::strlen(gLogBuffer);
+  if (used >= sizeof(gLogBuffer) - 1) {
+    return;
+  }
+  va_list args;
+  va_start(args, fmt);
+  std::vsnprintf(gLogBuffer + used, sizeof(gLogBuffer) - used, fmt, args);
+  va_end(args);
+}
+
+void setUp() { resetLogBuffer(); }
 void tearDown() {}
 
 void test_stop_all_motion_disarms_and_clears_manual() {
@@ -83,12 +105,15 @@ void test_supervisor_stop_failsafe_latches_safe_hold() {
   AnchorSupervisor::Decision decision;
   decision.action = AnchorSupervisor::SafeAction::STOP;
   decision.reason = AnchorSupervisor::Reason::SENSOR_TIMEOUT;
+  resetLogBuffer();
   motion.applySupervisorDecision(decision, manualControl, 4000);
 
   TEST_ASSERT_FALSE(manualControl.active());
   TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
   TEST_ASSERT_EQUAL((int)FailsafeReason::SENSOR_TIMEOUT, (int)motion.lastFailsafeReason());
   TEST_ASSERT_TRUE(motion.safeHoldActive());
+  TEST_ASSERT_NOT_NULL(std::strstr(gLogBuffer, "[EVENT] ANCHOR_OFF reason=STOP"));
+  TEST_ASSERT_NOT_NULL(std::strstr(gLogBuffer, "[EVENT] FAILSAFE_TRIGGERED reason=SENSOR_TIMEOUT action=STOP"));
 }
 
 void test_supervisor_containment_breach_exits_anchor() {

@@ -242,9 +242,6 @@ public:
       return;
     }
 
-    settings_.set("AnchorEnabled", 0);
-    settings_.save();
-
     stopAllMotionNow(manualControl);
     setSafetyReason(reason, nowMs);
     logMessage("[EVENT] FAILSAFE_TRIGGERED reason=%s action=STOP\n", reason);

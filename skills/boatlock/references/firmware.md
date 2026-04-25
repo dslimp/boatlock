@@ -124,6 +124,7 @@
 - `ANCHOR_ON` must be denied unless anchor point exists, onboard heading is available, and GNSS quality gate passes.
 - `HOLD` is a latched quiet mode entered by emergency stop and stop-style failsafes.
 - Explicit operator actions `ANCHOR_ON`, `ANCHOR_OFF`, and manual-mode entry clear the latched `HOLD` state.
+- Stop-style failsafes should have one owner for clearing anchor, saving settings, stopping outputs, and logging. Do not pre-clear `AnchorEnabled` before calling the shared stop path because it hides the previous state from `ANCHOR_OFF` event logging.
 - Publish runtime health as:
   - `status`: `OK|WARN|ALERT`
   - `mode`: `IDLE|HOLD|ANCHOR|MANUAL|SIM`

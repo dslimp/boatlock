@@ -3690,3 +3690,30 @@ Self-review:
 - This is a small semantic hardening at a module boundary, not a runtime behavior rewrite.
 - The change only affects corrupted/impossible compass metadata; normal valid BNO inputs are preserved.
 - Hardware acceptance is not required for this module under the fifteen-module cadence because this does not change drivers, pinout, deploy/debug wrappers, BLE reconnect/install, or phone-visible behavior.
+
+### 2026-04-25 Stage 114: RuntimeMotion stop-failsafe single owner
+
+Scope:
+- Continue the refactor batch with module `3/15`: runtime motion failsafe application.
+- Keep stop-style failsafes in the shared stop path instead of duplicating anchor disable steps.
+
+External baseline:
+- ArduPilot Rover failsafes map communication/RC failures to deterministic safe actions such as Hold, and operator action is required to retake Manual after recovery: <https://ardupilot.org/rover/docs/rover-failsafes.html>.
+- Existing BoatLock storage baseline still applies: settings saves are dirty-state guarded and flash writes should not be amplified without a semantic change.
+
+Key outcomes:
+- Removed the redundant `AnchorEnabled=0`/`save()` pre-clear before `stopAllMotionNow()`.
+- Stop-style supervisor failsafes now let the shared stop path see the previous anchor state and emit `[EVENT] ANCHOR_OFF reason=STOP` before the final failsafe event.
+- Extended runtime motion tests with a bounded log capture to assert both anchor-off and failsafe log events.
+- Promoted the single-owner stop-failsafe rule into `skills/boatlock/references/firmware.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because no phone-visible BLE command, reconnect, install, UI, or telemetry schema changed.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_motion -f test_anchor_supervisor` -> passed (`27/27`).
+- `cd boatlock && platformio test -e native` -> passed (`298/298`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `698089` bytes.
+
+Self-review:
+- This reduces duplicated state mutation and makes diagnostics more accurate without changing the final safe state.
+- The behavioral surface is still safety-relevant, but it is log/state sequencing inside an already-tested STOP path; local tests should bound it unless later batches touch live actuator behavior.
+- Hardware acceptance is not required yet under the fifteen-module cadence because this change does not alter drivers, pinout, deploy/debug wrappers, BLE reconnect/install, or live actuator output math.
