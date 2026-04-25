@@ -3742,3 +3742,27 @@ Self-review:
 - This is KISS cleanup with safety value: the builder and core supervisor can no longer drift on minimum timeout values.
 - Behavior should be unchanged for all current valid and invalid settings; existing clamp/non-finite tests should prove that.
 - Hardware acceptance is not required yet under the fifteen-module cadence because this does not alter drivers, pinout, deploy/debug wrappers, actuator output behavior, BLE reconnect/install, or phone-visible behavior.
+
+### 2026-04-25 Stage 116: AnchorSupervisor core dependency cleanup
+
+Scope:
+- Continue the refactor batch with module `5/15`: core anchor supervisor state machine.
+- Keep supervisor behavior unchanged while reducing dependencies and covering unknown diagnostic reasons.
+
+External baseline:
+- ArduPilot Rover pre-arm/failsafe docs emphasize explicit failure causes and safe actions instead of silent operation through bad configuration or bad sensor data: <https://ardupilot.org/rover/docs/common-prearm-safety-checks.html> and <https://ardupilot.org/rover/docs/rover-failsafes.html>.
+
+Key outcomes:
+- `AnchorSupervisor.h` no longer includes `Arduino.h`; it only needs `stdint.h` for enum storage.
+- Added a direct native test that unknown `AnchorSupervisor::Reason` values fail closed to `"NONE"`.
+- Phone-smoke decision: no Android smoke added or run for this module because no BLE command, phone-visible status field, reconnect/install, UI, or telemetry schema changed.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_anchor_supervisor -f test_runtime_supervisor_policy` -> passed (`23/23`).
+- `cd boatlock && platformio test -e native` -> passed (`299/299`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `698069` bytes.
+
+Self-review:
+- This keeps the supervisor portable and easier to unit-test without changing decision priority.
+- The added reason-string test protects diagnostic stability for invalid enum values.
+- Hardware acceptance is not required at module five under the updated fifteen-module cadence because this is a core-header/test-only cleanup with no live hardware, BLE reconnect/install, or phone-visible behavior change.

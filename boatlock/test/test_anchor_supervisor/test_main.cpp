@@ -291,6 +291,10 @@ void test_inactive_anchor_resets_and_returns_none() {
   TEST_ASSERT_EQUAL((int)AnchorSupervisor::Reason::NONE, (int)d.reason);
 }
 
+void test_reason_string_fails_closed_for_unknown_value() {
+  TEST_ASSERT_EQUAL_STRING("NONE", AnchorSupervisor::reasonString((AnchorSupervisor::Reason)255));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_gps_weak_exits_anchor_after_hysteresis);
@@ -312,5 +316,6 @@ int main() {
   RUN_TEST(test_command_limit_clamps_above_100_percent);
   RUN_TEST(test_negative_command_limit_fails_closed);
   RUN_TEST(test_inactive_anchor_resets_and_returns_none);
+  RUN_TEST(test_reason_string_fails_closed_for_unknown_value);
   return UNITY_END();
 }
