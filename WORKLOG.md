@@ -3766,3 +3766,28 @@ Self-review:
 - This keeps the supervisor portable and easier to unit-test without changing decision priority.
 - The added reason-string test protects diagnostic stability for invalid enum values.
 - Hardware acceptance is not required at module five under the updated fifteen-module cadence because this is a core-header/test-only cleanup with no live hardware, BLE reconnect/install, or phone-visible behavior change.
+
+### 2026-04-25 Stage 117: RuntimeStatus severity predicates
+
+Scope:
+- Continue the refactor batch with module `6/15`: runtime status summary and reason severity.
+- Keep the wire values unchanged while making ALERT and WARN predicates separate.
+
+External baseline:
+- Signal K models alarm states as ordered severities (`normal`, `alert`, `warn`, `alarm`, `emergency`) and expects consumers to react consistently to the state metadata: <https://signalk.org/specification/1.7.0/doc/data_model_metadata.html> and <https://signalk.org/specification/1.5.0/doc/notifications.html>.
+
+Key outcomes:
+- Added `runtimeStatusInputHasAlert()` for explicit `HOLD`, `DRIFT_FAIL`, and active failsafe reason handling.
+- Removed duplicate failsafe handling from the WARN helper; summary now checks ALERT first, then WARN.
+- Added native tests proving `DRIFT_FAIL` and failsafe reasons produce `ALERT`.
+- Promoted the separated severity-predicate rule into `skills/boatlock/references/firmware.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because `status`, `statusReasons`, BLE flags, commands, reconnect/install, and UI behavior are unchanged for existing inputs.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_status -f test_runtime_ble_live_frame` -> PASS (`11/11`).
+- `cd boatlock && platformio test -e native` -> PASS (`300/300`).
+- `cd boatlock && pio run -e esp32s3` -> PASS (`698097` bytes flash).
+
+Self-review:
+- This is a readability/safety refactor: output compatibility is preserved, but the code now makes severity ownership explicit.
+- Remaining risk is app presentation of WARN/ALERT, which is outside this firmware-only module and already covered by existing Flutter status tests.

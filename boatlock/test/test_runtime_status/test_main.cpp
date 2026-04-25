@@ -49,6 +49,19 @@ void test_runtime_status_summary_uses_alert_warn_ok_levels() {
   TEST_ASSERT_EQUAL_STRING("ALERT", buildRuntimeStatusSummary(input, alertReasons));
 }
 
+void test_runtime_status_summary_alert_sources_are_explicit() {
+  RuntimeStatusInput input;
+
+  input.driftFail = true;
+  std::string reasons = buildRuntimeStatusReasons(input);
+  TEST_ASSERT_EQUAL_STRING("ALERT", buildRuntimeStatusSummary(input, reasons));
+
+  input.driftFail = false;
+  input.failsafeReason = "SENSOR_TIMEOUT";
+  reasons = buildRuntimeStatusReasons(input);
+  TEST_ASSERT_EQUAL_STRING("ALERT", buildRuntimeStatusSummary(input, reasons));
+}
+
 void test_runtime_status_summary_keeps_info_reason_ok() {
   RuntimeStatusInput input;
   input.safetyReason = "NUDGE_OK";
@@ -90,6 +103,7 @@ int main() {
   RUN_TEST(test_runtime_status_reasons_collect_expected_flags);
   RUN_TEST(test_runtime_status_reasons_use_gnss_reason_and_skip_none);
   RUN_TEST(test_runtime_status_summary_uses_alert_warn_ok_levels);
+  RUN_TEST(test_runtime_status_summary_alert_sources_are_explicit);
   RUN_TEST(test_runtime_status_summary_keeps_info_reason_ok);
   RUN_TEST(test_runtime_status_summary_treats_unknown_safety_reason_as_warning);
   RUN_TEST(test_runtime_status_reason_tokens_are_sanitized_and_bounded);

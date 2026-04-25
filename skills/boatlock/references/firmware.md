@@ -129,6 +129,7 @@
   - `status`: `OK|WARN|ALERT`
   - `mode`: `IDLE|HOLD|ANCHOR|MANUAL|SIM`
   - `statusReasons`: comma-separated detail flags
+- Runtime health severity predicates must stay separated: `HOLD`, `DRIFT_FAIL`, and active failsafe reasons are `ALERT`; degraded sensors/GNSS/anchor-denied reasons are `WARN`; informational acknowledgements such as `NUDGE_OK` stay `OK`.
 - `statusReasons` tokens are phone/BLE-facing protocol values: keep them single-token, bounded, and free of comma/control characters before publishing.
 - `statusReasons` may include informational operator acknowledgements such as `NUDGE_OK`; those must not elevate `status` above `OK` without a real health warning.
 - Build UI-facing display state through `RuntimeUiSnapshot` before passing it into `display_draw_ui()`.

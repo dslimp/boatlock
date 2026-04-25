@@ -27,6 +27,10 @@ inline bool runtimeStatusReasonIsInformational(const char* reason) {
   return reason && strcmp(reason, "NUDGE_OK") == 0;
 }
 
+inline bool runtimeStatusInputHasAlert(const RuntimeStatusInput& input) {
+  return input.holdMode || input.driftFail || runtimeStatusReasonPresent(input.failsafeReason);
+}
+
 inline bool runtimeStatusReasonCharAllowed(char ch) {
   return (ch >= 'A' && ch <= 'Z') ||
          (ch >= 'a' && ch <= 'z') ||
@@ -86,16 +90,13 @@ inline bool runtimeStatusInputHasWarning(const RuntimeStatusInput& input,
   if (!input.anchorActive && runtimeStatusReasonPresent(input.anchorDeniedReason)) {
     return true;
   }
-  if (runtimeStatusReasonPresent(input.failsafeReason)) {
-    return true;
-  }
   return runtimeStatusReasonPresent(input.safetyReason) &&
          !runtimeStatusReasonIsInformational(input.safetyReason);
 }
 
 inline const char* buildRuntimeStatusSummary(const RuntimeStatusInput& input,
                                              const std::string& reasons) {
-  if (input.holdMode || input.driftFail || runtimeStatusReasonPresent(input.failsafeReason)) {
+  if (runtimeStatusInputHasAlert(input)) {
     return "ALERT";
   }
   if (runtimeStatusInputHasWarning(input, reasons)) {
