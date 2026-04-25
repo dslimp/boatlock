@@ -10,6 +10,7 @@
 
 #include "AnchorControlLoop.h"
 #include "ControlInterfaces.h"
+#include "HilSimActuator.h"
 #include "HilSimClock.h"
 #include "HilSimEvents.h"
 #include "HilSimExpect.h"
@@ -30,15 +31,6 @@ inline float clampf(float v, float lo, float hi) {
   if (v > hi) return hi;
   return v;
 }
-
-class ActuatorCapture : public IActuator {
-public:
-  void apply(const ActuatorCmd& cmd) override { lastCmd_ = cmd; }
-  const ActuatorCmd& last() const { return lastCmd_; }
-
-private:
-  ActuatorCmd lastCmd_;
-};
 
 struct BoatWorldConfig {
   float vMaxMps = 1.6f;

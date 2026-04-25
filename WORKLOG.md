@@ -4734,3 +4734,28 @@ Validation:
 Self-review:
 - Virtual clock behavior is now independently covered and no longer hidden inside the runner class.
 - Remaining risk is that realtime vs speedup scheduling still lives in `HilSimManager`; that should be handled separately because it touches phone-visible `SIM_RUN` timing behavior.
+
+### 2026-04-25 Stage 154: HIL actuator capture extraction
+
+Scope:
+- Continue the refactor batch with module `11/15`: HIL actuator output capture.
+- Move `ActuatorCapture` out of `HilSimRunner`.
+
+External baseline:
+- PX4 SIH reads actuator outputs to update the simulated vehicle state at each timestep; BoatLock's actuator capture is therefore a first-class simulation boundary: <https://docs.px4.io/main/en/sim_sih/index>.
+- ArduPilot Simulation-on-Hardware guidance stresses monitoring actuator outputs and disabling dangerous movement; BoatLock's internal test double should default to safe stop: <https://ardupilot.org/dev/docs/sim-on-hardware.html>.
+
+Key outcomes:
+- Added `HilSimActuator.h` with `ActuatorCapture`.
+- Removed the actuator test-double implementation from `HilSimRunner.h`.
+- Added direct tests for safe default command and storing the last command.
+- Promoted the durable actuator-capture rule into `external-patterns.md`.
+- Phone-smoke decision: no Android smoke required because this only changes internal HIL test-double ownership; valid BLE command, telemetry, and actuator safety behavior are unchanged.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_hil_sim_actuator` -> PASS (`2/2`).
+- `cd boatlock && platformio test -e native -f test_hil_sim` -> PASS (`11/11`).
+
+Self-review:
+- The actuator boundary is now isolated and covered with the safe default that matters for accidental-motion review.
+- Remaining risk is that the world model still applies thrust/steer in `HilSimRunner.h`; that should be the next pure extraction.
