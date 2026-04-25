@@ -4835,3 +4835,28 @@ Validation:
 Self-review:
 - This closes the same variable-string JSON risk for `SIM_STATUS` that earlier modules closed for `SIM_REPORT`.
 - Remaining risk is `SIM_REPORT` assembly still lives in the runner; module `15/15` should extract that builder before the hardware/Android acceptance gate.
+
+### 2026-04-25 Stage 158: HIL SIM_REPORT JSON builder
+
+Scope:
+- Complete the refactor batch with module `15/15`: HIL `SIM_REPORT` JSON construction.
+- Move report JSON formatting out of `HilScenarioRunner` and keep variable string fields on the shared encoder path.
+
+External baseline:
+- RFC 8259 defines JSON string escaping and value structure; BoatLock report artifacts should be built through a dedicated encoder boundary: <https://www.rfc-editor.org/rfc/rfc8259>.
+- ArduPilot AutoTest extracts logs/results after simulation runs; BoatLock `SIM_REPORT` is the equivalent regression artifact and must stay machine-parseable: <https://ardupilot.org/dev/docs/the-ardupilot-autotest-framework.html>.
+
+Key outcomes:
+- Added `HilSimReport.h` with `buildSimReportJson()`.
+- Updated `HilScenarioRunner::reportJson()` to delegate report assembly to the builder.
+- Removed the direct `HilSimJson.h` include from `HilSimRunner.h`.
+- Added direct report-builder tests for metrics/event shape, bounded event tail, and escaped variable strings.
+- Phone-smoke decision: this touches the phone-visible `SIM_REPORT` test interface. The module-local proof is native; mandatory Android SIM smoke runs immediately after commit/push as part of the `15/15` hardware gate.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_hil_sim_report` -> PASS (`3/3`).
+- `cd boatlock && platformio test -e native -f test_hil_sim_json -f test_runtime_sim_execution -f test_hil_sim` -> PASS (`21/21`).
+
+Self-review:
+- HIL JSON status/report assembly is now outside the scenario runner and directly tested.
+- Remaining risk is live Android SIM command/report transport after these phone-visible test-interface changes; this is covered by the required post-module-15 hardware/Android acceptance.

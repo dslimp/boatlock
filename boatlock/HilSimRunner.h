@@ -14,9 +14,9 @@
 #include "HilSimClock.h"
 #include "HilSimEvents.h"
 #include "HilSimExpect.h"
-#include "HilSimJson.h"
 #include "HilSimMetrics.h"
 #include "HilSimRandom.h"
+#include "HilSimReport.h"
 #include "HilSimSensors.h"
 #include "HilSimStatus.h"
 #include "HilSimTime.h"
@@ -363,67 +363,13 @@ public:
   }
 
   std::string reportJson() const {
-    std::string out;
-    char line[256];
-    out += "{\"id\":";
-    appendSimJsonString(out, scenario_.id);
-    out += ",\"state\":\"";
-    out += stateStr(state_);
-    out += "\",\"pass\":";
-    out += result_.pass ? "true" : "false";
-    out += ",\"reason\":";
-    appendSimJsonString(out, result_.reason);
-    out += ",";
-
-    snprintf(line,
-             sizeof(line),
-             "\"metrics\":{\"p95_error_m\":%.3f,\"max_error_m\":%.3f,"
-             "\"time_in_deadband_pct\":%.2f,\"time_saturated_pct\":%.2f,"
-             "\"dir_changes_per_min\":%.2f,\"ramp_violations\":%lu,"
-             "\"max_bad_gnss_in_anchor_s\":%.3f,\"nan_detected\":%s,"
-             "\"out_of_range_command\":%s}",
-             result_.metrics.p95ErrorM,
-             result_.metrics.maxErrorM,
-             result_.metrics.timeInDeadbandPct,
-             result_.metrics.timeSaturatedPct,
-             result_.metrics.dirChangesPerMin,
-             (unsigned long)result_.metrics.rampViolations,
-             result_.metrics.maxBadGnssInAnchorS,
-             result_.metrics.nanDetected ? "true" : "false",
-             result_.metrics.outOfRangeCommand ? "true" : "false");
-    out += line;
-
-    const size_t totalEvents = result_.events.size();
-    const size_t beginEventIdx =
-        (totalEvents > maxEventsInReport_) ? (totalEvents - maxEventsInReport_) : 0;
-    const size_t keptEvents = totalEvents - beginEventIdx;
-    if (totalEvents > keptEvents) {
-      char evCountBuf[96];
-      snprintf(evCountBuf,
-               sizeof(evCountBuf),
-               ",\"events_total\":%lu,\"events_kept\":%lu",
-               (unsigned long)totalEvents,
-               (unsigned long)keptEvents);
-      out += evCountBuf;
-    }
-
-    out += ",\"events\":[";
-    for (size_t i = beginEventIdx; i < totalEvents; ++i) {
-      const SimEvent& ev = result_.events[i];
-      if (i > beginEventIdx) {
-        out += ",";
-      }
-      out += "{\"at_ms\":";
-      snprintf(line, sizeof(line), "%lu", (unsigned long)ev.atMs);
-      out += line;
-      out += ",\"code\":";
-      appendSimJsonString(out, ev.code);
-      out += ",\"details\":";
-      appendSimJsonString(out, ev.details);
-      out += "}";
-    }
-    out += "]}";
-    return out;
+    return buildSimReportJson(scenario_.id,
+                              stateStr(state_),
+                              result_.pass,
+                              result_.reason,
+                              result_.metrics,
+                              result_.events,
+                              maxEventsInReport_);
   }
 
   static const char* stateStr(State s) {
