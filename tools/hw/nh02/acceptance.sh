@@ -29,6 +29,11 @@ if [[ "${RESET_FIRST}" -eq 1 ]]; then
   remote_shell "'${BOATLOCK_NH02_REMOTE_RESET_BIN}'"
 fi
 
+if [[ ${#ARGS[@]} -gt 0 ]]; then
+  exec "${BOATLOCK_PIO_PYTHON}" "${SCRIPT_DIR}/acceptance.py" \
+    --url "${BOATLOCK_NH02_RFC2217_URL}" \
+    "${ARGS[@]}"
+fi
+
 exec "${BOATLOCK_PIO_PYTHON}" "${SCRIPT_DIR}/acceptance.py" \
-  --url "${BOATLOCK_NH02_RFC2217_URL}" \
-  "${ARGS[@]}"
+  --url "${BOATLOCK_NH02_RFC2217_URL}"

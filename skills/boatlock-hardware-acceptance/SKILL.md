@@ -128,6 +128,7 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
 - Do not interrupt a live flash, build, acceptance run, or phone smoke while it is still making forward progress.
 - If a bench or phone wrapper fails, fix that wrapper before normalizing a manual fallback.
 - If a bench or phone wrapper returns stale, wrong, or ambiguous data, fix the wrapper or its guidance before trusting the result.
+- For bash wrappers that run under macOS bash 3.2 with `set -u`, do not expand an empty array directly as `"${ARGS[@]}"`; branch on `${#ARGS[@]}` before expanding optional args.
 - If `tools/hw/nh02/flash.sh --no-build` fails because expected PlatformIO artifacts are missing, rerun canonical `tools/hw/nh02/flash.sh` instead of hand-copying or reconstructing artifacts.
 - Do not replace a pending or slow acceptance or phone-smoke verdict with manual `monitor.sh` or `logcat` interpretation. Use those only as blocker-debug context.
 - Before live mutation on `nh02` or an attached Android phone, prove the exact target first and keep the recovery path explicit.

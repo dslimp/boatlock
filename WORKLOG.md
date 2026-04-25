@@ -4029,9 +4029,34 @@ Validation:
 - `cd boatlock && platformio test -e native -f test_runtime_ble_immediate_command -f test_runtime_ble_command_queue` -> PASS (`9/9`).
 - `cd boatlock && platformio test -e native` -> PASS (`316/316`).
 - `cd boatlock && pio run -e esp32s3` -> PASS (`699761` bytes flash).
-- Pending after commit/push: `tools/hw/nh02/acceptance.sh`.
-- Pending after commit/push: `tools/hw/nh02/android-run-smoke.sh --wait-secs 130`.
+- Batch hardware and Android acceptance completed in Stage 127.
 
 Self-review:
 - This is mostly structure and proof: immediate command behavior is unchanged, but it is now hard to accidentally widen with a prefix match.
 - Remaining risk is end-to-end BLE transport behavior, so batch acceptance must flash and smoke the real nh02 + Android path after this commit.
+
+### 2026-04-25 Stage 127: 15-module batch hardware and Android acceptance
+
+Scope:
+- Complete mandatory real-hardware validation for modules `1/15..15/15`.
+- Flash current `main` to nh02, run the canonical hardware acceptance wrapper, and run the Android USB + BLE smoke wrapper with exact APK install proof.
+
+Key outcomes:
+- Proved nh02 target before mutation: RFC2217 service active on port `4000`, ESP32-S3 serial by-id `usb-Espressif_USB_JTAG_serial_debug_unit_98:88:E0:03:BA:5C-if00`.
+- Flashed current firmware through `tools/hw/nh02/flash.sh`; target MAC `98:88:e0:03:ba:5c`; flash and hard reset completed.
+- Fixed `tools/hw/nh02/acceptance.sh` for macOS bash 3.2 with `set -u`: empty `"${ARGS[@]}"` expansion can fail as unbound, so the wrapper now branches before expanding optional args.
+- Hardware acceptance passed through the canonical wrapper.
+- Android target was visible through nh02 as ADB device `68b657f0`, model `220333QNY`.
+- Android BLE smoke passed through the canonical wrapper after one expected Xiaomi/MIUI `INSTALL_FAILED_USER_RESTRICTED` retry; terminal install result was `Success`.
+
+Validation:
+- `bash -n tools/hw/nh02/acceptance.sh` -> PASS.
+- `tools/hw/nh02/status.sh` -> PASS; service enabled/active, serial bridge present.
+- `tools/hw/nh02/flash.sh` -> PASS; firmware `699761` bytes flash, esptool verified hashes.
+- `tools/hw/nh02/acceptance.sh` -> PASS (`[ACCEPT] PASS lines=29`), including BNO08x-RVC ready, heading events ready, display ready, EEPROM loaded, BLE init/advertising, stepper config, STOP button, and GPS UART data.
+- `tools/hw/nh02/android-status.sh` -> PASS; phone `68b657f0` visible.
+- `tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> PASS; `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received","dataEvents":1,"mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","rssi":-35,...}`.
+
+Self-review:
+- The acceptance blocker was in the canonical wrapper, not the bench; it was fixed at the source before rerunning validation.
+- The Android first-attempt install restriction is not a blocker when the canonical retry returns `Success` and the smoke verdict passes; keep recording it because it is important phone-side evidence.

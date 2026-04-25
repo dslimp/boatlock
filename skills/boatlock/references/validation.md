@@ -90,3 +90,7 @@
 - If you change EEPROM write policy or persistence semantics, update the skill references and any operator docs that mention save behavior.
 - If you change user-visible firmware behavior, update `CHANGELOG.md` and the relevant release note when appropriate.
 - When prose docs disagree with code, fix the docs in the same change instead of preserving the mismatch.
+
+## Wrapper Hygiene
+
+- Repo bash wrappers must work under macOS bash 3.2 with `set -u`; do not expand empty arrays directly as `"${ARGS[@]}"`. Branch on `${#ARGS[@]}` before passing optional arg arrays.
