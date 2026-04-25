@@ -4455,3 +4455,19 @@ Validation:
 Self-review:
 - This is a hot-path overhead reduction with no protocol or UI surface change.
 - First telemetry still has RSSI because the throttle permits the first read immediately; subsequent freshness is intentionally lower-rate link metadata.
+
+### 2026-04-25 Stage 143: Batch hardware acceptance after module 15/15
+
+Scope:
+- Run the required real-hardware acceptance after completing the 15-module Flutter BLE/smoke refactor batch.
+- Validate current `main` on `nh02` using the canonical flash, hardware acceptance, and Android USB/BLE smoke wrappers.
+
+Validation:
+- `tools/hw/nh02/status.sh` -> PASS target proof; `boatlock-esp32s3-rfc2217.service` enabled/active, ESP32-S3 USB target `98:88:E0:03:BA:5C`, RFC2217 listener on `:4000`.
+- `tools/hw/nh02/flash.sh` -> PASS; PlatformIO `esp32s3` build success, RAM `11.5%`, flash `20.9%`, upload/write/verify success, hard reset via RTS.
+- `tools/hw/nh02/acceptance.sh` -> PASS (`[ACCEPT] PASS lines=29`): BNO08x-RVC ready on `rx=12 baud=115200`, heading events ready, display ready, EEPROM `ver=23`, security unpaired, BLE init/advertising, stepper cfg, STOP button, GPS UART data.
+- `tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> PASS; first Xiaomi install attempt hit `INSTALL_FAILED_USER_RESTRICTED`, canonical retry returned `Success`, `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received","dataEvents":1,"mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","rssi":-34,...}`.
+
+Self-review:
+- The batch changed Flutter BLE scanning, GATT discovery, smoke tooling, command validation, and app-side parsers; final hardware acceptance confirms firmware boot/sensors are still healthy and current Android app still scans/connects/receives telemetry after a fresh ESP32 flash.
+- No new durable workflow rule emerged beyond the already-recorded MIUI retry rule and wrapper-first acceptance discipline.
