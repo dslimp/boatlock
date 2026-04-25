@@ -4162,3 +4162,28 @@ Validation:
 Self-review:
 - This reduces the central BLE class without introducing a compatibility wrapper for the removed static methods.
 - Targeted and full Flutter tests covered import/reference drift; remaining risk is command-builder growth, so future app commands should go into this pure module with local tests first.
+
+### 2026-04-25 Stage 132: Extract Flutter BLE security codec
+
+Scope:
+- Continue the refactor batch with module `5/15`: Flutter owner secret/auth envelope codec.
+- Move deterministic secret normalization, auth proof, secure command formatting, and owner-secret generation out of the stateful BLE transport class.
+
+External baseline:
+- Dart Effective Dart supports top-level functions when class state is not needed and recommends narrow public APIs instead of exposing unrelated helpers from a class: <https://dart.dev/effective-dart/design>.
+- Dart `Random.secure()` is the official cryptographically secure RNG constructor and throws if a secure source is unavailable: <https://api.dart.dev/dart-math/Random/Random.secure.html>.
+
+Key outcomes:
+- Added `ble_security_codec.dart` for owner-secret generation/normalization, auth proof, secure envelope formatting, and private SipHash helpers.
+- Removed the static security helper methods from `BleBoatLock`; the class now calls the pure codec while keeping session sequencing/state local.
+- Updated settings UI/tests to import the codec directly instead of reaching through `BleBoatLock`.
+- Updated the BLE/UI reference to mark `ble_security_codec.dart` as the canonical Flutter security codec module.
+- Phone-smoke decision: no Android smoke required because the generated command bytes are unchanged and this module does not alter connect/write sequencing.
+
+Validation:
+- `cd boatlock_ui && flutter test test/ble_security_codec_test.dart test/ble_boatlock_test.dart test/settings_page_test.dart` -> PASS (`7/7`).
+- `cd boatlock_ui && flutter test` -> PASS (`38/38`).
+
+Self-review:
+- This is a structure-only extraction with no compatibility wrapper for removed static methods.
+- Targeted codec tests preserve proof/envelope shape and full Flutter tests cover imports; remaining risk is deeper auth acceptance on hardware, which should be covered by a dedicated pairing/auth smoke when that flow changes.

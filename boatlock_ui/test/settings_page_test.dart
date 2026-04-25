@@ -1,4 +1,5 @@
 import 'package:boatlock_ui/ble/ble_boatlock.dart';
+import 'package:boatlock_ui/ble/ble_security_codec.dart';
 import 'package:boatlock_ui/pages/settings_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,7 +21,7 @@ class FakeBleBoatLock extends BleBoatLock {
 
   @override
   void setOwnerSecret(String? secret) {
-    ownerSecretValue = BleBoatLock.normalizeOwnerSecret(secret);
+    ownerSecretValue = normalizeOwnerSecret(secret);
   }
 
   @override
@@ -32,14 +33,14 @@ class FakeBleBoatLock extends BleBoatLock {
   @override
   Future<bool> pairWithOwnerSecret([String? secret]) async {
     pairCalls += 1;
-    ownerSecretValue = BleBoatLock.normalizeOwnerSecret(secret);
+    ownerSecretValue = normalizeOwnerSecret(secret);
     return true;
   }
 
   @override
   Future<bool> authenticateOwner([String? secret]) async {
     authCalls += 1;
-    ownerSecretValue = BleBoatLock.normalizeOwnerSecret(secret);
+    ownerSecretValue = normalizeOwnerSecret(secret);
     return true;
   }
 

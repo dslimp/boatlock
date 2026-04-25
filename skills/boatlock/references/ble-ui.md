@@ -9,6 +9,7 @@
 - `boatlock/RuntimeBleParams.h`: typed runtime telemetry provider
 - `boatlock_ui/lib/ble/ble_boatlock.dart`: scan/connect/auth/write behavior
 - `boatlock_ui/lib/ble/ble_commands.dart`: pure command builders and value allowlists for app-originated commands
+- `boatlock_ui/lib/ble/ble_security_codec.dart`: owner-secret normalization, owner auth proof, and secure command envelope formatting
 - `boatlock_ui/lib/ble/ble_live_frame.dart`: live binary telemetry decoder
 - `boatlock_ui/lib/models/boat_data.dart`: telemetry fields parsed by Flutter
 
@@ -55,6 +56,7 @@
 - Firmware logs should suppress high-frequency `HEARTBEAT` command lines while preserving operator/service commands.
 - Immediate BLE transport commands are exact-match only: `STREAM_START`, `STREAM_STOP`, and `SNAPSHOT`. Prefixes, suffixes, and decorated variants must fall through to the normal command path and be rejected there if invalid.
 - App command builders should remain pure top-level functions in `ble_commands.dart`; do not hide value formatting/range checks inside the stateful BLE transport class.
+- Security envelope formatting should remain pure top-level functions in `ble_security_codec.dart`; `BleBoatLock` owns session state and write order, not reusable codec internals.
 - After service discovery the app subscribes to:
   - data char `34cd`
   - log char `78ab`

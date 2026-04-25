@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../ble/ble_boatlock.dart';
+import '../ble/ble_security_codec.dart';
 
 class SettingsPage extends StatefulWidget {
   final BleBoatLock ble;
@@ -87,7 +88,9 @@ class _SettingsPageState extends State<SettingsPage> {
     secAuth = widget.secAuth;
     secPairWindowOpen = widget.secPairWindowOpen;
     secReject = widget.secReject;
-    _ownerSecretCtrl = TextEditingController(text: widget.ble.ownerSecret ?? '');
+    _ownerSecretCtrl = TextEditingController(
+      text: widget.ble.ownerSecret ?? '',
+    );
     widget.ble.setOwnerSecret(_ownerSecretCtrl.text);
   }
 
@@ -239,7 +242,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _pairDevice() async {
     if (!isConnected) return;
     _syncOwnerSecret();
-    if (BleBoatLock.normalizeOwnerSecret(_ownerSecretCtrl.text) == null) {
+    if (normalizeOwnerSecret(_ownerSecretCtrl.text) == null) {
       _showMessage('Нужен owner secret из 32 hex-символов');
       return;
     }
@@ -266,7 +269,9 @@ class _SettingsPageState extends State<SettingsPage> {
       secPaired = widget.ble.secPaired;
       secReject = ok ? 'NONE' : widget.ble.secReject;
     });
-    _showMessage(ok ? 'Owner auth выполнен' : 'Auth не прошёл: ${widget.ble.secReject}');
+    _showMessage(
+      ok ? 'Owner auth выполнен' : 'Auth не прошёл: ${widget.ble.secReject}',
+    );
   }
 
   Future<void> _clearPairing() async {
@@ -305,11 +310,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _securityTile(String label, String value) {
-    return ListTile(
-      dense: true,
-      title: Text(label),
-      trailing: Text(value),
-    );
+    return ListTile(dense: true, title: Text(label), trailing: Text(value));
   }
 
   @override
