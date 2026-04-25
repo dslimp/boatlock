@@ -3717,3 +3717,28 @@ Self-review:
 - This reduces duplicated state mutation and makes diagnostics more accurate without changing the final safe state.
 - The behavioral surface is still safety-relevant, but it is log/state sequencing inside an already-tested STOP path; local tests should bound it unless later batches touch live actuator behavior.
 - Hardware acceptance is not required yet under the fifteen-module cadence because this change does not alter drivers, pinout, deploy/debug wrappers, BLE reconnect/install, or live actuator output math.
+
+### 2026-04-25 Stage 115: RuntimeSupervisorPolicy floor constants
+
+Scope:
+- Continue the refactor batch with module `4/15`: supervisor config/input policy.
+- Remove duplicated safety-floor literals between `RuntimeSupervisorPolicy` and `AnchorSupervisor`.
+
+External baseline:
+- ArduPilot pre-arm checks treat configuration and bad sensor data as movement-blocking safety concerns, and Rover failsafes use explicit timeout-triggered safe actions such as Hold: <https://ardupilot.org/rover/docs/common-prearm-safety-checks.html> and <https://ardupilot.org/rover/docs/rover-failsafes.html>.
+
+Key outcomes:
+- `RuntimeSupervisorPolicy` now derives timeout floors from `AnchorSupervisor::kMin*` constants.
+- Replaced the Arduino `constrain()` dependency in `runtimeSupervisorFiniteClamp()` with explicit finite/low/high checks.
+- Promoted the single-source supervisor floor rule into `skills/boatlock/references/firmware.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because no BLE command, phone-visible status field, reconnect/install, UI, or telemetry schema changed.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_supervisor_policy -f test_anchor_supervisor` -> passed (`22/22`).
+- `cd boatlock && platformio test -e native` -> passed (`298/298`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `698069` bytes.
+
+Self-review:
+- This is KISS cleanup with safety value: the builder and core supervisor can no longer drift on minimum timeout values.
+- Behavior should be unchanged for all current valid and invalid settings; existing clamp/non-finite tests should prove that.
+- Hardware acceptance is not required yet under the fifteen-module cadence because this does not alter drivers, pinout, deploy/debug wrappers, actuator output behavior, BLE reconnect/install, or phone-visible behavior.
