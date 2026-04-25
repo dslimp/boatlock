@@ -10,6 +10,7 @@
 - `boatlock_ui/lib/ble/ble_boatlock.dart`: scan/connect/auth/write behavior
 - `boatlock_ui/lib/ble/ble_ids.dart`: Flutter BLE device name, service UUID, and characteristic UUID constants
 - `boatlock_ui/lib/ble/ble_device_match.dart`: adapter readiness and BoatLock advertisement matching
+- `boatlock_ui/lib/ble/ble_scan_config.dart`: scan service filter and scan timing constants
 - `boatlock_ui/lib/ble/ble_commands.dart`: pure command builders and value allowlists for app-originated commands
 - `boatlock_ui/lib/ble/ble_security_codec.dart`: owner-secret normalization, owner auth proof, and secure command envelope formatting
 - `boatlock_ui/lib/ble/ble_live_frame.dart`: live binary telemetry decoder
@@ -53,6 +54,8 @@
   - advertised or platform name equals/contains `boatlock`, or
   - advertised service UUID contains `12ab`
 - Device matching belongs in `ble_device_match.dart` and should stay testable without starting a BLE scan.
+- Active Flutter scan should use the BoatLock service UUID filter from `ble_scan_config.dart`, then keep the name/service advertisement matcher as a defensive app-side validation before connecting.
+- Scan timeout and completion wait constants belong in `ble_scan_config.dart`; do not scatter scan durations in transport code.
 - Scan is stopped immediately before connect.
 - If nothing is found, the app retries after `3 s`.
 - On disconnect, the app clears characteristics and schedules reconnect.

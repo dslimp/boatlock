@@ -4347,3 +4347,30 @@ Validation:
 Self-review:
 - This removes one duplicated acceptance-contract list without changing accepted flags or default mode.
 - Remaining risk is a future mode added to shell but not implemented in smoke page behavior; the enum/list drift test catches names, while mode behavior still needs a targeted smoke-page or Android run when the new mode is real.
+
+### 2026-04-25 Stage 139: Filter Flutter BLE scans by service UUID
+
+Scope:
+- Continue the refactor batch with module `12/15`: Flutter BLE scan configuration.
+- Reduce scan overhead and accidental candidate processing by filtering Android/iOS BLE scans for BoatLock's advertised service UUID before app-side validation.
+
+External baseline:
+- Android `BluetoothLeScanner.startScan(filters, settings, callback)` supports filtered scans, and Android docs note unfiltered scans can be stopped on screen-off/power-saving paths while filtered scans avoid that class of behavior: <https://developer.android.com/reference/android/bluetooth/le/BluetoothLeScanner>.
+- Android `ScanFilter` exposes service UUID filtering, which matches BoatLock because firmware advertises service `12ab`: <https://developer.android.com/reference/android/bluetooth/le/ScanFilter>.
+
+Key outcomes:
+- Added `ble_scan_config.dart` with BoatLock scan service filter and scan timing constants.
+- Updated `BleBoatLock._scanAndConnect()` to call `FlutterBluePlus.startScan()` with the `12ab` service filter.
+- Kept `isBoatLockScanResult()` as the second validation layer before connect.
+- Added focused tests for service-filter UUID and scan timing relationship.
+- Updated BLE/UI and external-pattern references.
+- Phone-smoke decision: Android BLE smoke required because scan discovery behavior changed.
+
+Validation:
+- `cd boatlock_ui && flutter test test/ble_scan_config_test.dart` -> PASS (`2/2`).
+- `cd boatlock_ui && flutter test` -> PASS (`47/47`).
+- `tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> PASS; install `Success`, `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received","dataEvents":1,"mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","rssi":-35,...}`.
+
+Self-review:
+- The change is intentionally narrow: scan filtering changed, connection/auth/write logic did not.
+- Hardware smoke proves current ESP32 advertising includes the service UUID and the phone still discovers/connects through the canonical path.

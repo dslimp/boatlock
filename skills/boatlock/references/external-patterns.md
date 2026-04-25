@@ -41,6 +41,8 @@ Use this file for:
 - Bluetooth Core GATT specification: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-61/out/en/host/generic-attribute-profile--gatt-.html>
 - Android BluetoothGatt API reference: <https://developer.android.com/reference/android/bluetooth/BluetoothGatt>
 - Android BluetoothGattCharacteristic API reference: <https://developer.android.com/reference/android/bluetooth/BluetoothGattCharacteristic>
+- Android BluetoothLeScanner API reference: <https://developer.android.com/reference/android/bluetooth/le/BluetoothLeScanner>
+- Android ScanFilter API reference: <https://developer.android.com/reference/android/bluetooth/le/ScanFilter>
 - Bluetooth HID Over GATT Profile: <https://www.bluetooth.com/specifications/specs/hid-over-gatt-profile/>
 - Dart `String.fromEnvironment` API: <https://api.dart.dev/dart-core/String/String.fromEnvironment.html>
 - Android Testing Strategies: <https://developer.android.com/training/testing/fundamentals/strategies>
@@ -190,6 +192,7 @@ Implication for BoatLock:
   - client decoders should reject unknown fixed-frame enum codes when the protocol version is unchanged; `UNKNOWN` or downgraded warning fallbacks mask schema drift before release
   - avoid keeping unused alternate telemetry parsers beside the current binary characteristic contract; dead protocol paths widen tests and create false compatibility obligations
   - treat text/log characteristic values as length-delimited byte strings, not implicit C strings; trim defensive padding at the client boundary
+  - use a service UUID scan filter for the phone app before app-side advertisement validation; unfiltered Android scans are less stable under screen/power constraints and produce unnecessary scan-result traffic
 - For manual UI, avoid making actuation look like a primary one-tap FAB action. Use an explicit control surface such as a toolbar entry plus sheet/pad, and keep movement tied to press-and-hold/deadman semantics.
 - Compile-time test-app modes should use one typed allowlist parser and a small unit test, then a real APK build for the entrypoint that consumes the define. This keeps device smoke wrappers from silently drifting away from Flutter code.
 - Shell wrappers that share protocol/test vocabulary should source one common helper and have a cheap CI drift test against the app-side enum/parser. Duplicated case lists make acceptance scripts fail silently when new modes are added.

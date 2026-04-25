@@ -12,6 +12,7 @@ import 'ble_ids.dart';
 import 'ble_live_frame.dart';
 import 'ble_log_line.dart';
 import 'ble_reconnect_policy.dart';
+import 'ble_scan_config.dart';
 import 'ble_security_codec.dart';
 
 typedef BoatDataCallback = void Function(BoatData? data);
@@ -153,10 +154,13 @@ class BleBoatLock with WidgetsBindingObserver {
     });
 
     try {
-      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 6));
+      await FlutterBluePlus.startScan(
+        timeout: kBoatLockScanTimeout,
+        withServices: boatLockScanServiceFilters(),
+      );
       await Future.any([
         scanDone.future,
-        Future.delayed(const Duration(seconds: 7)),
+        Future.delayed(kBoatLockScanCompletionWait),
       ]);
     } catch (e) {
       _log('scan failed: $e');
