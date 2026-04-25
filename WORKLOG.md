@@ -4810,3 +4810,28 @@ Validation:
 Self-review:
 - This is both a structural extraction and a small HIL correctness fix; it does not touch production GNSS/compass drivers.
 - Remaining risk is scenario catalog construction still living in the runner header; next modules should target scenario catalog/list/status boundaries before module 15 hardware acceptance.
+
+### 2026-04-25 Stage 157: HIL SIM_STATUS JSON builder
+
+Scope:
+- Continue the refactor batch with module `14/15`: HIL `SIM_STATUS` JSON construction.
+- Move status JSON formatting out of `HilScenarioRunner` and remove fixed-buffer/raw-id string formatting.
+
+External baseline:
+- RFC 8259 requires JSON strings to escape quotes, backslashes, and control characters; `SIM_STATUS` must use the same string encoder as `SIM_REPORT`: <https://www.rfc-editor.org/rfc/rfc8259>.
+- ArduPilot AutoTest keeps logs/results as regression evidence; BoatLock status payloads must remain machine-parseable under future long or escaped IDs: <https://ardupilot.org/dev/docs/autotest-verbose.html>.
+
+Key outcomes:
+- Added `HilSimStatus.h` with `buildSimStatusJson()`.
+- Updated `HilScenarioRunner::statusJson()` to delegate to the builder.
+- Added tests proving the current status shape is preserved and long/escaped IDs are not truncated.
+- Promoted the durable JSON-builder rule into `external-patterns.md`.
+- Phone-smoke decision: this touches the phone-visible `SIM_STATUS` test interface, but current valid payload shape is unchanged; Android SIM smoke is required after module `15/15` as the batch gate.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_hil_sim_status` -> PASS (`2/2`).
+- `cd boatlock && platformio test -e native -f test_runtime_sim_execution -f test_hil_sim` -> PASS (`18/18`).
+
+Self-review:
+- This closes the same variable-string JSON risk for `SIM_STATUS` that earlier modules closed for `SIM_REPORT`.
+- Remaining risk is `SIM_REPORT` assembly still lives in the runner; module `15/15` should extract that builder before the hardware/Android acceptance gate.

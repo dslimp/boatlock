@@ -264,6 +264,7 @@ Implication for BoatLock:
 - HIL actuator capture should keep the last command as explicit simulation input and default to the safe stopped actuator state.
 - HIL world/physics updates should be isolated from scenario orchestration and directly test actuator-output-to-state transitions.
 - HIL simulated sensors should be isolated from scenario orchestration and should keep invalid samples fail-closed, including stale/invalid age fields during rate-limited returns.
+- HIL status/report JSON builders should use the shared JSON string encoder and avoid fixed buffers for variable-length string fields.
 - On real hardware, simulation acceptance must keep dangerous actuator movement disabled or explicitly zero-throttle unless a powered bench procedure is defined.
 
 ## What ESP32 Storage Guidance Gets Right

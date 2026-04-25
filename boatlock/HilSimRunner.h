@@ -18,6 +18,7 @@
 #include "HilSimMetrics.h"
 #include "HilSimRandom.h"
 #include "HilSimSensors.h"
+#include "HilSimStatus.h"
 #include "HilSimTime.h"
 #include "HilSimWorld.h"
 
@@ -353,18 +354,12 @@ public:
   }
 
   std::string statusJson() const {
-    char buf[256];
-    snprintf(buf,
-             sizeof(buf),
-             "{\"id\":\"%s\",\"state\":\"%s\",\"progress_pct\":%.2f,"
-             "\"sim_ms\":%lu,\"duration_ms\":%lu,\"dt_ms\":%lu}",
-             scenario_.id.c_str(),
-             stateStr(state_),
-             progressPct_,
-             (unsigned long)simMs_,
-             (unsigned long)scenario_.durationMs,
-             (unsigned long)lastAppliedDtMs_);
-    return std::string(buf);
+    return buildSimStatusJson(scenario_.id,
+                              stateStr(state_),
+                              progressPct_,
+                              simMs_,
+                              scenario_.durationMs,
+                              lastAppliedDtMs_);
   }
 
   std::string reportJson() const {
