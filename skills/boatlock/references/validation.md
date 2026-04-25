@@ -58,6 +58,7 @@
   - `tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130`
+- Smoke APK mode constants and parser live in `boatlock_ui/lib/smoke/ble_smoke_mode.dart`; when that entrypoint contract changes, run its unit test plus `tools/android/build-smoke-apk.sh --mode <mode>` at minimum.
 - CI helper tests:
   - `pytest tools/ci/test_*.py`
 - Quick audit for persistence call sites:

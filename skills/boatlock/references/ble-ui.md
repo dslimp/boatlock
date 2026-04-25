@@ -15,6 +15,8 @@
 - `boatlock_ui/lib/ble/ble_live_frame.dart`: live binary telemetry decoder
 - `boatlock_ui/lib/ble/ble_log_line.dart`: log characteristic byte-string decoder
 - `boatlock_ui/lib/models/boat_data.dart`: telemetry fields parsed by Flutter
+- `boatlock_ui/lib/smoke/ble_smoke_mode.dart`: Android smoke APK mode enum and compile-time mode parser
+- `boatlock_ui/lib/smoke/ble_smoke_logic.dart`: pure Android smoke result/stage and telemetry verdict helpers
 
 ## BLE Identity
 
@@ -68,6 +70,14 @@
   - log char `78ab`
 - The app sends `STREAM_START`, then `SNAPSHOT`, after connect.
 - Heartbeat is sent every `1 s` once connected.
+
+## Android Smoke App
+
+- Smoke APK mode selection is compiled through `BOATLOCK_SMOKE_MODE`.
+- Supported smoke mode names are `basic`, `reconnect`, `manual`, `status`, `sim`, and `anchor`.
+- The mode enum and parser belong in `ble_smoke_mode.dart`, not in `main_smoke.dart` or the smoke page widget.
+- `main_smoke.dart` should stay entrypoint glue: read the compile-time define, parse it through the pure helper, and construct `BleSmokePage`.
+- Smoke result and stage line encoding belongs in `ble_smoke_logic.dart` so wrapper parsing can be covered by unit tests before Android device runs.
 
 ## Command Surface
 

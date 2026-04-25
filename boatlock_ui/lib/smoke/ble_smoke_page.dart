@@ -7,8 +7,7 @@ import 'package:flutter/material.dart';
 import '../ble/ble_boatlock.dart';
 import '../models/boat_data.dart';
 import 'ble_smoke_logic.dart';
-
-enum BleSmokeMode { basic, reconnect, manual, status, sim, anchor }
+import 'ble_smoke_mode.dart';
 
 class BleSmokePage extends StatefulWidget {
   const BleSmokePage({super.key, this.mode = BleSmokeMode.basic});

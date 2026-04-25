@@ -4292,3 +4292,30 @@ Validation:
 Self-review:
 - This makes smoke stricter without changing production BLE behavior.
 - Android smoke proved current nh02 telemetry satisfies the stricter criterion; keep recording Xiaomi first-install restriction because it is phone-side evidence, not a blocker when canonical retry passes.
+
+### 2026-04-25 Stage 137: Extract Android smoke mode parser
+
+Scope:
+- Continue the refactor batch with module `10/15`: Android BLE smoke APK mode selection.
+- Move the smoke mode enum and `BOATLOCK_SMOKE_MODE` parser out of UI/entrypoint glue into a pure module.
+
+External baseline:
+- Dart `String.fromEnvironment` is a compile-time environment read and must be consistent across a program, so the define name/default belong in one tested place instead of duplicated literals: <https://api.dart.dev/dart-core/String/String.fromEnvironment.html>.
+- Android testing strategy guidance separates fast local/unit coverage from higher-fidelity device tests; this module needs parser tests plus a real APK compile, not a BLE hardware run because BLE behavior is unchanged: <https://developer.android.com/training/testing/fundamentals/strategies>.
+
+Key outcomes:
+- Added `ble_smoke_mode.dart` with `BleSmokeMode`, `BOATLOCK_SMOKE_MODE` constants, and `boatLockSmokeModeFromString()`.
+- Reduced `main_smoke.dart` to entrypoint glue that reads the define and delegates parsing.
+- `BleSmokePage` now consumes the shared mode enum instead of owning smoke mode definitions.
+- Added focused parser tests for supported modes, unknown-value fallback, and stable define names.
+- Updated BLE/UI and validation references so future smoke modes are added through the pure module and wrapper build path.
+- Phone-smoke decision: no Android BLE smoke required because this does not change scan/connect/write/telemetry behavior; `build-smoke-apk.sh --mode basic` covers the changed smoke entrypoint.
+
+Validation:
+- `cd boatlock_ui && flutter test test/ble_smoke_mode_test.dart` -> PASS (`3/3`).
+- `cd boatlock_ui && flutter test` -> PASS (`45/45`).
+- `tools/android/build-smoke-apk.sh --mode basic` -> PASS, produced `boatlock_ui/build/app/outputs/flutter-apk/app-debug.apk`.
+
+Self-review:
+- This removes test-invisible mode parsing from `main_smoke.dart` without changing accepted mode names.
+- Remaining risk is wrapper/code list drift when a new mode is added; the validation reference now requires parser tests plus smoke APK build for that contract.

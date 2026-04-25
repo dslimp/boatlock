@@ -42,6 +42,8 @@ Use this file for:
 - Android BluetoothGatt API reference: <https://developer.android.com/reference/android/bluetooth/BluetoothGatt>
 - Android BluetoothGattCharacteristic API reference: <https://developer.android.com/reference/android/bluetooth/BluetoothGattCharacteristic>
 - Bluetooth HID Over GATT Profile: <https://www.bluetooth.com/specifications/specs/hid-over-gatt-profile/>
+- Dart `String.fromEnvironment` API: <https://api.dart.dev/dart-core/String/String.fromEnvironment.html>
+- Android Testing Strategies: <https://developer.android.com/training/testing/fundamentals/strategies>
 - OWASP Logging Cheat Sheet: <https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html>
 - OWASP Input Validation Cheat Sheet: <https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html>
 - Material Design Floating Action Button guidance: <https://m1.material.io/components/buttons-floating-action-button.html>
@@ -188,6 +190,7 @@ Implication for BoatLock:
   - avoid keeping unused alternate telemetry parsers beside the current binary characteristic contract; dead protocol paths widen tests and create false compatibility obligations
   - treat text/log characteristic values as length-delimited byte strings, not implicit C strings; trim defensive padding at the client boundary
 - For manual UI, avoid making actuation look like a primary one-tap FAB action. Use an explicit control surface such as a toolbar entry plus sheet/pad, and keep movement tied to press-and-hold/deadman semantics.
+- Compile-time test-app modes should use one typed allowlist parser and a small unit test, then a real APK build for the entrypoint that consumes the define. This keeps device smoke wrappers from silently drifting away from Flutter code.
 
 ## What Commercial GPS Anchors Get Right
 

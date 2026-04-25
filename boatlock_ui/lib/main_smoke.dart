@@ -1,34 +1,17 @@
 import 'package:flutter/material.dart';
 
+import 'smoke/ble_smoke_mode.dart';
 import 'smoke/ble_smoke_page.dart';
 
 void main() {
   const smokeMode = String.fromEnvironment(
-    'BOATLOCK_SMOKE_MODE',
-    defaultValue: 'basic',
+    kBoatLockSmokeModeDefine,
+    defaultValue: kBoatLockDefaultSmokeModeName,
   );
   runApp(
     MaterialApp(
-      home: BleSmokePage(mode: _smokeModeFromString(smokeMode)),
+      home: BleSmokePage(mode: boatLockSmokeModeFromString(smokeMode)),
       debugShowCheckedModeBanner: false,
     ),
   );
-}
-
-BleSmokeMode _smokeModeFromString(String value) {
-  switch (value) {
-    case 'reconnect':
-      return BleSmokeMode.reconnect;
-    case 'manual':
-      return BleSmokeMode.manual;
-    case 'status':
-      return BleSmokeMode.status;
-    case 'sim':
-      return BleSmokeMode.sim;
-    case 'anchor':
-      return BleSmokeMode.anchor;
-    case 'basic':
-    default:
-      return BleSmokeMode.basic;
-  }
 }
