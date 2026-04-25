@@ -230,9 +230,13 @@ void BLEBoatLock::enqueueCommand(const std::string& cmd) {
     }
 
     char payload[kCmdMaxLen];
-    if (!runtimeBleCopyCommandForQueue(payload, sizeof(payload), cmd)) {
+    const char* rejectReason = runtimeBleCommandQueueRejectReason(sizeof(payload), cmd);
+    if (rejectReason[0] != '\0' ||
+        !runtimeBleCopyCommandForQueue(payload, sizeof(payload), cmd)) {
         const std::string logCommand = runtimeBleLogCommandText(cmd);
-        logMessage("[BLE] command queue reject reason=too_long command=%s\n", logCommand.c_str());
+        logMessage("[BLE] command queue reject reason=%s command=%s\n",
+                   rejectReason[0] != '\0' ? rejectReason : "copy_failed",
+                   logCommand.c_str());
         return;
     }
 

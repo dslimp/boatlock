@@ -3980,3 +3980,30 @@ Validation:
 Self-review:
 - This reduces ambiguity at the BLE boundary with less code in `BLEBoatLock.cpp`; truncation is not an acceptable compatibility layer before alpha.
 - Remaining risk is that NimBLE may already truncate above ATT MTU before the callback; the app protocol still must treat any received callback value as complete and validate its own queue slot boundary.
+
+### 2026-04-25 Stage 125: BLE command queue printable-byte gate
+
+Scope:
+- Continue the refactor batch with module `14/15`: BLE command byte contract before queueing.
+- Prevent embedded NUL/control/non-ASCII bytes from being copied into a queue slot that is later consumed as a C string.
+
+External baseline:
+- SEI CERT STR32-C warns that passing non-null-terminated or unexpectedly terminated byte sequences to string functions can cause out-of-bounds reads or unintended disclosure; if copying without truncation is intended, an overlarge or invalid string is an error condition: <https://wiki.sei.cmu.edu/confluence/pages/viewpage.action?pageId=554434583>.
+- OWASP Input Validation Cheat Sheet recommends defining the accepted character set and minimum/maximum length server-side before data is processed: <https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html>.
+
+Key outcomes:
+- Extended `RuntimeBleCommandQueue` with a printable ASCII byte gate and explicit reject reasons.
+- Embedded NUL/control/non-ASCII bytes now fail before queueing, so `STOP\0...` cannot become `STOP` downstream.
+- Queue rejection logs now preserve the concrete reason: `too_long`, `bad_bytes`, `bad_slot`, or `copy_failed`.
+- Added native tests for embedded NUL and non-ASCII rejection.
+- Promoted the printable-byte command rule into `skills/boatlock/references/ble-ui.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because valid app commands are printable ASCII and phone-visible protocol shape is unchanged; malformed byte payloads now fail closed.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_command_queue -f test_runtime_ble_command_log` -> PASS (`11/11`).
+- `cd boatlock && platformio test -e native` -> PASS (`313/313`).
+- `cd boatlock && pio run -e esp32s3` -> PASS (`699765` bytes flash).
+
+Self-review:
+- This completes the command queue boundary from the previous module: length and byte contract now live in one helper.
+- Remaining risk is that special non-queued commands (`STREAM_START`, `STREAM_STOP`, `SNAPSHOT`) are still checked directly in `handleControlPoint`; malformed variants are not accepted because they require exact string equality.
