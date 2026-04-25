@@ -45,7 +45,7 @@ void test_runtime_ble_live_frame_encodes_stable_header_and_scaled_fields() {
   TEST_ASSERT_EQUAL_UINT16(123, readU16(frame, 26));
   TEST_ASSERT_EQUAL_UINT16(4225, readU16(frame, 28));
   TEST_ASSERT_EQUAL_UINT16(3599, readU16(frame, 30));
-  TEST_ASSERT_EQUAL_UINT8(70, frame.size());
+  TEST_ASSERT_EQUAL_UINT32(kRuntimeBleLiveFrameSize, frame.size());
 }
 
 void test_runtime_ble_live_frame_maps_reasons_and_reject_codes() {
@@ -69,6 +69,15 @@ void test_runtime_ble_live_frame_maps_reasons_and_reject_codes() {
   TEST_ASSERT_BITS_LOW(RUNTIME_BLE_REASON_NO_COMPASS, reasons);
 }
 
+void test_runtime_ble_reason_flags_match_exact_tokens_only() {
+  const uint32_t flags = runtimeBleReasonFlags(
+      "NO_GPS_STALE,XXNO_GPS, NO_COMPASS ,GPS_HDOP_MISSING");
+
+  TEST_ASSERT_BITS_LOW(RUNTIME_BLE_REASON_NO_GPS, flags);
+  TEST_ASSERT_BITS_HIGH(RUNTIME_BLE_REASON_NO_COMPASS, flags);
+  TEST_ASSERT_BITS_HIGH(RUNTIME_BLE_REASON_GPS_HDOP_MISSING, flags);
+}
+
 void test_runtime_ble_live_frame_scaling_clamps_before_cast() {
   TEST_ASSERT_EQUAL_INT32(INT32_MAX,
                           runtimeBleScaleSigned(1.0e100, 10000000.0,
@@ -88,6 +97,7 @@ int main() {
   UNITY_BEGIN();
   RUN_TEST(test_runtime_ble_live_frame_encodes_stable_header_and_scaled_fields);
   RUN_TEST(test_runtime_ble_live_frame_maps_reasons_and_reject_codes);
+  RUN_TEST(test_runtime_ble_reason_flags_match_exact_tokens_only);
   RUN_TEST(test_runtime_ble_live_frame_scaling_clamps_before_cast);
   return UNITY_END();
 }

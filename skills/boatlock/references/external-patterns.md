@@ -164,6 +164,7 @@ Implication for BoatLock:
   - keep/restart connectable advertising while a client is connected when future phone + remote discovery is required
   - never treat multi-central BLE transport as enough for simultaneous control; control ownership still needs an explicit lease/arbitration rule
   - clamp binary telemetry values before integer rounding/casting so invalid runtime values cannot corrupt the wire representation
+  - keep fixed binary telemetry frames length-stable and map enum/flag fields from one explicit table rather than duplicated branching
   - treat text/log characteristic values as length-delimited byte strings, not implicit C strings; trim defensive padding at the client boundary
 - For manual UI, avoid making actuation look like a primary one-tap FAB action. Use an explicit control surface such as a toolbar entry plus sheet/pad, and keep movement tied to press-and-hold/deadman semantics.
 

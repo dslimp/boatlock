@@ -1,9 +1,12 @@
 #pragma once
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
+
+static constexpr size_t kRuntimeBleLiveFrameSize = 70;
 
 struct RuntimeBleLiveTelemetry {
   double lat = 0.0;
@@ -69,6 +72,34 @@ enum RuntimeBleReasonFlags : uint32_t {
   RUNTIME_BLE_REASON_GPS_HDOP_MISSING = 1ul << 19,
 };
 
+struct RuntimeBleReasonMapEntry {
+  const char* token;
+  uint32_t flag;
+};
+
+static constexpr RuntimeBleReasonMapEntry kRuntimeBleReasonMap[] = {
+    {"NO_GPS", RUNTIME_BLE_REASON_NO_GPS},
+    {"NO_COMPASS", RUNTIME_BLE_REASON_NO_COMPASS},
+    {"DRIFT_ALERT", RUNTIME_BLE_REASON_DRIFT_ALERT},
+    {"DRIFT_FAIL", RUNTIME_BLE_REASON_DRIFT_FAIL},
+    {"CONTAINMENT_BREACH", RUNTIME_BLE_REASON_CONTAINMENT_BREACH},
+    {"GPS_WEAK", RUNTIME_BLE_REASON_GPS_WEAK},
+    {"COMM_TIMEOUT", RUNTIME_BLE_REASON_COMM_TIMEOUT},
+    {"CONTROL_LOOP_TIMEOUT", RUNTIME_BLE_REASON_CONTROL_LOOP_TIMEOUT},
+    {"SENSOR_TIMEOUT", RUNTIME_BLE_REASON_SENSOR_TIMEOUT},
+    {"INTERNAL_ERROR_NAN", RUNTIME_BLE_REASON_INTERNAL_ERROR_NAN},
+    {"COMMAND_OUT_OF_RANGE", RUNTIME_BLE_REASON_COMMAND_OUT_OF_RANGE},
+    {"STOP_CMD", RUNTIME_BLE_REASON_STOP_CMD},
+    {"GPS_HDOP_TOO_HIGH", RUNTIME_BLE_REASON_GPS_HDOP_TOO_HIGH},
+    {"GPS_SATS_TOO_LOW", RUNTIME_BLE_REASON_GPS_SATS_TOO_LOW},
+    {"GPS_DATA_STALE", RUNTIME_BLE_REASON_GPS_DATA_STALE},
+    {"GPS_POSITION_JUMP", RUNTIME_BLE_REASON_GPS_POSITION_JUMP},
+    {"NUDGE_OK", RUNTIME_BLE_REASON_NUDGE_OK},
+    {"NO_ANCHOR_POINT", RUNTIME_BLE_REASON_NO_ANCHOR_POINT},
+    {"NO_HEADING", RUNTIME_BLE_REASON_NO_HEADING},
+    {"GPS_HDOP_MISSING", RUNTIME_BLE_REASON_GPS_HDOP_MISSING},
+};
+
 inline bool runtimeBleCsvHasToken(const std::string& csv, const char* token) {
   size_t start = 0;
   while (start <= csv.size()) {
@@ -127,26 +158,11 @@ inline uint8_t runtimeBleRejectCode(const std::string& reject) {
 
 inline uint32_t runtimeBleReasonFlags(const std::string& reasons) {
   uint32_t flags = 0;
-  if (runtimeBleCsvHasToken(reasons, "NO_GPS")) flags |= RUNTIME_BLE_REASON_NO_GPS;
-  if (runtimeBleCsvHasToken(reasons, "NO_COMPASS")) flags |= RUNTIME_BLE_REASON_NO_COMPASS;
-  if (runtimeBleCsvHasToken(reasons, "DRIFT_ALERT")) flags |= RUNTIME_BLE_REASON_DRIFT_ALERT;
-  if (runtimeBleCsvHasToken(reasons, "DRIFT_FAIL")) flags |= RUNTIME_BLE_REASON_DRIFT_FAIL;
-  if (runtimeBleCsvHasToken(reasons, "CONTAINMENT_BREACH")) flags |= RUNTIME_BLE_REASON_CONTAINMENT_BREACH;
-  if (runtimeBleCsvHasToken(reasons, "GPS_WEAK")) flags |= RUNTIME_BLE_REASON_GPS_WEAK;
-  if (runtimeBleCsvHasToken(reasons, "COMM_TIMEOUT")) flags |= RUNTIME_BLE_REASON_COMM_TIMEOUT;
-  if (runtimeBleCsvHasToken(reasons, "CONTROL_LOOP_TIMEOUT")) flags |= RUNTIME_BLE_REASON_CONTROL_LOOP_TIMEOUT;
-  if (runtimeBleCsvHasToken(reasons, "SENSOR_TIMEOUT")) flags |= RUNTIME_BLE_REASON_SENSOR_TIMEOUT;
-  if (runtimeBleCsvHasToken(reasons, "INTERNAL_ERROR_NAN")) flags |= RUNTIME_BLE_REASON_INTERNAL_ERROR_NAN;
-  if (runtimeBleCsvHasToken(reasons, "COMMAND_OUT_OF_RANGE")) flags |= RUNTIME_BLE_REASON_COMMAND_OUT_OF_RANGE;
-  if (runtimeBleCsvHasToken(reasons, "STOP_CMD")) flags |= RUNTIME_BLE_REASON_STOP_CMD;
-  if (runtimeBleCsvHasToken(reasons, "GPS_HDOP_TOO_HIGH")) flags |= RUNTIME_BLE_REASON_GPS_HDOP_TOO_HIGH;
-  if (runtimeBleCsvHasToken(reasons, "GPS_SATS_TOO_LOW")) flags |= RUNTIME_BLE_REASON_GPS_SATS_TOO_LOW;
-  if (runtimeBleCsvHasToken(reasons, "GPS_DATA_STALE")) flags |= RUNTIME_BLE_REASON_GPS_DATA_STALE;
-  if (runtimeBleCsvHasToken(reasons, "GPS_POSITION_JUMP")) flags |= RUNTIME_BLE_REASON_GPS_POSITION_JUMP;
-  if (runtimeBleCsvHasToken(reasons, "NUDGE_OK")) flags |= RUNTIME_BLE_REASON_NUDGE_OK;
-  if (runtimeBleCsvHasToken(reasons, "NO_ANCHOR_POINT")) flags |= RUNTIME_BLE_REASON_NO_ANCHOR_POINT;
-  if (runtimeBleCsvHasToken(reasons, "NO_HEADING")) flags |= RUNTIME_BLE_REASON_NO_HEADING;
-  if (runtimeBleCsvHasToken(reasons, "GPS_HDOP_MISSING")) flags |= RUNTIME_BLE_REASON_GPS_HDOP_MISSING;
+  for (const RuntimeBleReasonMapEntry& entry : kRuntimeBleReasonMap) {
+    if (runtimeBleCsvHasToken(reasons, entry.token)) {
+      flags |= entry.flag;
+    }
+  }
   return flags;
 }
 
@@ -229,7 +245,7 @@ inline std::vector<uint8_t> runtimeBleEncodeLiveFrame(
     const RuntimeBleLiveTelemetry& telemetry,
     uint16_t sequence) {
   std::vector<uint8_t> out;
-  out.reserve(70);
+  out.reserve(kRuntimeBleLiveFrameSize);
   runtimeBleAppendU8(out, 'B');
   runtimeBleAppendU8(out, 'L');
   runtimeBleAppendU8(out, 2);

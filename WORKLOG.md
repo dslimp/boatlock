@@ -3384,3 +3384,34 @@ Self-review:
 - This does not change normal emitted status constants, so app parsing should stay behaviorally unchanged.
 - The sanitizer is intentionally narrow: it protects the existing CSV contract instead of adding a new protocol field mid-batch.
 - Remaining risk is any future reason that intentionally needs punctuation; that should be a protocol/schema decision, not an accidental runtime string.
+
+### 2026-04-25 Stage 104: BLE live-frame reason mapping table
+
+Scope:
+- Continue the watchdog/telemetry batch with `RuntimeBleLiveFrame`.
+- Keep the fixed 70-byte binary frame and field layout unchanged while reducing duplicated reason-to-bit branching.
+- This is module `4/5`; hardware and Android acceptance are deferred to module five because the binary schema and normal emitted bytes stay unchanged.
+
+External baseline:
+- Bluetooth GATT notifications carry characteristic values without ATT-layer acknowledgement, so the application frame should stay compact, deterministic, and self-validated before notify: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-61/out/en/host/generic-attribute-profile--gatt-.html>.
+- Android exposes notification/read data as byte arrays for the characteristic value, reinforcing the current fixed binary frame instead of JSON/string parsing on the live path: <https://developer.android.com/reference/android/bluetooth/BluetoothGattCharacteristic>.
+
+Key outcomes:
+- Added `kRuntimeBleLiveFrameSize` and used it for encoder reserve and frame-size tests.
+- Replaced duplicated `if token then flag` branches with one explicit token-to-bit table and a loop.
+- Added a native test that rejects substring/prefix lookalikes while preserving exact token matches with whitespace trimming.
+- Promoted the live-frame mapping rule into `skills/boatlock/references/ble-ui.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no new Android smoke path is needed because the frame version, byte layout, size, decoder contract, and normal bytes are unchanged; the full Android smoke suite remains scheduled after module five.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_live_frame -f test_runtime_status -f test_runtime_ble_params -f test_ble_command_handler` -> passed (`46/46`).
+- `cd boatlock_ui && flutter test test/ble_live_frame_test.dart` -> passed.
+- `cd boatlock && platformio test -e native` -> passed (`285/285`).
+- `cd boatlock_ui && flutter test` -> passed (`32/32`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `697797` bytes.
+- `git diff --check` -> clean.
+
+Self-review:
+- The frame layout stayed fixed at `70` bytes; no decoder or protocol version change was needed.
+- The table removes duplicated branch logic and makes future reason additions reviewable in one place.
+- Remaining risk is cross-language drift between firmware and Flutter reason tables; current Flutter tests cover decode, and full Android smoke is scheduled after module five.
