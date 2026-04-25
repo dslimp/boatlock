@@ -45,6 +45,7 @@ Use this file for:
 - Material Design Floating Action Button guidance: <https://m1.material.io/components/buttons-floating-action-button.html>
 - W3C SCXML state-machine specification: <https://www.w3.org/TR/scxml/>
 - SEI CERT FLP04-C floating-point input checks: <https://wiki.sei.cmu.edu/confluence/display/c/FLP04-C.+Check+floating-point+inputs+for+exceptional+values>
+- SEI CERT STR32-C null-terminated byte string checks: <https://wiki.sei.cmu.edu/confluence/pages/viewpage.action?pageId=554434583>
 - CEVA BNO08X Datasheet: <https://www.ceva-ip.com/wp-content/uploads/2019/10/BNO080_085-Datasheet.pdf>
 - Adafruit BNO085 UART-RVC guide: <https://learn.adafruit.com/adafruit-9-dof-orientation-imu-fusion-breakout-bno085/uart-rvc-for-arduino>
 - Adafruit BNO085 pinout/mode-select guide: <https://learn.adafruit.com/adafruit-9-dof-orientation-imu-fusion-breakout-bno085/pinouts>
@@ -171,6 +172,7 @@ Implication for BoatLock:
   - log BLE connect/disconnect events as short key=value lines and keep raw reason codes in decimal plus hex for layer-specific NimBLE/HCI triage
   - format runtime logs into a bounded buffer, then write the known formatted byte count instead of relying on unbounded C-string scans
   - build queued BLE log payloads with bounded source scans and explicit zero-fill; do not call C string functions on length-unknown buffers
+  - keep BLE log characteristic notifications single-line by trimming trailing CR/LF and neutralizing embedded control bytes
   - clamp binary telemetry values before integer rounding/casting so invalid runtime values cannot corrupt the wire representation
   - sanitize direct numeric telemetry fields before packing fixed binary characteristics; out-of-range or non-finite floats must not be cast directly into integers
   - treat quality/confidence fields as bounded enums and fail invalid ordinals to the lowest confidence state instead of clamping upward

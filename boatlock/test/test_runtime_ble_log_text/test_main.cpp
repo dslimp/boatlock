@@ -10,8 +10,8 @@ void test_runtime_ble_log_value_uses_bounded_c_string_length() {
 
   const std::string value = runtimeBleLogValue(payload, sizeof(payload));
 
-  TEST_ASSERT_EQUAL_STRING("[OK]\n", value.c_str());
-  TEST_ASSERT_EQUAL_UINT32(5, value.size());
+  TEST_ASSERT_EQUAL_STRING("[OK]", value.c_str());
+  TEST_ASSERT_EQUAL_UINT32(4, value.size());
 }
 
 void test_runtime_ble_log_value_handles_missing_terminator() {
@@ -27,6 +27,15 @@ void test_runtime_ble_log_value_handles_null_input() {
   const std::string value = runtimeBleLogValue(nullptr, 8);
 
   TEST_ASSERT_TRUE(value.empty());
+}
+
+void test_runtime_ble_log_value_sanitizes_embedded_control_bytes() {
+  const char payload[] = {'A', '\r', 'B', '\t', 'C', '\n', '\0'};
+
+  const std::string value = runtimeBleLogValue(payload, sizeof(payload));
+
+  TEST_ASSERT_EQUAL_STRING("A B C", value.c_str());
+  TEST_ASSERT_EQUAL_UINT32(5, value.size());
 }
 
 void test_runtime_ble_prepare_payload_bounds_source_scan() {
@@ -50,12 +59,27 @@ void test_runtime_ble_prepare_payload_clears_destination_on_empty_input() {
   TEST_ASSERT_EQUAL('\0', payload[3]);
 }
 
+void test_runtime_ble_prepare_payload_sanitizes_and_trims_line() {
+  const char source[] = {'A', '\n', 'B', '\r', '\n', '\0'};
+  char payload[] = {'x', 'x', 'x', 'x', 'x', 'x'};
+  const size_t len = runtimeBlePrepareLogPayload(payload, sizeof(payload), source);
+
+  TEST_ASSERT_EQUAL_UINT32(3, len);
+  TEST_ASSERT_EQUAL('A', payload[0]);
+  TEST_ASSERT_EQUAL(' ', payload[1]);
+  TEST_ASSERT_EQUAL('B', payload[2]);
+  TEST_ASSERT_EQUAL('\0', payload[3]);
+  TEST_ASSERT_EQUAL('\0', payload[5]);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_runtime_ble_log_value_uses_bounded_c_string_length);
   RUN_TEST(test_runtime_ble_log_value_handles_missing_terminator);
   RUN_TEST(test_runtime_ble_log_value_handles_null_input);
+  RUN_TEST(test_runtime_ble_log_value_sanitizes_embedded_control_bytes);
   RUN_TEST(test_runtime_ble_prepare_payload_bounds_source_scan);
   RUN_TEST(test_runtime_ble_prepare_payload_clears_destination_on_empty_input);
+  RUN_TEST(test_runtime_ble_prepare_payload_sanitizes_and_trims_line);
   return UNITY_END();
 }

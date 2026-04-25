@@ -3871,3 +3871,30 @@ Validation:
 Self-review:
 - This removes a stale generic-data escape hatch from the live characteristic and makes future frame-size drift fail visibly.
 - Remaining risk is future non-live frame types: they should be added as explicit frame types with tests rather than reopening a generic length range.
+
+### 2026-04-25 Stage 121: BLE log text single-line payloads
+
+Scope:
+- Continue the refactor batch with module `10/15`: BLE log text characteristic payload preparation.
+- Keep serial logging unchanged while making BLE log notifications length-bounded and single-line.
+
+External baseline:
+- SEI CERT STR32-C warns that passing non-null-terminated byte sequences into string functions can read outside object bounds or disclose unintended memory; bounded scans and explicit terminators are required: <https://wiki.sei.cmu.edu/confluence/pages/viewpage.action?pageId=554434583>.
+- Bluetooth Core GATT treats the log characteristic notification as a characteristic-value update, so BoatLock should publish one bounded diagnostic line per update instead of leaking embedded line separators into the client stream: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-61/out/en/host/generic-attribute-profile--gatt-.html>.
+
+Key outcomes:
+- `RuntimeBleLogText` now trims trailing CR/LF from BLE log payloads.
+- Embedded ASCII control bytes are neutralized to spaces before enqueueing/publishing over BLE.
+- Existing bounded C-string scans remain in place; serial output path is unchanged.
+- Added native tests for control-byte sanitation and trailing line-break trimming.
+- Promoted the BLE single-line log rule into `skills/boatlock/references/ble-ui.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because app parsing, commands, telemetry, reconnect/install, and valid BLE control behavior are unchanged; BLE log text is only normalized to one line.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_log_text -f test_runtime_log_text` -> PASS (`10/10`).
+- `cd boatlock && platformio test -e native` -> PASS (`303/303`).
+- `cd boatlock && pio run -e esp32s3` -> PASS (`698289` bytes flash).
+
+Self-review:
+- This reduces diagnostic ambiguity without touching control behavior or serial evidence.
+- Remaining risk is that historical consumers expecting BLE log trailing newlines may differ, but the app is unreleased and its UI already treats logs as discrete lines.
