@@ -159,6 +159,7 @@ Implication for BoatLock:
 - HIL/control-loop timers follow the same rule as watchdogs and diagnostics: use explicit seen flags plus unsigned elapsed-time math, and treat timestamp `0` as a valid sample.
 - HIL core behavior needs direct boundary tests in addition to end-to-end scenarios; scenario coverage alone can miss timer sentinel bugs.
 - HIL fault-injection windows and event de-duplication windows must use one rollover-safe elapsed-time helper. Do not compare `now < at + duration` or require `now >= previous`; absolute expiry math can silently break when simulated time wraps.
+- HIL sensor simulators must reset every timestamp baseline and drift accumulator between scenarios. Repeatability requires a fresh simulated sensor epoch, not only cleared output samples.
 - HIL command surfaces should be narrow and deterministic: accept only documented commands and reject malformed payloads instead of guessing alternate encodings.
 - HIL logs are part of the test interface. Keep log records single-line, bounded, and neutralize CR/LF/control characters before logging command-derived fields.
 - HIL JSON reports are also a test interface. Build JSON strings through one escaping helper; quote, backslash, and control characters must never be interpolated raw into `SIM_REPORT`.

@@ -270,6 +270,7 @@ public:
   void reset() {
     lastGnssEmitMs_ = 0;
     lastGnssUpdateMs_ = 0;
+    lastHeadingMs_ = 0;
     headingBiasDeg_ = 0.0f;
     fix_ = {};
     fix_.ageMs = 999999UL;

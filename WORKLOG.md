@@ -4553,3 +4553,27 @@ Validation:
 Self-review:
 - This is a focused rollover fix, not a report/event schema change.
 - Remaining risk is broader event-buffer ownership still living inside `HilScenarioRunner`; a later module can extract bounded event recording if it removes complexity without changing output.
+
+### 2026-04-25 Stage 147: HIL sensor reset clears heading drift baseline
+
+Scope:
+- Continue the refactor batch with module `4/15`: HIL simulated sensor reset correctness.
+- Fix repeat-run state leakage in `SimSensorHub` heading drift timing.
+
+External baseline:
+- PX4 SIH describes deterministic/reproducible simulation with simulated sensors and actuator feedback in lockstep; repeatability requires each scenario to start from a clean sensor epoch: <https://docs.px4.io/main/en/sim_sih/index>.
+- ArduPilot SITL feeds simulated sensor data from the flight dynamics model into the real autopilot code; sensor simulation state must therefore be reset as carefully as control state between runs: <https://ardupilot.org/dev/docs/sitl-simulator-software-in-the-loop.html>.
+
+Key outcomes:
+- Updated `SimSensorHub::reset()` to clear `lastHeadingMs_` along with GNSS timestamps, heading bias, and output samples.
+- Added `test_hil_sensor_hub` proving heading drift baseline does not leak across reset.
+- Promoted the durable HIL sensor-reset rule into `external-patterns.md`.
+- Phone-smoke decision: no Android smoke required because this module only affects HIL sensor simulation repeatability and does not change BLE/app behavior.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_hil_sensor_hub` -> PASS (`1/1`).
+- `cd boatlock && platformio test -e native -f test_hil_sim` -> PASS (`11/11`).
+
+Self-review:
+- This fixes a real latent bug for future heading-drift scenarios; current default scenarios mostly hid it because heading drift defaults to zero.
+- Remaining risk is that other HIL components may still have reset-state coupling inside the large runner; continue extracting/reset-testing them in later modules.
