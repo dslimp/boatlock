@@ -4187,3 +4187,28 @@ Validation:
 Self-review:
 - This is a structure-only extraction with no compatibility wrapper for removed static methods.
 - Targeted codec tests preserve proof/envelope shape and full Flutter tests cover imports; remaining risk is deeper auth acceptance on hardware, which should be covered by a dedicated pairing/auth smoke when that flow changes.
+
+### 2026-04-25 Stage 133: Extract Flutter BLE log decoder
+
+Scope:
+- Continue the refactor batch with module `6/15`: Flutter BLE log characteristic decoding.
+- Move length-delimited log byte parsing out of the stateful BLE transport class.
+
+External baseline:
+- Bluetooth Core GATT notification payloads are characteristic Attribute Values; BoatLock's log characteristic therefore needs an app-level byte-string decoder instead of implicit C-string handling: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-60/out/en/host/generic-attribute-profile--gatt-.html>.
+- Dart `Utf8Codec` documents `allowMalformed=true` as replacement-character decoding for invalid/unterminated UTF-8, which is appropriate for display-only diagnostics but not for control payloads: <https://api.flutter.dev/flutter/dart-convert/Utf8Codec/Utf8Codec.html>.
+
+Key outcomes:
+- Added `ble_log_line.dart` with `decodeBoatLockLogLine()`.
+- Removed `BleBoatLock.decodeLogLine()` with no compatibility wrapper; `BleBoatLock` now only calls the log decoder.
+- Added focused tests for NUL padding and malformed UTF-8 replacement behavior.
+- Updated the BLE/UI reference to make `ble_log_line.dart` canonical for Flutter log characteristic parsing.
+- Phone-smoke decision: no Android smoke required because runtime log notification behavior is unchanged and this is a pure parser extraction.
+
+Validation:
+- `cd boatlock_ui && flutter test test/ble_log_line_test.dart test/ble_boatlock_test.dart` -> PASS (`3/3`).
+- `cd boatlock_ui && flutter test` -> PASS (`39/39`).
+
+Self-review:
+- This keeps diagnostic byte handling separate from BLE state and command/control parsing.
+- Targeted and full Flutter tests covered import/reference drift; remaining risk is only future misuse of this tolerant decoder for control payloads, which remains blocked by `ble_command_text.dart`.

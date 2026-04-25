@@ -11,6 +11,7 @@
 - `boatlock_ui/lib/ble/ble_commands.dart`: pure command builders and value allowlists for app-originated commands
 - `boatlock_ui/lib/ble/ble_security_codec.dart`: owner-secret normalization, owner auth proof, and secure command envelope formatting
 - `boatlock_ui/lib/ble/ble_live_frame.dart`: live binary telemetry decoder
+- `boatlock_ui/lib/ble/ble_log_line.dart`: log characteristic byte-string decoder
 - `boatlock_ui/lib/models/boat_data.dart`: telemetry fields parsed by Flutter
 
 ## BLE Identity
@@ -26,6 +27,7 @@
 - Flutter live-frame decoding must reject unknown mode/status/security-reject enum codes while the frame version is unchanged; `UNKNOWN` display fallbacks hide firmware/app schema drift.
 - Flutter `BoatData` is populated from the binary live-frame decoder only; do not keep a parallel JSON telemetry parser unless a real shipped protocol path is restored end-to-end.
 - Log characteristic values are byte strings with explicit length. Firmware must set the exact text length, and Flutter must ignore trailing NUL padding defensively.
+- Flutter log decoding belongs in `ble_log_line.dart`; keep it length-delimited and tolerate malformed UTF-8 as display-only diagnostics.
 - BLE log queue writes must build bounded, NUL-terminated payload slots without `strlen()` on untrusted or length-unknown input.
 - BLE log notifications must stay single-line: trim trailing CR/LF and neutralize embedded ASCII control bytes before enqueueing or publishing over `78ab`.
 - BLE command-derived log fields must go through `RuntimeBleCommandLog`: suppress high-rate `HEARTBEAT`, redact `PAIR_SET`, `AUTH_PROVE`, and `SEC_CMD`, neutralize control bytes, and bound field length.

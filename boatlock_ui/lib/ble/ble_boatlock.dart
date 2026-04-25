@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
@@ -9,6 +8,7 @@ import '../models/boat_data.dart';
 import 'ble_commands.dart';
 import 'ble_command_text.dart';
 import 'ble_live_frame.dart';
+import 'ble_log_line.dart';
 import 'ble_reconnect_policy.dart';
 import 'ble_security_codec.dart';
 
@@ -371,15 +371,9 @@ class BleBoatLock with WidgetsBindingObserver {
   }
 
   void _onLogNotify(List<int> value) {
-    final line = decodeLogLine(value);
+    final line = decodeBoatLockLogLine(value);
     if (line.trim().isEmpty) return;
     onLog?.call(line);
-  }
-
-  static String decodeLogLine(List<int> value) {
-    final nul = value.indexOf(0);
-    final end = nul < 0 ? value.length : nul;
-    return utf8.decode(value.sublist(0, end), allowMalformed: true);
   }
 
   Future<void> setAnchor() async {
