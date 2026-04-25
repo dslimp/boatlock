@@ -10,6 +10,7 @@
 
 #include "AnchorControlLoop.h"
 #include "ControlInterfaces.h"
+#include "HilSimClock.h"
 #include "HilSimEvents.h"
 #include "HilSimExpect.h"
 #include "HilSimJson.h"
@@ -29,16 +30,6 @@ inline float clampf(float v, float lo, float hi) {
   if (v > hi) return hi;
   return v;
 }
-
-class VirtualClock : public IClock {
-public:
-  unsigned long now_ms() const override { return nowMs_; }
-  void set(unsigned long ms) { nowMs_ = ms; }
-  void advance(unsigned long ms) { nowMs_ += ms; }
-
-private:
-  unsigned long nowMs_ = 0;
-};
 
 class ActuatorCapture : public IActuator {
 public:

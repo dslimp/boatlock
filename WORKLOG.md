@@ -4709,3 +4709,28 @@ Validation:
 Self-review:
 - The RNG is now independently testable and does not depend on runner state.
 - Remaining risk is that all sensor simulation still shares one RNG stream; split streams only if a future scenario needs isolation and can prove it with deterministic tests.
+
+### 2026-04-25 Stage 153: HIL virtual clock extraction
+
+Scope:
+- Continue the refactor batch with module `10/15`: HIL virtual time source.
+- Move `VirtualClock` out of `HilSimRunner`.
+
+External baseline:
+- PX4 SIH uses lockstep simulation time synchronized with the flight stack; BoatLock HIL should also own simulated time explicitly: <https://docs.px4.io/main/en/sim_sih/index>.
+- Arduino's non-blocking timing pattern uses explicit elapsed-time checks around `millis()`; virtual time needs direct wrap tests instead of relying on wall-clock behavior: <https://docs.arduino.cc/built-in-examples/digital/BlinkWithoutDelay/>.
+
+Key outcomes:
+- Added `HilSimClock.h` with `VirtualClock`.
+- Removed the virtual clock implementation from `HilSimRunner.h`.
+- Added direct tests for initial time, set, advance, and unsigned wrap.
+- Promoted the durable virtual-clock rule into `external-patterns.md`.
+- Phone-smoke decision: no Android smoke required because this only changes internal HIL time ownership; valid BLE command and telemetry behavior are unchanged.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_hil_sim_clock` -> PASS (`3/3`).
+- `cd boatlock && platformio test -e native -f test_hil_sim_time -f test_hil_sim` -> PASS (`15/15`).
+
+Self-review:
+- Virtual clock behavior is now independently covered and no longer hidden inside the runner class.
+- Remaining risk is that realtime vs speedup scheduling still lives in `HilSimManager`; that should be handled separately because it touches phone-visible `SIM_RUN` timing behavior.

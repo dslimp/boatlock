@@ -260,6 +260,7 @@ Implication for BoatLock:
 - HIL expectation evaluation should be a pure helper with stable failure-priority tests; scenario execution should collect facts, not hide pass/fail policy in loop glue.
 - HIL metrics accumulation should keep sampled facts separate from pass/fail policy and should fail closed for invalid numeric inputs before they influence percentiles.
 - HIL randomness must be seed-owned, deterministic, and directly tested; zero seeds should normalize to a non-zero state so simulated noise cannot collapse silently.
+- HIL time should be owned by an explicit virtual clock; helpers should be tested for set, advance, and unsigned wrap instead of depending on wall-clock timing.
 - On real hardware, simulation acceptance must keep dangerous actuator movement disabled or explicitly zero-throttle unless a powered bench procedure is defined.
 
 ## What ESP32 Storage Guidance Gets Right
