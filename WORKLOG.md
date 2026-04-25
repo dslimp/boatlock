@@ -4529,3 +4529,27 @@ Validation:
 Self-review:
 - This hardens a phone-visible test/report interface without changing current scenario outcomes.
 - Remaining risk is bounded-buffer truncation if future event strings become long after escaping; current event fields are short and the next HIL report/log modules should keep report chunks explicitly bounded.
+
+### 2026-04-25 Stage 146: HIL event duplicate suppression rollover
+
+Scope:
+- Continue the refactor batch with module `3/15`: HIL control-event de-duplication timing.
+- Replace the `atMs >= lastEventMs_` duplicate-suppression guard with the shared rollover-safe time-window helper.
+
+External baseline:
+- PX4 SIH emphasizes lockstep deterministic simulation output; event streams are part of that output and should stay deterministic at timing boundaries: <https://docs.px4.io/main/en/sim_sih/index>.
+- Arduino `millis()` style timing should be reasoned about as elapsed unsigned time rather than absolute ordering when wrap is possible: <https://docs.arduino.cc/built-in-examples/digital/BlinkWithoutDelay/>.
+
+Key outcomes:
+- Updated `HilScenarioRunner::onControlEvent()` to suppress duplicate events through `simTimeWindowContains()`.
+- Added `test_hil_sim_events` covering duplicate suppression across unsigned rollover and preserving events whose details differ.
+- Updated external-pattern guidance so event de-duplication follows the same helper as HIL injection windows.
+- Phone-smoke decision: no Android smoke required because this only affects duplicate event filtering under synthetic time wrap and does not change BLE command/telemetry schema.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_hil_sim_events` -> PASS (`2/2`).
+- `cd boatlock && platformio test -e native -f test_hil_sim` -> PASS (`11/11`).
+
+Self-review:
+- This is a focused rollover fix, not a report/event schema change.
+- Remaining risk is broader event-buffer ownership still living inside `HilScenarioRunner`; a later module can extract bounded event recording if it removes complexity without changing output.

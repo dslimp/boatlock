@@ -430,8 +430,8 @@ public:
     markEventSeen(codeStr);
     markEventSeen(detailsStr);
 
-    if (codeStr == lastEventCode_ && detailsStr == lastEventDetails_ && atMs >= lastEventMs_ &&
-        (atMs - lastEventMs_) < kDuplicateEventSuppressMs) {
+    if (codeStr == lastEventCode_ && detailsStr == lastEventDetails_ &&
+        simTimeWindowContains(atMs, lastEventMs_, kDuplicateEventSuppressMs)) {
       return;
     }
     lastEventCode_ = codeStr;
