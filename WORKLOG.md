@@ -4212,3 +4212,32 @@ Validation:
 Self-review:
 - This keeps diagnostic byte handling separate from BLE state and command/control parsing.
 - Targeted and full Flutter tests covered import/reference drift; remaining risk is only future misuse of this tolerant decoder for control payloads, which remains blocked by `ble_command_text.dart`.
+
+### 2026-04-25 Stage 134: Extract Flutter BLE device matching
+
+Scope:
+- Continue the refactor batch with module `7/15`: Flutter BLE adapter readiness and scan-result matching.
+- Move BoatLock advertisement matching out of `BleBoatLock` so it can be tested without starting a scan.
+
+External baseline:
+- Android `ScanRecord` exposes local device name and service UUIDs from BLE advertising data, so matching should be explicit over those advertised fields rather than hidden in scan-loop side effects: <https://developer.android.com/reference/android/bluetooth/le/ScanRecord>.
+- Dart Effective Dart favors narrow APIs and top-level functions when class state is not needed: <https://dart.dev/effective-dart/design>.
+
+Key outcomes:
+- Added `ble_device_match.dart` for adapter readiness, pure advertisement matching, and a thin `ScanResult` adapter.
+- Removed adapter/device matching helpers from `BleBoatLock`; the scan loop now calls the dedicated matcher.
+- Deleted the now-empty `ble_boatlock_test.dart`; transport helpers are covered in focused modules instead.
+- Added focused tests for name match, service UUID match, unrelated advert rejection, and adapter readiness.
+- Updated the BLE/UI reference to make `ble_device_match.dart` canonical for matching rules.
+- Phone-smoke decision: no Android smoke required because matching semantics are unchanged; this is a pure extraction covered by local tests.
+
+Validation:
+- `cd boatlock_ui && flutter test test/ble_device_match_test.dart` -> PASS (`4/4`).
+- First `cd boatlock_ui && flutter test` -> FAIL; caught one leftover call to removed `isAdapterReady()` in `_readAdapterReady()`.
+- Fixed `_readAdapterReady()` to use `isBluetoothAdapterReady()`.
+- `cd boatlock_ui && flutter test` -> PASS (`42/42`).
+
+Self-review:
+- This removes another pure concern from the transport class and keeps scan matching deterministic.
+- Full Flutter tests caught the only stale reference, which confirms why extraction modules still need full-suite validation.
+- Remaining risk is plugin-specific `ScanResult` wrapping; the wrapper is tiny and still exercised by full Flutter compilation.

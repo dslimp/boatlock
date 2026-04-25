@@ -7,6 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../models/boat_data.dart';
 import 'ble_commands.dart';
 import 'ble_command_text.dart';
+import 'ble_device_match.dart';
 import 'ble_live_frame.dart';
 import 'ble_log_line.dart';
 import 'ble_reconnect_policy.dart';
@@ -133,7 +134,7 @@ class BleBoatLock with WidgetsBindingObserver {
         _log(
           "found device: mac=${r.device.remoteId}, name='${r.device.platformName}', advName='${r.advertisementData.advName}'",
         );
-        if (_isBoatLockDevice(r)) {
+        if (isBoatLockScanResult(r)) {
           found = true;
           if (!scanDone.isCompleted) {
             scanDone.complete();
@@ -296,7 +297,7 @@ class BleBoatLock with WidgetsBindingObserver {
     _adapterStateSub = FlutterBluePlus.adapterState.listen((state) {
       _log('BLE adapter state: $state');
       final decision = _reconnectPolicy.adapterChanged(
-        adapterReady: isAdapterReady(state),
+        adapterReady: isBluetoothAdapterReady(state),
       );
       unawaited(_applyReconnectDecision(decision));
     });
@@ -309,7 +310,7 @@ class BleBoatLock with WidgetsBindingObserver {
         const Duration(seconds: 2),
       );
       _log('BLE adapter initial state: $state');
-      return isAdapterReady(state);
+      return isBluetoothAdapterReady(state);
     } catch (e) {
       _log('BLE adapter state unavailable, trying scan: $e');
       return true;
@@ -322,10 +323,6 @@ class BleBoatLock with WidgetsBindingObserver {
 
   bool get _hasUsableLink {
     return _device != null && _dataChar != null && _cmdChar != null;
-  }
-
-  static bool isAdapterReady(BluetoothAdapterState state) {
-    return state == BluetoothAdapterState.on;
   }
 
   Future<void> requestSnapshot() async {
@@ -643,22 +640,6 @@ class BleBoatLock with WidgetsBindingObserver {
   void _log(String msg) {
     debugPrint('[BleBoatLock] $msg');
     developer.log(msg, name: 'BleBoatLock');
-  }
-
-  bool _isBoatLockDevice(ScanResult r) {
-    final advName = r.advertisementData.advName.trim().toLowerCase();
-    final devName = r.device.platformName.trim().toLowerCase();
-    final nameMatch =
-        advName == 'boatlock' ||
-        devName == 'boatlock' ||
-        advName.contains('boatlock') ||
-        devName.contains('boatlock');
-
-    final serviceMatch = r.advertisementData.serviceUuids.any(
-      (uuid) => uuid.toString().toLowerCase().contains('12ab'),
-    );
-
-    return nameMatch || serviceMatch;
   }
 
   Future<bool> _ensurePermissions() async {

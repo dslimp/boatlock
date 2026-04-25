@@ -8,6 +8,7 @@
 - `boatlock/RuntimeBleLiveFrame.h`: live binary telemetry frame encoder and enum mapping
 - `boatlock/RuntimeBleParams.h`: typed runtime telemetry provider
 - `boatlock_ui/lib/ble/ble_boatlock.dart`: scan/connect/auth/write behavior
+- `boatlock_ui/lib/ble/ble_device_match.dart`: adapter readiness and BoatLock advertisement matching
 - `boatlock_ui/lib/ble/ble_commands.dart`: pure command builders and value allowlists for app-originated commands
 - `boatlock_ui/lib/ble/ble_security_codec.dart`: owner-secret normalization, owner auth proof, and secure command envelope formatting
 - `boatlock_ui/lib/ble/ble_live_frame.dart`: live binary telemetry decoder
@@ -47,6 +48,7 @@
 - A device matches when:
   - advertised or platform name equals/contains `boatlock`, or
   - advertised service UUID contains `12ab`
+- Device matching belongs in `ble_device_match.dart` and should stay testable without starting a BLE scan.
 - Scan is stopped immediately before connect.
 - If nothing is found, the app retries after `3 s`.
 - On disconnect, the app clears characteristics and schedules reconnect.
