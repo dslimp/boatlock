@@ -147,7 +147,7 @@ Implication for BoatLock:
 - HIL core behavior needs direct boundary tests in addition to end-to-end scenarios; scenario coverage alone can miss timer sentinel bugs.
 - HIL command surfaces should be narrow and deterministic: accept only documented commands and reject malformed payloads instead of guessing alternate encodings.
 - HIL logs are part of the test interface. Keep log records single-line, bounded, and neutralize CR/LF/control characters before logging command-derived fields.
-- Periodic UI/BLE/sensor cadence should use one shared non-blocking elapsed-time helper. Test interval `0` and unsigned rollover directly instead of relying only on normal interval scenarios.
+- Periodic UI/BLE/sensor cadence should use one shared non-blocking elapsed-time helper. Floor interval `0` instead of allowing same-timestamp bursts, and test unsigned rollover directly instead of relying only on normal interval scenarios.
 - One-shot UI/diagnostic banners follow the same timer rule: store the start timestamp and duration, then compare unsigned elapsed time. Do not store absolute expiry timestamps as the authority.
 - Do not auto-enter manual control from failsafe. After a fault clears, operator control must be an explicit new action.
 - Treat non-finite sensor/control values like unavailable inputs at module boundaries, not as values to normalize later inside actuator code.

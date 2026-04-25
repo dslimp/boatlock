@@ -3321,3 +3321,36 @@ Self-review:
 
 Promote to skill:
 - UART/watchdog timing configs must have local floors so zero or corrupted intervals cannot create busy warning/restart loops.
+
+### 2026-04-25 Stage 102: Runtime telemetry cadence zero-interval floor
+
+Scope:
+- Continue the watchdog/telemetry batch with `RuntimeTelemetryCadence`.
+- Prevent UI/BLE/compass cadence callers from creating same-timestamp bursts through interval `0`.
+- This is module `2/5`; hardware and Android acceptance are deferred to module five because live production intervals stay non-zero and no phone-visible schema changed.
+
+External baseline:
+- Arduino's non-blocking timing pattern is based on elapsed-time checks instead of blocking delays or unbounded loops: <https://docs.arduino.cc/built-in-examples/digital/BlinkWithoutDelay/>.
+- ESP-IDF UART/event guidance reinforces event/cadence-driven processing rather than blocking or busy polling loops: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/peripherals/uart.html>.
+- PX4/ArduPilot safety patterns used elsewhere in this repo treat invalid timing/config values as values to bound locally before runtime logic uses them.
+
+Key outcomes:
+- Added `RuntimeTelemetryCadence::kMinIntervalMs = 1`.
+- `shouldRun()` now floors interval `0` to `1 ms` instead of returning `true` repeatedly for the same timestamp.
+- Preserved independent UI/BLE/compass timers and unsigned rollover behavior.
+- Updated cadence tests for zero interval floor semantics.
+- Promoted the cadence floor rule into `skills/boatlock/references/firmware.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because BLE payload/schema and app behavior did not change.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_telemetry_cadence -f test_runtime_ble_live_frame -f test_runtime_status -f test_runtime_compass_health` -> passed (`21/21`).
+- `cd boatlock && platformio test -e native` -> passed (`283/283`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `697937` bytes.
+
+Self-review:
+- Valid production intervals are unchanged; the change only hardens bad direct input.
+- The minimum remains intentionally tiny (`1 ms`) to avoid changing normal scheduling policy while removing same-timestamp burst behavior.
+- Remaining validation risk is live BLE/display cadence under noisy runtime load; scheduled batch hardware acceptance will cover boot and smoke behavior after module five.
+
+Promote to skill:
+- Cadence helpers must floor zero intervals instead of allowing same-timestamp bursts.

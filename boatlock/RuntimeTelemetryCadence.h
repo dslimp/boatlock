@@ -2,6 +2,8 @@
 
 class RuntimeTelemetryCadence {
 public:
+  static constexpr unsigned long kMinIntervalMs = 1;
+
   bool shouldRefreshUi(unsigned long nowMs, unsigned long intervalMs) {
     return shouldRun(nowMs, intervalMs, lastUiRefreshMs_);
   }
@@ -20,7 +22,9 @@ public:
 
 private:
   static bool shouldRun(unsigned long nowMs, unsigned long intervalMs, unsigned long& lastMs) {
-    if (intervalMs > 0 && nowMs - lastMs < intervalMs) {
+    const unsigned long effectiveInterval =
+        intervalMs < kMinIntervalMs ? kMinIntervalMs : intervalMs;
+    if (nowMs - lastMs < effectiveInterval) {
       return false;
     }
     lastMs = nowMs;

@@ -131,7 +131,7 @@
 - `statusReasons` may include informational operator acknowledgements such as `NUDGE_OK`; those must not elevate `status` above `OK` without a real health warning.
 - Build UI-facing display state through `RuntimeUiSnapshot` before passing it into `display_draw_ui()`.
 - Keep UI refresh cadence and BLE notify cadence in `RuntimeTelemetryCadence`, not as loose timestamps in `main.cpp`.
-- Runtime cadence timers must share unsigned elapsed-time logic; interval `0` must have explicit behavior and rollover coverage.
+- Runtime cadence timers must share unsigned elapsed-time logic; interval `0` is floored to `1 ms` so callers cannot create same-timestamp bursts, and rollover coverage is required.
 - Keep GPS UART no-data/stale/restart policy in `RuntimeGpsUart`, not as loose flags in `main.cpp`.
 - GPS UART restart must reset the no-data baseline so post-restart silence gets a fresh grace window instead of an immediate no-data warning.
 - GPS UART restart cooldown must use an explicit restart-seen flag; timestamp `0` is a valid restart time, not a sentinel.
