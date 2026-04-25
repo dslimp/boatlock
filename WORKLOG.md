@@ -3638,3 +3638,29 @@ Validation:
 Self-review:
 - The longer cadence reduces bench churn for low-risk local-only refactors.
 - The main risk is a larger local-only window, so the immediate hardware gate for drivers, pinout, deploy/debug, actuator safety, BLE reconnect/install, and other unbounded paths must stay strict.
+
+### 2026-04-25 Stage 112: RuntimeControl deterministic mode priority
+
+Scope:
+- Start the next refactor batch with module `1/15`: runtime mode arbitration.
+- Keep behavior unchanged while making the priority contract explicit and fully tested.
+
+External baseline:
+- W3C SCXML defines conflicting transition selection through explicit priority and an optimal conflict-free transition set, which maps to BoatLock's need for deterministic mode arbitration instead of incidental state resolution: <https://www.w3.org/TR/scxml/>.
+
+Key outcomes:
+- `RuntimeControl.h` no longer includes `Arduino.h`; it only needs standard `math.h` and `stdint.h`.
+- Replaced partial priority tests with an exhaustive 16-case table for `SIM > MANUAL > ANCHOR > SAFE_HOLD > IDLE`.
+- Added a fail-closed label test for unknown `CoreMode` values returning `IDLE`.
+- Promoted the deterministic mode arbitration rule into `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because no BLE payload, command, reconnect, install, UI, or phone-visible behavior changed.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_control -f test_runtime_control_input_builder` -> passed (`11/11`).
+- `cd boatlock && platformio test -e native` -> passed (`297/297`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `698105` bytes.
+
+Self-review:
+- This is intentionally a small refactor: changing arbitration code would add risk without simplifying the already-clear priority chain.
+- The useful safety gain is test coverage around every conflicting mode combination, especially manual/anchor/hold and sim/manual overlap.
+- Hardware acceptance is not required for this module under the fifteen-module cadence because no hardware driver, pinout, actuator, BLE reconnect/install, or phone-visible protocol behavior changed.

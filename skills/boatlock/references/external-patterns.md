@@ -43,6 +43,7 @@ Use this file for:
 - Android BluetoothGattCharacteristic API reference: <https://developer.android.com/reference/android/bluetooth/BluetoothGattCharacteristic>
 - Bluetooth HID Over GATT Profile: <https://www.bluetooth.com/specifications/specs/hid-over-gatt-profile/>
 - Material Design Floating Action Button guidance: <https://m1.material.io/components/buttons-floating-action-button.html>
+- W3C SCXML state-machine specification: <https://www.w3.org/TR/scxml/>
 - CEVA BNO08X Datasheet: <https://www.ceva-ip.com/wp-content/uploads/2019/10/BNO080_085-Datasheet.pdf>
 - Adafruit BNO085 UART-RVC guide: <https://learn.adafruit.com/adafruit-9-dof-orientation-imu-fusion-breakout-bno085/uart-rvc-for-arduino>
 - Adafruit BNO085 pinout/mode-select guide: <https://learn.adafruit.com/adafruit-9-dof-orientation-imu-fusion-breakout-bno085/pinouts>
@@ -201,10 +202,12 @@ Implication for BoatLock:
 - Always keep a basic mode that remains valid when advanced inputs disappear.
 - Higher modes may fall back to simpler modes, but the fallback chain must be explicit.
 - Core mode layering matters more than feature count.
+- Conflicting mode candidates need an explicit deterministic priority, not incidental branching hidden from tests.
 
 Implication for BoatLock:
 - A basic quiet-safe mode must always be available.
 - Any future advanced behavior should degrade toward simpler, safer states instead of staying half-active.
+- Runtime mode arbitration priority must stay exhaustive-tested across all candidate flag combinations.
 
 ## What Autopilot Simulation Gets Right
 

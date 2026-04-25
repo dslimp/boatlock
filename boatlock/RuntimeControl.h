@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Arduino.h>
 #include <math.h>
+#include <stdint.h>
 
 enum class CoreMode : uint8_t {
   IDLE = 0,
