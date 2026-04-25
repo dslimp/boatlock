@@ -30,7 +30,7 @@
   - if firmware state says connected but the server has no clients, clear stale BLE stream/subscription state and restart advertising
   - if at least one client is connected and advertising is stopped, restart advertising without clearing active stream/subscription state
 - BLE callback code must not clear active stream/notify state on a second central connect or on disconnect while another central remains connected.
-- BLE connection/disconnection logs should use short key=value fields and preserve raw disconnect reasons in decimal plus hex for NimBLE/HCI triage.
+- BLE connection/disconnection logs should use short key=value fields, sanitize address text to bounded hex/colon tokens, and preserve raw disconnect reasons in decimal plus hex for NimBLE/HCI triage.
 
 ## Flutter Scan And Connect Behavior
 

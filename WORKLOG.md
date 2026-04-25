@@ -3898,3 +3898,30 @@ Validation:
 Self-review:
 - This reduces diagnostic ambiguity without touching control behavior or serial evidence.
 - Remaining risk is that historical consumers expecting BLE log trailing newlines may differ, but the app is unreleased and its UI already treats logs as discrete lines.
+
+### 2026-04-25 Stage 122: BLE connection log address tokens
+
+Scope:
+- Continue the refactor batch with module `11/15`: BLE connect/disconnect diagnostic formatting.
+- Keep connection behavior unchanged while bounding and sanitizing address text in logs.
+
+External baseline:
+- Bluetooth Core GAP describes Bluetooth Device Addresses as 48-bit addresses and UI-level representation as 12 hexadecimal characters, optionally separated with `:`: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-54/out/en/host/generic-access-profile.html>.
+- Short key=value logs with raw reason codes stay useful for GATT/HCI triage, but diagnostic fields still need bounded token rules so malformed text cannot create fake fields or lines.
+
+Key outcomes:
+- Added address-token validation for BLE connection logs.
+- Unsafe, empty, overlong, or control-containing address text now logs as `unknown`.
+- Valid hex/colon address text is preserved.
+- Added native tests for missing, malformed, overlong, and valid address tokens.
+- Promoted the BLE connection-log address rule into `skills/boatlock/references/ble-ui.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because BLE transport, commands, telemetry, reconnect/install, and UI behavior are unchanged; only diagnostic text formatting is hardened.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_connection_log -f test_runtime_ble_log_text` -> PASS (`12/12`).
+- `cd boatlock && platformio test -e native` -> PASS (`304/304`).
+- `cd boatlock && pio run -e esp32s3` -> PASS (`698365` bytes flash).
+
+Self-review:
+- This is diagnostic hardening only; it does not affect NimBLE connection state or reconnect behavior.
+- Remaining risk is that a future stack may render addresses in a non-hex token format, in which case the log will fall back to `unknown` until explicitly allowed.

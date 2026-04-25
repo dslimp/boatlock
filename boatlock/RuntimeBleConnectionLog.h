@@ -4,8 +4,29 @@
 #include <stddef.h>
 #include <stdio.h>
 
+inline bool runtimeBleLogAddressCharAllowed(char ch) {
+  return (ch >= '0' && ch <= '9') ||
+         (ch >= 'a' && ch <= 'f') ||
+         (ch >= 'A' && ch <= 'F') ||
+         ch == ':';
+}
+
+inline bool runtimeBleLogAddressLooksSafe(const char* address) {
+  if (!address || !address[0]) {
+    return false;
+  }
+  size_t len = 0;
+  while (address[len] != '\0') {
+    if (len >= 31 || !runtimeBleLogAddressCharAllowed(address[len])) {
+      return false;
+    }
+    ++len;
+  }
+  return len > 0;
+}
+
 inline const char* runtimeBleLogAddress(const char* address) {
-  return (address && address[0]) ? address : "unknown";
+  return runtimeBleLogAddressLooksSafe(address) ? address : "unknown";
 }
 
 inline unsigned int runtimeBleReasonCodeHex(int reason) {

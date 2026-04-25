@@ -169,7 +169,7 @@ Implication for BoatLock:
   - keep/restart connectable advertising while a client is connected when future phone + remote discovery is required
   - never treat multi-central BLE transport as enough for simultaneous control; control ownership still needs an explicit lease/arbitration rule
   - suppress or downgrade high-frequency heartbeat/debug traffic in normal serial logs so diagnostics keep event lines intact and readable
-  - log BLE connect/disconnect events as short key=value lines and keep raw reason codes in decimal plus hex for layer-specific NimBLE/HCI triage
+  - log BLE connect/disconnect events as short key=value lines, sanitize address text to bounded hex/colon tokens, and keep raw reason codes in decimal plus hex for layer-specific NimBLE/HCI triage
   - format runtime logs into a bounded buffer, then write the known formatted byte count instead of relying on unbounded C-string scans
   - build queued BLE log payloads with bounded source scans and explicit zero-fill; do not call C string functions on length-unknown buffers
   - keep BLE log characteristic notifications single-line by trimming trailing CR/LF and neutralizing embedded control bytes
