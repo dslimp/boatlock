@@ -4,12 +4,21 @@ import '../models/boat_data.dart';
 
 const kBoatLockSmokeResultPrefix = 'BOATLOCK_SMOKE_RESULT ';
 const kBoatLockSmokeStagePrefix = 'BOATLOCK_SMOKE_STAGE ';
+const Set<String> kBoatLockSmokeModes = {
+  'IDLE',
+  'HOLD',
+  'ANCHOR',
+  'MANUAL',
+  'SIM',
+};
+const Set<String> kBoatLockSmokeStatuses = {'OK', 'WARN', 'ALERT'};
 
 bool smokeTelemetryLooksHealthy(BoatData? data) {
   if (data == null) {
     return false;
   }
-  return data.mode.trim().isNotEmpty && data.status.trim().isNotEmpty;
+  return kBoatLockSmokeModes.contains(data.mode.trim()) &&
+      kBoatLockSmokeStatuses.contains(data.status.trim());
 }
 
 bool smokeStatusHasReason(BoatData data, String reason) {

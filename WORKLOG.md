@@ -4266,3 +4266,29 @@ Validation:
 Self-review:
 - This is a small duplication removal with no compatibility shim or protocol change.
 - Tests and full Flutter compile covered current consumers; remaining risk is future firmware UUID changes, which must update `ble_ids.dart`, firmware, and protocol docs together.
+
+### 2026-04-25 Stage 136: Tighten Android BLE smoke telemetry criteria
+
+Scope:
+- Continue the refactor batch with module `9/15`: Android smoke acceptance logic.
+- Make basic smoke reject telemetry with unknown `mode` or `status` instead of accepting any non-empty strings.
+
+External baseline:
+- Android testing guidance favors many small tests for fast feedback plus larger application/device tests for high-fidelity critical journeys; smoke logic should therefore be unit-tested locally and then proven through the device smoke wrapper: <https://developer.android.com/training/testing/fundamentals/strategies?hl=en>.
+- OWASP Input Validation recommends exact allowed-value checks for small fixed sets, which fits protocol mode/status enums better than non-empty string checks: <https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html>.
+
+Key outcomes:
+- Added explicit allowed mode/status sets to `ble_smoke_logic.dart`.
+- Updated basic telemetry health checks to require known current protocol values.
+- Added tests for unknown mode/status rejection.
+- Updated hardware acceptance skill wording so basic Android smoke is documented as known-mode/status telemetry proof.
+- Phone-smoke decision: Android BLE smoke is required because this changes the app-side acceptance criterion used by the smoke APK.
+
+Validation:
+- `cd boatlock_ui && flutter test test/ble_smoke_logic_test.dart` -> PASS (`5/5`).
+- `cd boatlock_ui && flutter test` -> PASS (`42/42`).
+- `tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> PASS; first Xiaomi install attempt hit `INSTALL_FAILED_USER_RESTRICTED`, canonical retry returned `Success`, `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received","dataEvents":1,"mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","rssi":-35,...}`.
+
+Self-review:
+- This makes smoke stricter without changing production BLE behavior.
+- Android smoke proved current nh02 telemetry satisfies the stricter criterion; keep recording Xiaomi first-install restriction because it is phone-side evidence, not a blocker when canonical retry passes.

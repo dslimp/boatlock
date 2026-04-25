@@ -47,11 +47,19 @@ BoatData _data({
 }
 
 void main() {
-  test('smokeTelemetryLooksHealthy requires mode and status', () {
+  test('smokeTelemetryLooksHealthy requires known mode and status', () {
     expect(smokeTelemetryLooksHealthy(_data()), isTrue);
     expect(smokeTelemetryLooksHealthy(_data(mode: '', status: 'OK')), isFalse);
     expect(
       smokeTelemetryLooksHealthy(_data(mode: 'IDLE', status: '')),
+      isFalse,
+    );
+    expect(
+      smokeTelemetryLooksHealthy(_data(mode: 'UNKNOWN', status: 'OK')),
+      isFalse,
+    );
+    expect(
+      smokeTelemetryLooksHealthy(_data(mode: 'IDLE', status: 'UNKNOWN')),
       isFalse,
     );
     expect(smokeTelemetryLooksHealthy(null), isFalse);

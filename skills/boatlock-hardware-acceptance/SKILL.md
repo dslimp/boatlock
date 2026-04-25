@@ -74,7 +74,7 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
 ## What Acceptance Does Not Prove
 
 - It does not prove BLE control flow end to end.
-- Basic Android smoke proves BLE scan/connect/telemetry only; it does not intentionally send actuation commands.
+- Basic Android smoke proves BLE scan/connect and telemetry with known current protocol mode/status values only; it does not intentionally send actuation commands.
 - Manual Android smoke proves exact APK install, BLE scan/connect/telemetry, zero-throttle `MANUAL_SET`, observed `MANUAL` mode, `MANUAL_OFF`, and observed mode exit. It is not a powered thrust test.
 - Status Android smoke proves exact APK install, BLE scan/connect/telemetry, safe `STOP` command delivery, observed `ALERT/STOP_CMD`, and alert recovery through zero-throttle manual roundtrip. It is not a powered thrust test.
 - SIM Android smoke proves exact APK install, BLE scan/connect/telemetry, `SIM_RUN:S0_hold_still_good,1`, observed `SIM` mode, `SIM_ABORT`, observed mode exit, and alert recovery through zero-throttle manual roundtrip. It is not a powered thrust test.
