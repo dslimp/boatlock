@@ -11,6 +11,7 @@
 
 #include "AnchorControlLoop.h"
 #include "ControlInterfaces.h"
+#include "HilSimEvents.h"
 #include "HilSimJson.h"
 #include "HilSimTime.h"
 
@@ -251,12 +252,6 @@ struct SimScenario {
   std::vector<TimedActuatorDerate> actuatorDerates;
 };
 
-struct SimEvent {
-  unsigned long atMs = 0;
-  std::string code;
-  std::string details;
-};
-
 class SimSensorHub : public IGnssSource, public IHeadingSource {
 public:
   void configure(const SensorConfig& cfg) {
@@ -426,27 +421,7 @@ public:
   void onControlEvent(unsigned long atMs,
                       const char* code,
                       const char* details) override {
-    const std::string codeStr = code ? code : "";
-    const std::string detailsStr = details ? details : "";
-    markEventSeen(codeStr);
-    markEventSeen(detailsStr);
-
-    if (codeStr == lastEventCode_ && detailsStr == lastEventDetails_ &&
-        simTimeWindowContains(atMs, lastEventMs_, kDuplicateEventSuppressMs)) {
-      return;
-    }
-    lastEventCode_ = codeStr;
-    lastEventDetails_ = detailsStr;
-    lastEventMs_ = atMs;
-
-    SimEvent ev;
-    ev.atMs = atMs;
-    ev.code = codeStr;
-    ev.details = detailsStr;
-    if (events_.size() >= maxEvents_) {
-      events_.erase(events_.begin());
-    }
-    events_.push_back(ev);
+    eventLog_.record(atMs, code, details);
   }
 
   bool start(const SimScenario& scenario) {
@@ -473,11 +448,7 @@ public:
     controller_.requestAnchor(true);
 
     clearErrorHist();
-    events_.clear();
-    seenEventTokens_.clear();
-    lastEventCode_.clear();
-    lastEventDetails_.clear();
-    lastEventMs_ = 0;
+    eventLog_.clear();
     compassLossActive_ = false;
     powerLossActive_ = false;
     displayLossActive_ = false;
@@ -530,7 +501,7 @@ public:
     state_ = State::ABORTED;
     result_.pass = false;
     result_.reason = "ABORTED";
-    result_.events = std::move(events_);
+    result_.events = eventLog_.takeEvents();
   }
 
   // Returns false when run is finished.
@@ -870,7 +841,7 @@ private:
   void finalize() {
     done_ = true;
     state_ = State::DONE;
-    result_.events = std::move(events_);
+    result_.events = eventLog_.takeEvents();
 
     if (samples_ == 0) {
       result_.pass = false;
@@ -949,36 +920,11 @@ private:
   }
 
 private:
-  void markEventSeen(const std::string& token) {
-    if (token.empty()) {
-      return;
-    }
-    for (const std::string& seen : seenEventTokens_) {
-      if (seen == token) {
-        return;
-      }
-    }
-    if (seenEventTokens_.size() < maxSeenEventTokens_) {
-      seenEventTokens_.push_back(token);
-    }
-  }
-
   bool wasEventSeen(const std::string& token) const {
-    if (token.empty()) {
-      return false;
-    }
-    for (const std::string& seen : seenEventTokens_) {
-      if (seen == token) {
-        return true;
-      }
-    }
-    return false;
+    return eventLog_.wasSeen(token);
   }
 
-  static constexpr size_t maxEvents_ = 200;
   static constexpr size_t maxEventsInReport_ = 64;
-  static constexpr size_t maxSeenEventTokens_ = 64;
-  static constexpr unsigned long kDuplicateEventSuppressMs = 1500;
   static constexpr float kErrorHistBinM = 0.1f;
   static constexpr float kErrorHistMaxM = 64.0f;
   static constexpr size_t kErrorHistBins = (size_t)(kErrorHistMaxM / kErrorHistBinM) + 1;
@@ -998,13 +944,9 @@ private:
   XorShift32 rng_;
 
   std::array<uint32_t, kErrorHistBins> errorHist_{};
-  std::vector<SimEvent> events_;
-  std::vector<std::string> seenEventTokens_;
+  SimEventLog eventLog_;
   Result result_;
   LiveTelemetry live_;
-  std::string lastEventCode_;
-  std::string lastEventDetails_;
-  unsigned long lastEventMs_ = 0;
   bool compassLossActive_ = false;
   bool powerLossActive_ = false;
   bool displayLossActive_ = false;

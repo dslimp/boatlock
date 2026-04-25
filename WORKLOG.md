@@ -4604,3 +4604,31 @@ Validation:
 Self-review:
 - The report builder is now simpler for variable-length string fields and keeps numeric formatting bounded.
 - Remaining risk is that `HilScenarioRunner` still owns report assembly, event storage, and scenario execution in one large class; later HIL modules should keep extracting pure helpers where they reduce branching.
+
+### 2026-04-25 Stage 149: HIL bounded event log extraction
+
+Scope:
+- Continue the refactor batch with module `6/15`: HIL event recording and duplicate suppression.
+- Move event tail retention, duplicate suppression, and required-event token tracking out of `HilScenarioRunner`.
+
+External baseline:
+- PX4 SIH describes deterministic/reproducible lockstep simulation output; event capture should therefore be its own deterministic component instead of incidental runner state: <https://docs.px4.io/main/en/sim_sih/index>.
+- ArduPilot AutoTest emphasizes repeatable regression tests and extracting logs/results after each run; BoatLock event logs are test evidence and need direct unit coverage: <https://ardupilot.org/dev/docs/the-ardupilot-autotest-framework.html>.
+
+Key outcomes:
+- Added `HilSimEvents.h` with `SimEvent` and `SimEventLog`.
+- Replaced runner-owned `events_`, seen-token storage, duplicate event fields, and marking helpers with one `SimEventLog` member.
+- Kept behavior unchanged: duplicate suppression still uses the rollover-safe time-window helper, final/abort results still receive the bounded event tail, and required-event checks still use seen tokens.
+- Added direct `test_hil_sim_event_log` coverage for rollover duplicate suppression, bounded tail retention, seen-token independence, and clear/reset behavior.
+- Promoted the durable event-log rule into `external-patterns.md`.
+- Phone-smoke decision: no Android smoke required because valid `SIM_*` BLE commands and payload schemas are unchanged; this is internal HIL state ownership with native coverage.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_hil_sim_event_log` -> PASS (`3/3`).
+- `cd boatlock && platformio test -e native -f test_hil_sim_events` -> PASS (`2/2`).
+- `cd boatlock && platformio test -e native -f test_hil_sim` -> PASS (`11/11`).
+- `cd boatlock && platformio test -e native -f test_hil_sim_json` -> PASS (`3/3`).
+
+Self-review:
+- This reduces `HilScenarioRunner` responsibility without changing scenario semantics or BLE-visible output for valid scenarios.
+- Remaining risk is report/status serialization still living in the runner; a later HIL module can extract status/report formatting if it stays behavior-preserving.
