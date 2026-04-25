@@ -3547,3 +3547,31 @@ Self-review:
 - This keeps BLE connection behavior untouched and only changes the diagnostic text shape.
 - The formatter is bounded, native-tested, and preserves raw reason code information needed to diagnose layered NimBLE/HCI disconnects.
 - Remaining risk is whether real bench serial capture still drops bytes under connect/disconnect churn; module-five hardware acceptance will check the canonical log path.
+
+### 2026-04-25 Stage 109: BLE log queue bounded payload copy
+
+Scope:
+- Continue the diagnostics/readability batch with the BLE log queue payload path.
+- Keep log delivery semantics unchanged while removing `strlen()` from the queue enqueue path.
+- This is module `4/5`; hardware and Android acceptance are deferred to module five because BLE schema, command behavior, and app parsing are unchanged.
+
+External baseline:
+- Bluetooth GATT notifications send characteristic values as attribute-value bytes, not C strings, so firmware should carry explicit lengths through the BLE-facing path: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-61/out/en/host/generic-attribute-profile--gatt-.html>.
+- SEI CERT STR32-C warns against passing a non-null-terminated character sequence to string functions because termination errors can cause overflow or information disclosure: <https://wiki.sei.cmu.edu/confluence/pages/viewpage.action?pageId=554434583>.
+
+Key outcomes:
+- Added `runtimeBlePrepareLogPayload()` to zero-fill a queue slot and copy at most `slotSize - 1` bytes from a bounded source scan.
+- `BLEBoatLock::enqueueLogLine()` now uses the helper instead of `strlen()` plus manual copy.
+- Extended native BLE log-text tests for unterminated source input and null input destination clearing.
+- Promoted the bounded log queue payload rule into `skills/boatlock/references/ble-ui.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because phone-visible schema and behavior are unchanged; module-five Android smokes will validate real log delivery and reconnect.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_log_text -f test_runtime_log_text -f test_runtime_ble_connection_log` -> passed (`12/12`).
+- `cd boatlock && platformio test -e native` -> passed (`297/297`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `698097` bytes.
+
+Self-review:
+- This removes one unbounded source scan from the BLE log path without changing queued value format or notify cadence.
+- The helper zero-fills every slot, so dropped/empty/null inputs cannot leak stale payload bytes into later log notifications.
+- Remaining risk is live queue pressure under Android reconnect churn; module-five hardware acceptance and Android smokes will exercise the canonical device path.

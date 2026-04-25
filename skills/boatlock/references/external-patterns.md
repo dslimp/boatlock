@@ -166,6 +166,7 @@ Implication for BoatLock:
   - suppress or downgrade high-frequency heartbeat/debug traffic in normal serial logs so diagnostics keep event lines intact and readable
   - log BLE connect/disconnect events as short key=value lines and keep raw reason codes in decimal plus hex for layer-specific NimBLE/HCI triage
   - format runtime logs into a bounded buffer, then write the known formatted byte count instead of relying on unbounded C-string scans
+  - build queued BLE log payloads with bounded source scans and explicit zero-fill; do not call C string functions on length-unknown buffers
   - clamp binary telemetry values before integer rounding/casting so invalid runtime values cannot corrupt the wire representation
   - sanitize direct numeric telemetry fields before packing fixed binary characteristics; out-of-range or non-finite floats must not be cast directly into integers
   - keep fixed binary telemetry frames length-stable and map enum/flag fields from one explicit table rather than duplicated branching

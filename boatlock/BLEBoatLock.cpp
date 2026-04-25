@@ -315,9 +315,7 @@ void BLEBoatLock::enqueueLogLine(const char* line) {
     }
 
     char payload[kLogMaxLen];
-    memset(payload, 0, sizeof(payload));
-    const size_t n = std::min(strlen(line), kLogMaxLen - 1);
-    memcpy(payload, line, n);
+    runtimeBlePrepareLogPayload(payload, sizeof(payload), line);
 
     if (xQueueSend(logQueue, payload, 0) == pdTRUE) {
         return;
