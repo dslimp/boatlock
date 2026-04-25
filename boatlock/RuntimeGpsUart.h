@@ -18,6 +18,10 @@ struct RuntimeGpsUartActions {
 
 class RuntimeGpsUart {
 public:
+  static constexpr unsigned long kMinNoDataWarnMs = 1000;
+  static constexpr unsigned long kMinStaleRestartMs = 1000;
+  static constexpr unsigned long kMinRestartCooldownMs = 1000;
+
   void reset(unsigned long bootMs) {
     noDataBaselineMs_ = bootMs;
     seen_ = false;
@@ -32,6 +36,12 @@ public:
                                unsigned long nowMs,
                                const RuntimeGpsUartConfig& config) {
     RuntimeGpsUartActions actions;
+    const unsigned long noDataWarnMs =
+        floorInterval(config.noDataWarnMs, kMinNoDataWarnMs);
+    const unsigned long staleRestartMs =
+        floorInterval(config.staleRestartMs, kMinStaleRestartMs);
+    const unsigned long restartCooldownMs =
+        floorInterval(config.restartCooldownMs, kMinRestartCooldownMs);
 
     if (bytesRead > 0) {
       actions.firstDataSeen = !seen_;
@@ -41,19 +51,19 @@ public:
     }
 
     if (!seen_ && !noDataWarned_ &&
-        elapsedGreaterThan(nowMs, noDataBaselineMs_, config.noDataWarnMs)) {
+        elapsedGreaterThan(nowMs, noDataBaselineMs_, noDataWarnMs)) {
       noDataWarned_ = true;
       actions.warnNoData = true;
     }
 
     if (seen_ &&
-        elapsedAtLeast(nowMs, lastByteMs_, config.staleRestartMs)) {
+        elapsedAtLeast(nowMs, lastByteMs_, staleRestartMs)) {
       actions.staleAgeMs = nowMs - lastByteMs_;
       if (!staleLogged_) {
         staleLogged_ = true;
         actions.warnStale = true;
       }
-      if (!restartSeen_ || elapsedAtLeast(nowMs, lastRestartMs_, config.restartCooldownMs)) {
+      if (!restartSeen_ || elapsedAtLeast(nowMs, lastRestartMs_, restartCooldownMs)) {
         lastRestartMs_ = nowMs;
         restartSeen_ = true;
         noDataBaselineMs_ = nowMs;
@@ -81,5 +91,9 @@ private:
 
   static bool elapsedGreaterThan(unsigned long nowMs, unsigned long sinceMs, unsigned long intervalMs) {
     return nowMs - sinceMs > intervalMs;
+  }
+
+  static unsigned long floorInterval(unsigned long intervalMs, unsigned long floorMs) {
+    return intervalMs < floorMs ? floorMs : intervalMs;
   }
 };

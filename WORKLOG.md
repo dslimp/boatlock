@@ -3287,3 +3287,37 @@ Self-review:
 
 Promote to skill:
 - No new workflow rule needed; the existing canonical hardware and Android acceptance path worked as documented.
+
+### 2026-04-25 Stage 101: GPS UART watchdog timing floors
+
+Scope:
+- Start the watchdog/telemetry batch with `RuntimeGpsUart`.
+- Keep the existing non-blocking no-data/stale/restart policy, but prevent zero/too-short timing config from causing warning or serial-restart thrash.
+- This is module `1/5`; hardware and Android acceptance are deferred to module five because the live constants stay unchanged and the latest bench batch just passed.
+
+External baseline:
+- ESP-IDF UART guidance models UART reception through driver events and RX timeout handling, so UART activity/loss should be explicit state instead of blocking reads: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/peripherals/uart.html>.
+- ArduPilot pre-arm checks treat missing GPS data and unhealthy GPS as blockers that require physical/configuration diagnosis, not silent acceptance: <https://ardupilot.org/copter/docs/common-prearm-safety-checks.html>.
+- Arduino's non-blocking timing pattern uses elapsed time checks rather than blocking delays for periodic work: <https://docs.arduino.cc/built-in-examples/digital/BlinkWithoutDelay/>.
+
+Key outcomes:
+- Added local minimum floors for `noDataWarnMs`, `staleRestartMs`, and `restartCooldownMs`.
+- Zero config values no longer create immediate no-data warning or repeated serial restart loops.
+- Preserved timestamp-zero and unsigned `millis()` rollover behavior.
+- Updated native tests to cover floored zero config and rollover above the new floors.
+- Promoted the GPS UART watchdog timing-floor rule into `skills/boatlock/references/firmware.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because BLE command/status schema and phone behavior did not change.
+
+Validation:
+- First targeted run exposed a stale test expectation: the old rollover test used `100 ms`, now below the new safety floor. The test was corrected to verify rollover with intervals above the floor.
+- `cd boatlock && platformio test -e native -f test_runtime_gps_uart -f test_runtime_gnss -f test_runtime_status -f test_anchor_control_loop` -> passed (`30/30`).
+- `cd boatlock && platformio test -e native` -> passed (`283/283`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `697929` bytes.
+
+Self-review:
+- Valid runtime constants remain unchanged, so normal GPS UART behavior should stay the same.
+- The change protects direct module callers and future config wiring from zero/too-short intervals.
+- Remaining validation risk is live GPS UART intermittent wiring/noise; scheduled batch hardware acceptance will cover boot/runtime logs after module five.
+
+Promote to skill:
+- UART/watchdog timing configs must have local floors so zero or corrupted intervals cannot create busy warning/restart loops.

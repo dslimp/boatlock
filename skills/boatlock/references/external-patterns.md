@@ -137,6 +137,7 @@ Implication for BoatLock:
 - Angle/heading normalization in safety paths must use bounded modulo-style math, not unbounded loops over input magnitude.
 - Serial/GNSS watchdogs should be non-blocking and based on elapsed-time checks; direct `now > then` comparisons are not rollover-safe.
 - Serial/GNSS watchdog restarts should start a new no-data observation window, and restart cooldowns should use explicit "restart seen" state instead of treating timestamp `0` as "never".
+- Serial/GNSS watchdog timing config needs local minimum floors so zero or corrupted intervals cannot cause busy warning/restart loops.
 - Compass/RVC watchdogs follow the same rule: track event presence separately from timestamps, then calculate age with unsigned subtraction. A timestamp value of `0` is a valid sample time.
 - Compass/RVC parsers should validate the full packet contract at the boundary: sync/header, checksum, and datasheet value ranges before changing live heading state.
 - Compass health checks should be fail-closed with local timeout floors; a zero or tiny timeout input must not silently disable heading-event loss detection.
