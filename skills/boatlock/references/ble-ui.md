@@ -120,6 +120,7 @@
   - `steer=-1..1`
   - `throttlePct=-100..100`
   - `ttlMs=100..1000`
+- Do not log high-frequency `HEARTBEAT` as an operator command; keep serial/BLE diagnostics focused on state-changing commands and events.
 - Each `MANUAL_SET` is an atomic command and deadman refresh. If updates stop, firmware exits Manual and quiets outputs.
 - `MANUAL_SET` disables Anchor on entry so timeout, reconnect, or app crash cannot resume Anchor unexpectedly.
 - `MANUAL_OFF` stops Manual output explicitly.

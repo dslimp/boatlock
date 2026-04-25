@@ -163,6 +163,7 @@ Implication for BoatLock:
   - map future BLE HID/HOGP joystick input into the same internal manual-control state instead of creating a second actuator path
   - keep/restart connectable advertising while a client is connected when future phone + remote discovery is required
   - never treat multi-central BLE transport as enough for simultaneous control; control ownership still needs an explicit lease/arbitration rule
+  - suppress or downgrade high-frequency heartbeat/debug traffic in normal serial logs so diagnostics keep event lines intact and readable
   - clamp binary telemetry values before integer rounding/casting so invalid runtime values cannot corrupt the wire representation
   - sanitize direct numeric telemetry fields before packing fixed binary characteristics; out-of-range or non-finite floats must not be cast directly into integers
   - keep fixed binary telemetry frames length-stable and map enum/flag fields from one explicit table rather than duplicated branching

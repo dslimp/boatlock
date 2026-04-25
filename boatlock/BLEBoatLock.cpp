@@ -1,6 +1,7 @@
 #include "BLEBoatLock.h"
 #include "BleAdvertisingWatchdog.h"
 #include "Logger.h"
+#include "RuntimeBleCommandLog.h"
 #include "RuntimeBleLogText.h"
 #include <algorithm>
 #include <cstring>
@@ -78,7 +79,9 @@ public:
     CmdCallbacks(BLEBoatLock* p) : parent(p) {}
     void onWrite(NimBLECharacteristic* pCharacteristic, NimBLEConnInfo&) override {
         std::string command = pCharacteristic->getValue();
-        logMessage("[BLE] Control point: %s\n", command.c_str());
+        if (runtimeBleShouldLogCommand(command)) {
+            logMessage("[BLE] Control point: %s\n", command.c_str());
+        }
         if (parent) parent->handleControlPoint(command);
     }
 };

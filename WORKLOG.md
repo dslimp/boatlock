@@ -3460,3 +3460,32 @@ Self-review:
 - The first basic-smoke install still shows the known MIUI first-attempt `USER_RESTRICTED` prompt path, but the canonical retry installed the exact APK and the wrapper returned a passing terminal result.
 - The captured hardware log had one cosmetic truncation-looking disconnect line (`Reas9`), but no error/fail pattern and no acceptance miss; treat this as log formatting debt, not a runtime blocker.
 - Remaining validation gaps are real GNSS fix behavior, powered actuator load, and on-water hold quality; this bench still reports `NO_GPS` in Android smokes.
+
+### 2026-04-25 Stage 106: BLE heartbeat command log suppression
+
+Scope:
+- Start the diagnostics/readability batch with `BLEBoatLock` command logging.
+- Reduce serial/BLE diagnostic noise by suppressing high-frequency `HEARTBEAT` command log lines while preserving state-changing command and event logs.
+- This is module `1/5`; hardware and Android acceptance are deferred to module five because behavior and protocol are unchanged.
+
+External baseline:
+- ESP-IDF logging guidance separates levels from error through verbose and calls out performance/log-processing cost, so frequent non-action traffic should not live in normal runtime logs: <https://docs.espressif.com/projects/esp-idf/en/v5.4.1/esp32/api-reference/system/log.html>.
+- ESP-IDF also notes that logs are first formatted into a buffer and then sent to UART with thread-safe behavior; BoatLock should keep diagnostic lines compact enough that the bench capture remains useful.
+
+Key outcomes:
+- Added `RuntimeBleCommandLog.h` with a single rule: suppress `HEARTBEAT`, keep all other commands logged.
+- `BLEBoatLock::CmdCallbacks::onWrite()` now still handles every command, but only logs operator/service commands that carry diagnostic value.
+- Added native tests for skipped heartbeat and retained `STREAM_START`, `MANUAL_SET`, and `STOP` logs.
+- Promoted the heartbeat-log suppression rule into `skills/boatlock/references/ble-ui.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because command behavior, BLE schema, reconnect, install, and UI behavior are unchanged; scheduled post-module-five hardware acceptance will verify log readability on the bench.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_command_log -f test_ble_command_handler -f test_runtime_ble_log_text` -> passed (`38/38`).
+- `cd boatlock && platformio test -e native` -> passed (`288/288`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `697885` bytes.
+- `git diff --check` -> clean.
+
+Self-review:
+- This removes normal heartbeat log noise without changing heartbeat handling or link activity semantics.
+- The helper keeps the rule explicit and directly testable instead of burying a string comparison inside a callback.
+- Remaining risk is that the previous `Reas9` line may also involve serial transport byte loss; scheduled module-five hardware acceptance will verify whether lower log volume improves capture readability.
