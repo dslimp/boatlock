@@ -3415,3 +3415,48 @@ Self-review:
 - The frame layout stayed fixed at `70` bytes; no decoder or protocol version change was needed.
 - The table removes duplicated branch logic and makes future reason additions reviewable in one place.
 - Remaining risk is cross-language drift between firmware and Flutter reason tables; current Flutter tests cover decode, and full Android smoke is scheduled after module five.
+
+### 2026-04-25 Stage 105: BLE telemetry snapshot integer guards
+
+Scope:
+- Finish the watchdog/telemetry batch with `RuntimeBleParams`.
+- Keep the live-frame schema unchanged while preventing bad float settings from being cast directly into `uint16_t` telemetry fields.
+- This is module `5/5`; after local validation this batch requires `nh02` flash/acceptance and Android BLE smokes.
+
+External baseline:
+- Bluetooth GATT characteristic notifications carry application-provided byte values without a protocol-level semantic guard, so the firmware must validate fixed-frame values before notify: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-61/out/en/host/generic-attribute-profile--gatt-.html>.
+- Android exposes characteristic values as byte arrays and updates its cached value from reads/notifications, so corrupt packed values become app state unless bounded at the source: <https://developer.android.com/reference/android/bluetooth/BluetoothGattCharacteristic>.
+- C++ floating-point to integer conversion is undefined when the truncated value cannot fit the destination type, so firmware should saturate before integer casts: <https://www.cppreference.com/w/cpp/language/implicit_cast.html>.
+
+Key outcomes:
+- Added `runtimeBleTelemetryU16()` for direct integer fields in the telemetry snapshot.
+- `StepSpr`, `StepMaxSpd`, and `StepAccel` now map non-finite, negative, and zero values to `0`, preserve normal in-range integer settings, and saturate above `UINT16_MAX`.
+- Added native tests for `NaN`, infinity, negative, zero, fractional in-range, and over-range values.
+- Promoted the telemetry integer-guard rule into `skills/boatlock/references/ble-ui.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no new smoke path is needed because the frame schema and normal values are unchanged; the scheduled post-module-five Android suite will cover live BLE delivery on hardware.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_params -f test_runtime_ble_live_frame -f test_runtime_status -f test_settings` -> passed (`30/30`).
+- `cd boatlock_ui && flutter test test/ble_live_frame_test.dart test/ble_boatlock_test.dart` -> passed (`14/14`).
+- `cd boatlock && platformio test -e native` -> passed (`286/286`).
+- `cd boatlock_ui && flutter test` -> passed (`32/32`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `697861` bytes.
+- `./tools/hw/nh02/status.sh` -> RFC2217 active, ESP32-S3 USB serial `98:88:E0:03:BA:5C`, port `4000`.
+- `./tools/hw/nh02/flash.sh` -> build success, flash success, app image write `698224` bytes, hard reset via RTS.
+- `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-watchdog-telemetry-batch-60s.log --json-out /tmp/boatlock-watchdog-telemetry-batch-60s.json` -> `[ACCEPT] PASS lines=78`.
+- Acceptance matched BNO08x-RVC ready on `rx=12 baud=115200`, fresh compass heading events, display ready, EEPROM loaded `ver=23`, security state `paired=0`, BLE init and advertising, stepper config, STOP button, and GPS UART data.
+- Error scan over `/tmp/boatlock-watchdog-telemetry-batch-60s.log` for panic/assert/Guru/config save/CRC/GPS stale/no UART/compass loss/I2C/Arduino `[E]`/fail/error tokens -> no matches.
+- `./tools/hw/nh02/android-status.sh` -> Xiaomi `220333QNY`, adb state `device`, USB serial `68b657f0`.
+- `./tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> first install attempt hit `INSTALL_FAILED_USER_RESTRICTED`, canonical retry `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --status --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"status_stop_alert_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[EVENT] FAILSAFE_TRIGGERED reason=STOP_CMD"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --anchor --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"anchor_denied_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[EVENT] ANCHOR_OFF reason=BLE_CMD"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --sim --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"sim_run_abort_roundtrip","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[SIM] ABORTED"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+- `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact install `Success`, final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect","mode":"IDLE","status":"WARN","statusReasons":"NO_GPS"}`.
+
+Self-review:
+- The batch passed local unit/UI tests, was flashed to the bench, boot-accepted, and passed the current Android BLE smoke suite.
+- The first basic-smoke install still shows the known MIUI first-attempt `USER_RESTRICTED` prompt path, but the canonical retry installed the exact APK and the wrapper returned a passing terminal result.
+- The captured hardware log had one cosmetic truncation-looking disconnect line (`Reas9`), but no error/fail pattern and no acceptance miss; treat this as log formatting debt, not a runtime blocker.
+- Remaining validation gaps are real GNSS fix behavior, powered actuator load, and on-water hold quality; this bench still reports `NO_GPS` in Android smokes.

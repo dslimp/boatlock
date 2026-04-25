@@ -60,10 +60,20 @@ void test_anchor_telemetry_clears_nonfinite_heading() {
   TEST_ASSERT_EQUAL_FLOAT(0.0f, telemetry.anchorHeadingDeg);
 }
 
+void test_runtime_ble_telemetry_u16_saturates_bad_values() {
+  TEST_ASSERT_EQUAL_UINT16(0, runtimeBleTelemetryU16(NAN));
+  TEST_ASSERT_EQUAL_UINT16(0, runtimeBleTelemetryU16(INFINITY));
+  TEST_ASSERT_EQUAL_UINT16(0, runtimeBleTelemetryU16(-1.0f));
+  TEST_ASSERT_EQUAL_UINT16(0, runtimeBleTelemetryU16(0.0f));
+  TEST_ASSERT_EQUAL_UINT16(12, runtimeBleTelemetryU16(12.9f));
+  TEST_ASSERT_EQUAL_UINT16(UINT16_MAX, runtimeBleTelemetryU16(70000.0f));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_anchor_telemetry_accepts_valid_anchor_and_normalizes_heading);
   RUN_TEST(test_anchor_telemetry_clears_invalid_anchor_pair);
   RUN_TEST(test_anchor_telemetry_clears_nonfinite_heading);
+  RUN_TEST(test_runtime_ble_telemetry_u16_saturates_bad_values);
   return UNITY_END();
 }

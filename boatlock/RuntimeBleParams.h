@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <cmath>
+#include <cstdint>
 #include <functional>
 #include <string>
 
@@ -55,6 +56,16 @@ inline void setRuntimeBleAnchorTelemetry(RuntimeBleLiveTelemetry* telemetry,
                                     : 0.0f;
 }
 
+inline uint16_t runtimeBleTelemetryU16(float value) {
+  if (!isfinite(value) || value <= 0.0f) {
+    return 0;
+  }
+  if (value >= (float)UINT16_MAX) {
+    return UINT16_MAX;
+  }
+  return (uint16_t)value;
+}
+
 inline void registerRuntimeBleParams(const RuntimeBleParamContext& context) {
   BLEBoatLock* ble = &context.ble;
   Settings* settings = &context.settings;
@@ -79,9 +90,9 @@ inline void registerRuntimeBleParams(const RuntimeBleParamContext& context) {
     telemetry.distanceM = gnss->distanceM();
     telemetry.headingDeg = currentHeadingValue();
     telemetry.holdHeading = settings->get("HoldHeading") >= 0.5f;
-    telemetry.stepSpr = (uint16_t)settings->get("StepSpr");
-    telemetry.stepMaxSpd = (uint16_t)settings->get("StepMaxSpd");
-    telemetry.stepAccel = (uint16_t)settings->get("StepAccel");
+    telemetry.stepSpr = runtimeBleTelemetryU16(settings->get("StepSpr"));
+    telemetry.stepMaxSpd = runtimeBleTelemetryU16(settings->get("StepMaxSpd"));
+    telemetry.stepAccel = runtimeBleTelemetryU16(settings->get("StepAccel"));
     telemetry.headingRawDeg = compassReadyNow ? compass->getRawAzimuth() : 0.0f;
     telemetry.compassOffsetDeg =
         compassReadyNow ? compass->getHeadingOffsetDeg() : settings->get("MagOffX");
