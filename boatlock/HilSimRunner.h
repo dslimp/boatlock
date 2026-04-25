@@ -705,14 +705,15 @@ public:
   std::string reportJson() const {
     std::string out;
     char line[256];
-    snprintf(line,
-             sizeof(line),
-             "{\"id\":%s,\"state\":\"%s\",\"pass\":%s,\"reason\":%s,",
-             simJsonString(scenario_.id).c_str(),
-             stateStr(state_),
-             result_.pass ? "true" : "false",
-             simJsonString(result_.reason).c_str());
-    out += line;
+    out += "{\"id\":";
+    appendSimJsonString(out, scenario_.id);
+    out += ",\"state\":\"";
+    out += stateStr(state_);
+    out += "\",\"pass\":";
+    out += result_.pass ? "true" : "false";
+    out += ",\"reason\":";
+    appendSimJsonString(out, result_.reason);
+    out += ",";
 
     snprintf(line,
              sizeof(line),
@@ -752,14 +753,14 @@ public:
       if (i > beginEventIdx) {
         out += ",";
       }
-      char evBuf[256];
-      snprintf(evBuf,
-               sizeof(evBuf),
-               "{\"at_ms\":%lu,\"code\":%s,\"details\":%s}",
-               (unsigned long)ev.atMs,
-               simJsonString(ev.code).c_str(),
-               simJsonString(ev.details).c_str());
-      out += evBuf;
+      out += "{\"at_ms\":";
+      snprintf(line, sizeof(line), "%lu", (unsigned long)ev.atMs);
+      out += line;
+      out += ",\"code\":";
+      appendSimJsonString(out, ev.code);
+      out += ",\"details\":";
+      appendSimJsonString(out, ev.details);
+      out += "}";
     }
     out += "]}";
     return out;

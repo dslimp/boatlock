@@ -4577,3 +4577,30 @@ Validation:
 Self-review:
 - This fixes a real latent bug for future heading-drift scenarios; current default scenarios mostly hid it because heading drift defaults to zero.
 - Remaining risk is that other HIL components may still have reset-state coupling inside the large runner; continue extracting/reset-testing them in later modules.
+
+### 2026-04-25 Stage 148: HIL report JSON without fixed string buffers
+
+Scope:
+- Continue the refactor batch with module `5/15`: HIL report JSON construction.
+- Remove fixed-buffer formatting around string-bearing report fields so long future scenario IDs, reasons, or event details cannot truncate valid JSON.
+
+External baseline:
+- RFC 8259 defines JSON strings as escaped string values; BoatLock should encode string fields through one helper and then append them as complete fields: <https://www.rfc-editor.org/rfc/rfc8259>.
+- ArduPilot/PX4 simulation guidance treats simulation output as test/diagnostic evidence; a report path must stay machine-readable instead of depending on current short event text.
+
+Key outcomes:
+- Updated `HilScenarioRunner::reportJson()` to append `id`, `reason`, `code`, and `details` through `appendSimJsonString()` instead of embedding them in fixed `snprintf()` buffers.
+- Kept fixed formatting only for numeric fields with bounded output.
+- Added a regression test proving long ID/details text remains present and escaped in the final report.
+- Promoted the durable rule into `external-patterns.md`.
+- Corrected the hardware acceptance skill cadence after user correction: normal batch hardware runs after module `15/15`, not module `5/15`.
+- Phone-smoke decision: no Android smoke required because this module only changes local/on-device HIL report construction; BLE command schema, telemetry schema, reconnect, install, and UI behavior are unchanged.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_hil_sim_json` -> PASS (`3/3`).
+- `cd boatlock && platformio test -e native -f test_hil_sim` -> PASS (`11/11`).
+- `cd boatlock && platformio test -e native -f test_runtime_sim_execution` -> PASS (`7/7`).
+
+Self-review:
+- The report builder is now simpler for variable-length string fields and keeps numeric formatting bounded.
+- Remaining risk is that `HilScenarioRunner` still owns report assembly, event storage, and scenario execution in one large class; later HIL modules should keep extracting pure helpers where they reduce branching.
