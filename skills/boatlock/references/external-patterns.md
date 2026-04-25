@@ -259,6 +259,7 @@ Implication for BoatLock:
 - HIL event recording should be a bounded, deterministic component separate from scenario execution; event retention and "seen" tokens are different concerns and need direct tests.
 - HIL expectation evaluation should be a pure helper with stable failure-priority tests; scenario execution should collect facts, not hide pass/fail policy in loop glue.
 - HIL metrics accumulation should keep sampled facts separate from pass/fail policy and should fail closed for invalid numeric inputs before they influence percentiles.
+- HIL randomness must be seed-owned, deterministic, and directly tested; zero seeds should normalize to a non-zero state so simulated noise cannot collapse silently.
 - On real hardware, simulation acceptance must keep dangerous actuator movement disabled or explicitly zero-throttle unless a powered bench procedure is defined.
 
 ## What ESP32 Storage Guidance Gets Right

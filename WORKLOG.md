@@ -4684,3 +4684,28 @@ Validation:
 Self-review:
 - The runner now delegates timing, events, expectation policy, and p95 histogram to focused helpers.
 - Remaining risk is that `SimMetrics` itself still mixes collected facts with currently-unused `hardFailure`; handle that separately only when adding a tested semantic policy for hard failures.
+
+### 2026-04-25 Stage 152: HIL deterministic RNG extraction
+
+Scope:
+- Continue the refactor batch with module `9/15`: HIL deterministic random/noise source.
+- Move `XorShift32` out of `HilSimRunner`.
+
+External baseline:
+- PX4 SIH emphasizes lockstep deterministic/reproducible simulation; simulated noise must therefore be seed-owned and directly testable: <https://docs.px4.io/main/en/sim_sih/index>.
+- ArduPilot AutoTest uses repeatable simulation tests to prevent regressions; BoatLock seeded HIL scenarios need stable RNG behavior across refactors: <https://ardupilot.org/dev/docs/the-ardupilot-autotest-framework.html>.
+
+Key outcomes:
+- Added `HilSimRandom.h` with `XorShift32`.
+- Removed the RNG implementation from `HilSimRunner.h`.
+- Added direct tests for same-seed repeatability, zero-seed normalization, `uniform01()` range, and zero-sigma noise.
+- Promoted the durable RNG determinism rule into `external-patterns.md`.
+- Phone-smoke decision: no Android smoke required because valid scenario results and `SIM_*` BLE behavior are unchanged; this is internal deterministic noise ownership with native coverage.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_hil_sim_random` -> PASS (`4/4`).
+- `cd boatlock && platformio test -e native -f test_hil_sim -f test_hil_sensor_hub` -> PASS (`12/12`).
+
+Self-review:
+- The RNG is now independently testable and does not depend on runner state.
+- Remaining risk is that all sensor simulation still shares one RNG stream; split streams only if a future scenario needs isolation and can prove it with deterministic tests.
