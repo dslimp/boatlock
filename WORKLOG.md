@@ -4784,3 +4784,29 @@ Validation:
 Self-review:
 - The runner now orchestrates a world object instead of owning physics details, which is closer to the external SIH/SITL pattern.
 - Remaining risk is `SimSensorHub` still lives in the runner header and should be the next high-value extraction because sensors are the other half of the physics/control boundary.
+
+### 2026-04-25 Stage 156: HIL sensor hub extraction
+
+Scope:
+- Continue the refactor batch with module `13/15`: HIL simulated GNSS/heading sensors and fault injection.
+- Move sensor configs, timed sensor faults, and `SimSensorHub` out of `HilSimRunner`.
+
+External baseline:
+- PX4 SIH provides simulated sensor data to the flight stack and reads actuator outputs to update the model; BoatLock's sensor simulator should be a first-class module: <https://docs.px4.io/main/en/sim_sih/index>.
+- ArduPilot SITL is used to simulate environments and failure modes; BoatLock sensor faults need direct coverage, not only whole-scenario coverage: <https://ardupilot.org/dev/docs/using-sitl-for-ardupilot-testing.html>.
+
+Key outcomes:
+- Added `HilSimSensors.h` with `SensorConfig`, timed GNSS/heading fault structs, and `SimSensorHub`.
+- Removed the sensor simulator implementation from `HilSimRunner.h`.
+- Extended `test_hil_sensor_hub` for non-positive GNSS rate fallback, heading dropout fail-closed state, and GNSS dropout age/frozen-fix behavior.
+- Fixed a HIL sensor bug found by the new test: heading dropout set `valid=false` and stale age, but the GNSS rate-limit return path overwrote heading age back to `0`.
+- Promoted the durable sensor-simulator rule into `external-patterns.md`.
+- Phone-smoke decision: no Android smoke required because this changes internal HIL sensor simulation; default scenarios and valid `SIM_*` BLE behavior remain covered by native HIL tests.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_hil_sensor_hub` -> PASS (`4/4`) after the age fail-closed fix.
+- `cd boatlock && platformio test -e native -f test_hil_sim -f test_hil_sim_world` -> PASS (`14/14`).
+
+Self-review:
+- This is both a structural extraction and a small HIL correctness fix; it does not touch production GNSS/compass drivers.
+- Remaining risk is scenario catalog construction still living in the runner header; next modules should target scenario catalog/list/status boundaries before module 15 hardware acceptance.
