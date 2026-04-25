@@ -11,6 +11,7 @@
 
 #include "AnchorControlLoop.h"
 #include "ControlInterfaces.h"
+#include "HilSimJson.h"
 #include "HilSimTime.h"
 
 namespace hilsim {
@@ -705,11 +706,11 @@ public:
     char line[256];
     snprintf(line,
              sizeof(line),
-             "{\"id\":\"%s\",\"state\":\"%s\",\"pass\":%s,\"reason\":\"%s\",",
-             scenario_.id.c_str(),
+             "{\"id\":%s,\"state\":\"%s\",\"pass\":%s,\"reason\":%s,",
+             simJsonString(scenario_.id).c_str(),
              stateStr(state_),
              result_.pass ? "true" : "false",
-             result_.reason.c_str());
+             simJsonString(result_.reason).c_str());
     out += line;
 
     snprintf(line,
@@ -753,10 +754,10 @@ public:
       char evBuf[256];
       snprintf(evBuf,
                sizeof(evBuf),
-               "{\"at_ms\":%lu,\"code\":\"%s\",\"details\":\"%s\"}",
+               "{\"at_ms\":%lu,\"code\":%s,\"details\":%s}",
                (unsigned long)ev.atMs,
-               ev.code.c_str(),
-               ev.details.c_str());
+               simJsonString(ev.code).c_str(),
+               simJsonString(ev.details).c_str());
       out += evBuf;
     }
     out += "]}";

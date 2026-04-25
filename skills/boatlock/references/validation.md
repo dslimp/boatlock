@@ -28,6 +28,7 @@
   - `cd boatlock && pio run -e esp32s3`
 - Full native tests:
   - `cd boatlock && platformio test -e native`
+- Do not run multiple `platformio test -e native ...` commands in parallel against the same checkout/build directory. PlatformIO shares `.pio/build/native`, and parallel suites can kill or corrupt each other; run suites sequentially or use isolated worktrees/build dirs.
 - Example targeted native suites:
   - `cd boatlock && platformio test -e native -f test_ble_command_handler`
   - `cd boatlock && platformio test -e native -f test_ble_security`

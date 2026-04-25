@@ -4499,3 +4499,33 @@ Validation:
 Self-review:
 - This is a small safety refactor with one behavior hardening at wrap boundaries; normal scenario timings remain unchanged.
 - Remaining risk is that `HilSimRunner.h` is still too large; next modules should keep extracting pure HIL pieces without changing scenario expectations.
+
+### 2026-04-25 Stage 145: HIL JSON report escaping
+
+Scope:
+- Continue the refactor batch with module `2/15`: HIL `SIM_REPORT` JSON string construction.
+- Stop interpolating scenario IDs, reasons, and event text directly into JSON string fields.
+
+External baseline:
+- RFC 8259 requires JSON strings to escape quotation marks, reverse solidus, and control characters `U+0000..U+001F`: <https://www.rfc-editor.org/rfc/rfc8259>.
+- PX4/ArduPilot simulation guidance treats simulation output as a developer/test interface; BoatLock's `SIM_REPORT` must therefore remain machine-parseable even when future event text contains punctuation or control bytes.
+
+Key outcomes:
+- Added `HilSimJson.h` with `appendSimJsonString()` and `simJsonString()`.
+- Updated `HilScenarioRunner::reportJson()` to encode `id`, `reason`, `code`, and `details` via the shared JSON string helper.
+- Added `test_hil_sim_json` covering quote, backslash, newline, tab, arbitrary control-byte escaping, and report-level escaping.
+- Promoted the durable JSON-report rule into `external-patterns.md`.
+- Added validation guidance not to run multiple PlatformIO native test suites in parallel against one `.pio/build/native` directory.
+- Phone-smoke decision: no Android smoke required because current valid `SIM_REPORT` schema and BLE command behavior are unchanged; malformed/future report text hardening is covered by native tests.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_hil_sim_json` -> PASS (`2/2`).
+- `cd boatlock && platformio test -e native -f test_hil_sim` -> PASS (`11/11`).
+- `cd boatlock && platformio test -e native -f test_runtime_sim_log` -> PASS (`5/5`).
+- I initially started `test_runtime_sim_command`, `test_runtime_sim_log`, and `test_runtime_sim_execution` in parallel; two runs were killed with `SIGKILL`, consistent with shared PlatformIO build-dir contention rather than code failure.
+- Sequential rerun `cd boatlock && platformio test -e native -f test_runtime_sim_command` -> PASS (`9/9`).
+- Sequential rerun `cd boatlock && platformio test -e native -f test_runtime_sim_execution` -> PASS (`7/7`).
+
+Self-review:
+- This hardens a phone-visible test/report interface without changing current scenario outcomes.
+- Remaining risk is bounded-buffer truncation if future event strings become long after escaping; current event fields are short and the next HIL report/log modules should keep report chunks explicitly bounded.

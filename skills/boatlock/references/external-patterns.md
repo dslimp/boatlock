@@ -47,6 +47,7 @@ Use this file for:
 - Dart `String.fromEnvironment` API: <https://api.dart.dev/dart-core/String/String.fromEnvironment.html>
 - Android Testing Strategies: <https://developer.android.com/training/testing/fundamentals/strategies>
 - Google Shell Style Guide: <https://google.github.io/styleguide/shellguide.html>
+- RFC 8259 JSON: <https://www.rfc-editor.org/rfc/rfc8259>
 - OWASP Logging Cheat Sheet: <https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html>
 - OWASP Input Validation Cheat Sheet: <https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html>
 - Material Design Floating Action Button guidance: <https://m1.material.io/components/buttons-floating-action-button.html>
@@ -160,6 +161,7 @@ Implication for BoatLock:
 - HIL fault-injection windows must use one rollover-safe elapsed-time helper. Do not compare `now < at + duration`; absolute expiry math can silently break when simulated time wraps.
 - HIL command surfaces should be narrow and deterministic: accept only documented commands and reject malformed payloads instead of guessing alternate encodings.
 - HIL logs are part of the test interface. Keep log records single-line, bounded, and neutralize CR/LF/control characters before logging command-derived fields.
+- HIL JSON reports are also a test interface. Build JSON strings through one escaping helper; quote, backslash, and control characters must never be interpolated raw into `SIM_REPORT`.
 - Periodic UI/BLE/sensor cadence should use one shared non-blocking elapsed-time helper. Floor interval `0` instead of allowing same-timestamp bursts, and test unsigned rollover directly instead of relying only on normal interval scenarios.
 - One-shot UI/diagnostic banners follow the same timer rule: store the start timestamp and duration, then compare unsigned elapsed time. Do not store absolute expiry timestamps as the authority.
 - Do not auto-enter manual control from failsafe. After a fault clears, operator control must be an explicit new action.
