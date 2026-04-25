@@ -1,4 +1,5 @@
 import 'package:boatlock_ui/ble/ble_device_match.dart';
+import 'package:boatlock_ui/ble/ble_ids.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -6,7 +7,7 @@ void main() {
   test('isBoatLockAdvertisement matches advertised and platform names', () {
     expect(
       isBoatLockAdvertisement(
-        advertisedName: 'BoatLock',
+        advertisedName: boatLockDeviceName,
         platformName: '',
         serviceUuids: const [],
       ),
@@ -15,7 +16,7 @@ void main() {
     expect(
       isBoatLockAdvertisement(
         advertisedName: '',
-        platformName: 'my boatlock bench',
+        platformName: 'my $boatLockDeviceNameLower bench',
         serviceUuids: const [],
       ),
       isTrue,
@@ -27,7 +28,9 @@ void main() {
       isBoatLockAdvertisement(
         advertisedName: '',
         platformName: '',
-        serviceUuids: const ['000012ab-0000-1000-8000-00805f9b34fb'],
+        serviceUuids: const [
+          '0000$boatLockServiceUuid-0000-1000-8000-00805f9b34fb',
+        ],
       ),
       isTrue,
     );

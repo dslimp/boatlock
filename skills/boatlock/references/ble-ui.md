@@ -8,6 +8,7 @@
 - `boatlock/RuntimeBleLiveFrame.h`: live binary telemetry frame encoder and enum mapping
 - `boatlock/RuntimeBleParams.h`: typed runtime telemetry provider
 - `boatlock_ui/lib/ble/ble_boatlock.dart`: scan/connect/auth/write behavior
+- `boatlock_ui/lib/ble/ble_ids.dart`: Flutter BLE device name, service UUID, and characteristic UUID constants
 - `boatlock_ui/lib/ble/ble_device_match.dart`: adapter readiness and BoatLock advertisement matching
 - `boatlock_ui/lib/ble/ble_commands.dart`: pure command builders and value allowlists for app-originated commands
 - `boatlock_ui/lib/ble/ble_security_codec.dart`: owner-secret normalization, owner auth proof, and secure command envelope formatting
@@ -23,6 +24,7 @@
   - `34cd`: live state notify/read, 70-byte little-endian binary v2 frame
   - `56ef`: control point write/write-no-response
   - `78ab`: log notify
+- Flutter UUID/name constants live in `ble_ids.dart`; do not hardcode these identifiers in scan, discovery, or tests.
 - Live notify payload length must be validated before `setValue()`; producer-side packets whose length is not exactly the live-frame size are dropped rather than padded, truncated, or read past the packet buffer.
 - Flutter must reject live-frame payloads whose length is not exactly 70 bytes; accepting padded frames hides characteristic-value bugs and can mask protocol drift.
 - Flutter live-frame decoding must reject unknown mode/status/security-reject enum codes while the frame version is unchanged; `UNKNOWN` display fallbacks hide firmware/app schema drift.

@@ -4241,3 +4241,28 @@ Self-review:
 - This removes another pure concern from the transport class and keeps scan matching deterministic.
 - Full Flutter tests caught the only stale reference, which confirms why extraction modules still need full-suite validation.
 - Remaining risk is plugin-specific `ScanResult` wrapping; the wrapper is tiny and still exercised by full Flutter compilation.
+
+### 2026-04-25 Stage 135: Centralize Flutter BLE identity constants
+
+Scope:
+- Continue the refactor batch with module `8/15`: Flutter BLE identity constants.
+- Replace duplicated hardcoded device name, service UUID, and characteristic UUID fragments in Flutter BLE modules.
+
+External baseline:
+- Bluetooth Core GATT identifies services and characteristics by UUIDs; client code should treat those identifiers as protocol constants, not incidental string literals: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-60/out/en/host/generic-attribute-profile--gatt-.html>.
+- Android `BluetoothGattCharacteristic` construction and lookup are UUID-based, reinforcing that characteristic IDs are part of the API contract: <https://developer.android.com/reference/android/bluetooth/BluetoothGattCharacteristic.html>.
+
+Key outcomes:
+- Added `ble_ids.dart` with Flutter BLE identity constants for device name, service UUID, and characteristic UUID fragments.
+- Updated scan matching and service discovery to consume those constants.
+- Updated device-match tests to use the same constants instead of duplicating UUID/name literals.
+- Updated the BLE/UI reference to make `ble_ids.dart` canonical for Flutter BLE identity.
+- Phone-smoke decision: no Android smoke required because UUID/name values and runtime behavior are unchanged.
+
+Validation:
+- `cd boatlock_ui && flutter test test/ble_device_match_test.dart` -> PASS (`4/4`).
+- `cd boatlock_ui && flutter test` -> PASS (`42/42`).
+
+Self-review:
+- This is a small duplication removal with no compatibility shim or protocol change.
+- Tests and full Flutter compile covered current consumers; remaining risk is future firmware UUID changes, which must update `ble_ids.dart`, firmware, and protocol docs together.

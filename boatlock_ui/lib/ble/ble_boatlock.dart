@@ -8,6 +8,7 @@ import '../models/boat_data.dart';
 import 'ble_commands.dart';
 import 'ble_command_text.dart';
 import 'ble_device_match.dart';
+import 'ble_ids.dart';
 import 'ble_live_frame.dart';
 import 'ble_log_line.dart';
 import 'ble_reconnect_policy.dart';
@@ -197,16 +198,17 @@ class BleBoatLock with WidgetsBindingObserver {
       _clearCharacteristics();
       for (var s in services) {
         for (var c in s.characteristics) {
-          if (c.uuid.toString().toLowerCase().contains("34cd")) {
+          final uuid = c.uuid.toString().toLowerCase();
+          if (uuid.contains(boatLockDataCharacteristicUuid)) {
             _dataChar = c;
             await _dataChar!.setNotifyValue(true);
             _dataSub?.cancel();
             _dataSub = _dataChar!.lastValueStream.listen(_onNotify);
           }
-          if (c.uuid.toString().toLowerCase().contains("56ef")) {
+          if (uuid.contains(boatLockCommandCharacteristicUuid)) {
             _cmdChar = c;
           }
-          if (c.uuid.toString().toLowerCase().contains("78ab")) {
+          if (uuid.contains(boatLockLogCharacteristicUuid)) {
             _logChar = c;
             await _logChar!.setNotifyValue(true);
             _logSub?.cancel();
