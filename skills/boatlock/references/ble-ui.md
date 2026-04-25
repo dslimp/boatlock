@@ -21,6 +21,7 @@
   - `78ab`: log notify
 - Live notify payload length must be validated before `setValue()`; producer-side packets whose length is not exactly the live-frame size are dropped rather than padded, truncated, or read past the packet buffer.
 - Flutter must reject live-frame payloads whose length is not exactly 70 bytes; accepting padded frames hides characteristic-value bugs and can mask protocol drift.
+- Flutter live-frame decoding must reject unknown mode/status/security-reject enum codes while the frame version is unchanged; `UNKNOWN` display fallbacks hide firmware/app schema drift.
 - Log characteristic values are byte strings with explicit length. Firmware must set the exact text length, and Flutter must ignore trailing NUL padding defensively.
 - BLE log queue writes must build bounded, NUL-terminated payload slots without `strlen()` on untrusted or length-unknown input.
 - BLE log notifications must stay single-line: trim trailing CR/LF and neutralize embedded ASCII control bytes before enqueueing or publishing over `78ab`.

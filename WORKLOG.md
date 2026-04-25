@@ -4087,3 +4087,29 @@ Validation:
 Self-review:
 - This intentionally duplicates the firmware boundary in the app, not as trust in the client but as earlier failure and clearer diagnostics.
 - Android smoke closed the valid-write risk for the telemetry/control heartbeat path; remaining risk is command-specific semantics, which stay covered by the dedicated manual/status/sim/anchor smokes when those modules change.
+
+### 2026-04-25 Stage 129: Flutter live-frame decoder contract
+
+Scope:
+- Continue the refactor batch with module `2/15`: Flutter BLE live-frame decoding.
+- Make the fixed binary frame schema explicit on the client and fail closed on unknown enum ordinals.
+
+External baseline:
+- Bluetooth Core GATT defines characteristic notifications as a single Attribute Value for the characteristic handle, so BoatLock's app protocol owns the exact binary payload contract: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-60/out/en/host/generic-attribute-profile--gatt-.html>.
+- Dart `ByteData.sublistView` is the official API for interpreting incoming byte buffers, and `Endian.little` must be specified explicitly for little-endian wire fields instead of relying on host defaults: <https://api.dart.dev/dart-typed_data/ByteData-class.html> and <https://api.dart.dev/dart-typed_data/Endian-class.html>.
+
+Key outcomes:
+- Replaced magic numeric offsets in `ble_live_frame.dart` with named frame-size, header, and field-offset constants.
+- Avoided an extra allocation when the incoming notification value is already a `Uint8List`.
+- Changed unknown `mode`, `status`, and `secReject` codes from `UNKNOWN`/downgraded `WARN` display values to rejected frames while protocol version remains `2`.
+- Updated BLE protocol docs and repo BLE reference to make unknown enum rejection part of the current app/firmware contract.
+- Phone-smoke decision: Android BLE smoke is required because the live-frame decoder now rejects schema drift and still must accept current bench telemetry.
+
+Validation:
+- `cd boatlock_ui && flutter test test/ble_live_frame_test.dart` -> PASS (`4/4`).
+- `cd boatlock_ui && flutter test` -> PASS (`37/37`).
+- `tools/hw/nh02/android-run-smoke.sh --wait-secs 130` -> PASS; install `Success`, `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received","dataEvents":1,"mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","rssi":-37,...}`.
+
+Self-review:
+- This keeps the live parser simple and stricter instead of adding compatibility branches before alpha.
+- Android smoke proved the stricter decoder still accepts current nh02 telemetry; remaining risk is future enum additions without a version bump, now intentionally rejected instead of silently downgraded.

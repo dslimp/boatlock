@@ -66,7 +66,10 @@ List<int> _frame() {
   _i16(out, -12);
   _i16(out, 34);
   _u8(out, 4);
-  _u32(out, (1 << 0) | (1 << 3) | (1 << 14) | (1 << 15) | (1 << 18) | (1 << 19));
+  _u32(
+    out,
+    (1 << 0) | (1 << 3) | (1 << 14) | (1 << 15) | (1 << 18) | (1 << 19),
+  );
   _u64(out, 0x0123456789ABCDEF);
   _u8(out, 2);
   return out.toBytes();
@@ -77,6 +80,7 @@ void main() {
     final decoded = decodeBoatLockLiveFrame(_frame(), rssi: -61);
 
     expect(decoded, isNotNull);
+    expect(_frame(), hasLength(boatLockLiveFrameSize));
     expect(decoded!.sequence, 9);
     expect(decoded.secNonceHex, '0123456789ABCDEF');
     expect(decoded.data.mode, 'ANCHOR');
@@ -109,5 +113,19 @@ void main() {
     final padded = [..._frame(), 0];
 
     expect(decodeBoatLockLiveFrame(padded), isNull);
+  });
+
+  test('decodeBoatLockLiveFrame rejects unknown enum codes', () {
+    final unknownMode = _frame();
+    unknownMode[8] = 99;
+    expect(decodeBoatLockLiveFrame(unknownMode), isNull);
+
+    final unknownStatus = _frame();
+    unknownStatus[9] = 99;
+    expect(decodeBoatLockLiveFrame(unknownStatus), isNull);
+
+    final unknownReject = _frame();
+    unknownReject[56] = 99;
+    expect(decodeBoatLockLiveFrame(unknownReject), isNull);
   });
 }

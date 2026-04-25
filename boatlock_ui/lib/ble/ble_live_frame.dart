@@ -18,7 +18,45 @@ const int _flagHoldHeading = 1 << 0;
 const int _flagSecPaired = 1 << 1;
 const int _flagSecAuth = 1 << 2;
 const int _flagSecPairWindow = 1 << 3;
-const int _liveFrameSize = 70;
+const int boatLockLiveFrameSize = 70;
+const int _magicB = 0x42;
+const int _magicL = 0x4C;
+const int _protocolVersion = 2;
+const int _frameTypeLiveTelemetry = 1;
+const Endian _wireEndian = Endian.little;
+
+const int _offsetMagicB = 0;
+const int _offsetMagicL = 1;
+const int _offsetProtocolVersion = 2;
+const int _offsetFrameType = 3;
+const int _offsetSequence = 4;
+const int _offsetFlags = 6;
+const int _offsetMode = 8;
+const int _offsetStatus = 9;
+const int _offsetLat = 10;
+const int _offsetLon = 14;
+const int _offsetAnchorLat = 18;
+const int _offsetAnchorLon = 22;
+const int _offsetAnchorHeading = 26;
+const int _offsetDistance = 28;
+const int _offsetHeading = 30;
+const int _offsetBattery = 32;
+const int _offsetStepSpr = 33;
+const int _offsetStepMaxSpd = 35;
+const int _offsetStepAccel = 37;
+const int _offsetHeadingRaw = 39;
+const int _offsetCompassOffset = 41;
+const int _offsetCompassQ = 43;
+const int _offsetMagQ = 44;
+const int _offsetGyroQ = 45;
+const int _offsetRvAcc = 46;
+const int _offsetMagNorm = 48;
+const int _offsetGyroNorm = 50;
+const int _offsetPitch = 52;
+const int _offsetRoll = 54;
+const int _offsetSecReject = 56;
+const int _offsetReasonFlags = 57;
+const int _offsetSecNonce = 61;
 
 const Map<int, String> _modeByCode = {
   0: 'IDLE',
@@ -28,11 +66,7 @@ const Map<int, String> _modeByCode = {
   4: 'SIM',
 };
 
-const Map<int, String> _statusByCode = {
-  0: 'OK',
-  1: 'WARN',
-  2: 'ALERT',
-};
+const Map<int, String> _statusByCode = {0: 'OK', 1: 'WARN', 2: 'ALERT'};
 
 const Map<int, String> _rejectByCode = {
   0: 'NONE',
@@ -71,53 +105,59 @@ const List<(int, String)> _reasonBits = [
 ];
 
 BleLiveFrame? decodeBoatLockLiveFrame(List<int> value, {int rssi = 0}) {
-  if (value.length != _liveFrameSize) {
+  if (value.length != boatLockLiveFrameSize) {
     return null;
   }
-  final bytes = Uint8List.fromList(value);
+  final bytes = value is Uint8List ? value : Uint8List.fromList(value);
   final view = ByteData.sublistView(bytes);
-  if (view.getUint8(0) != 0x42 || view.getUint8(1) != 0x4C) {
+  if (view.getUint8(_offsetMagicB) != _magicB ||
+      view.getUint8(_offsetMagicL) != _magicL) {
     return null;
   }
-  if (view.getUint8(2) != 2 || view.getUint8(3) != 1) {
+  if (view.getUint8(_offsetProtocolVersion) != _protocolVersion ||
+      view.getUint8(_offsetFrameType) != _frameTypeLiveTelemetry) {
     return null;
   }
 
-  final sequence = view.getUint16(4, Endian.little);
-  final flags = view.getUint16(6, Endian.little);
-  final mode = _modeByCode[view.getUint8(8)] ?? 'UNKNOWN';
-  final status = _statusByCode[view.getUint8(9)] ?? 'WARN';
-  final reasonFlags = view.getUint32(57, Endian.little);
-  final secReject = _rejectByCode[view.getUint8(56)] ?? 'UNKNOWN';
-  final secNonce = view.getUint64(61, Endian.little);
+  final mode = _modeByCode[view.getUint8(_offsetMode)];
+  final status = _statusByCode[view.getUint8(_offsetStatus)];
+  final secReject = _rejectByCode[view.getUint8(_offsetSecReject)];
+  if (mode == null || status == null || secReject == null) {
+    return null;
+  }
+
+  final sequence = view.getUint16(_offsetSequence, _wireEndian);
+  final flags = view.getUint16(_offsetFlags, _wireEndian);
+  final reasonFlags = view.getUint32(_offsetReasonFlags, _wireEndian);
+  final secNonce = view.getUint64(_offsetSecNonce, _wireEndian);
 
   final data = BoatData(
-    lat: view.getInt32(10, Endian.little) / 10000000.0,
-    lon: view.getInt32(14, Endian.little) / 10000000.0,
-    anchorLat: view.getInt32(18, Endian.little) / 10000000.0,
-    anchorLon: view.getInt32(22, Endian.little) / 10000000.0,
-    anchorHeading: view.getUint16(26, Endian.little) / 10.0,
-    distance: view.getUint16(28, Endian.little) / 100.0,
-    heading: view.getUint16(30, Endian.little) / 10.0,
-    battery: view.getUint8(32),
+    lat: view.getInt32(_offsetLat, _wireEndian) / 10000000.0,
+    lon: view.getInt32(_offsetLon, _wireEndian) / 10000000.0,
+    anchorLat: view.getInt32(_offsetAnchorLat, _wireEndian) / 10000000.0,
+    anchorLon: view.getInt32(_offsetAnchorLon, _wireEndian) / 10000000.0,
+    anchorHeading: view.getUint16(_offsetAnchorHeading, _wireEndian) / 10.0,
+    distance: view.getUint16(_offsetDistance, _wireEndian) / 100.0,
+    heading: view.getUint16(_offsetHeading, _wireEndian) / 10.0,
+    battery: view.getUint8(_offsetBattery),
     status: status,
     statusReasons: _decodeReasons(reasonFlags),
     mode: mode,
     rssi: rssi,
     holdHeading: (flags & _flagHoldHeading) != 0,
-    stepSpr: view.getUint16(33, Endian.little),
-    stepMaxSpd: view.getUint16(35, Endian.little).toDouble(),
-    stepAccel: view.getUint16(37, Endian.little).toDouble(),
-    headingRaw: view.getUint16(39, Endian.little) / 10.0,
-    compassOffset: view.getInt16(41, Endian.little) / 10.0,
-    compassQ: view.getUint8(43),
-    magQ: view.getUint8(44),
-    gyroQ: view.getUint8(45),
-    rvAcc: view.getUint16(46, Endian.little) / 100.0,
-    magNorm: view.getUint16(48, Endian.little) / 100.0,
-    gyroNorm: view.getUint16(50, Endian.little) / 100.0,
-    pitch: view.getInt16(52, Endian.little) / 10.0,
-    roll: view.getInt16(54, Endian.little) / 10.0,
+    stepSpr: view.getUint16(_offsetStepSpr, _wireEndian),
+    stepMaxSpd: view.getUint16(_offsetStepMaxSpd, _wireEndian).toDouble(),
+    stepAccel: view.getUint16(_offsetStepAccel, _wireEndian).toDouble(),
+    headingRaw: view.getUint16(_offsetHeadingRaw, _wireEndian) / 10.0,
+    compassOffset: view.getInt16(_offsetCompassOffset, _wireEndian) / 10.0,
+    compassQ: view.getUint8(_offsetCompassQ),
+    magQ: view.getUint8(_offsetMagQ),
+    gyroQ: view.getUint8(_offsetGyroQ),
+    rvAcc: view.getUint16(_offsetRvAcc, _wireEndian) / 100.0,
+    magNorm: view.getUint16(_offsetMagNorm, _wireEndian) / 100.0,
+    gyroNorm: view.getUint16(_offsetGyroNorm, _wireEndian) / 100.0,
+    pitch: view.getInt16(_offsetPitch, _wireEndian) / 10.0,
+    roll: view.getInt16(_offsetRoll, _wireEndian) / 10.0,
     secPaired: (flags & _flagSecPaired) != 0,
     secAuth: (flags & _flagSecAuth) != 0,
     secPairWindowOpen: (flags & _flagSecPairWindow) != 0,
