@@ -37,9 +37,13 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
    - `tools/android/status.sh`
 2. Build the dedicated smoke APK:
   - `tools/android/build-smoke-apk.sh`
+  - or build the production app with e2e hook:
+    `tools/android/build-app-apk.sh --e2e-mode basic`
 3. Install and run the phone smoke flow:
    - `tools/android/run-smoke.sh`
    - or `tools/hw/nh02/android-run-smoke.sh` when the phone is attached to `nh02`
+   - use `tools/hw/nh02/android-run-app-e2e.sh --wait-secs 130` when the acceptance target is the real `lib/main.dart` application rather than the dedicated smoke entrypoint
+   - use `tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130`, `--status`, `--anchor`, `--sim`, `--reconnect`, or `--esp-reset` for production-app command/recovery flows
    - use `tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` after manual BLE protocol changes; this sends zero-throttle `MANUAL_SET`, verifies `MANUAL`, sends `MANUAL_OFF`, and verifies mode exit
    - use `tools/hw/nh02/android-run-smoke.sh --status --wait-secs 130` after phone-visible status/severity changes; this sends `STOP`, verifies `ALERT/STOP_CMD`, then clears through zero-throttle manual roundtrip
    - use `tools/hw/nh02/android-run-smoke.sh --sim --wait-secs 130` after `SIM_*` BLE/HIL changes; this starts realtime `S0`, verifies `SIM` mode, sends `SIM_ABORT`, then clears the safe hold through zero-throttle manual recovery
@@ -99,6 +103,13 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
   - `tools/hw/nh02/status.sh`
   - `tools/hw/nh02/monitor.sh`
 - Android:
+  - `tools/hw/nh02/android-run-app-e2e.sh`
+  - `tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130`
+  - `tools/hw/nh02/android-run-app-e2e.sh --status --wait-secs 130`
+  - `tools/hw/nh02/android-run-app-e2e.sh --sim --wait-secs 130`
+  - `tools/hw/nh02/android-run-app-e2e.sh --anchor --wait-secs 130`
+  - `tools/hw/nh02/android-run-app-e2e.sh --reconnect --wait-secs 130`
+  - `tools/hw/nh02/android-run-app-e2e.sh --esp-reset --wait-secs 130`
   - `tools/hw/nh02/android-install.sh`
   - `tools/hw/nh02/android-status.sh`
   - `tools/hw/nh02/android-run-smoke.sh`

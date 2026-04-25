@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import '../ble/ble_boatlock.dart';
+import '../e2e/app_e2e_probe.dart';
 import '../models/boat_data.dart';
 import '../widgets/manual_control_sheet.dart';
 import '../widgets/status_panel.dart';
@@ -19,6 +20,7 @@ class MapPage extends StatefulWidget {
 class _MapPageState extends State<MapPage> {
   BoatData? boatData;
   late BleBoatLock ble;
+  BoatLockAppE2eProbe? _e2eProbe;
   LatLng? selectedAnchorPos;
   final MapController _mapController = MapController();
   double _zoom = 16;
@@ -92,6 +94,7 @@ class _MapPageState extends State<MapPage> {
     super.initState();
     ble = BleBoatLock(
       onData: (data) {
+        _e2eProbe?.onData(data);
         setState(() {
           boatData = data;
           if (data != null && data.lat != 0 && data.lon != 0) {
@@ -103,7 +106,11 @@ class _MapPageState extends State<MapPage> {
           }
         });
       },
+      onLog: (line) {
+        _e2eProbe?.onDeviceLog(line);
+      },
     );
+    _e2eProbe = BoatLockAppE2eProbe.maybeCreate(ble);
     _bootstrap();
   }
 
@@ -114,6 +121,7 @@ class _MapPageState extends State<MapPage> {
 
   @override
   void dispose() {
+    _e2eProbe?.dispose();
     ble.dispose();
     _posSub?.cancel();
     super.dispose();

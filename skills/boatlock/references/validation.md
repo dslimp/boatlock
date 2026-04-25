@@ -54,12 +54,18 @@
   - rerun `install.sh` after changing the tracked service unit or remote flash helper
 - Android USB + BLE smoke:
   - `tools/android/status.sh`
+  - `tools/android/build-app-apk.sh`
+  - `tools/android/run-app-e2e.sh`
   - `tools/android/build-smoke-apk.sh`
   - `tools/android/run-smoke.sh`
+  - `tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130`
+  - `tools/hw/nh02/android-run-app-e2e.sh --reconnect --wait-secs 130`
+  - `tools/hw/nh02/android-run-app-e2e.sh --esp-reset --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130`
 - Smoke APK mode constants and parser live in `boatlock_ui/lib/smoke/ble_smoke_mode.dart`.
+- Production-app e2e builds use `BOATLOCK_APP_E2E_MODE` and `lib/main.dart`; do not count the smoke entrypoint as production-app acceptance.
 - Shell smoke wrapper mode allowlist lives in `tools/android/common.sh`; do not duplicate `basic|reconnect|manual|status|sim|anchor` case lists in individual wrappers.
 - When the smoke mode contract changes, run its Flutter unit test, `pytest -q tools/ci/test_android_smoke_modes.py`, and `tools/android/build-smoke-apk.sh --mode <mode>` at minimum.
 - CI helper tests:

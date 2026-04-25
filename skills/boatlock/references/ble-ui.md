@@ -88,6 +88,15 @@
 - `main_smoke.dart` should stay entrypoint glue: read the compile-time define, parse it through the pure helper, and construct `BleSmokePage`.
 - Smoke result and stage line encoding belongs in `ble_smoke_logic.dart` so wrapper parsing can be covered by unit tests before Android device runs.
 
+## Production App E2E
+
+- Production-app bench tests must build `lib/main.dart`, not `lib/main_smoke.dart`.
+- Main-app e2e hooks are enabled only by the compile-time `BOATLOCK_APP_E2E_MODE` define; normal app builds leave the hook disabled.
+- Main-app e2e verdicts intentionally reuse `BOATLOCK_SMOKE_STAGE` and `BOATLOCK_SMOKE_RESULT` lines so the canonical adb/logcat runner remains the single acceptance path.
+- Use `tools/android/build-app-apk.sh --e2e-mode <mode>` to build a debuggable main-app APK with the hook enabled.
+- Use `tools/hw/nh02/android-run-app-e2e.sh --<mode> --wait-secs 130` for nh02 production-app BLE acceptance.
+- Keep mode names aligned with `BleSmokeMode` unless the production app needs a flow that cannot share the existing safe command contract.
+
 ## Command Surface
 
 - High-traffic command groups:

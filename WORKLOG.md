@@ -4877,3 +4877,34 @@ Validation:
 Self-review:
 - The batch heavily refactored HIL internals and touched phone-visible `SIM_STATUS`/`SIM_REPORT`; native tests covered structure and the Android SIM smoke proved scan/connect/telemetry plus `SIM_RUN`/`SIM_ABORT` roundtrip after a fresh flash.
 - No new durable workflow rule emerged; the existing module-15 hardware gate and MIUI canonical retry rule matched this run.
+
+### 2026-04-25 Stage 160: Production Flutter app e2e bench path
+
+Scope:
+- Add a canonical Android e2e path for the real `lib/main.dart` Flutter app, not only the dedicated smoke entrypoint.
+- Reuse the existing safe BLE smoke modes and logcat verdict parser so production-app acceptance does not create a second proof path.
+
+External baseline:
+- Android testing guidance separates small local tests from larger device tests for critical user journeys; the main app must therefore have a real-device e2e hook, not only unit coverage: <https://developer.android.com/training/testing/fundamentals/strategies>.
+- Flutter documents integration/e2e tests as full-app tests run on a real device; BoatLock's bench equivalent is a debuggable main-app APK with a compile-time hook and canonical adb/logcat wrapper: <https://docs.flutter.dev/testing/integration-tests>.
+
+Key outcomes:
+- Added `BoatLockAppE2eProbe`, enabled only by `BOATLOCK_APP_E2E_MODE`, that observes the production `MapPage` BLE client and emits `BOATLOCK_SMOKE_STAGE`/`BOATLOCK_SMOKE_RESULT`.
+- Added `tools/android/build-app-apk.sh`, `tools/android/run-app-e2e.sh`, and `tools/hw/nh02/android-run-app-e2e.sh`.
+- Updated validation and hardware skills to distinguish production-app e2e from the dedicated smoke APK.
+- Added tests proving the e2e define is disabled by default and that app-e2e wrappers build `lib/main.dart`.
+
+Validation:
+- `bash -n tools/android/build-app-apk.sh tools/android/run-app-e2e.sh tools/hw/nh02/android-run-app-e2e.sh tools/android/build-smoke-apk.sh tools/android/run-smoke.sh tools/hw/nh02/android-run-smoke.sh` -> PASS.
+- `pytest -q tools/ci/test_android_smoke_modes.py` -> PASS (`4/4`).
+- `cd boatlock_ui && flutter test` -> PASS (`55/55`).
+- `tools/android/build-app-apk.sh --e2e-mode basic` -> PASS, built `boatlock_ui/build/app/outputs/flutter-apk/app-debug.apk` from `lib/main.dart`.
+- `tools/hw/nh02/android-status.sh` -> PASS, ADB target `68b657f0`, Xiaomi `220333QNY`, device `rain`.
+- `tools/hw/nh02/android-run-app-e2e.sh --wait-secs 130` -> PASS, `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"app_telemetry_received","dataEvents":1,"deviceLogEvents":0,"mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","secPaired":false,"secAuth":false,"rssi":-32,"lastDeviceLog":""}`.
+- `tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130` -> PASS after one expected Xiaomi `USER_RESTRICTED` retry, `reason=app_manual_roundtrip`.
+- `tools/hw/nh02/android-run-app-e2e.sh --status --wait-secs 130` -> PASS after one expected Xiaomi `USER_RESTRICTED` retry, `reason=app_status_stop_alert_roundtrip`.
+- `tools/hw/nh02/android-run-app-e2e.sh --anchor --wait-secs 130` -> PASS after one expected Xiaomi `USER_RESTRICTED` retry, `reason=app_anchor_denied_roundtrip`.
+
+Self-review:
+- The production app now has direct BLE e2e proof for connect/telemetry and safe command roundtrips without replacing the existing smoke APK path.
+- Remaining app-e2e gaps are `sim`, `reconnect`, `esp-reset`, and a future `gps-field` mode for BLE-only GNSS validation when ESP32 is powered from a powerbank away from `nh02`.
