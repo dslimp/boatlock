@@ -3575,3 +3575,34 @@ Self-review:
 - This removes one unbounded source scan from the BLE log path without changing queued value format or notify cadence.
 - The helper zero-fills every slot, so dropped/empty/null inputs cannot leak stale payload bytes into later log notifications.
 - Remaining risk is live queue pressure under Android reconnect churn; module-five hardware acceptance and Android smokes will exercise the canonical device path.
+
+### 2026-04-25 Stage 110: BLE live notify packet length guard
+
+Scope:
+- Finish the diagnostics/readability batch with the BLE live data notify packet path.
+- Keep the v2 live-frame schema unchanged while preventing `processQueuedData()` from constructing a characteristic value from an invalid internal packet length.
+- This is module `5/5`; after local validation this batch requires `nh02` flash/acceptance and Android BLE smokes.
+
+External baseline:
+- Bluetooth GATT notifications carry an attribute value byte sequence, so the server-side application must choose a valid characteristic value length before notify: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-61/out/en/host/generic-attribute-profile--gatt-.html>.
+- Android exposes characteristic values as `byte[]` cached from read or notification updates, so malformed live-frame length at the source becomes app state unless dropped before notify: <https://developer.android.com/reference/android/bluetooth/BluetoothGattCharacteristic>.
+
+Key outcomes:
+- Added `RuntimeBleDataPacket.h` with a small guard for valid nonzero notify payload lengths.
+- `BLEBoatLock::processQueuedData()` now drops zero-length or oversized internal packets before building the characteristic value.
+- Added native tests for accepted normal/max lengths and rejected empty/oversized values.
+- Promoted the live-notify packet-length rule into `skills/boatlock/references/ble-ui.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: this touches live data delivery, so the scheduled post-module-five Android smoke suite must be run in this stage.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_data_packet -f test_runtime_ble_live_frame -f test_runtime_ble_params` -> passed (`10/10`).
+- `cd boatlock_ui && flutter test test/ble_live_frame_test.dart test/ble_boatlock_test.dart` -> passed (`14/14`).
+- `cd boatlock && platformio test -e native` -> passed (`299/299`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `698105` bytes.
+- Pending `nh02` flash/acceptance.
+- Pending Android BLE smoke suite.
+
+Self-review:
+- Local tests cover the guard boundary and the normal frame encoder/decoder contract.
+- The guard drops only invalid internal packets; the normal live frame remains the same binary v2 payload.
+- Remaining risk is live hardware delivery and Android reconnect behavior; that is the required post-module-five acceptance step.

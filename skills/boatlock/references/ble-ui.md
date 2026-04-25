@@ -19,6 +19,7 @@
   - `34cd`: live state notify/read, 70-byte little-endian binary v2 frame
   - `56ef`: control point write/write-no-response
   - `78ab`: log notify
+- Live notify payload length must be validated before `setValue()`; zero-length or oversized internal packets are dropped rather than read past the packet buffer.
 - Log characteristic values are byte strings with explicit length. Firmware must set the exact text length, and Flutter must ignore trailing NUL padding defensively.
 - BLE log queue writes must build bounded, NUL-terminated payload slots without `strlen()` on untrusted or length-unknown input.
 - Firmware boot logs should include BLE init and advertising result lines.

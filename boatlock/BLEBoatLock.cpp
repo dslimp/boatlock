@@ -3,6 +3,7 @@
 #include "Logger.h"
 #include "RuntimeBleCommandLog.h"
 #include "RuntimeBleConnectionLog.h"
+#include "RuntimeBleDataPacket.h"
 #include "RuntimeBleLogText.h"
 #include <algorithm>
 #include <cstring>
@@ -302,7 +303,12 @@ void BLEBoatLock::processQueuedData() {
         return;
     }
 
-    std::string value(reinterpret_cast<const char*>(payload.bytes), payload.len);
+    const size_t payloadLen = runtimeBleNotifyPayloadLength(payload.len, kDataMaxLen);
+    if (payloadLen == 0) {
+        return;
+    }
+
+    std::string value(reinterpret_cast<const char*>(payload.bytes), payloadLen);
     pDataChar->setValue(value);
     if (pDataChar->notify()) {
         lastDataNotifyMs = now;

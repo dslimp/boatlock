@@ -157,6 +157,7 @@ Implication for BoatLock:
 - For BLE/manual control, keep GATT as a small transport and put safety in the app protocol:
   - use acknowledged writes for control commands where the client needs a write result
   - keep live telemetry on notify/read characteristics
+  - validate internal live-notify packet length before building characteristic values; invalid lengths should drop the packet, not read past the fixed buffer
   - make manual actuation updates atomic instead of split mode/direction/speed writes
   - use a short deadman/lease on manual input so app crash, disconnect, or controller loss goes quiet
   - reject invalid manual controller sources and do not refresh a deadman lease from malformed packets
