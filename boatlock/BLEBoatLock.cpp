@@ -2,6 +2,7 @@
 #include "BleAdvertisingWatchdog.h"
 #include "Logger.h"
 #include "RuntimeBleCommandLog.h"
+#include "RuntimeBleConnectionLog.h"
 #include "RuntimeBleLogText.h"
 #include <algorithm>
 #include <cstring>
@@ -32,11 +33,16 @@ public:
         // 24..48 => 30..60ms interval, timeout 300 => 3s.
         server->updateConnParams(connInfo.getConnHandle(), 24, 48, 0, 300);
         server->setDataLen(connInfo.getConnHandle(), 251);
-        logMessage("[BLE] Client connected! Address: %s mtu=%u int=%u timeout=%u\n",
-            connInfo.getAddress().toString().c_str(),
-            connInfo.getMTU(),
-            connInfo.getConnInterval(),
-            connInfo.getConnTimeout());
+        const std::string address = connInfo.getAddress().toString();
+        char line[128];
+        if (runtimeBleFormatConnectLog(line,
+                                       sizeof(line),
+                                       address.c_str(),
+                                       connInfo.getMTU(),
+                                       connInfo.getConnInterval(),
+                                       connInfo.getConnTimeout()) > 0) {
+            logMessage("%s", line);
+        }
     }
 
     void onMTUChange(uint16_t mtu, NimBLEConnInfo& connInfo) override {
@@ -64,8 +70,15 @@ public:
                 parent->connEstablishedMs = 0;
             }
         }
-        logMessage("[BLE] Client disconnected! Address: %s, Reason: %d\n",
-            connInfo.getAddress().toString().c_str(), reason);
+        const std::string address = connInfo.getAddress().toString();
+        char line[128];
+        if (runtimeBleFormatDisconnectLog(line,
+                                          sizeof(line),
+                                          address.c_str(),
+                                          reason,
+                                          server ? server->getConnectedCount() : 0) > 0) {
+            logMessage("%s", line);
+        }
         NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
         const bool advOk = advertising && (advertising->isAdvertising() || advertising->start());
         logMessage("[BLE] Restart advertising %s\n", advOk ? "started" : "failed");

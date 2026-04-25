@@ -3517,3 +3517,33 @@ Self-review:
 - This keeps emitted log text and BLE forwarding semantics stable while bounding the serial write path by `vsnprintf`'s contract.
 - The helper gives native coverage for formatting failures, truncation, and the `[BLE]` forwarding filter.
 - Remaining risk is live serial transport byte loss or line interleaving under bench load; module-five hardware acceptance will check the canonical log path.
+
+### 2026-04-25 Stage 108: BLE connection log formatter
+
+Scope:
+- Continue the diagnostics/readability batch with `BLEBoatLock` connection/disconnection logs.
+- Keep BLE behavior unchanged while replacing long free-text connect/disconnect lines with shorter key=value formatter output.
+- This is module `3/5`; hardware and Android acceptance are deferred to module five because transport behavior, protocol, and app parsing are unchanged.
+
+External baseline:
+- NimBLE-Arduino server callbacks expose `onConnect(...)` and `onDisconnect(..., int reason)` with `NimBLEConnInfo`, so connection diagnostics should preserve callback metadata: <https://h2zero.github.io/NimBLE-Arduino/class_nim_b_l_e_server_callbacks.html>.
+- Apache NimBLE return codes are partitioned into layer ranges such as `0x100`, `0x200`, `0x300`, `0x400`, and `0x500`, so logging only decimal disconnect reasons makes field triage harder: <https://mynewt.incubator.apache.org/latest/network/ble_hs/ble_hs_return_codes.html>.
+- Espressif BLE troubleshooting likewise describes NimBLE and HCI error code ranges, reinforcing raw hex reason logging for bench diagnostics: <https://docs.espressif.com/projects/esp-techpedia/en/latest/esp-friends/advanced-development/ble-application-note/troubleshooting.html>.
+
+Key outcomes:
+- Added `RuntimeBleConnectionLog.h` with bounded formatters for connect and disconnect lines.
+- Connect logs now use `[BLE] connect addr=... mtu=... int=... timeout=...`.
+- Disconnect logs now use `[BLE] disconnect addr=... reason=... hex=0x... clients=...`.
+- Added native tests for normal formatting, unknown address fallback, reason decimal+hex retention, truncation, and missing buffers.
+- Promoted the connection-log formatting rule into `skills/boatlock/references/ble-ui.md` and `skills/boatlock/references/external-patterns.md`.
+- Phone-smoke decision: no Android smoke added or run for this module because BLE schema, commands, reconnect logic, install path, and UI behavior are unchanged; module-five Android smokes will exercise real connect/disconnect on hardware.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_connection_log -f test_runtime_log_text -f test_ble_advertising_watchdog` -> passed (`13/13`).
+- `cd boatlock && platformio test -e native` -> passed (`295/295`).
+- `cd boatlock && platformio run -e esp32s3` -> success, flash size `698085` bytes.
+
+Self-review:
+- This keeps BLE connection behavior untouched and only changes the diagnostic text shape.
+- The formatter is bounded, native-tested, and preserves raw reason code information needed to diagnose layered NimBLE/HCI disconnects.
+- Remaining risk is whether real bench serial capture still drops bytes under connect/disconnect churn; module-five hardware acceptance will check the canonical log path.
