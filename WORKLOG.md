@@ -5422,6 +5422,7 @@ Validation:
 - Second publisher run failed because `yes | sdkmanager --licenses` trips `pipefail` with exit `141` after `sdkmanager` closes the pipe. Scoped `pipefail` off only around license acceptance and kept the rest of the Dockerfile strict.
 - Third publisher run exhausted the GitHub-hosted runner disk while building the prewarmed project image. Removed project source copy, debug APK warmup, Buildx GHA layer export, and provenance attestation so the GHCR image is toolchain-only rather than a full project build cache snapshot.
 - Toolchain-only publisher run succeeded in `5:37`.
+- First consumer workflow did not create jobs because `jobs.<job_id>.container.image` does not allow the `env` context. Replaced the shared env indirection with the literal GHCR image expression in each Flutter Linux job.
 - Pending: run CI with the GHCR image consumers and compare warm-run durations.
 
 Self-review:

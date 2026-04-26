@@ -43,8 +43,8 @@ def test_android_build_uses_ci_caches():
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
     gradle_properties = (ROOT / "boatlock_ui/android/gradle.properties").read_text()
 
-    assert "FLUTTER_CI_IMAGE: ghcr.io/${{ github.repository }}/flutter-android-ci:3.32.4-android33-ndk27.0" in workflow
-    assert "image: ${{ env.FLUTTER_CI_IMAGE }}" in workflow
+    assert "FLUTTER_CI_IMAGE" not in workflow
+    assert "image: ghcr.io/${{ github.repository }}/flutter-android-ci:3.32.4-android33-ndk27.0" in workflow
     assert "username: ${{ github.actor }}" in workflow
     assert "password: ${{ secrets.GITHUB_TOKEN }}" in workflow
     assert "uses: gradle/actions/setup-gradle@v6" in workflow
