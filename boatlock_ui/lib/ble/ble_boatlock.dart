@@ -43,6 +43,34 @@ class _OtaTransport {
   final bool restoreBalancedPriority;
 }
 
+class _BoatLockDiscovery {
+  const _BoatLockDiscovery({
+    required this.dataFound,
+    required this.commandFound,
+    required this.logFound,
+    required this.otaFound,
+  });
+
+  final bool dataFound;
+  final bool commandFound;
+  final bool logFound;
+  final bool otaFound;
+
+  bool get complete => boatLockDiscoveryComplete(
+    dataFound: dataFound,
+    commandFound: commandFound,
+    logFound: logFound,
+    otaFound: otaFound,
+  );
+
+  String get missing => describeMissingBoatLockCharacteristics(
+    dataFound: dataFound,
+    commandFound: commandFound,
+    logFound: logFound,
+    otaFound: otaFound,
+  );
+}
+
 class BleBoatLock with WidgetsBindingObserver {
   BluetoothDevice? _device;
   BluetoothCharacteristic? _dataChar;
@@ -282,66 +310,27 @@ class BleBoatLock with WidgetsBindingObserver {
       });
 
       _log('Discovering services...');
-      List<BluetoothService> services = await _device!.discoverServices();
+      var services = await _device!.discoverServices();
       _log('Services discovered: ${services.length}');
-      _clearCharacteristics();
-      var dataFound = false;
-      var commandFound = false;
-      var logFound = false;
-      var otaFound = false;
-      for (var s in services) {
-        if (!isBoatLockUuid(s.uuid.toString(), boatLockServiceUuid)) {
-          continue;
-        }
-        for (var c in s.characteristics) {
-          final uuid = c.uuid.toString().toLowerCase();
-          if (isBoatLockUuid(uuid, boatLockDataCharacteristicUuid)) {
-            _dataChar = c;
-            dataFound = true;
-            await _dataChar!.setNotifyValue(true);
-            _dataSub?.cancel();
-            _dataSub = _dataChar!.lastValueStream.listen(_onNotify);
-          }
-          if (isBoatLockUuid(uuid, boatLockCommandCharacteristicUuid)) {
-            _cmdChar = c;
-            commandFound = true;
-          }
-          if (isBoatLockUuid(uuid, boatLockLogCharacteristicUuid)) {
-            _logChar = c;
-            logFound = true;
-            await _logChar!.setNotifyValue(true);
-            _logSub?.cancel();
-            _logSub = _logChar!.lastValueStream.listen(_onLogNotify);
-          }
-          if (isBoatLockUuid(uuid, boatLockOtaCharacteristicUuid)) {
-            _otaChar = c;
-            otaFound = true;
-          }
+      var discovery = await _bindBoatLockCharacteristics(services);
+      if (!discovery.complete && !discovery.otaFound) {
+        final refreshed = await _rediscoverAfterMissingOtaCharacteristic();
+        if (refreshed != null) {
+          discovery = refreshed;
         }
       }
-      if (!boatLockDiscoveryComplete(
-        dataFound: dataFound,
-        commandFound: commandFound,
-        logFound: logFound,
-      )) {
-        _log(
-          'BoatLock characteristics missing ${describeMissingBoatLockCharacteristics(dataFound: dataFound, commandFound: commandFound, logFound: logFound)}',
-        );
+      if (!discovery.complete) {
+        _log('BoatLock characteristics missing ${discovery.missing}');
         await _applyReconnectDecision(_reconnectPolicy.connectFailed());
         return;
       }
       _setDiagnostics(
-        hasDataChar: dataFound,
-        hasCommandChar: commandFound,
-        hasLogChar: logFound,
-        hasOtaChar: otaFound,
+        hasDataChar: discovery.dataFound,
+        hasCommandChar: discovery.commandFound,
+        hasLogChar: discovery.logFound,
+        hasOtaChar: discovery.otaFound,
         mtu: _device?.mtuNow ?? diagnostics.value.mtu,
       );
-      if (!otaFound) {
-        _log(
-          'BoatLock OTA characteristic missing ota:$boatLockOtaCharacteristicUuid',
-        );
-      }
       await _setStreamEnabled(true);
       await requestSnapshot();
       _startHeartbeat();
@@ -351,6 +340,77 @@ class BleBoatLock with WidgetsBindingObserver {
       await _applyReconnectDecision(_reconnectPolicy.connectFailed());
     } finally {
       _isConnecting = false;
+    }
+  }
+
+  Future<_BoatLockDiscovery> _bindBoatLockCharacteristics(
+    List<BluetoothService> services,
+  ) async {
+    await _dataSub?.cancel();
+    _dataSub = null;
+    await _logSub?.cancel();
+    _logSub = null;
+    _clearCharacteristics();
+    var dataFound = false;
+    var commandFound = false;
+    var logFound = false;
+    var otaFound = false;
+    for (var s in services) {
+      if (!isBoatLockUuid(s.uuid.toString(), boatLockServiceUuid)) {
+        continue;
+      }
+      for (var c in s.characteristics) {
+        final uuid = c.uuid.toString().toLowerCase();
+        if (isBoatLockUuid(uuid, boatLockDataCharacteristicUuid)) {
+          _dataChar = c;
+          dataFound = true;
+        }
+        if (isBoatLockUuid(uuid, boatLockCommandCharacteristicUuid)) {
+          _cmdChar = c;
+          commandFound = true;
+        }
+        if (isBoatLockUuid(uuid, boatLockLogCharacteristicUuid)) {
+          _logChar = c;
+          logFound = true;
+        }
+        if (isBoatLockUuid(uuid, boatLockOtaCharacteristicUuid)) {
+          _otaChar = c;
+          otaFound = true;
+        }
+      }
+    }
+    if (_dataChar != null) {
+      await _dataChar!.setNotifyValue(true);
+      _dataSub = _dataChar!.lastValueStream.listen(_onNotify);
+    }
+    if (_logChar != null) {
+      await _logChar!.setNotifyValue(true);
+      _logSub = _logChar!.lastValueStream.listen(_onLogNotify);
+    }
+    return _BoatLockDiscovery(
+      dataFound: dataFound,
+      commandFound: commandFound,
+      logFound: logFound,
+      otaFound: otaFound,
+    );
+  }
+
+  Future<_BoatLockDiscovery?> _rediscoverAfterMissingOtaCharacteristic() async {
+    if (kIsWeb || !Platform.isAndroid || _device == null) {
+      return null;
+    }
+    _log(
+      'BoatLock OTA characteristic missing; clearing Android GATT cache and rediscovering',
+    );
+    try {
+      await _device!.clearGattCache();
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      final services = await _device!.discoverServices();
+      _log('Services rediscovered: ${services.length}');
+      return _bindBoatLockCharacteristics(services);
+    } catch (e) {
+      _log('Android GATT rediscovery failed: $e');
+      return null;
     }
   }
 
@@ -651,8 +711,22 @@ class BleBoatLock with WidgetsBindingObserver {
     OtaProgressCallback? onProgress,
   }) async {
     final sha = normalizeBoatLockSha256Hex(sha256Hex);
-    if (_cmdChar == null || _otaChar == null || sha == null) return false;
-    if (!isBoatLockOtaImageSizeValid(firmware.length)) return false;
+    if (_cmdChar == null) {
+      _log('BLE OTA unavailable reason=missing_command_char');
+      return false;
+    }
+    if (_otaChar == null) {
+      _log('BLE OTA unavailable reason=missing_ota_char');
+      return false;
+    }
+    if (sha == null) {
+      _log('BLE OTA unavailable reason=bad_sha256');
+      return false;
+    }
+    if (!isBoatLockOtaImageSizeValid(firmware.length)) {
+      _log('BLE OTA unavailable reason=bad_size size=${firmware.length}');
+      return false;
+    }
 
     _heartbeatTimer?.cancel();
     var beginAccepted = false;
@@ -670,8 +744,9 @@ class BleBoatLock with WidgetsBindingObserver {
       );
       _otaBeginAck = Completer<bool>();
       _otaFinishAck = null;
-      final beginSent = await _writeCommand(
+      final beginSent = await sendCustomCommand(
         'OTA_BEGIN:${firmware.length},$sha',
+        allowService: true,
       );
       if (!beginSent) return false;
       beginAccepted = await _waitForOtaAck(
@@ -718,7 +793,10 @@ class BleBoatLock with WidgetsBindingObserver {
       _otaFinishAck = Completer<bool>();
       _otaFinishRequested = true;
       _log('BLE OTA finish requested sent=$sent total=${firmware.length}');
-      finishRequested = await _writeCommand('OTA_FINISH');
+      finishRequested = await sendCustomCommand(
+        'OTA_FINISH',
+        allowService: true,
+      );
       if (!finishRequested) {
         _log('BLE OTA finish write returned false, waiting for firmware ack');
       }
@@ -738,7 +816,7 @@ class BleBoatLock with WidgetsBindingObserver {
       if (beginAccepted && !finishRequested && _cmdChar != null) {
         try {
           _log('BLE OTA abort requested sent=$sent total=${firmware.length}');
-          await _writeCommand('OTA_ABORT');
+          await sendCustomCommand('OTA_ABORT', allowService: true);
         } catch (_) {}
       }
       if (transport.restoreBalancedPriority && !finishAccepted) {

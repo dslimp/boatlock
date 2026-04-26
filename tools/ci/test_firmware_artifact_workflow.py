@@ -89,6 +89,16 @@ def test_ci_builds_service_apps_with_latest_main_firmware_source():
     assert "artifacts/flutter-macos-service-app/*" in workflow
 
 
+def test_flutter_ci_runs_service_ui_tests():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+
+    assert "Test service UI" in workflow
+    assert (
+        "flutter test --dart-define=BOATLOCK_SERVICE_UI=true "
+        "test/settings_page_service_ui_test.dart"
+    ) in workflow
+
+
 def test_macos_build_wrapper_supports_latest_main_service_variant():
     script = (ROOT / "tools/macos/build-app.sh").read_text()
 

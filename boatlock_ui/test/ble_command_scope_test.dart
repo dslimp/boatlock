@@ -50,6 +50,8 @@ void main() {
       ),
       BoatLockCommandScope.service,
     );
+    expect(classifyBoatLockCommand('OTA_FINISH'), BoatLockCommandScope.service);
+    expect(classifyBoatLockCommand('OTA_ABORT'), BoatLockCommandScope.service);
     expect(
       classifyBoatLockCommand('COMPASS_DCD_SAVE'),
       BoatLockCommandScope.service,

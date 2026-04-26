@@ -126,7 +126,10 @@ Do not merge the firmware gate until the rest of this wrapper contract is implem
 5. The app downloads the binary, verifies SHA-256 before transfer, sends authenticated `OTA_BEGIN`, writes chunks to BLE characteristic `9abc`, then sends `OTA_FINISH`.
 6. ESP32 validates byte count and SHA-256 before finalizing the OTA partition and rebooting. Disconnect or failed validation aborts without changing the active boot partition.
 7. Bench automation can run the same path with `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin`; the wrapper serves `firmware.bin` on `nh02`, exposes it to the phone with `adb reverse`, installs the production app with OTA e2e defines, and waits for post-reboot telemetry.
-8. Current BLE upload uses acknowledged writes for reliability and is slow on the bench: plan for roughly 15 minutes per 700 KB firmware image until the transfer path is tuned.
+8. Current BLE upload requests high connection priority, a larger MTU, and
+   write-without-response for OTA chunks when Android and the characteristic
+   support it; otherwise it falls back to acknowledged writes. Keep the wrapper
+   timeout long enough for the slower fallback path.
 
 ## Android USB Path
 

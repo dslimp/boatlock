@@ -21,6 +21,22 @@ This file records the actual execution stages for BoatLock work so the repo keep
 
 ## Stages
 
+### 2026-04-26 Stage app emergency STOP backlog
+
+Scope:
+- Capture the requested app safety/UI backlog item for emergency STOP behavior.
+
+Key outcomes:
+- Added a P0 `boatlock/TODO.md` item to remove the confirmation from the app emergency STOP button so it sends `STOP` immediately.
+- Included the UI placement note that the emergency STOP should be visually separated to the left of normal controls.
+
+Validation:
+- Documentation-only backlog update; no runtime validation run.
+
+Self-review:
+- This records intent only. The implementation still needs Flutter UI changes and `MapPage` test updates because current tests expect confirmation before sending `STOP`.
+- No durable workflow lesson emerged.
+
 ### 2026-04-26 Stage BLE OTA phone bridge
 
 Scope:
@@ -6661,3 +6677,43 @@ Validation:
 
 Self-review:
 - This proves the software path and wrapper contract locally. It still needs a real `nh02` run with a service-capable target before calling the one-button update path hardware-proven.
+
+### 2026-04-26 Stage 228: Manifest-backed OTA hardware closure
+
+Scope:
+- Close the latest-main app OTA path on real `nh02` hardware after the first phone run exposed a BLE/app discovery race and then a firmware multi-client abort race.
+- Fold the completed background-agent findings into code, CI, docs, and the repo backlog.
+
+External baseline:
+- Android `BluetoothGatt.discoverServices()` is the GATT contract for discovering services plus their characteristics before characteristic operations.
+- FlutterBluePlus documents `clearGattCache()` as an Android-only service/characteristic cache refresh path.
+- OTA owner tracking was driven by repo hardware evidence rather than a new external source: the failed run showed `[OTA] finish rejected reason=not_active` after a non-owner BLE central disconnected during an otherwise complete phone upload.
+
+Key outcomes:
+- Reworked Flutter BLE discovery so the app records data, command, log, and OTA characteristics before enabling notifications; OTA uploads now fail with explicit missing-reason logs and retry Android GATT discovery once when OTA is missing.
+- Routed `OTA_BEGIN`, `OTA_FINISH`, and `OTA_ABORT` through the service-scoped app command path and added service UI CI coverage.
+- Updated OTA docs and hardware skill references to the current `esp32s3_service` artifact and write-without-response/fallback transfer behavior.
+- Added firmware OTA connection-handle ownership so a non-owner central disconnect does not abort an active phone OTA; wrong-owner chunks are rejected, and owner disconnect still aborts.
+- Returned the bench to the release firmware profile after proving the service OTA path.
+
+Validation:
+- `cd boatlock_ui && flutter test test/ble_discovery_check_test.dart test/ble_ota_payload_test.dart test/ble_command_scope_test.dart test/app_e2e_probe_test.dart test/github_release_firmware_source_test.dart test/settings_page_service_ui_test.dart` -> PASS (`23/23`).
+- `cd boatlock_ui && flutter test --dart-define=BOATLOCK_SERVICE_UI=true test/settings_page_service_ui_test.dart` -> PASS (`2/2`).
+- `cd boatlock_ui && flutter analyze` -> PASS.
+- `python3 -m pytest tools/ci/test_ble_ota_workflow.py tools/ci/test_android_smoke_modes.py tools/ci/test_firmware_artifact_workflow.py` -> PASS (`21/21`).
+- `bash -n tools/hw/nh02/android-run-app-e2e.sh tools/hw/nh02/android-run-smoke.sh tools/android/build-app-apk.sh tools/android/run-app-e2e.sh` -> PASS.
+- `cd boatlock && pio run -e esp32s3_service` -> PASS.
+- `cd boatlock && platformio test -e native` -> PASS (`404/404`).
+- `tools/hw/nh02/status.sh` -> PASS.
+- `tools/hw/nh02/android-status.sh` -> PASS (`68b657f0` over USB and `192.168.88.33:5555` over Wi-Fi visible).
+- `tools/hw/nh02/install.sh` -> PASS.
+- `tools/hw/nh02/flash.sh --profile service` -> PASS.
+- `tools/hw/nh02/acceptance.sh --seconds 20` after service flash -> PASS.
+- `tools/hw/nh02/android-run-app-e2e.sh --ota-latest-main --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --serial 68b657f0 --wait-secs 1800` -> PASS (`app_ota_reconnect_after_update`, last device log `[OTA] finish ok size=717056 reboot_ms=900`).
+- `tools/hw/nh02/flash.sh --profile release` -> PASS.
+- `tools/hw/nh02/acceptance.sh --seconds 20` after release flash -> PASS.
+- `tools/hw/nh02/android-run-app-e2e.sh --serial 68b657f0 --wait-secs 130` after release flash -> PASS (`app_telemetry_received`).
+
+Self-review:
+- The original app race happened because telemetry could arrive immediately after notifications were enabled while `_otaChar` was still unset; this is now captured in the BLE/UI reference.
+- The firmware owner fix is validated by the exact failing Android OTA path, but the pure owner-policy logic is still embedded in NimBLE callbacks. If this grows, extract a tiny testable policy helper rather than adding more callback branching.

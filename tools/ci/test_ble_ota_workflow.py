@@ -39,8 +39,13 @@ def test_flutter_ble_ota_protocol_is_wired():
 
     assert "boatLockOtaCharacteristicUuid = '9abc'" in ids
     assert "uploadFirmwareOtaBytes" in transport
-    assert "OTA_BEGIN:${firmware.length},$sha" in transport
+    assert "sendCustomCommand(\n        'OTA_BEGIN:${firmware.length},$sha'" in transport
+    assert "allowService: true" in transport
     assert "OTA_FINISH" in transport
+    assert "OTA_ABORT" in transport
+    assert "otaFound: otaFound" in transport
+    assert "clearGattCache" in transport
+    assert "BLE OTA unavailable reason=missing_ota_char" in transport
     assert "requestConnectionPriority" in transport
     assert "requestMtu" in transport
     assert "withoutResponse: transport.withoutResponse" in transport

@@ -285,6 +285,10 @@ jobs:
         working-directory: boatlock_ui
         run: flutter test
 
+      - name: Test service UI
+        working-directory: boatlock_ui
+        run: flutter test --dart-define=BOATLOCK_SERVICE_UI=true test/settings_page_service_ui_test.dart
+
   flutter-build-android:
     name: flutter-build-android
     runs-on: ubuntu-latest

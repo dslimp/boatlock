@@ -88,9 +88,18 @@ public:
         if (parent) {
             parent->bleStatus = stillConnected ? CONNECTED : ADVERTISING;
             if (bleOta.active()) {
-                bleOta.abort("disconnect");
+                if (parent->shouldAbortOtaForDisconnect(connInfo.getConnHandle(), stillConnected)) {
+                    bleOta.abort("disconnect");
+                    parent->clearOtaOwner();
+                } else {
+                    logMessage("[OTA] peer disconnect ignored handle=%u owner=%u clients=%u\n",
+                               connInfo.getConnHandle(),
+                               parent->otaOwnerConnHandle,
+                               server ? server->getConnectedCount() : 0);
+                }
             }
             if (!stillConnected) {
+                parent->clearOtaOwner();
                 parent->clearQueuedData();
                 parent->dataNotifyEnabled = false;
                 parent->logNotifyEnabled = false;
@@ -119,21 +128,30 @@ class BLEBoatLock::CmdCallbacks : public NimBLECharacteristicCallbacks {
     BLEBoatLock* parent;
 public:
     CmdCallbacks(BLEBoatLock* p) : parent(p) {}
-    void onWrite(NimBLECharacteristic* pCharacteristic, NimBLEConnInfo&) override {
+    void onWrite(NimBLECharacteristic* pCharacteristic, NimBLEConnInfo& connInfo) override {
         std::string command = pCharacteristic->getValue();
         if (runtimeBleShouldLogCommand(command)) {
             const std::string logCommand = runtimeBleLogCommandText(command);
             logMessage("[BLE] Control point: %s\n", logCommand.c_str());
         }
-        if (parent) parent->handleControlPoint(command);
+        if (parent) {
+            parent->noteOtaControlWrite(command, connInfo.getConnHandle());
+            parent->handleControlPoint(command);
+        }
     }
 };
 
 class BLEBoatLock::OtaCallbacks : public NimBLECharacteristicCallbacks {
+    BLEBoatLock* parent;
 public:
-    void onWrite(NimBLECharacteristic* pCharacteristic, NimBLEConnInfo&) override {
+    OtaCallbacks(BLEBoatLock* p) : parent(p) {}
+
+    void onWrite(NimBLECharacteristic* pCharacteristic, NimBLEConnInfo& connInfo) override {
         const std::string value = pCharacteristic->getValue();
         if (value.empty()) {
+            return;
+        }
+        if (parent && !parent->acceptOtaChunkWrite(connInfo.getConnHandle())) {
             return;
         }
         bleOta.writeChunk(reinterpret_cast<const uint8_t*>(value.data()), value.size());
@@ -193,7 +211,7 @@ void BLEBoatLock::begin() {
     pOtaChar = pService->createCharacteristic(
         "9abc", NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR
     );
-    pOtaChar->setCallbacks(new OtaCallbacks());
+    pOtaChar->setCallbacks(new OtaCallbacks(this));
 
     NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(pService->getUUID());
@@ -524,6 +542,54 @@ void BLEBoatLock::restartConnectedAdvertising(const char* source) {
                source ? source : "unknown",
                clients,
                kMaxBleCentralClients);
+}
+
+void BLEBoatLock::noteOtaControlWrite(const std::string& command, uint16_t connHandle) {
+    const bool otaBegin = command.rfind("OTA_BEGIN:", 0) == 0 ||
+                          command.find(":OTA_BEGIN:") != std::string::npos;
+    const bool otaFinish = command == "OTA_FINISH" ||
+                           command.find(":OTA_FINISH") != std::string::npos;
+    const bool otaAbort = command == "OTA_ABORT" ||
+                          command.find(":OTA_ABORT") != std::string::npos;
+    if (otaBegin) {
+        otaOwnerKnown = true;
+        otaOwnerConnHandle = connHandle;
+        return;
+    }
+    if ((otaFinish || otaAbort) && !otaOwnerKnown) {
+        otaOwnerKnown = true;
+        otaOwnerConnHandle = connHandle;
+    }
+}
+
+bool BLEBoatLock::acceptOtaChunkWrite(uint16_t connHandle) {
+    if (!bleOta.active()) {
+        return true;
+    }
+    if (!otaOwnerKnown) {
+        otaOwnerKnown = true;
+        otaOwnerConnHandle = connHandle;
+        return true;
+    }
+    if (otaOwnerConnHandle == connHandle) {
+        return true;
+    }
+    logMessage("[OTA] chunk rejected reason=wrong_owner handle=%u owner=%u\n",
+               connHandle,
+               otaOwnerConnHandle);
+    return false;
+}
+
+bool BLEBoatLock::shouldAbortOtaForDisconnect(uint16_t connHandle, bool stillConnected) const {
+    if (!otaOwnerKnown) {
+        return !stillConnected;
+    }
+    return otaOwnerConnHandle == connHandle;
+}
+
+void BLEBoatLock::clearOtaOwner() {
+    otaOwnerKnown = false;
+    otaOwnerConnHandle = 0;
 }
 
 void BLEBoatLock::notifyLive() {

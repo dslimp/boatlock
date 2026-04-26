@@ -35,6 +35,18 @@ Status after the 2026-04-26 autonomous pass.
 - Android app e2e now has a manifest-backed latest-main OTA mode that serves
   `manifest.json` plus `firmware.bin` and uses the app firmware-update client
   before the normal BLE OTA/reconnect verdict.
+- Manifest-backed Android OTA e2e has been proven on `nh02` against the
+  service firmware profile, including phone HTTP manifest download, BLE upload,
+  ESP32 reboot, and app telemetry recovery.
+- The Flutter BLE client now binds all BoatLock GATT characteristics before
+  enabling data/log notifications, treats the OTA characteristic as required
+  for upload, and can clear the Android GATT cache plus rediscover when OTA is
+  missing.
+- OTA control commands now use explicit service-scope app writes, and CI runs
+  the service UI widget test with `BOATLOCK_SERVICE_UI=true`.
+- Firmware OTA ownership is tied to the BLE connection handle that starts the
+  update, so a non-owner central disconnect no longer aborts an active phone
+  OTA transfer.
 
 ## Active Background Work
 
@@ -52,8 +64,12 @@ Status after the 2026-04-26 autonomous pass.
   setting, not local app code.
 - Keep multi-client controller support deferred until per-client auth/session and
   a single control-owner lease are implemented.
-- Run the manifest-backed Android OTA e2e on `nh02` after the service firmware
-  profile is flashed and the phone is available.
+- Add a macOS runtime/update smoke or manual acceptance path for the service app.
+- Decide whether Android/macOS service builds should intentionally replace the
+  normal app or get distinct app/bundle IDs before operator distribution.
+- Add a CI/runtime probe for the public latest-main Pages channel after the
+  first real deployment, using the same manifest validation and SHA check as
+  the app.
 
 ## Hardware-Gated Tasks
 
@@ -66,8 +82,8 @@ Status after the 2026-04-26 autonomous pass.
 - Do not change firmware motor/steering profiles for the real boat until those
   facts are captured. The current firmware assumes PWM plus two direction pins
   for the brushed motor and 28BYJ-48 plus ULN2003-style `HALF4WIRE` steering.
-- Run `nh02` release/service/acceptance profile proof and Android app e2e after
-  the CI Pages channel is live.
+- After the CI Pages channel is live, run a service-app OTA proof against the
+  public Pages URL instead of the local wrapper-served manifest.
 
 ## Defer Or Move Out Of Main
 
@@ -95,3 +111,16 @@ Status after the 2026-04-26 autonomous pass.
 - `Epicurus`: latest GitHub release source; implemented through release parsing,
   service-profile release artifacts, release manifest publishing, and
   token-backed asset API support behind `BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO`.
+- `Bacon`: OTA commands must be written through the service-scoped app command
+  path; implemented and covered.
+- `Leibniz`: one-button latest-main mostly existed, but service UI CI, stale
+  OTA throughput docs, and real Pages/macOS proof gaps were identified. CI/docs
+  fixes are implemented; Pages/macOS proof remains open.
+- `Hume`: Android OTA failure triage pointed at missing OTA characteristic
+  detail, service-profile artifact consistency, and stale remote-helper risks.
+  The OTA diagnostics/artifact guidance was fixed and `install.sh` was rerun
+  before hardware proof.
+- `Faraday`: prioritized the remaining autonomous/gated tasks; `nh02`
+  manifest-backed OTA and release return-to-bench proof are now complete, while
+  Pages, macOS runtime, powered hardware intake, and control-owner lease remain
+  open.

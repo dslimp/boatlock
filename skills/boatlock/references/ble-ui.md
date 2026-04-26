@@ -36,6 +36,8 @@
 - Service discovery should inspect BoatLock characteristics only under service `12ab`; a matching characteristic UUID under another service is not a valid BoatLock control/data/log endpoint.
 - A connected GATT service is usable only when data `34cd`, command `56ef`, and log `78ab` characteristics are all found. Partial discovery must clear the link and retry instead of leaving the app half-connected.
 - BLE OTA is optional for basic connection but required for app-driven firmware update. The app must discover `9abc` before allowing an OTA upload.
+- The app should bind data, command, log, and OTA characteristic references before enabling data/log notifications. Notifications can arrive immediately after subscription and may start e2e logic that needs the OTA characteristic.
+- On Android, if data/command/log are present but OTA is missing, the app may clear the GATT cache and rediscover once before declaring the link incomplete.
 - Live notify payload length must be validated before `setValue()`; producer-side packets whose length is not exactly the live-frame size are dropped rather than padded, truncated, or read past the packet buffer.
 - Flutter must reject live-frame payloads whose length is not exactly 72 bytes; accepting padded frames hides characteristic-value bugs and can mask protocol drift.
 - Flutter live-frame decoding must reject unknown mode/status/security-reject enum codes while the frame version is unchanged; `UNKNOWN` display fallbacks hide firmware/app schema drift.
@@ -121,6 +123,7 @@
 - Future hardware may need a phone plus a remote/controller connected over BLE.
 - Advertising while connected is allowed so future phone + remote setups can discover the ESP32 without a power-cycle.
 - Multi-central transport support does not replace control-source arbitration.
+- During BLE OTA, the firmware must bind OTA ownership to the connection handle that armed the update. Non-owner disconnects must not abort an active OTA transfer; owner disconnects or validation failures must abort.
 - Required multi-client design before accepting real simultaneous control:
   - multiple read-only telemetry subscribers are allowed
   - at most one control owner/lease can send actuation or settings commands

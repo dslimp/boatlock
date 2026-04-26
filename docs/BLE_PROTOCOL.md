@@ -221,7 +221,12 @@ verifies size and SHA-256, then reuses the same BLE OTA transport path. This
 intentionally avoids trusting expiring workflow artifact links or
 unauthenticated binaries.
 
-The current phone bridge intentionally uses acknowledged BLE writes for the first reliable acceptance path. This is slow on the bench, roughly sub-1 KB/s, so a 700 KB firmware image can take around 15 minutes; throughput optimization should be a separate change that preserves abort/retry safety.
+The current phone bridge requests a larger MTU and uses write-without-response
+for OTA chunks when the platform and characteristic support it, with a small
+backpressure delay between write windows. If the platform cannot use
+write-without-response, it falls back to acknowledged writes. Throughput is
+therefore device-dependent; keep the acceptance timeout long enough for both
+paths and preserve abort/retry safety when tuning transfer speed.
 
 ## Live State Frame
 

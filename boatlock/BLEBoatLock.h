@@ -65,6 +65,8 @@ private:
     bool dataNotifyEnabled = false;
     bool logNotifyEnabled = false;
     bool streamEnabled = false;
+    bool otaOwnerKnown = false;
+    uint16_t otaOwnerConnHandle = 0;
 
     TelemetryProvider telemetryProvider = nullptr;
     CommandHandler cmdHandler = nullptr;
@@ -92,6 +94,10 @@ private:
     void maintainConnParams();
     void maintainAdvertising();
     void restartConnectedAdvertising(const char* source);
+    void noteOtaControlWrite(const std::string& command, uint16_t connHandle);
+    bool acceptOtaChunkWrite(uint16_t connHandle);
+    bool shouldAbortOtaForDisconnect(uint16_t connHandle, bool stillConnected) const;
+    void clearOtaOwner();
 
     std::string status = "OK";
 public:
