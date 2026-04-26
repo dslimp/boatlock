@@ -6,6 +6,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter/widgets.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/boat_data.dart';
+import 'ble_debug_snapshot.dart';
 import 'ble_commands.dart';
 import 'ble_command_text.dart';
 import 'ble_device_match.dart';
@@ -56,6 +57,10 @@ class BleBoatLock with WidgetsBindingObserver {
   String _secReject = 'NONE';
   int _secCounter = 0;
   String? _ownerSecret;
+  final ValueNotifier<BleDebugSnapshot> diagnostics =
+      ValueNotifier<BleDebugSnapshot>(BleDebugSnapshot.initial());
+  final List<String> _debugAppLogs = <String>[];
+  final List<String> _debugDeviceLogs = <String>[];
 
   BoatData? get currentData => _lastData;
   bool get secPaired => _secPaired;
@@ -116,6 +121,14 @@ class BleBoatLock with WidgetsBindingObserver {
     }
     _device = null;
     _clearCharacteristics();
+    _setDiagnostics(
+      connectionState: 'disconnected',
+      deviceId: '',
+      deviceName: '',
+      isScanning: false,
+      clearConnectedAt: true,
+      lastError: '',
+    );
   }
 
   Future<bool> sendCustomCommand(String cmd) async {
@@ -149,31 +162,22 @@ class BleBoatLock with WidgetsBindingObserver {
     }
     if (_isConnecting) return;
     _isConnecting = true;
+    _setDiagnostics(isScanning: true, lastError: '');
 
     await FlutterBluePlus.stopScan();
     await _scanResultsSub?.cancel();
     _scanResultsSub = null;
 
-    bool found = false;
-    final scanDone = Completer<void>();
-    _scanResultsSub = FlutterBluePlus.scanResults.listen((results) async {
-      if (found) return;
+    ScanResult? foundResult;
+    final scanDone = Completer<ScanResult>();
+    _scanResultsSub = FlutterBluePlus.scanResults.listen((results) {
+      if (scanDone.isCompleted) return;
       for (var r in results) {
         _log(
-          "found device: mac=${r.device.remoteId}, name='${r.device.platformName}', advName='${r.advertisementData.advName}'",
+          "found device: mac=${r.device.remoteId}, rssi=${r.rssi}, name='${r.device.platformName}', advName='${r.advertisementData.advName}'",
         );
         if (isBoatLockScanResult(r)) {
-          found = true;
-          if (!scanDone.isCompleted) {
-            scanDone.complete();
-          }
-          _log('BoatLock found, connecting...');
-          _device = r.device;
-          await FlutterBluePlus.stopScan();
-          await _scanResultsSub?.cancel();
-          _scanResultsSub = null;
-          await _connectToDevice();
-          _isConnecting = false;
+          scanDone.complete(r);
           return;
         }
       }
@@ -184,23 +188,37 @@ class BleBoatLock with WidgetsBindingObserver {
         timeout: kBoatLockScanTimeout,
         withServices: boatLockScanServiceFilters(),
       );
-      await Future.any([
+      foundResult = await Future.any<ScanResult?>([
         scanDone.future,
-        Future.delayed(kBoatLockScanCompletionWait),
+        Future.delayed(kBoatLockScanCompletionWait, () => null),
       ]);
     } catch (e) {
       _log('scan failed: $e');
+      _setDiagnostics(lastError: e.toString());
     } finally {
       await FlutterBluePlus.stopScan();
       await _scanResultsSub?.cancel();
       _scanResultsSub = null;
       _isConnecting = false;
+      _setDiagnostics(isScanning: false);
     }
 
-    if (!found) {
+    if (foundResult == null) {
       _log('BoatLock not found, retry scan in 3s');
       await _applyReconnectDecision(_reconnectPolicy.scanMiss());
+      return;
     }
+
+    final r = foundResult;
+    _log('BoatLock found, connecting...');
+    _device = r.device;
+    _setDiagnostics(
+      deviceId: r.device.remoteId.toString(),
+      deviceName: r.device.platformName.isNotEmpty
+          ? r.device.platformName
+          : r.advertisementData.advName,
+    );
+    await _connectToDevice();
   }
 
   Future<void> _connectToDevice() async {
@@ -214,9 +232,16 @@ class BleBoatLock with WidgetsBindingObserver {
     try {
       await _device!.connect(timeout: const Duration(seconds: 20));
       _log('Connected to device');
+      _setDiagnostics(
+        connectionState: 'connected',
+        connectedAt: DateTime.now(),
+        mtu: _device?.mtuNow ?? 0,
+        lastError: '',
+      );
       _connectionSub?.cancel();
       _connectionSub = _device!.connectionState.listen((state) {
         _log('BLE state: $state');
+        _setDiagnostics(connectionState: state.name);
         if (state == BluetoothConnectionState.disconnected) {
           unawaited(_applyReconnectDecision(_reconnectPolicy.disconnected()));
         }
@@ -271,6 +296,13 @@ class BleBoatLock with WidgetsBindingObserver {
         await _applyReconnectDecision(_reconnectPolicy.connectFailed());
         return;
       }
+      _setDiagnostics(
+        hasDataChar: dataFound,
+        hasCommandChar: commandFound,
+        hasLogChar: logFound,
+        hasOtaChar: otaFound,
+        mtu: _device?.mtuNow ?? diagnostics.value.mtu,
+      );
       if (!otaFound) {
         _log(
           'BoatLock OTA characteristic missing ota:$boatLockOtaCharacteristicUuid',
@@ -281,9 +313,11 @@ class BleBoatLock with WidgetsBindingObserver {
       _startHeartbeat();
     } catch (e) {
       _log('connect failed: $e');
+      _setDiagnostics(lastError: e.toString());
       await _applyReconnectDecision(_reconnectPolicy.connectFailed());
+    } finally {
+      _isConnecting = false;
     }
-    _isConnecting = false;
   }
 
   void _startHeartbeat() {
@@ -327,6 +361,14 @@ class BleBoatLock with WidgetsBindingObserver {
       await _logSub?.cancel();
       _logSub = null;
       _clearCharacteristics();
+      _setDiagnostics(
+        connectionState: 'disconnected',
+        hasDataChar: false,
+        hasCommandChar: false,
+        hasLogChar: false,
+        hasOtaChar: false,
+        clearConnectedAt: true,
+      );
       final device = _device;
       _device = null;
       if (device != null) {
@@ -358,6 +400,7 @@ class BleBoatLock with WidgetsBindingObserver {
     await _adapterStateSub?.cancel();
     _adapterStateSub = FlutterBluePlus.adapterState.listen((state) {
       _log('BLE adapter state: $state');
+      _setDiagnostics(adapterState: state.name);
       final decision = _reconnectPolicy.adapterChanged(
         adapterReady: isBluetoothAdapterReady(state),
       );
@@ -372,6 +415,7 @@ class BleBoatLock with WidgetsBindingObserver {
         const Duration(seconds: 2),
       );
       _log('BLE adapter initial state: $state');
+      _setDiagnostics(adapterState: state.name);
       return isBluetoothAdapterReady(state);
     } catch (e) {
       _log('BLE adapter state unavailable, trying scan: $e');
@@ -410,6 +454,12 @@ class BleBoatLock with WidgetsBindingObserver {
     }
 
     _lastData = frame.data;
+    _setDiagnostics(
+      dataEvents: diagnostics.value.dataEvents + 1,
+      lastDataAt: now,
+      rssi: _lastRssi,
+      mtu: _device?.mtuNow ?? diagnostics.value.mtu,
+    );
     _secPaired = frame.data.secPaired;
     _secAuth = frame.data.secAuth;
     _secPairWindowOpen = frame.data.secPairWindowOpen;
@@ -434,6 +484,7 @@ class BleBoatLock with WidgetsBindingObserver {
   void _onLogNotify(List<int> value) {
     final line = decodeBoatLockLogLine(value);
     if (line.trim().isEmpty) return;
+    _appendDeviceDebugLog(line.trim());
     _handleOtaLogLine(line);
     onLog?.call(line);
   }
@@ -678,9 +729,11 @@ class BleBoatLock with WidgetsBindingObserver {
           predelay: 0,
           timeout: 10,
         );
+        _setDiagnostics(mtu: mtu);
         _log('BLE OTA MTU negotiated=$mtu');
       } catch (e) {
         mtu = _device?.mtuNow ?? mtu;
+        _setDiagnostics(mtu: mtu, lastError: e.toString());
         _log('BLE OTA MTU request failed, using mtu=$mtu: $e');
       }
     }
@@ -884,6 +937,13 @@ class BleBoatLock with WidgetsBindingObserver {
     _cmdChar = null;
     _logChar = null;
     _otaChar = null;
+    _setDiagnostics(
+      hasDataChar: false,
+      hasCommandChar: false,
+      hasLogChar: false,
+      hasOtaChar: false,
+      clearLastDataAt: true,
+    );
     _lastData = null;
     _secAuth = false;
     _secPairWindowOpen = false;
@@ -906,6 +966,89 @@ class BleBoatLock with WidgetsBindingObserver {
   void _log(String msg) {
     debugPrint('[BleBoatLock] $msg');
     developer.log(msg, name: 'BleBoatLock');
+    _appendAppDebugLog(msg);
+  }
+
+  void _appendAppDebugLog(String line) {
+    final now = DateTime.now();
+    _debugAppLogs.add(line);
+    if (_debugAppLogs.length > 80) {
+      _debugAppLogs.removeRange(0, _debugAppLogs.length - 80);
+    }
+    _setDiagnostics(
+      appLogEvents: diagnostics.value.appLogEvents + 1,
+      lastAppLogAt: now,
+      appLogLines: List<String>.unmodifiable(_debugAppLogs),
+    );
+  }
+
+  void _appendDeviceDebugLog(String line) {
+    final now = DateTime.now();
+    _debugDeviceLogs.add(line);
+    if (_debugDeviceLogs.length > 80) {
+      _debugDeviceLogs.removeRange(0, _debugDeviceLogs.length - 80);
+    }
+    _setDiagnostics(
+      deviceLogEvents: diagnostics.value.deviceLogEvents + 1,
+      lastDeviceLogAt: now,
+      deviceLogLines: List<String>.unmodifiable(_debugDeviceLogs),
+    );
+  }
+
+  void _setDiagnostics({
+    String? adapterState,
+    String? connectionState,
+    String? deviceId,
+    String? deviceName,
+    int? mtu,
+    int? rssi,
+    bool? isScanning,
+    bool? hasDataChar,
+    bool? hasCommandChar,
+    bool? hasLogChar,
+    bool? hasOtaChar,
+    int? dataEvents,
+    int? deviceLogEvents,
+    int? appLogEvents,
+    DateTime? connectedAt,
+    bool clearConnectedAt = false,
+    DateTime? lastDataAt,
+    bool clearLastDataAt = false,
+    DateTime? lastDeviceLogAt,
+    bool clearLastDeviceLogAt = false,
+    DateTime? lastAppLogAt,
+    bool clearLastAppLogAt = false,
+    String? lastError,
+    List<String>? appLogLines,
+    List<String>? deviceLogLines,
+  }) {
+    diagnostics.value = diagnostics.value.copyWith(
+      adapterState: adapterState,
+      connectionState: connectionState,
+      deviceId: deviceId,
+      deviceName: deviceName,
+      mtu: mtu,
+      rssi: rssi,
+      isScanning: isScanning,
+      hasDataChar: hasDataChar,
+      hasCommandChar: hasCommandChar,
+      hasLogChar: hasLogChar,
+      hasOtaChar: hasOtaChar,
+      dataEvents: dataEvents,
+      deviceLogEvents: deviceLogEvents,
+      appLogEvents: appLogEvents,
+      connectedAt: connectedAt,
+      clearConnectedAt: clearConnectedAt,
+      lastDataAt: lastDataAt,
+      clearLastDataAt: clearLastDataAt,
+      lastDeviceLogAt: lastDeviceLogAt,
+      clearLastDeviceLogAt: clearLastDeviceLogAt,
+      lastAppLogAt: lastAppLogAt,
+      clearLastAppLogAt: clearLastAppLogAt,
+      lastError: lastError,
+      appLogLines: appLogLines,
+      deviceLogLines: deviceLogLines,
+    );
   }
 
   Future<bool> _ensurePermissions() async {

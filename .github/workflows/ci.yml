@@ -239,6 +239,42 @@ jobs:
           if-no-files-found: error
           path: boatlock_ui/web-build.zip
 
+  flutter-build-macos:
+    name: flutter-build-macos
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.32.4"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        working-directory: boatlock_ui
+        run: flutter pub get
+
+      - name: Build macOS app
+        working-directory: boatlock_ui
+        run: flutter build macos --release
+
+      - name: Pack macOS app
+        working-directory: boatlock_ui
+        run: |
+          set -euo pipefail
+          cd build/macos/Build/Products/Release
+          ditto -c -k --sequesterRsrc --keepParent boatlock_ui.app ../../../../../boatlock-macos.zip
+
+      - name: Upload macOS app
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-macos-app
+          if-no-files-found: error
+          path: boatlock_ui/boatlock-macos.zip
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs:
@@ -249,6 +285,7 @@ jobs:
       - flutter-checks
       - flutter-build-android
       - flutter-build-web
+      - flutter-build-macos
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -278,3 +315,4 @@ jobs:
             artifacts/simulation-reports/*
             artifacts/flutter-android-apk/*
             artifacts/flutter-web/*
+            artifacts/flutter-macos-app/*

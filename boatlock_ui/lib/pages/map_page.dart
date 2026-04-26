@@ -9,6 +9,7 @@ import '../e2e/app_e2e_probe.dart';
 import '../models/boat_data.dart';
 import '../widgets/manual_control_sheet.dart';
 import '../widgets/status_panel.dart';
+import 'diagnostics_page.dart';
 import 'settings_page.dart';
 
 class MapPage extends StatefulWidget {
@@ -182,6 +183,15 @@ class _MapPageState extends State<MapPage> {
       appBar: AppBar(
         title: const Text('BoatLock OSM Map'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            tooltip: 'Диагностика',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => DiagnosticsPage(ble: ble, data: boatData),
+              ),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.settings),
             tooltip: 'Настройки',

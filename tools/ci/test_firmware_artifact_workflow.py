@@ -27,10 +27,30 @@ def test_ci_delivery_jobs_are_split_by_failure_domain():
         "flutter-checks",
         "flutter-build-android",
         "flutter-build-web",
+        "flutter-build-macos",
     ):
         assert f"  {job_name}:" in workflow
         assert f"name: {job_name}" in workflow
 
     assert "name: flutter-android-apk" in workflow
     assert "name: flutter-web" in workflow
+    assert "name: flutter-macos-app" in workflow
+    assert "flutter build macos --release" in workflow
     assert "flutter-android-web" not in workflow
+
+
+def test_macos_permissions_cover_ble_location_and_network():
+    info_plist = (ROOT / "boatlock_ui/macos/Runner/Info.plist").read_text()
+    debug_entitlements = (
+        ROOT / "boatlock_ui/macos/Runner/DebugProfile.entitlements"
+    ).read_text()
+    release_entitlements = (
+        ROOT / "boatlock_ui/macos/Runner/Release.entitlements"
+    ).read_text()
+
+    assert "NSBluetoothAlwaysUsageDescription" in info_plist
+    assert "NSLocationUsageDescription" in info_plist
+    for entitlements in (debug_entitlements, release_entitlements):
+        assert "com.apple.security.device.bluetooth" in entitlements
+        assert "com.apple.security.network.client" in entitlements
+        assert "com.apple.security.personal-information.location" in entitlements

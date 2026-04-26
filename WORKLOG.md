@@ -5308,3 +5308,42 @@ Self-review:
 - The fast path is now reliable on two completed phone OTA uploads after tuning backpressure. The repeat upload is under one minute; the full canonical path is longer because it includes APK build/install and ESP reboot/reconnect.
 - Throughput still depends on Android link scheduling and HTTP bridge setup. Do not use `--no-build` for a different firmware SHA or a different compile-time OTA port.
 - Signed firmware remains future production hardening; current debug OTA integrity is still SHA-256 plus firmware-side size/hash validation.
+
+### 2026-04-26 Stage 174: macOS client, diagnostics, and BLE second-client proof
+
+Scope:
+- Add the same BoatLock Flutter app surface for macOS so the Mac can be used as a second BLE client during bench/debug work.
+- Add debug visibility in the app and CI delivery for the macOS app artifact.
+- Prove that the ESP32 is visible from the Mac and can serve the Android phone plus the macOS app as concurrent BLE clients.
+
+External baseline:
+- FlutterBluePlus macOS guidance requires the app sandbox Bluetooth entitlement and Bluetooth usage plist key before CoreBluetooth can scan/connect from a packaged app.
+- FlutterBluePlus notes macOS/iOS negotiate MTU automatically, so the app-side OTA MTU request remains Android-only.
+- NimBLE/ESP32 multi-central examples restart advertising after a central connects when the server still has free connection slots.
+- NimBLE characteristic notifications can target all subscribed peers, so normal telemetry/log notifications do not need per-client duplicate command paths.
+
+Key outcomes:
+- Added a macOS-compatible diagnostics page with BLE state, scan/connect/discovery/error counters, RSSI, telemetry metadata, and bounded app/device logs.
+- Added macOS Bluetooth/location plist keys and entitlements for DebugProfile and Release builds.
+- Added a `flutter-build-macos` GitHub Actions job and release artifact upload for `boatlock-macos.zip`.
+- Reworked Flutter BLE scanning so a found BoatLock scan result is selected first, scanning is stopped, and connect/discovery runs sequentially. This prevents overlapping reconnect attempts on app resume.
+- Increased ESP32 NimBLE resources for two central clients and restarted advertising while one central is connected and another slot is free.
+- Stopped forcing fast connection params/data length during normal control connections; the aggressive params now stay OTA-only, preserving the fast OTA path without destabilizing weak macOS links.
+- OTA remains protected as a single-transfer path: connected advertising is suppressed while OTA is active and any disconnect during OTA aborts the update.
+
+Validation:
+- `plutil -lint boatlock_ui/macos/Runner/Info.plist boatlock_ui/macos/Runner/DebugProfile.entitlements boatlock_ui/macos/Runner/Release.entitlements` -> PASS.
+- `cd boatlock_ui && flutter analyze && flutter test` -> PASS.
+- `python3 -m pytest -q tools/ci/test_*.py && python3 tools/ci/check_config_schema_version.py && git diff --check` -> PASS (`19/19`, schema `0x18`).
+- `cd boatlock && platformio test -e native` -> PASS (`375/375`).
+- `cd boatlock && pio run -e esp32s3` -> PASS; firmware size `711501` bytes, flash use `21.3%`.
+- `cd boatlock_ui && flutter build macos --release` -> PASS; built `boatlock_ui.app` (`42.2MB`). CocoaPods still emits the known `geolocator_apple` deployment-target warning.
+- `tools/hw/nh02/acceptance.sh --seconds 45` -> PASS; BLE advertising, NVS settings `ver=24`, BNO08x heading events, GPS UART, display, stepper, and STOP button all matched.
+- Android production-app e2e over Wi-Fi ADB with the final app build -> PASS, reason `app_telemetry_received`, RSSI `-48`.
+- macOS production-app e2e as the only BLE client -> PASS, reason `app_telemetry_received`, RSSI `-64`.
+- Android first plus macOS second client -> PASS; macOS connected as the second central and received telemetry with RSSI `-62`. ESP32 monitor showed the macOS client disconnecting after smoke while one client remained connected, confirming Android stayed attached.
+
+Self-review:
+- This was not a local BLE permission blocker: the Mac app could scan and discover `BoatLock`, and after the connection sequencing plus normal-param change it connected and received telemetry. `tccutil reset BluetoothAlways com.example.boatlockUi` was run so the next manual packaged-app launch can prompt cleanly if macOS decides a prompt is needed.
+- The upstairs Mac link is weak (`-74..-62` RSSI during scans), so retries are expected. Diagnostics now expose RSSI and recent app/device logs instead of leaving the failure mode invisible.
+- The macOS artifact is unsigned/not notarized beyond local Flutter build signing. Production distribution still needs a real bundle id, signing identity, notarization, and a user-facing permission/pairing polish pass.

@@ -19,6 +19,7 @@ constexpr uint16_t kOtaConnMin = 6;     // 7.5 ms
 constexpr uint16_t kOtaConnMax = 12;    // 15 ms
 constexpr uint16_t kConnLatency = 0;
 constexpr uint16_t kConnTimeout = 300;  // 3 s
+constexpr uint8_t kMaxBleCentralClients = CONFIG_BT_NIMBLE_MAX_CONNECTIONS;
 
 bool connIntervalOutside(unsigned int interval, uint16_t minInterval, uint16_t maxInterval) {
     return interval < minInterval || interval > maxInterval;
@@ -42,19 +43,10 @@ public:
                 parent->lastDataNotifyMs = 0;
                 parent->lastLogNotifyMs = 0;
                 parent->lastConnParamReqMs = 0;
-                parent->connEstablishedMs = millis();
             }
+            parent->connEstablishedMs = millis();
         }
 
-        // Request stable params for control traffic.
-        // Units: interval 1.25ms, timeout 10ms.
-        // 24..48 => 30..60ms interval, timeout 300 => 3s.
-        server->updateConnParams(connInfo.getConnHandle(),
-                                 kStableConnMin,
-                                 kStableConnMax,
-                                 kConnLatency,
-                                 kConnTimeout);
-        server->setDataLen(connInfo.getConnHandle(), 251);
         const std::string address = connInfo.getAddress().toString();
         char line[128];
         if (runtimeBleFormatConnectLog(line,
@@ -65,15 +57,19 @@ public:
                                        connInfo.getConnTimeout()) > 0) {
             logMessage("%s", line);
         }
+        if (parent) {
+            parent->restartConnectedAdvertising("connect");
+        }
     }
 
     void onMTUChange(uint16_t mtu, NimBLEConnInfo& connInfo) override {
         NimBLEServer* server = NimBLEDevice::getServer();
-        if (server) {
-            const bool otaActive = bleOta.active();
+        const bool otaActive = bleOta.active();
+        if (server && otaActive) {
+            server->setDataLen(connInfo.getConnHandle(), 251);
             server->updateConnParams(connInfo.getConnHandle(),
-                                     otaActive ? kOtaConnMin : kStableConnMin,
-                                     otaActive ? kOtaConnMax : kStableConnMax,
+                                     kOtaConnMin,
+                                     kOtaConnMax,
                                      kConnLatency,
                                      kConnTimeout);
         }
@@ -91,10 +87,10 @@ public:
         const bool stillConnected = server && server->getConnectedCount() > 0;
         if (parent) {
             parent->bleStatus = stillConnected ? CONNECTED : ADVERTISING;
+            if (bleOta.active()) {
+                bleOta.abort("disconnect");
+            }
             if (!stillConnected) {
-                if (bleOta.active()) {
-                    bleOta.abort("disconnect");
-                }
                 parent->clearQueuedData();
                 parent->dataNotifyEnabled = false;
                 parent->logNotifyEnabled = false;
@@ -426,33 +422,39 @@ void BLEBoatLock::maintainConnParams() {
                                            ? (now - connEstablishedMs)
                                            : 0UL;
     const bool otaActive = bleOta.active();
+    if (!otaActive) {
+        return;
+    }
     const unsigned long reqGapMs = otaActive ? 1000UL : ((sinceConnect < 5000UL) ? 250UL : 1500UL);
     if (now - lastConnParamReqMs < reqGapMs) {
         return;
     }
     lastConnParamReqMs = now;
 
-    NimBLEConnInfo conn = pServer->getPeerInfo((uint8_t)0);
     const uint16_t minInterval = otaActive ? kOtaConnMin : kStableConnMin;
     const uint16_t maxInterval = otaActive ? kOtaConnMax : kStableConnMax;
-    const bool intervalWrong = connIntervalOutside(conn.getConnInterval(), minInterval, maxInterval);
-    const bool timeoutTooLow = conn.getConnTimeout() < 200;
-    if (!intervalWrong && !timeoutTooLow) {
-        return;
-    }
+    for (uint16_t handle : pServer->getPeerDevices()) {
+        NimBLEConnInfo conn = pServer->getPeerInfoByHandle(handle);
+        const bool intervalWrong = connIntervalOutside(conn.getConnInterval(), minInterval, maxInterval);
+        const bool timeoutWrong = otaActive && conn.getConnTimeout() < 200;
+        if (!intervalWrong && !timeoutWrong) {
+            continue;
+        }
 
-    pServer->updateConnParams(conn.getConnHandle(),
-                              minInterval,
-                              maxInterval,
-                              kConnLatency,
-                              kConnTimeout);
-    logMessage("[BLE] Conn params re-request: mode=%s int=%u timeout=%u -> min=%u max=%u timeout=%u\n",
-               otaActive ? "ota" : "stable",
-               conn.getConnInterval(),
-               conn.getConnTimeout(),
-               minInterval,
-               maxInterval,
-               kConnTimeout);
+        pServer->updateConnParams(conn.getConnHandle(),
+                                  minInterval,
+                                  maxInterval,
+                                  kConnLatency,
+                                  kConnTimeout);
+        logMessage("[BLE] Conn params re-request: mode=%s handle=%u int=%u timeout=%u -> min=%u max=%u timeout=%u\n",
+                   otaActive ? "ota" : "stable",
+                   conn.getConnHandle(),
+                   conn.getConnInterval(),
+                   conn.getConnTimeout(),
+                   minInterval,
+                   maxInterval,
+                   kConnTimeout);
+    }
 }
 
 void BLEBoatLock::maintainAdvertising() {
@@ -487,8 +489,7 @@ void BLEBoatLock::maintainAdvertising() {
     }
 
     if (action == BleAdvertisingWatchdogAction::START_CONNECTED_ADVERTISING) {
-        const bool advOk = advertising->start();
-        logMessage("[BLE] connected advertising restart %s\n", advOk ? "started" : "failed");
+        restartConnectedAdvertising("watchdog");
         return;
     }
 
@@ -501,6 +502,29 @@ void BLEBoatLock::maintainAdvertising() {
     bleStatus = ADVERTISING;
     const bool advOk = advertising->start();
     logMessage("[BLE] advertising watchdog restart %s\n", advOk ? "started" : "failed");
+}
+
+void BLEBoatLock::restartConnectedAdvertising(const char* source) {
+    if (!pServer || bleStatus != CONNECTED) {
+        return;
+    }
+
+    const uint8_t clients = pServer->getConnectedCount();
+    if (clients == 0 || clients >= kMaxBleCentralClients || bleOta.active()) {
+        return;
+    }
+
+    NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
+    if (!advertising || advertising->isAdvertising()) {
+        return;
+    }
+
+    const bool advOk = advertising->start();
+    logMessage("[BLE] connected advertising restart %s source=%s clients=%u/%u\n",
+               advOk ? "started" : "failed",
+               source ? source : "unknown",
+               clients,
+               kMaxBleCentralClients);
 }
 
 void BLEBoatLock::notifyLive() {

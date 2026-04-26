@@ -91,6 +91,7 @@ private:
     void processQueuedLogs();
     void maintainConnParams();
     void maintainAdvertising();
+    void restartConnectedAdvertising(const char* source);
 
     std::string status = "OK";
 public:
