@@ -5853,3 +5853,26 @@ Validation:
 
 Self-review:
 - This is still a manually normalized scenario catalog, not calibrated truth. The next sim work should add provenance/confidence metadata and real current/voltage/boat-mass calibration after bench data exists.
+
+### 2026-04-26 Stage 193: External power measurement log
+
+Scope:
+- Close the first-water battery/current/power visibility gap with a required external measurement log, without pretending firmware has power telemetry.
+- Keep this documentation-only; no firmware, Flutter, or wrapper behavior changes.
+
+External baseline:
+- Reused the existing powered-bench checklist and product readiness requirement that motor sizing, current, voltage sag, and thermal behavior are safety inputs.
+- No new external source was needed.
+
+Key outcomes:
+- Added `docs/PROTECTED_WATER_TEST_LOG.md` for powered bench, tank, tether, and protected-water sessions.
+- The template captures commit IDs, hardware facts, pre-run gates, external voltage/current/power readings, thermal readings, event log, abort conditions, and post-run review.
+- Linked the template from `docs/POWERED_BENCH_CHECKLIST.md`.
+- Updated the readiness plan and TODO to mark the external measurement-step path complete.
+
+Validation:
+- `rg -n "PROTECTED_WATER_TEST_LOG|voltage|current|power" docs boatlock/TODO.md` -> PASS.
+- `git diff --check` -> PASS.
+
+Self-review:
+- This is an operator log requirement, not live power telemetry. Real current/power telemetry remains a future protocol/hardware feature after the driver and sensing hardware are known.

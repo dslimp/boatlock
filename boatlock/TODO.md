@@ -24,7 +24,7 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 - [x] Add a first-class readiness panel in the app with link age, GNSS/heading freshness, auth, anchor gate, failsafe, manual lease, and motor readiness.
 - [x] Add fixed 1.5 m anchor jog controls to the normal app UI.
 - [x] Show distance and bearing to anchor as primary telemetry.
-- [ ] Add battery/power/current visibility or a required external measurement step in water-test logs.
+- [x] Add battery/power/current visibility or a required external measurement step in water-test logs.
 - [ ] Add track/history around anchor events for post-run review.
 - [x] Add `MapPage` tests for disconnect, preflight, auth reject, STOP, and manual-off behavior.
 - [x] Remove or branch off leftover non-target surfaces: `BOATLOCK_BOARD_JC4832W535`, route UI labels, and unused `ReacqStrat`.

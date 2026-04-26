@@ -132,9 +132,10 @@ Important mismatch:
   with `quiet` as the default for first powered tests.
 - Add track/history around anchor events so drift, correction, and failsafe exits
   can be reviewed after a run.
-- Add battery/power telemetry or at least a required external measurement step
-  for bench and water logs. Motor sizing and runtime are not product polish; they
-  directly bound safety.
+- Add battery/power telemetry later; for the first powered bench and protected
+  water sessions, `docs/PROTECTED_WATER_TEST_LOG.md` is the required external
+  voltage/current/power measurement path. Motor sizing and runtime are not
+  product polish; they directly bound safety.
 - Add `MapPage` widget tests for stale disconnect state, anchor preflight, auth
   reject, STOP, and manual-off wording.
 - Remove current main-branch leftovers that confuse release scope: old route UI

@@ -149,3 +149,7 @@ Every powered-bench run should record:
 - Exact BLE/e2e command or wrapper used.
 - Measured `PWM=7`, `DIR=5`, `DIR=10`, and steering output behavior.
 - Any reset, brownout, latch, STOP, or unexpected motion.
+
+Use `docs/PROTECTED_WATER_TEST_LOG.md` for powered bench, tank, tether, and
+protected-water sessions. It is the required external voltage/current/power
+measurement path until firmware publishes real power telemetry.
