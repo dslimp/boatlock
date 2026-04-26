@@ -9,6 +9,7 @@ class StatusPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (data == null) return SizedBox.shrink();
+    final statusReasonText = _statusReasonText(data!);
     return Container(
       margin: EdgeInsets.all(12),
       padding: EdgeInsets.symmetric(vertical: 10, horizontal: 16),
@@ -23,8 +24,8 @@ class StatusPanel extends StatelessWidget {
         spacing: 14,
         children: [
           _iconText(Icons.info_outline, data!.status),
-          if (data!.statusReasons.isNotEmpty)
-            _iconText(Icons.warning_amber_rounded, data!.statusReasons),
+          if (statusReasonText.isNotEmpty)
+            _iconText(Icons.warning_amber_rounded, statusReasonText),
           _iconText(
             Icons.anchor,
             (data!.anchorLat != 0 || data!.anchorLon != 0)
@@ -49,6 +50,50 @@ class StatusPanel extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _statusReasonText(BoatData data) {
+    final reasons = data.statusReasons.trim();
+    if (reasons.isNotEmpty) {
+      return reasons
+          .split(',')
+          .map((reason) => _statusReasonLabel(reason.trim()))
+          .where((reason) => reason.isNotEmpty)
+          .join(', ');
+    }
+    if (data.status == 'OK') {
+      return '';
+    }
+    if (data.gnssQ == 0) {
+      return 'GPS не готов';
+    }
+    return 'Причина не передана';
+  }
+
+  String _statusReasonLabel(String reason) {
+    return switch (reason) {
+      'NO_GPS' => 'Нет GPS',
+      'GPS_WEAK' => 'GPS слабый',
+      'GPS_NO_FIX' => 'Нет GPS fix',
+      'GPS_DATA_STALE' => 'GPS устарел',
+      'GPS_HDOP_MISSING' => 'Нет HDOP GPS',
+      'GPS_HDOP_TOO_HIGH' => 'HDOP GPS высокий',
+      'GPS_SATS_TOO_LOW' => 'Мало спутников',
+      'GPS_POSITION_JUMP' => 'Скачок GPS',
+      'NO_COMPASS' => 'Нет компаса',
+      'NO_HEADING' => 'Нет курса',
+      'DRIFT_ALERT' => 'Дрейф',
+      'DRIFT_FAIL' => 'Дрейф критичный',
+      'CONTAINMENT_BREACH' => 'Выход за зону',
+      'COMM_TIMEOUT' => 'Нет связи',
+      'CONTROL_LOOP_TIMEOUT' => 'Контур завис',
+      'SENSOR_TIMEOUT' => 'Сенсоры устарели',
+      'INTERNAL_ERROR_NAN' => 'Ошибка расчета',
+      'COMMAND_OUT_OF_RANGE' => 'Команда вне диапазона',
+      'STOP_CMD' => 'STOP',
+      'NO_ANCHOR_POINT' => 'Нет якорной точки',
+      _ => reason,
+    };
   }
 
   Widget _iconText(IconData icon, String text) => ConstrainedBox(

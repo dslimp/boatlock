@@ -34,7 +34,7 @@ struct RuntimeBleParamContext {
   std::function<float()> currentHeadingValue;
   std::function<const char*()> currentModeLabel;
   std::function<int()> gnssQualityLevel;
-  std::function<std::string()> buildStatusReasons;
+  std::function<RuntimeStatusSnapshot()> buildStatusSnapshot;
   std::function<const char*()> fixTypeSourceLabel;
 };
 
@@ -85,7 +85,7 @@ inline void registerRuntimeBleParams(const RuntimeBleParamContext& context) {
   const auto currentHeadingValue = context.currentHeadingValue;
   const auto currentModeLabel = context.currentModeLabel;
   const auto gnssQualityLevel = context.gnssQualityLevel;
-  const auto buildStatusReasons = context.buildStatusReasons;
+  const auto buildStatusSnapshot = context.buildStatusSnapshot;
 
   ble->setCommandHandler(commandHandler);
   ble->setTelemetryProvider([=]() {
@@ -122,8 +122,9 @@ inline void registerRuntimeBleParams(const RuntimeBleParamContext& context) {
     telemetry.secPairWindowOpen = security->pairingWindowOpen(millis());
     telemetry.secNonce = security->sessionNonce();
     telemetry.mode = std::string(currentModeLabel());
-    telemetry.status = ble->runtimeStatus();
-    telemetry.statusReasons = buildStatusReasons();
+    const RuntimeStatusSnapshot statusSnapshot = buildStatusSnapshot();
+    telemetry.status = statusSnapshot.summary;
+    telemetry.statusReasons = statusSnapshot.reasons;
     telemetry.secReject = std::string(security->lastRejectString());
     telemetry.gnssQ = runtimeBleTelemetryQuality(gnssQualityLevel(), 2);
     return telemetry;

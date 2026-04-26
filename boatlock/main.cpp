@@ -244,6 +244,12 @@ std::string buildCurrentStatusReasons(unsigned long now) {
   return buildRuntimeStatusReasons(input);
 }
 
+RuntimeStatusSnapshot buildCurrentStatusSnapshot(unsigned long now) {
+  std::string safetyReason;
+  const RuntimeStatusInput input = currentRuntimeStatusInput(now, &safetyReason);
+  return buildRuntimeStatusSnapshot(input);
+}
+
 float normalizeDiffDeg(float targetDeg, float currentDeg) {
   return RuntimeGnss::normalizeDiffDeg(targetDeg, currentDeg);
 }
@@ -301,7 +307,7 @@ void registerBleParams() {
       []() { return currentHeadingValue(); },
       []() { return currentModeLabel(); },
       []() { return gnssQualityLevel(); },
-      []() { return buildCurrentStatusReasons(millis()); },
+      []() { return buildCurrentStatusSnapshot(millis()); },
       []() { return fixTypeSourceString(fixTypeSource); },
   };
   registerRuntimeBleParams(context);

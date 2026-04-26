@@ -49,6 +49,16 @@ void test_runtime_status_summary_uses_alert_warn_ok_levels() {
   TEST_ASSERT_EQUAL_STRING("ALERT", buildRuntimeStatusSummary(input, alertReasons));
 }
 
+void test_runtime_status_snapshot_keeps_summary_and_reasons_coherent() {
+  RuntimeStatusInput input;
+  input.gpsUnavailable = true;
+
+  const RuntimeStatusSnapshot snapshot = buildRuntimeStatusSnapshot(input);
+
+  TEST_ASSERT_EQUAL_STRING("WARN", snapshot.summary.c_str());
+  TEST_ASSERT_EQUAL_STRING("NO_GPS", snapshot.reasons.c_str());
+}
+
 void test_runtime_status_summary_alert_sources_are_explicit() {
   RuntimeStatusInput input;
 
@@ -103,6 +113,7 @@ int main() {
   RUN_TEST(test_runtime_status_reasons_collect_expected_flags);
   RUN_TEST(test_runtime_status_reasons_use_gnss_reason_and_skip_none);
   RUN_TEST(test_runtime_status_summary_uses_alert_warn_ok_levels);
+  RUN_TEST(test_runtime_status_snapshot_keeps_summary_and_reasons_coherent);
   RUN_TEST(test_runtime_status_summary_alert_sources_are_explicit);
   RUN_TEST(test_runtime_status_summary_keeps_info_reason_ok);
   RUN_TEST(test_runtime_status_summary_treats_unknown_safety_reason_as_warning);

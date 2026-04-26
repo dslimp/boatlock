@@ -5347,3 +5347,26 @@ Self-review:
 - This was not a local BLE permission blocker: the Mac app could scan and discover `BoatLock`, and after the connection sequencing plus normal-param change it connected and received telemetry. `tccutil reset BluetoothAlways com.example.boatlockUi` was run so the next manual packaged-app launch can prompt cleanly if macOS decides a prompt is needed.
 - The upstairs Mac link is weak (`-74..-62` RSSI during scans), so retries are expected. Diagnostics now expose RSSI and recent app/device logs instead of leaving the failure mode invisible.
 - The macOS artifact is unsigned/not notarized beyond local Flutter build signing. Production distribution still needs a real bundle id, signing identity, notarization, and a user-facing permission/pairing polish pass.
+
+### 2026-04-26 Stage 175: status warning reason visibility
+
+Scope:
+- Fix the app case where the operator saw only `WARN` while the expected `NO_GPS` detail was not visible.
+
+Key outcomes:
+- Firmware live telemetry now builds `status` and `statusReasons` from one `RuntimeStatusSnapshot` instead of mixing a stored status string with freshly rebuilt reasons.
+- The status panel translates key reason tokens into operator-facing Russian labels, including `NO_GPS` -> `Нет GPS`.
+- If a device ever still sends a warning without reason flags, the panel fails visible with `GPS не готов` when `gnssQ=0`, otherwise `Причина не передана`.
+- Rebuilt and relaunched the local macOS release app from `boatlock_ui/build/macos/Build/Products/Release/boatlock_ui.app`.
+
+Validation:
+- `cd boatlock_ui && dart format lib/widgets/status_panel.dart test/status_panel_test.dart && flutter test test/status_panel_test.dart` -> PASS (`3/3`).
+- `cd boatlock && platformio test -e native -f test_runtime_status` -> PASS (`8/8`).
+- `cd boatlock && pio run -e esp32s3` -> PASS; firmware size `711585` bytes.
+- `cd boatlock_ui && flutter build macos --release` -> PASS; built `boatlock_ui.app` (`42.2MB`), with the existing CocoaPods deployment-target warning.
+- `cd boatlock_ui && flutter analyze` -> PASS.
+- `python3 -m pytest -q tools/ci/test_*.py && python3 tools/ci/check_config_schema_version.py && git diff --check` -> PASS (`19/19`, schema `0x18`).
+
+Self-review:
+- The root mismatch was a telemetry coherence issue, not only a layout issue.
+- The UI fallback is intentionally diagnostic: it prevents a bare warning from being invisible, but exact reason flags still come from firmware after this firmware is flashed or delivered by OTA.

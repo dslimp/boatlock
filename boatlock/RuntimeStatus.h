@@ -19,6 +19,11 @@ struct RuntimeStatusInput {
   bool holdMode = false;
 };
 
+struct RuntimeStatusSnapshot {
+  std::string summary;
+  std::string reasons;
+};
+
 inline bool runtimeStatusReasonPresent(const char* reason) {
   return reason && reason[0] != '\0' && strcmp(reason, "NONE") != 0;
 }
@@ -103,4 +108,11 @@ inline const char* buildRuntimeStatusSummary(const RuntimeStatusInput& input,
     return "WARN";
   }
   return "OK";
+}
+
+inline RuntimeStatusSnapshot buildRuntimeStatusSnapshot(const RuntimeStatusInput& input) {
+  RuntimeStatusSnapshot snapshot;
+  snapshot.reasons = buildRuntimeStatusReasons(input);
+  snapshot.summary = buildRuntimeStatusSummary(input, snapshot.reasons);
+  return snapshot;
 }
