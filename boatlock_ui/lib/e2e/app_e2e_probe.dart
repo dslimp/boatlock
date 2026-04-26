@@ -9,6 +9,7 @@ import '../ble/ble_boatlock.dart';
 import '../ble/ble_command_rejection.dart';
 import '../ble/ble_ota_payload.dart';
 import '../models/boat_data.dart';
+import '../ota/firmware_update_client.dart';
 import '../smoke/ble_smoke_logic.dart';
 import '../smoke/ble_smoke_mode.dart';
 
@@ -19,6 +20,7 @@ const kBoatLockAppE2eModeName = String.fromEnvironment(
 );
 const kBoatLockAppE2eOtaUrlDefine = 'BOATLOCK_APP_E2E_OTA_URL';
 const kBoatLockAppE2eOtaSha256Define = 'BOATLOCK_APP_E2E_OTA_SHA256';
+const kBoatLockAppE2eOtaLatestMainDefine = 'BOATLOCK_APP_E2E_OTA_LATEST_MAIN';
 const kBoatLockAppE2eOtaUrl = String.fromEnvironment(
   kBoatLockAppE2eOtaUrlDefine,
   defaultValue: '',
@@ -26,6 +28,9 @@ const kBoatLockAppE2eOtaUrl = String.fromEnvironment(
 const kBoatLockAppE2eOtaSha256 = String.fromEnvironment(
   kBoatLockAppE2eOtaSha256Define,
   defaultValue: '',
+);
+const kBoatLockAppE2eOtaLatestMain = bool.fromEnvironment(
+  kBoatLockAppE2eOtaLatestMainDefine,
 );
 
 String? appE2eProfileRejectionStage(BleCommandRejection? rejection) {
@@ -389,6 +394,10 @@ class BoatLockAppE2eProbe {
   }
 
   Future<void> _runOtaUpload() async {
+    if (kBoatLockAppE2eOtaLatestMain) {
+      await _runLatestMainOtaUpload();
+      return;
+    }
     final uri = Uri.tryParse(kBoatLockAppE2eOtaUrl);
     final expectedSha = normalizeBoatLockSha256Hex(kBoatLockAppE2eOtaSha256);
     if (uri == null || !uri.hasScheme || expectedSha == null) {
@@ -413,31 +422,61 @@ class BoatLockAppE2eProbe {
         return;
       }
       _stage('ota_download_verified');
-      final ok = await _ble.uploadFirmwareOtaBytes(
-        firmware: firmware,
-        sha256Hex: expectedSha,
-        onProgress: (sent, total) {
-          if (total <= 0) {
-            return;
-          }
-          final bucket = (100 * sent / total).floor();
-          if (bucket ~/ 10 != _otaProgressBucket ~/ 10 || sent == total) {
-            _otaProgressBucket = bucket;
-            _log('ota_progress sent=$sent total=$total pct=$bucket');
-          }
-        },
-      );
-      if (!ok) {
-        _finish(false, 'app_ota_upload_failed');
-        return;
-      }
-      _otaUploadDone = true;
-      _lastDataAt = DateTime.now();
-      _stage('ota_upload_done_wait_reconnect');
+      await _uploadVerifiedOta(firmware, expectedSha);
     } catch (e) {
       _log('ota_error $e');
       _finish(false, 'app_ota_exception');
     }
+  }
+
+  Future<void> _runLatestMainOtaUpload() async {
+    try {
+      _stage('ota_latest_main_manifest_fetch');
+      final bundle = await const FirmwareUpdateClient().fetchLatestFirmware(
+        onProgress: (received, total) {
+          if (total <= 0) {
+            return;
+          }
+          final bucket = (100 * received / total).floor();
+          if (bucket ~/ 10 != _otaProgressBucket ~/ 10 || received == total) {
+            _otaProgressBucket = bucket;
+            _log(
+              'ota_latest_main_download received=$received total=$total pct=$bucket',
+            );
+          }
+        },
+      );
+      _stage('ota_latest_main_download_verified');
+      _otaProgressBucket = -1;
+      await _uploadVerifiedOta(bundle.firmware, bundle.manifest.sha256);
+    } catch (e) {
+      _log('ota_latest_main_error $e');
+      _finish(false, 'app_ota_latest_main_exception');
+    }
+  }
+
+  Future<void> _uploadVerifiedOta(List<int> firmware, String sha256Hex) async {
+    final ok = await _ble.uploadFirmwareOtaBytes(
+      firmware: firmware,
+      sha256Hex: sha256Hex,
+      onProgress: (sent, total) {
+        if (total <= 0) {
+          return;
+        }
+        final bucket = (100 * sent / total).floor();
+        if (bucket ~/ 10 != _otaProgressBucket ~/ 10 || sent == total) {
+          _otaProgressBucket = bucket;
+          _log('ota_progress sent=$sent total=$total pct=$bucket');
+        }
+      },
+    );
+    if (!ok) {
+      _finish(false, 'app_ota_upload_failed');
+      return;
+    }
+    _otaUploadDone = true;
+    _lastDataAt = DateTime.now();
+    _stage('ota_upload_done_wait_reconnect');
   }
 
   Future<void> _sendManualSet() async {

@@ -50,6 +50,7 @@ def test_android_app_e2e_build_targets_main_app() -> None:
     text = _read("tools/android/build-app-apk.sh")
     assert "--target lib/main.dart" in text
     assert "BOATLOCK_APP_E2E_MODE=" in text
+    assert "BOATLOCK_APP_E2E_OTA_LATEST_MAIN=true" in text
     assert "main_smoke.dart" not in text
     assert '[[ ! -f "${BOATLOCK_ANDROID_APK}" ]]' in text
 
@@ -84,3 +85,20 @@ def test_android_app_e2e_wrappers_reuse_canonical_runner() -> None:
         assert "build-app-apk.sh" in text
         assert "run-smoke.sh" in text
         assert "build-smoke-apk.sh" not in text
+
+
+def test_android_app_e2e_supports_manifest_backed_ota() -> None:
+    app_e2e = _read("boatlock_ui/lib/e2e/app_e2e_probe.dart")
+    local_wrapper = _read("tools/android/run-app-e2e.sh")
+    nh02_wrapper = _read("tools/hw/nh02/android-run-app-e2e.sh")
+    nh02_smoke = _read("tools/hw/nh02/android-run-smoke.sh")
+
+    assert "fetchLatestFirmware" in app_e2e
+    assert "BOATLOCK_APP_E2E_OTA_LATEST_MAIN" in app_e2e
+    assert "--ota-latest-main" in local_wrapper
+    assert "--e2e-ota-latest-main" in local_wrapper
+    assert "--firmware-manifest-url" in local_wrapper
+    assert "--ota-latest-main" in nh02_wrapper
+    assert "generate_firmware_update_manifest.py" in nh02_wrapper
+    assert "http://127.0.0.1:${OTA_PORT}/manifest.json" in nh02_wrapper
+    assert "--ota-manifest" in nh02_smoke

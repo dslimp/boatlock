@@ -6590,3 +6590,28 @@ Validation:
 
 Self-review:
 - The app artifacts are now buildable with one-button latest-main OTA enabled on Android and macOS. This still does not prove the public Pages endpoint or a real GitHub Release asset; those require the next `main`/tag workflow run and device e2e.
+
+### 2026-04-26 Stage 227: Manifest-backed Android OTA e2e
+
+Scope:
+- Add an Android app e2e path that exercises the latest-main firmware manifest flow instead of only direct URL/SHA OTA defines.
+- Keep the probe in the existing app e2e mode model and reuse the same BLE OTA reconnect verdict.
+
+External baseline:
+- Reuses Stage 226: Flutter `--dart-define` is the existing app build-time switch, and the app must verify manifest metadata plus SHA before BLE transfer.
+
+Key outcomes:
+- Added `BOATLOCK_APP_E2E_OTA_LATEST_MAIN=true`; when set, app e2e `ota` mode downloads firmware through `FirmwareUpdateClient.fetchLatestFirmware()`.
+- Added local and `nh02` wrapper support for `--ota-latest-main`.
+- The `nh02` wrapper generates a local `manifest.json` from the candidate firmware, serves it beside `firmware.bin`, builds the app with the local manifest URL, and then uses the existing remote HTTP server and reconnect verdict.
+- Updated backlog and nh02 docs so the remaining hardware task is running this e2e path, not implementing it.
+
+Validation:
+- `cd boatlock_ui && flutter test test/app_e2e_probe_test.dart` -> PASS.
+- `cd boatlock_ui && flutter analyze` -> PASS.
+- `python3 -m pytest tools/ci/test_android_smoke_modes.py` -> PASS.
+- `bash -n tools/android/build-app-apk.sh tools/android/run-app-e2e.sh tools/hw/nh02/android-run-app-e2e.sh tools/hw/nh02/android-run-smoke.sh` -> PASS.
+- `tools/android/build-app-apk.sh --e2e-mode ota --e2e-ota-latest-main --firmware-manifest-url http://127.0.0.1:18080/manifest.json` -> PASS.
+
+Self-review:
+- This proves the software path and wrapper contract locally. It still needs a real `nh02` run with a service-capable target before calling the one-button update path hardware-proven.

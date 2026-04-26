@@ -32,6 +32,9 @@ Status after the 2026-04-26 autonomous pass.
 - GitHub Releases now receive a service-profile `firmware-esp32s3-service`
   asset set plus `manifest.json`, and the app can use authenticated release
   asset API URLs when a token-backed validation client is injected.
+- Android app e2e now has a manifest-backed latest-main OTA mode that serves
+  `manifest.json` plus `firmware.bin` and uses the app firmware-update client
+  before the normal BLE OTA/reconnect verdict.
 
 ## Active Background Work
 
@@ -49,9 +52,8 @@ Status after the 2026-04-26 autonomous pass.
   setting, not local app code.
 - Keep multi-client controller support deferred until per-client auth/session and
   a single control-owner lease are implemented.
-- Add a manifest-backed Android app e2e mode that serves `manifest.json` plus
-  `firmware.bin`, builds with `--latest-main-service`, triggers the same
-  Settings latest-main path, and verifies post-reboot telemetry.
+- Run the manifest-backed Android OTA e2e on `nh02` after the service firmware
+  profile is flashed and the phone is available.
 
 ## Hardware-Gated Tasks
 

@@ -14,6 +14,7 @@ SMOKE_MODE="basic"
 CYCLE_BLUETOOTH=0
 RESET_ESP32=0
 OTA_FIRMWARE=""
+OTA_MANIFEST=""
 OTA_PORT=18080
 
 while [[ $# -gt 0 ]]; do
@@ -54,6 +55,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --ota-firmware)
       OTA_FIRMWARE="${2:?missing OTA firmware path}"
+      shift 2
+      ;;
+    --ota-manifest)
+      OTA_MANIFEST="${2:?missing OTA manifest path}"
       shift 2
       ;;
     --ota-port)
@@ -112,9 +117,16 @@ if [[ -n "${OTA_FIRMWARE}" ]]; then
     echo "OTA firmware not found: ${OTA_FIRMWARE}" >&2
     exit 1
   fi
+  if [[ -n "${OTA_MANIFEST}" && ! -f "${OTA_MANIFEST}" ]]; then
+    echo "OTA manifest not found: ${OTA_MANIFEST}" >&2
+    exit 1
+  fi
   remote_shell "mkdir -p '${BOATLOCK_NH02_REMOTE_ANDROID_STAGE}'"
   remote_ota_path="${BOATLOCK_NH02_REMOTE_ANDROID_STAGE}/firmware.bin"
   "${RSYNC_BASE[@]}" "${OTA_FIRMWARE}" "${BOATLOCK_NH02_SSH_TARGET}:${remote_ota_path}"
+  if [[ -n "${OTA_MANIFEST}" ]]; then
+    "${RSYNC_BASE[@]}" "${OTA_MANIFEST}" "${BOATLOCK_NH02_SSH_TARGET}:${BOATLOCK_NH02_REMOTE_ANDROID_STAGE}/manifest.json"
+  fi
 fi
 
 serial_arg=""

@@ -9,6 +9,8 @@ MODE="basic"
 PASS_ARGS=()
 OTA_URL=""
 OTA_SHA256=""
+OTA_LATEST_MAIN=0
+FIRMWARE_MANIFEST_URL=""
 WAIT_SET=0
 
 while [[ $# -gt 0 ]]; do
@@ -52,12 +54,22 @@ while [[ $# -gt 0 ]]; do
       MODE="ota"
       shift
       ;;
+    --ota-latest-main)
+      MODE="ota"
+      OTA_LATEST_MAIN=1
+      shift
+      ;;
     --ota-url)
       OTA_URL="${2:?missing OTA URL}"
       shift 2
       ;;
     --ota-sha256)
       OTA_SHA256="${2:?missing OTA SHA-256}"
+      shift 2
+      ;;
+    --firmware-manifest-url)
+      FIRMWARE_MANIFEST_URL="${2:?missing firmware manifest URL}"
+      OTA_LATEST_MAIN=1
       shift 2
       ;;
     --no-build)
@@ -82,7 +94,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ "${MODE}" == "ota" ]]; then
-  if [[ "${BUILD_FIRST}" -eq 1 && ( -z "${OTA_URL}" || -z "${OTA_SHA256}" ) ]]; then
+  if [[ "${BUILD_FIRST}" -eq 1 &&
+    "${OTA_LATEST_MAIN}" -eq 0 &&
+    ( -z "${OTA_URL}" || -z "${OTA_SHA256}" ) ]]; then
     echo "--ota-url and --ota-sha256 are required for --ota" >&2
     exit 1
   fi
@@ -94,7 +108,14 @@ fi
 if [[ "${BUILD_FIRST}" -eq 1 ]]; then
   build_args=(--e2e-mode "${MODE}")
   if [[ "${MODE}" == "ota" ]]; then
-    build_args+=(--ota-url "${OTA_URL}" --ota-sha256 "${OTA_SHA256}")
+    if [[ "${OTA_LATEST_MAIN}" -eq 1 ]]; then
+      build_args+=(--e2e-ota-latest-main)
+      if [[ -n "${FIRMWARE_MANIFEST_URL}" ]]; then
+        build_args+=(--firmware-manifest-url "${FIRMWARE_MANIFEST_URL}")
+      fi
+    else
+      build_args+=(--ota-url "${OTA_URL}" --ota-sha256 "${OTA_SHA256}")
+    fi
   fi
   "${SCRIPT_DIR}/build-app-apk.sh" "${build_args[@]}" >/dev/null
 fi

@@ -9,6 +9,8 @@ BUILD_FIRST=1
 MODE="basic"
 PASS_ARGS=()
 OTA_FIRMWARE=""
+OTA_LATEST_MAIN=0
+OTA_MANIFEST=""
 OTA_PORT=18080
 OTA_PORT_SET=0
 OTA_SHA256=""
@@ -53,6 +55,11 @@ while [[ $# -gt 0 ]]; do
       ;;
     --ota)
       MODE="ota"
+      shift
+      ;;
+    --ota-latest-main)
+      MODE="ota"
+      OTA_LATEST_MAIN=1
       shift
       ;;
     --ota-firmware)
@@ -128,7 +135,25 @@ else:
 PY")"
   fi
   printf 'ota_port=%s\n' "${OTA_PORT}"
-  PASS_ARGS+=(--ota-firmware "${OTA_FIRMWARE}" --ota-port "${OTA_PORT}")
+  if [[ "${OTA_LATEST_MAIN}" -eq 1 ]]; then
+    OTA_MANIFEST="$(mktemp -t boatlock-ota-manifest.XXXXXX.json)"
+    (
+      cd "${REPO_ROOT}"
+      python3 tools/ci/generate_firmware_update_manifest.py \
+        --firmware "${OTA_FIRMWARE}" \
+        --out "${OTA_MANIFEST}" \
+        --base-url "http://127.0.0.1:${OTA_PORT}" \
+        --git-sha "$(git rev-parse HEAD)" \
+        --firmware-version "$(python3 tools/ci/check_firmware_version.py --print-only)"
+    )
+    PASS_ARGS+=(
+      --ota-firmware "${OTA_FIRMWARE}"
+      --ota-manifest "${OTA_MANIFEST}"
+      --ota-port "${OTA_PORT}"
+    )
+  else
+    PASS_ARGS+=(--ota-firmware "${OTA_FIRMWARE}" --ota-port "${OTA_PORT}")
+  fi
   if [[ "${WAIT_SET}" -eq 0 ]]; then
     PASS_ARGS+=(--wait-secs 1800)
   fi
@@ -137,10 +162,17 @@ fi
 if [[ "${BUILD_FIRST}" -eq 1 ]]; then
   build_args=(--e2e-mode "${MODE}")
   if [[ "${MODE}" == "ota" ]]; then
-    build_args+=(
-      --ota-url "http://127.0.0.1:${OTA_PORT}/firmware.bin"
-      --ota-sha256 "${OTA_SHA256}"
-    )
+    if [[ "${OTA_LATEST_MAIN}" -eq 1 ]]; then
+      build_args+=(
+        --e2e-ota-latest-main
+        --firmware-manifest-url "http://127.0.0.1:${OTA_PORT}/manifest.json"
+      )
+    else
+      build_args+=(
+        --ota-url "http://127.0.0.1:${OTA_PORT}/firmware.bin"
+        --ota-sha256 "${OTA_SHA256}"
+      )
+    fi
   fi
   "${REPO_ROOT}/tools/android/build-app-apk.sh" "${build_args[@]}" >/dev/null
 fi

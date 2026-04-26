@@ -9,6 +9,7 @@ RUN_PUB_GET=0
 E2E_MODE=""
 OTA_URL=""
 OTA_SHA256=""
+OTA_LATEST_MAIN=0
 SERVICE_UI=0
 FIRMWARE_MANIFEST_URL=""
 FIRMWARE_GITHUB_REPO=""
@@ -31,6 +32,14 @@ while [[ $# -gt 0 ]]; do
     --ota-sha256)
       OTA_SHA256="${2:?missing OTA SHA-256}"
       shift 2
+      ;;
+    --e2e-ota-latest-main)
+      OTA_LATEST_MAIN=1
+      SERVICE_UI=1
+      if [[ -z "${FIRMWARE_MANIFEST_URL}" ]]; then
+        FIRMWARE_MANIFEST_URL="${LATEST_MAIN_MANIFEST_URL}"
+      fi
+      shift
       ;;
     --service-ui)
       SERVICE_UI=1
@@ -62,7 +71,9 @@ if [[ -n "${E2E_MODE}" ]]; then
   boatlock_validate_app_e2e_mode "${E2E_MODE}"
 fi
 
-if [[ "${E2E_MODE}" == "ota" && ( -z "${OTA_URL}" || -z "${OTA_SHA256}" ) ]]; then
+if [[ "${E2E_MODE}" == "ota" &&
+  "${OTA_LATEST_MAIN}" -eq 0 &&
+  ( -z "${OTA_URL}" || -z "${OTA_SHA256}" ) ]]; then
   echo "--ota-url and --ota-sha256 are required for e2e mode ota" >&2
   exit 1
 fi
@@ -94,10 +105,14 @@ fi
       --dart-define="BOATLOCK_APP_E2E_MODE=${E2E_MODE}" \
     )
     if [[ "${E2E_MODE}" == "ota" ]]; then
-      build_args+=(
-        --dart-define="BOATLOCK_APP_E2E_OTA_URL=${OTA_URL}"
-        --dart-define="BOATLOCK_APP_E2E_OTA_SHA256=${OTA_SHA256}"
-      )
+      if [[ "${OTA_LATEST_MAIN}" -eq 1 ]]; then
+        build_args+=(--dart-define="BOATLOCK_APP_E2E_OTA_LATEST_MAIN=true")
+      else
+        build_args+=(
+          --dart-define="BOATLOCK_APP_E2E_OTA_URL=${OTA_URL}"
+          --dart-define="BOATLOCK_APP_E2E_OTA_SHA256=${OTA_SHA256}"
+        )
+      fi
     fi
     build_args+=(--target lib/main.dart)
     "${FLUTTER_ENV[@]}" "${BOATLOCK_ANDROID_FLUTTER_BIN}" build apk "${build_args[@]}"

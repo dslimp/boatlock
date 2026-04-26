@@ -168,6 +168,11 @@ Do not merge the firmware gate until the rest of this wrapper contract is implem
   `flutter-android-service-apk/boatlock-service-main.apk` and
   `flutter-macos-service-app/boatlock-macos-service-main.zip` alongside the
   normal app artifacts.
+- Android app e2e can exercise the manifest-backed latest-main path with
+  `tools/hw/nh02/android-run-app-e2e.sh --ota-latest-main --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin`.
+  The wrapper serves both `manifest.json` and `firmware.bin`, builds the app
+  with `BOATLOCK_APP_E2E_OTA_LATEST_MAIN=true`, and still waits for post-reboot
+  telemetry.
 - For release-asset validation, the same button can be built with
   `--dart-define=BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=dslimp/boatlock` instead;
   the app will resolve the latest release manifest or reconstruct it from

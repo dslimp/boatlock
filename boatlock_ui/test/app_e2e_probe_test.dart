@@ -6,7 +6,12 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('app e2e define is explicit and disabled by default', () {
     expect(kBoatLockAppE2eModeDefine, 'BOATLOCK_APP_E2E_MODE');
+    expect(
+      kBoatLockAppE2eOtaLatestMainDefine,
+      'BOATLOCK_APP_E2E_OTA_LATEST_MAIN',
+    );
     expect(kBoatLockAppE2eModeName, isEmpty);
+    expect(kBoatLockAppE2eOtaLatestMain, isFalse);
   });
 
   test('maps firmware profile rejections to app e2e stages and reasons', () {
