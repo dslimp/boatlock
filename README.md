@@ -131,7 +131,7 @@ The HC 160A S2 driver requires two direction pins. They are configured in
 `boatlock/main.cpp`:
 
 ```cpp
-constexpr int kMotorDirPin1 = 6;   // IN1 on the driver
+constexpr int kMotorDirPin1 = 5;   // IN1 on the driver
 constexpr int kMotorDirPin2 = 10;  // IN2 on the driver
 ```
 

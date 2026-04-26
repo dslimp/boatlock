@@ -5429,3 +5429,30 @@ Validation:
 
 Self-review:
 - This deliberately lands the image publisher before switching CI consumers, so `main` does not point at a non-existent container image.
+
+### 2026-04-26 Stage 179: product readiness audit and water-test plan
+
+Scope:
+- Review the post-refactor firmware/UI/BLE/simulation module relationships from a product-readiness angle.
+- Compare the current feature surface with commercial GPS-anchor patterns and prepare a concrete bench/water TODO.
+
+External baseline:
+- Minn Kota, Garmin Force, Lowrance Ghost, MotorGuide Pinpoint, and Rhodan/Raymarine all treat anchor lock, heading hold, jog/reposition, calibration/setup, mode feedback, and power sizing as first-class user behavior.
+- Commercial products consistently keep small-step jog, distance-to-anchor, setup/calibration quality, and multiple control surfaces visible rather than hidden as developer-only details.
+
+Key outcomes:
+- Added `docs/PRODUCT_READINESS_PLAN.md` with commercial baseline, current-fit review, P0/P1/P2 gaps, simulation plan, powered-bench plan, and first protected-water plan.
+- Replaced stale `boatlock/TODO.md` items that referenced obsolete BNO055/route-log-era work with the current product-readiness backlog.
+- Fixed the README HC 160A direction pin snippet to match current `boatlock/main.cpp` (`DIR1=5`, `DIR2=10`).
+- Added follow-up items for `ANCHOR_OFF` UI, phone-GPS correction isolation, leftover board/route surfaces, and unused `ReacqStrat`.
+
+Validation:
+- `python3 tools/sim/test_sim_core.py` -> PASS (`4/4`).
+- `python3 tools/sim/run_sim.py --check --json-out /tmp/boatlock-sim-report.json` -> PASS (`8/8`).
+- `python3 tools/sim/test_soak.py` -> PASS (`2/2`).
+- `python3 tools/sim/run_soak.py --hours 6 --check --json-out /tmp/boatlock-soak-report.json` -> PASS, no violations.
+- `git diff --check` -> PASS.
+
+Self-review:
+- No runtime code was changed in this stage.
+- The main unresolved architecture gap is validation coverage: on-device HIL exercises `AnchorControlLoop`, while real actuation for water uses `RuntimeMotion`, `StepperControl`, and `MotorControl`. Powered bench acceptance must prove that production path directly.
