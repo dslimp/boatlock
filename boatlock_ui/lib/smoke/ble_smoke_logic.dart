@@ -104,7 +104,9 @@ Map<String, dynamic> buildSmokeResultPayload({
   required int deviceLogEvents,
   BoatData? data,
   String? lastDeviceLog,
+  BleCommandRejection? commandRejection,
 }) {
+  final rejection = commandRejection;
   return <String, dynamic>{
     'pass': pass,
     'reason': reason,
@@ -120,6 +122,12 @@ Map<String, dynamic> buildSmokeResultPayload({
     'lon': data?.lon ?? 0.0,
     'gnssQ': data?.gnssQ ?? 0,
     'lastDeviceLog': lastDeviceLog ?? '',
+    'commandRejectReason': rejection?.reason ?? '',
+    'commandRejectProfile': rejection?.profile ?? '',
+    'commandRejectScope': rejection?.scope ?? '',
+    'commandRejectCommand': rejection?.command ?? '',
+    'commandRejectCommandName': rejection?.commandName ?? '',
+    'commandRejectRequiredProfile': rejection?.requiredProfile ?? '',
   };
 }
 

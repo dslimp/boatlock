@@ -6509,3 +6509,25 @@ Validation:
 
 Self-review:
 - This closes the app-side generic OTA rejection gap. The remaining rejection telemetry task is structured smoke/e2e result fields so wrappers do not have to scrape raw device-log text.
+
+### 2026-04-26 Stage 224: Structured smoke and app e2e rejection fields
+
+Scope:
+- Add structured command-rejection fields to Android smoke and production-app e2e result payloads.
+- Keep existing `reason` and `stage` strings for wrapper compatibility.
+
+External baseline:
+- Reuses the Stage 221 BLE/UI baseline: profile rejection is a parsed device event and should be carried as structured data instead of only as raw log text.
+
+Key outcomes:
+- `buildSmokeResultPayload()` now emits stable `commandRejectReason`, `commandRejectProfile`, `commandRejectScope`, `commandRejectCommand`, `commandRejectCommandName`, and `commandRejectRequiredProfile` fields.
+- `BleSmokePage` and `BoatLockAppE2eProbe` remember the last parsed `BleCommandRejection` and pass it into the final result payload.
+- Added unit coverage for the new result fields while preserving existing result and stage encoding.
+
+Validation:
+- `cd boatlock_ui && flutter test test/ble_smoke_logic_test.dart test/app_e2e_probe_test.dart` -> PASS (`11/11`).
+- `cd boatlock_ui && flutter analyze` -> PASS.
+- `git diff --check -- boatlock_ui/lib/smoke/ble_smoke_logic.dart boatlock_ui/lib/smoke/ble_smoke_page.dart boatlock_ui/lib/e2e/app_e2e_probe.dart boatlock_ui/test/ble_smoke_logic_test.dart` -> PASS.
+
+Self-review:
+- This closes the wrapper-visible rejection-structure gap. The remaining autonomous software work is now mostly simulator physics/sensor scenarios and CI/Pages deployment proof, while motor/steering changes remain hardware-intake gated.

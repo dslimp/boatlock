@@ -101,6 +101,7 @@ class BoatLockAppE2eProbe {
   BoatData? _lastData;
   DateTime? _lastDataAt;
   String? _lastDeviceLog;
+  BleCommandRejection? _lastCommandRejection;
   int _dataEvents = 0;
   int _deviceLogEvents = 0;
   bool _completed = false;
@@ -190,6 +191,9 @@ class BoatLockAppE2eProbe {
     _lastDeviceLog = line.trim();
     _log('device_log $_lastDeviceLog');
     final rejection = smokeProfileRejection(_lastDeviceLog);
+    if (rejection != null) {
+      _lastCommandRejection = rejection;
+    }
     final rejectionReason = appE2eProfileRejectionReason(_mode, rejection);
     if (rejectionReason != null) {
       final stage = appE2eProfileRejectionStage(rejection);
@@ -620,6 +624,7 @@ class BoatLockAppE2eProbe {
       deviceLogEvents: _deviceLogEvents,
       data: _lastData,
       lastDeviceLog: _lastDeviceLog,
+      commandRejection: _lastCommandRejection,
     );
     _logLine(encodeSmokeResultLine(payload));
     developer.log(jsonEncode(payload), name: 'BoatLockAppE2E');

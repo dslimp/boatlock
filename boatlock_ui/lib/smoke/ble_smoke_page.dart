@@ -5,6 +5,7 @@ import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 
 import '../ble/ble_boatlock.dart';
+import '../ble/ble_command_rejection.dart';
 import '../models/boat_data.dart';
 import 'ble_smoke_logic.dart';
 import 'ble_smoke_mode.dart';
@@ -36,6 +37,7 @@ class _BleSmokePageState extends State<BleSmokePage> {
   int _dataEvents = 0;
   int _deviceLogEvents = 0;
   String? _lastDeviceLog;
+  BleCommandRejection? _lastCommandRejection;
   bool _completed = false;
   bool _firstTelemetrySeen = false;
   bool _reconnectGapSeen = false;
@@ -533,6 +535,7 @@ class _BleSmokePageState extends State<BleSmokePage> {
     _appendEvent('device_log ${_lastDeviceLog!}');
     final profileRejection = smokeProfileRejection(_lastDeviceLog);
     if (profileRejection != null) {
+      _lastCommandRejection = profileRejection;
       _appendEvent(
         encodeSmokeStageLine(
           'command_rejected_${profileRejection.commandName}_${profileRejection.profile}',
@@ -592,6 +595,7 @@ class _BleSmokePageState extends State<BleSmokePage> {
       deviceLogEvents: _deviceLogEvents,
       data: _lastData,
       lastDeviceLog: _lastDeviceLog,
+      commandRejection: _lastCommandRejection,
     );
     final line = encodeSmokeResultLine(payload);
     debugPrint(line);

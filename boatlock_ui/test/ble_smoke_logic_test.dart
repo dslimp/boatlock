@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:boatlock_ui/ble/ble_command_rejection.dart';
 import 'package:boatlock_ui/models/boat_data.dart';
 import 'package:boatlock_ui/smoke/ble_smoke_logic.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -216,6 +217,32 @@ void main() {
     expect(payload['lat'], 0.0);
     expect(payload['lon'], 0.0);
     expect(payload['gnssQ'], 0);
+    expect(payload['commandRejectCommandName'], '');
+  });
+
+  test('result payload carries structured command rejection fields', () {
+    const rejection = BleCommandRejection(
+      reason: 'profile',
+      profile: 'release',
+      scope: 'service',
+      command: 'OTA_BEGIN:4096,abcd',
+    );
+    final payload = buildSmokeResultPayload(
+      pass: false,
+      reason: 'ota_rejected',
+      dataEvents: 1,
+      deviceLogEvents: 2,
+      commandRejection: rejection,
+      lastDeviceLog:
+          '[BLE] command rejected reason=profile profile=release scope=service command=OTA_BEGIN:4096,abcd',
+    );
+
+    expect(payload['commandRejectReason'], 'profile');
+    expect(payload['commandRejectProfile'], 'release');
+    expect(payload['commandRejectScope'], 'service');
+    expect(payload['commandRejectCommand'], 'OTA_BEGIN:4096,abcd');
+    expect(payload['commandRejectCommandName'], 'OTA_BEGIN');
+    expect(payload['commandRejectRequiredProfile'], 'service');
   });
 
   test('encodeSmokeStageLine serializes stage marker', () {
