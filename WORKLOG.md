@@ -5417,6 +5417,7 @@ Key outcomes:
 
 Validation:
 - First publisher run failed because the Dockerfile copied local `boatlock_ui/android/gradlew`, which exists on this Mac but is not tracked in git. Fixed the image warmup to use the real Flutter build path instead of the untracked local wrapper.
+- Second publisher run failed because `yes | sdkmanager --licenses` trips `pipefail` with exit `141` after `sdkmanager` closes the pipe. Scoped `pipefail` off only around license acceptance and kept the rest of the Dockerfile strict.
 - Pending: publish the first GHCR image from GitHub Actions, then switch Flutter CI jobs to consume it and compare warm-run durations.
 
 Self-review:

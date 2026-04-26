@@ -72,6 +72,7 @@ def test_flutter_ci_image_workflow_publishes_pinned_ghcr_image():
     assert "ARG ANDROID_PLATFORM_LEGACY=android-33" in dockerfile
     assert "ARG ANDROID_NDK_VERSION=27.0.12077973" in dockerfile
     assert "ARG ANDROID_CMAKE_VERSION=3.22.1" in dockerfile
+    assert "set +o pipefail" in dockerfile
     assert "flutter precache --android --web" in dockerfile
     assert "flutter build apk --debug --no-pub" in dockerfile
     assert "**/local.properties" in dockerignore

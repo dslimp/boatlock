@@ -37,7 +37,9 @@ RUN mkdir -p "${ANDROID_HOME}/cmdline-tools" "${PUB_CACHE}" "${GRADLE_USER_HOME}
     && unzip -q /tmp/android-commandline-tools.zip -d /tmp/android-commandline-tools \
     && mv /tmp/android-commandline-tools/cmdline-tools "${ANDROID_HOME}/cmdline-tools/latest" \
     && rm -rf /tmp/android-commandline-tools /tmp/android-commandline-tools.zip \
+    && set +o pipefail \
     && yes | sdkmanager --licenses >/dev/null \
+    && set -o pipefail \
     && sdkmanager \
         "platform-tools" \
         "platforms;${ANDROID_PLATFORM_CURRENT}" \
