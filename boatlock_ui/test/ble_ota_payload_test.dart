@@ -20,11 +20,24 @@ void main() {
 
   test('chunks firmware payload into BLE-safe writes', () {
     final bytes = List<int>.generate(
-      boatLockOtaChunkBytes * 2 + 7,
+      boatLockOtaFallbackChunkBytes * 2 + 7,
       (i) => i & 0xff,
     );
     final chunks = boatLockOtaChunks(bytes).toList();
     expect(chunks.map((c) => c.length), [180, 180, 7]);
+    expect(chunks.expand((c) => c), bytes);
+  });
+
+  test('sizes OTA chunks from negotiated MTU', () {
+    expect(boatLockOtaChunkBytesForMtu(247), 244);
+    expect(boatLockOtaChunkBytesForMtu(512), 244);
+    expect(boatLockOtaChunkBytesForMtu(23), 20);
+  });
+
+  test('chunks firmware payload using requested chunk size', () {
+    final bytes = List<int>.generate(244 * 2 + 3, (i) => i & 0xff);
+    final chunks = boatLockOtaChunks(bytes, chunkBytes: 244).toList();
+    expect(chunks.map((c) => c.length), [244, 244, 3]);
     expect(chunks.expand((c) => c), bytes);
   });
 

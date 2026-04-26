@@ -12,6 +12,19 @@
 
 extern BleOtaUpdate bleOta;
 
+namespace {
+constexpr uint16_t kStableConnMin = 24; // 30 ms
+constexpr uint16_t kStableConnMax = 48; // 60 ms
+constexpr uint16_t kOtaConnMin = 6;     // 7.5 ms
+constexpr uint16_t kOtaConnMax = 12;    // 15 ms
+constexpr uint16_t kConnLatency = 0;
+constexpr uint16_t kConnTimeout = 300;  // 3 s
+
+bool connIntervalOutside(unsigned int interval, uint16_t minInterval, uint16_t maxInterval) {
+    return interval < minInterval || interval > maxInterval;
+}
+} // namespace
+
 // --- Server callbacks ---
 class BLEBoatLock::ServerCallbacks : public NimBLEServerCallbacks {
     BLEBoatLock* parent;
@@ -36,7 +49,11 @@ public:
         // Request stable params for control traffic.
         // Units: interval 1.25ms, timeout 10ms.
         // 24..48 => 30..60ms interval, timeout 300 => 3s.
-        server->updateConnParams(connInfo.getConnHandle(), 24, 48, 0, 300);
+        server->updateConnParams(connInfo.getConnHandle(),
+                                 kStableConnMin,
+                                 kStableConnMax,
+                                 kConnLatency,
+                                 kConnTimeout);
         server->setDataLen(connInfo.getConnHandle(), 251);
         const std::string address = connInfo.getAddress().toString();
         char line[128];
@@ -51,7 +68,15 @@ public:
     }
 
     void onMTUChange(uint16_t mtu, NimBLEConnInfo& connInfo) override {
-        NimBLEDevice::getServer()->updateConnParams(connInfo.getConnHandle(), 24, 48, 0, 300);
+        NimBLEServer* server = NimBLEDevice::getServer();
+        if (server) {
+            const bool otaActive = bleOta.active();
+            server->updateConnParams(connInfo.getConnHandle(),
+                                     otaActive ? kOtaConnMin : kStableConnMin,
+                                     otaActive ? kOtaConnMax : kStableConnMax,
+                                     kConnLatency,
+                                     kConnTimeout);
+        }
         logMessage("[BLE] MTU updated: %u\n", mtu);
     }
 
@@ -400,21 +425,34 @@ void BLEBoatLock::maintainConnParams() {
     const unsigned long sinceConnect = (connEstablishedMs > 0 && now >= connEstablishedMs)
                                            ? (now - connEstablishedMs)
                                            : 0UL;
-    const unsigned long reqGapMs = (sinceConnect < 5000UL) ? 250UL : 1500UL;
+    const bool otaActive = bleOta.active();
+    const unsigned long reqGapMs = otaActive ? 1000UL : ((sinceConnect < 5000UL) ? 250UL : 1500UL);
     if (now - lastConnParamReqMs < reqGapMs) {
         return;
     }
     lastConnParamReqMs = now;
 
     NimBLEConnInfo conn = pServer->getPeerInfo((uint8_t)0);
-    if (conn.getConnTimeout() >= 200) {
+    const uint16_t minInterval = otaActive ? kOtaConnMin : kStableConnMin;
+    const uint16_t maxInterval = otaActive ? kOtaConnMax : kStableConnMax;
+    const bool intervalWrong = connIntervalOutside(conn.getConnInterval(), minInterval, maxInterval);
+    const bool timeoutTooLow = conn.getConnTimeout() < 200;
+    if (!intervalWrong && !timeoutTooLow) {
         return;
     }
 
-    // Keep asking for a safer supervision timeout (3s) if central negotiated too low.
-    pServer->updateConnParams(conn.getConnHandle(), 24, 48, 0, 300);
-    logMessage("[BLE] Conn params re-request: int=%u timeout=%u -> timeout=300\n",
-               conn.getConnInterval(), conn.getConnTimeout());
+    pServer->updateConnParams(conn.getConnHandle(),
+                              minInterval,
+                              maxInterval,
+                              kConnLatency,
+                              kConnTimeout);
+    logMessage("[BLE] Conn params re-request: mode=%s int=%u timeout=%u -> min=%u max=%u timeout=%u\n",
+               otaActive ? "ota" : "stable",
+               conn.getConnInterval(),
+               conn.getConnTimeout(),
+               minInterval,
+               maxInterval,
+               kConnTimeout);
 }
 
 void BLEBoatLock::maintainAdvertising() {

@@ -5277,3 +5277,34 @@ Self-review:
 - Current OTA speed is not the BLE maximum path. ESP32 has MTU 247/data length 251, but the app does not request MTU/connection priority and OTA uses 180-byte acknowledged writes over a 30..60 ms connection interval.
 - Bench throughput is about 1 KB/s; this is acceptable for first reliable acceptance but should be optimized separately with OTA-only fast conn params, Android MTU/priority request, MTU-sized chunks, and write-without-response plus backpressure.
 - BLE OTA updates the app partition only; bootloader/partition-table changes still require USB flashing.
+
+### 2026-04-26 Stage 173: BLE OTA fast transfer path
+
+Scope:
+- Optimize phone-to-ESP32 BLE OTA speed without weakening the existing SHA-256, size, finish, abort, and disconnect safety behavior.
+
+External baseline:
+- Android `BluetoothGatt` exposes connection-priority and MTU requests; bulk transfers should request high priority only while needed and return to balanced behavior after the transfer.
+- ATT write payload is bounded by the negotiated MTU minus the 3-byte ATT header; BoatLock caps the chunk at 244 bytes because the ESP32 server advertises MTU 247.
+
+Key outcomes:
+- Firmware keeps normal control connections at 30..60 ms but requests OTA-only fast params at 7.5..15 ms while `bleOta.active()`.
+- Android OTA prep requests high connection priority and MTU 247 before `OTA_BEGIN`.
+- Flutter chunks firmware at `MTU - 3`, uses `writeWithoutResponse` when the OTA characteristic supports it, and applies an explicit window/backpressure pause.
+- OTA logs now include chunk size, write mode, window, pause, progress, failure byte count, and abort requests.
+- Existing safety path remains intact: authenticated command wrapping when paired, `OTA_BEGIN:<size>,<sha256>`, chunk writes only after begin, `OTA_FINISH`, firmware size/SHA validation, and `OTA_ABORT` on failed client-side transfer.
+- `--no-build` OTA e2e is only valid when the APK's compile-time OTA URL/SHA still match the wrapper port and firmware. A mismatched no-build run failed before BLE upload with `app_ota_sha_mismatch` or HTTP connection refusal, so canonical new-firmware proof still rebuilds the APK.
+
+Validation:
+- `cd boatlock && pio run -e esp32s3` -> PASS; `firmware.bin` SHA-256 `5c07a91331cafd084ae885c97bb74f119f7b09ffbdeddab14596176ee9eb755d`, OTA size `711776`.
+- `cd boatlock_ui && dart format lib/ble/ble_boatlock.dart lib/ble/ble_ota_payload.dart test/ble_ota_payload_test.dart && flutter analyze && flutter test test/ble_ota_payload_test.dart test/settings_page_test.dart test/ble_smoke_mode_test.dart` -> PASS (`10/10`).
+- `python3 -m pytest -q tools/ci/test_*.py && python3 tools/ci/check_config_schema_version.py && git diff --check` -> PASS (`18/18`, schema `0x18`).
+- `cd boatlock && platformio test -e native` -> PASS (`375/375`).
+- `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --serial 192.168.88.33:5555` -> PASS, reason `app_ota_reconnect_after_update`; upload `10:53:43..10:54:54`, reconnect verdict `10:55:06`, last device log `[OTA] finish ok size=711776 reboot_ms=900`.
+- `tools/hw/nh02/android-run-app-e2e.sh --ota --no-build --ota-port 18082 --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --serial 192.168.88.33:5555` -> PASS, reason `app_ota_reconnect_after_update`; repeat upload `10:56:46..10:57:23`, reconnect verdict `10:57:34`, last device log `[OTA] finish ok size=711776 reboot_ms=900`.
+- `tools/hw/nh02/acceptance.sh --no-reset --seconds 20` after OTA -> PASS; boot path shows NVS settings `ver=24`, BLE advertising, BNO08x heading events, and GPS UART activity.
+
+Self-review:
+- The fast path is now reliable on two completed phone OTA uploads after tuning backpressure. The repeat upload is under one minute; the full canonical path is longer because it includes APK build/install and ESP reboot/reconnect.
+- Throughput still depends on Android link scheduling and HTTP bridge setup. Do not use `--no-build` for a different firmware SHA or a different compile-time OTA port.
+- Signed firmware remains future production hardening; current debug OTA integrity is still SHA-256 plus firmware-side size/hash validation.

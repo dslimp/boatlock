@@ -39,7 +39,10 @@ def test_flutter_ble_ota_protocol_is_wired():
     assert "uploadFirmwareOtaBytes" in transport
     assert "OTA_BEGIN:${firmware.length},$sha" in transport
     assert "OTA_FINISH" in transport
-    assert "withoutResponse: false" in transport
+    assert "requestConnectionPriority" in transport
+    assert "requestMtu" in transport
+    assert "withoutResponse: transport.withoutResponse" in transport
+    assert "boatLockOtaChunkBytesForMtu" in payload
     assert "boatLockSha256Hex" in payload
     assert "Обновить по BLE" in settings
 

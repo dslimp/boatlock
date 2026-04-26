@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter/widgets.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -21,6 +22,22 @@ import 'ble_security_codec.dart';
 typedef BoatDataCallback = void Function(BoatData? data);
 typedef LogCallback = void Function(String line);
 typedef OtaProgressCallback = void Function(int sentBytes, int totalBytes);
+
+const int _boatLockOtaDesiredMtu = 247;
+const int _boatLockOtaBackpressureWindowChunks = 8;
+const Duration _boatLockOtaBackpressurePause = Duration(milliseconds: 12);
+
+class _OtaTransport {
+  const _OtaTransport({
+    required this.chunkBytes,
+    required this.withoutResponse,
+    required this.restoreBalancedPriority,
+  });
+
+  final int chunkBytes;
+  final bool withoutResponse;
+  final bool restoreBalancedPriority;
+}
 
 class BleBoatLock with WidgetsBindingObserver {
   BluetoothDevice? _device;
@@ -546,8 +563,17 @@ class BleBoatLock with WidgetsBindingObserver {
     _heartbeatTimer?.cancel();
     var beginAccepted = false;
     var finishRequested = false;
+    var finishAccepted = false;
+    var sent = 0;
+    final transport = await _prepareOtaTransport();
     try {
-      _log('BLE OTA begin size=${firmware.length} sha=$sha');
+      _log(
+        'BLE OTA begin size=${firmware.length} sha=$sha '
+        'chunk=${transport.chunkBytes} '
+        'withoutResponse=${transport.withoutResponse} '
+        'window=$_boatLockOtaBackpressureWindowChunks '
+        'pauseMs=${_boatLockOtaBackpressurePause.inMilliseconds}',
+      );
       _otaBeginAck = Completer<bool>();
       _otaFinishAck = null;
       final beginSent = await _writeCommand(
@@ -560,13 +586,21 @@ class BleBoatLock with WidgetsBindingObserver {
       );
       if (!beginAccepted) return false;
 
-      var sent = 0;
       onProgress?.call(0, firmware.length);
       var lastLoggedBucket = -1;
       var lastLoggedAt = DateTime.now();
-      for (final chunk in boatLockOtaChunks(firmware)) {
-        await _otaChar!.write(chunk, withoutResponse: false);
+      var chunksInWindow = 0;
+      for (final chunk in boatLockOtaChunks(
+        firmware,
+        chunkBytes: transport.chunkBytes,
+      )) {
+        await _otaChar!.write(
+          chunk,
+          withoutResponse: transport.withoutResponse,
+          timeout: transport.withoutResponse ? 5 : 15,
+        );
         sent += chunk.length;
+        chunksInWindow += 1;
         onProgress?.call(sent, firmware.length);
         final bucket = (100 * sent) ~/ firmware.length;
         final now = DateTime.now();
@@ -579,6 +613,12 @@ class BleBoatLock with WidgetsBindingObserver {
             'BLE OTA progress sent=$sent total=${firmware.length} pct=$bucket',
           );
         }
+        if (transport.withoutResponse &&
+            chunksInWindow >= _boatLockOtaBackpressureWindowChunks &&
+            sent < firmware.length) {
+          chunksInWindow = 0;
+          await Future<void>.delayed(_boatLockOtaBackpressurePause);
+        }
       }
 
       _otaFinishAck = Completer<bool>();
@@ -588,7 +628,7 @@ class BleBoatLock with WidgetsBindingObserver {
       if (!finishRequested) {
         _log('BLE OTA finish write returned false, waiting for firmware ack');
       }
-      final finishAccepted = await _waitForOtaAck(
+      finishAccepted = await _waitForOtaAck(
         _otaFinishAck!,
         const Duration(seconds: 45),
       );
@@ -598,13 +638,17 @@ class BleBoatLock with WidgetsBindingObserver {
       _log('BLE OTA finish ack=$finishAccepted');
       return finishAccepted;
     } catch (e) {
-      _log('BLE OTA failed: $e');
+      _log('BLE OTA failed sent=$sent total=${firmware.length}: $e');
       return false;
     } finally {
       if (beginAccepted && !finishRequested && _cmdChar != null) {
         try {
+          _log('BLE OTA abort requested sent=$sent total=${firmware.length}');
           await _writeCommand('OTA_ABORT');
         } catch (_) {}
+      }
+      if (transport.restoreBalancedPriority && !finishAccepted) {
+        await _restoreBalancedConnectionPriority();
       }
       _otaBeginAck = null;
       _otaFinishAck = null;
@@ -612,6 +656,62 @@ class BleBoatLock with WidgetsBindingObserver {
       if (!_isDisposed && _cmdChar != null) {
         _startHeartbeat();
       }
+    }
+  }
+
+  Future<_OtaTransport> _prepareOtaTransport() async {
+    var mtu = _device?.mtuNow ?? 23;
+    var restoreBalancedPriority = false;
+    if (!kIsWeb && Platform.isAndroid && _device != null) {
+      try {
+        await _device!.requestConnectionPriority(
+          connectionPriorityRequest: ConnectionPriority.high,
+        );
+        restoreBalancedPriority = true;
+        _log('BLE OTA connection priority requested=high');
+      } catch (e) {
+        _log('BLE OTA connection priority high request failed: $e');
+      }
+      try {
+        mtu = await _device!.requestMtu(
+          _boatLockOtaDesiredMtu,
+          predelay: 0,
+          timeout: 10,
+        );
+        _log('BLE OTA MTU negotiated=$mtu');
+      } catch (e) {
+        mtu = _device?.mtuNow ?? mtu;
+        _log('BLE OTA MTU request failed, using mtu=$mtu: $e');
+      }
+    }
+    final chunkBytes = boatLockOtaChunkBytesForMtu(mtu);
+    final withoutResponse = _otaChar?.properties.writeWithoutResponse == true;
+    if (!withoutResponse) {
+      _log(
+        'BLE OTA writeWithoutResponse unavailable, using acknowledged writes',
+      );
+    }
+    return _OtaTransport(
+      chunkBytes: chunkBytes,
+      withoutResponse: withoutResponse,
+      restoreBalancedPriority: restoreBalancedPriority,
+    );
+  }
+
+  Future<void> _restoreBalancedConnectionPriority() async {
+    if (kIsWeb ||
+        !Platform.isAndroid ||
+        _device == null ||
+        _device!.isDisconnected) {
+      return;
+    }
+    try {
+      await _device!.requestConnectionPriority(
+        connectionPriorityRequest: ConnectionPriority.balanced,
+      );
+      _log('BLE OTA connection priority restored=balanced');
+    } catch (e) {
+      _log('BLE OTA connection priority restore failed: $e');
     }
   }
 

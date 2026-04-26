@@ -44,6 +44,7 @@ Use this file for:
 - Bluetooth Core GATT specification: <https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-61/out/en/host/generic-attribute-profile--gatt-.html>
 - Android BluetoothGatt API reference: <https://developer.android.com/reference/android/bluetooth/BluetoothGatt>
 - Android BluetoothGattCharacteristic API reference: <https://developer.android.com/reference/android/bluetooth/BluetoothGattCharacteristic>
+- Espressif ESP-AT BLE command reference: <https://docs.espressif.com/projects/esp-at/en/latest/esp32/AT_Command_Set/BLE_AT_Commands.html>
 - Android BluetoothLeScanner API reference: <https://developer.android.com/reference/android/bluetooth/le/BluetoothLeScanner>
 - Android ScanFilter API reference: <https://developer.android.com/reference/android/bluetooth/le/ScanFilter>
 - Bluetooth HID Over GATT Profile: <https://www.bluetooth.com/specifications/specs/hid-over-gatt-profile/>
@@ -212,6 +213,7 @@ Implication for BoatLock:
 - Shell wrappers that share protocol/test vocabulary should source one common helper and have a cheap CI drift test against the app-side enum/parser. Duplicated case lists make acceptance scripts fail silently when new modes are added.
 - OTA should write sequentially to an inactive OTA app partition, validate the completed image before selecting it for boot, and abort without changing boot selection on transfer failure.
 - BLE OTA should have an explicit start/finish command path, bounded chunks, progress/error acknowledgement, and an integrity check. For BoatLock, authenticated `OTA_BEGIN` plus full-image SHA-256 is the minimum debug-safe baseline; signed images or secure boot remain the production hardening step.
+- Bulk BLE OTA should temporarily move the Android link to high connection priority, request a larger ATT MTU, size writes to the negotiated `MTU - 3` payload, and use write-without-response only with explicit pacing/backpressure. Restore normal connection policy after a failed or aborted transfer; on success BoatLock expects the ESP32 reboot to drop the temporary link.
 
 ## What Commercial GPS Anchors Get Right
 
