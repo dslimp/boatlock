@@ -6405,3 +6405,19 @@ Validation:
 
 Self-review:
 - This makes the app's manifest URL actionable once GitHub Pages is enabled for Actions on the repository. It still needs the first real CI run to prove the Pages deployment settings and the generated public URL.
+
+### 2026-04-26 Stage 219: Consolidated agent backlog
+
+Scope:
+- Capture the completed and remaining work from the background agents in a durable repo document.
+- Keep this documentation-only and separate from CAD WIP.
+
+Key outcomes:
+- Added `docs/AGENT_TASK_BACKLOG.md` with done items, active background work, autonomous next tasks, hardware-gated tasks, defer/move-out items, and per-agent notes.
+- Preserved the latest-release worker task as active background work while recording completed findings from Darwin, Carver, Helmholtz, Hubble, Ohm, Russell, and Jason.
+
+Validation:
+- `git diff --check -- docs/AGENT_TASK_BACKLOG.md WORKLOG.md` -> PASS.
+
+Self-review:
+- This turns chat-only agent output into a working backlog. The list should be pruned as tasks are implemented so it does not become a stale parallel TODO.
