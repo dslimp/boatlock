@@ -53,6 +53,25 @@ def test_android_build_uses_ci_caches():
     assert "org.gradle.parallel=true" in gradle_properties
 
 
+def test_flutter_ci_image_workflow_publishes_pinned_ghcr_image():
+    workflow = (ROOT / ".github/workflows/flutter-ci-image.yml").read_text()
+    dockerfile = (ROOT / ".github/images/flutter-android-ci/Dockerfile").read_text()
+
+    assert "packages: write" in workflow
+    assert "ghcr.io/${{ github.repository }}/flutter-android-ci" in workflow
+    assert "IMAGE_TAG: 3.32.4-android33-ndk27.0" in workflow
+    assert "uses: docker/login-action@v4" in workflow
+    assert "uses: docker/setup-buildx-action@v4" in workflow
+    assert "uses: docker/build-push-action@v7" in workflow
+    assert "cache-from: type=gha,scope=flutter-android-ci" in workflow
+    assert "cache-to: type=gha,mode=max,scope=flutter-android-ci" in workflow
+    assert "ARG FLUTTER_VERSION=3.32.4" in dockerfile
+    assert "ARG ANDROID_PLATFORM_LEGACY=android-33" in dockerfile
+    assert "ARG ANDROID_NDK_VERSION=27.0.12077973" in dockerfile
+    assert "ARG ANDROID_CMAKE_VERSION=3.22.1" in dockerfile
+    assert "flutter precache --android --web" in dockerfile
+
+
 def test_macos_permissions_cover_ble_location_and_network():
     info_plist = (ROOT / "boatlock_ui/macos/Runner/Info.plist").read_text()
     debug_entitlements = (

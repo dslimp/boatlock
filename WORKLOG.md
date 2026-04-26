@@ -5398,3 +5398,24 @@ Validation:
 Self-review:
 - The first GitHub run after this change may still populate caches; the meaningful comparison is the second run on `main` after both Gradle and Android SDK caches exist.
 - I did not change `ndkVersion`, compile SDK, APK ABI set, or release artifact format. Those could reduce time further, but they would change build environment or delivered artifact compatibility and should be separate decisions.
+
+### 2026-04-26 Stage 177: GHCR Flutter CI image
+
+Scope:
+- Build a pinned Flutter/Android CI image in GHCR so Flutter tests and release builds can run from a preinstalled toolchain instead of installing Flutter, Java, Android SDK, NDK, and CMake inside every CI job.
+
+External baseline:
+- GitHub's container registry documentation supports publishing packages associated with the workflow repository through `GITHUB_TOKEN`.
+- GitHub Actions job containers can pull registry images with `jobs.<job_id>.container.credentials`.
+- Docker's official Buildx action supports `type=gha` layer caching; using a dedicated scope prevents unrelated image builds from overwriting each other's cache.
+
+Key outcomes:
+- Added `.github/images/flutter-android-ci/Dockerfile` with pinned Flutter `3.32.4`, JDK 17, Android platforms `35` and `33`, build tools `35.0.0`, NDK `27.0.12077973`, CMake `3.22.1`, and prewarmed Flutter pub/Gradle dependency caches.
+- Added `.github/workflows/flutter-ci-image.yml` to publish `ghcr.io/dslimp/boatlock/flutter-android-ci:3.32.4-android33-ndk27.0`, `latest`, and `sha-*` tags.
+- Added CI helper coverage for the image workflow, pinned toolchain values, and GHCR publishing permissions.
+
+Validation:
+- Pending: publish the first GHCR image from GitHub Actions, then switch Flutter CI jobs to consume it and compare warm-run durations.
+
+Self-review:
+- This deliberately lands the image publisher before switching CI consumers, so `main` does not point at a non-existent container image.
