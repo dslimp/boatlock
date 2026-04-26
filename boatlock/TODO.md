@@ -26,7 +26,7 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 - [ ] Add battery/power/current visibility or a required external measurement step in water-test logs.
 - [ ] Add track/history around anchor events for post-run review.
 - [ ] Add `MapPage` tests for disconnect, preflight, auth reject, STOP, and manual-off behavior.
-- [ ] Remove or branch off leftover non-target surfaces: `BOATLOCK_BOARD_JC4832W535`, route UI labels, and unused `ReacqStrat`.
+- [x] Remove or branch off leftover non-target surfaces: `BOATLOCK_BOARD_JC4832W535`, route UI labels, and unused `ReacqStrat`.
 - [ ] Run full local, `nh02`, Android, and no-load output validation before mounting powered hardware.
 
 ## P2 — Simulation And Product Polish

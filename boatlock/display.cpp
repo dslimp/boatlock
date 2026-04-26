@@ -18,18 +18,6 @@ struct DisplayProfile {
   uint32_t spiHz;
 };
 
-#if defined(BOATLOCK_BOARD_JC4832W535)
-// JC48xxW535 boards use AXS15231B on a 4-wire QSPI bus.
-constexpr int kLcdBacklightPin = 1;
-constexpr int kLcdResetPin = -1;
-constexpr int kLcdCsPin = 45;
-constexpr int kLcdQspiSckPin = 47;
-constexpr int kLcdQspiD0Pin = 21;
-constexpr int kLcdQspiD1Pin = 48;
-constexpr int kLcdQspiD2Pin = 40;
-constexpr int kLcdQspiD3Pin = 39;
-constexpr DisplayProfile kDisplayProfile = {0, false, 320, 480, 0, 0, 0, 0, 4000000};
-#else
 constexpr int kLcdBacklightPin = 1;
 constexpr int kLcdResetPin = 0;
 constexpr int kLcdCsPin = 45;
@@ -38,41 +26,13 @@ constexpr int kLcdMosiPin = 38;
 constexpr int kLcdSclkPin = 39;
 constexpr int kLcdMisoPin = -1;
 constexpr DisplayProfile kDisplayProfile = {1, true, 240, 320, 0, 0, 0, 0, 16000000};
-#endif
 
-#if defined(BOATLOCK_BOARD_JC4832W535)
 constexpr bool kUseCanvasCompositor = true;
-#else
-constexpr bool kUseCanvasCompositor = true;
-#endif
 constexpr bool kRotationSwapsAxes = (kDisplayProfile.rotation & 1) != 0;
 constexpr int kCanvasWidth = kRotationSwapsAxes ? kDisplayProfile.height : kDisplayProfile.width;
 constexpr int kCanvasHeight = kRotationSwapsAxes ? kDisplayProfile.width : kDisplayProfile.height;
 } // namespace
 
-#if defined(BOATLOCK_BOARD_JC4832W535)
-static Arduino_ESP32QSPI bus(
-  kLcdCsPin,
-  kLcdQspiSckPin,
-  kLcdQspiD0Pin,
-  kLcdQspiD1Pin,
-  kLcdQspiD2Pin,
-  kLcdQspiD3Pin
-);
-
-static Arduino_AXS15231B panel(
-  &bus,
-  kLcdResetPin,
-  kDisplayProfile.rotation,
-  kDisplayProfile.ips,
-  kDisplayProfile.width,
-  kDisplayProfile.height,
-  kDisplayProfile.colOffset1,
-  kDisplayProfile.rowOffset1,
-  kDisplayProfile.colOffset2,
-  kDisplayProfile.rowOffset2
-);
-#else
 static Arduino_ESP32SPI bus(
   kLcdDcPin,
   kLcdCsPin,
@@ -93,7 +53,6 @@ static Arduino_ST7789 panel(
   kDisplayProfile.colOffset2,
   kDisplayProfile.rowOffset2
 );
-#endif
 
 static Arduino_Canvas canvas(kCanvasWidth, kCanvasHeight, &panel);
 static Arduino_GFX *gfx = &panel;
@@ -263,9 +222,6 @@ static uint16_t mode_color(const char *mode) {
     return COLOR_CAUTION;
   }
   if (strcmp(mode, "SIM") == 0) {
-    return COLOR_TEAL;
-  }
-  if (strcmp(mode, "ROUTE") == 0) {
     return COLOR_TEAL;
   }
   return COLOR_SILVER;

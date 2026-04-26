@@ -21,20 +21,16 @@ void test_apply_anchor_profile_sets_expected_values() {
   Settings s;
   s.reset();
   TEST_ASSERT_TRUE(applyAnchorProfile(s, AnchorProfileId::QUIET));
-  TEST_ASSERT_EQUAL_FLOAT(0.0f, s.get("AnchorProf"));
   TEST_ASSERT_EQUAL_FLOAT(3.0f, s.get("HoldRadius"));
   TEST_ASSERT_EQUAL_FLOAT(2.2f, s.get("DeadbandM"));
   TEST_ASSERT_EQUAL_FLOAT(45.0f, s.get("MaxThrustA"));
   TEST_ASSERT_EQUAL_FLOAT(20.0f, s.get("ThrRampA"));
-  TEST_ASSERT_EQUAL_FLOAT(0.0f, s.get("ReacqStrat"));
 
   TEST_ASSERT_TRUE(applyAnchorProfile(s, AnchorProfileId::CURRENT));
-  TEST_ASSERT_EQUAL_FLOAT(2.0f, s.get("AnchorProf"));
   TEST_ASSERT_EQUAL_FLOAT(1.5f, s.get("HoldRadius"));
   TEST_ASSERT_EQUAL_FLOAT(1.0f, s.get("DeadbandM"));
   TEST_ASSERT_EQUAL_FLOAT(90.0f, s.get("MaxThrustA"));
   TEST_ASSERT_EQUAL_FLOAT(55.0f, s.get("ThrRampA"));
-  TEST_ASSERT_EQUAL_FLOAT(1.0f, s.get("ReacqStrat"));
 }
 
 int main() {

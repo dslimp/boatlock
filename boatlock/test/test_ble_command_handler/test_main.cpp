@@ -463,20 +463,18 @@ void test_compass_calibration_commands_are_routed_to_compass() {
 
 void test_set_anchor_profile_applies_bundle() {
   handleBleCommand("SET_ANCHOR_PROFILE:quiet");
-  TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorProf"));
   TEST_ASSERT_EQUAL_FLOAT(3.0f, settings.get("HoldRadius"));
   TEST_ASSERT_EQUAL_FLOAT(2.2f, settings.get("DeadbandM"));
   TEST_ASSERT_EQUAL_FLOAT(45.0f, settings.get("MaxThrustA"));
   TEST_ASSERT_EQUAL_FLOAT(20.0f, settings.get("ThrRampA"));
-  TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("ReacqStrat"));
 }
 
 void test_set_anchor_profile_rejects_invalid_payload() {
   const float holdBefore = settings.get("HoldRadius");
-  const float profileBefore = settings.get("AnchorProf");
+  const float deadbandBefore = settings.get("DeadbandM");
   handleBleCommand("SET_ANCHOR_PROFILE:storm");
-  TEST_ASSERT_EQUAL_FLOAT(profileBefore, settings.get("AnchorProf"));
   TEST_ASSERT_EQUAL_FLOAT(holdBefore, settings.get("HoldRadius"));
+  TEST_ASSERT_EQUAL_FLOAT(deadbandBefore, settings.get("DeadbandM"));
 }
 
 void test_security_rejects_plain_control_command_when_wrapper_required() {

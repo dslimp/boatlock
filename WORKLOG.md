@@ -5522,6 +5522,34 @@ Self-review:
 - `MapPage` still needs widget coverage with an injectable BLE facade before the stale-disconnect and command-failure UI can be tested directly.
 - Hardware and Android BLE smokes were not run for this UI-only cut; they should run before any powered bench session.
 
+### 2026-04-26 Stage 181: Release-scope cleanup leftovers
+
+Scope:
+- Close the independently safe product-plan leftovers around non-target board branches, route-era display labels, and unused persisted anchor profile fields.
+- Leave Flutter untouched in this slice.
+
+External baseline:
+- Reused the Stage 179 commercial GPS-anchor baseline and the repo release policy: `main` targets one default ESP32-S3 bench board and should not carry obsolete route/profile selector surfaces.
+- No new external source was needed; this was removal of repo-local stale release code.
+
+Key outcomes:
+- Removed the `jc4832w535` PlatformIO environment and `BOATLOCK_BOARD_JC4832W535` pin/display branches from the release firmware.
+- Removed the display-only `ROUTE` mode color branch.
+- Removed unused persisted `ReacqStrat` and `AnchorProf` settings, bumped config schema to `0x19`, and kept `SET_ANCHOR_PROFILE` scoped to the four runtime settings that are actually consumed: `HoldRadius`, `DeadbandM`, `MaxThrustA`, and `ThrRampA`.
+- Updated firmware tests, BLE/config docs, and the product TODO item.
+
+Validation:
+- `python3 tools/ci/check_config_schema_version.py` -> PASS (`0x19`).
+- `bash tools/ci/check_firmware_werror.sh` -> PASS.
+- `bash tools/ci/check_firmware_cppcheck.sh` -> PASS.
+- `git diff --check` -> PASS.
+- `cd boatlock && platformio test -e native -f test_anchor_profiles -f test_ble_command_handler -f test_settings` -> PASS (`61/61`).
+- `cd boatlock && pio run -e esp32s3` -> PASS; firmware size `714173` bytes.
+
+Self-review:
+- `SET_ANCHOR_PROFILE` still exists because the Flutter BLE helper still exposes it and Flutter files were explicitly out of scope. It is now a bounded preset command rather than a hidden persisted profile selector.
+- Full BLE command surface classification remains open under the P0 TODO item.
+
 ### 2026-04-26 Stage 181: Phone GPS yaw-correction isolation
 
 Scope:

@@ -1,6 +1,6 @@
 # Config Schema
 
-Schema version: `0x18` (`Settings::VERSION`).
+Schema version: `0x19` (`Settings::VERSION`).
 
 Settings are stored in ESP32 NVS namespace `boatlock_cfg` as:
 
@@ -61,8 +61,6 @@ Migration rules:
 - `MaxThrustA` (`10..100`)
 - `ThrRampA` (`1..100`)
 - `MaxTurnRt` (`30..720`)
-- `ReacqStrat` (`0..1`, `0=soft`, `1=aggressive`)
-- `AnchorProf` (`0..2`, `0=quiet`, `1=normal`, `2=current`)
 
 Legacy runtime PID knobs are removed. Anchor thrust uses bounded deadband, max-thrust, approach damping, anti-hunt timing, and slew/ramp limiting instead of hidden self-adaptive PID persistence.
 

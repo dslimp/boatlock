@@ -180,7 +180,7 @@ inline void handleBleCommand(const std::string& cmd) {
             return;
         }
         if (!applyAnchorProfile(settings, profile)) {
-            logMessage("[EVENT] CONFIG_REJECTED key=AnchorProf raw=%s\n", payload);
+            logMessage("[EVENT] PROFILE_REJECTED profile=%s reason=apply_failed\n", payload);
             logMessage("[BLE] SET_ANCHOR_PROFILE rejected: apply failed\n");
             return;
         }

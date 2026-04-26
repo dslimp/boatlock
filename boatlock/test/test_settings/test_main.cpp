@@ -176,16 +176,6 @@ void test_set_strict_rejects_out_of_range() {
   TEST_ASSERT_EQUAL_FLOAT(4.0f, s.get("HoldRadius"));
 }
 
-void test_anchor_profile_setting_bounds() {
-  Settings s;
-  s.reset();
-  TEST_ASSERT_EQUAL_FLOAT(1.0f, s.get("AnchorProf"));
-  TEST_ASSERT_TRUE(s.setStrict("AnchorProf", 0.0f));
-  TEST_ASSERT_EQUAL_FLOAT(0.0f, s.get("AnchorProf"));
-  TEST_ASSERT_FALSE(s.setStrict("AnchorProf", 3.0f));
-  TEST_ASSERT_EQUAL_FLOAT(0.0f, s.get("AnchorProf"));
-}
-
 void test_set_strict_rounds_integer_values() {
   Settings s;
   s.reset();
@@ -307,7 +297,6 @@ void test_load_sanitizes_nan_and_out_of_range_values() {
   fillDefaultValues(values);
 
   values[defaultIdxByKey("MaxHdop")] = NAN;
-  values[defaultIdxByKey("AnchorProf")] = 9.0f;
   values[defaultIdxByKey("MinSats")] = 7.6f;
   storeNvsValues(values);
 
@@ -315,7 +304,6 @@ void test_load_sanitizes_nan_and_out_of_range_values() {
   s.load();
   TEST_ASSERT_EQUAL_INT(1, nvs_mock_commit_count());
   TEST_ASSERT_EQUAL_FLOAT(1.8f, s.get("MaxHdop"));
-  TEST_ASSERT_EQUAL_FLOAT(1.0f, s.get("AnchorProf"));
   TEST_ASSERT_EQUAL_FLOAT(8.0f, s.get("MinSats"));
 }
 
@@ -382,7 +370,6 @@ int main(int argc, char **argv) {
   RUN_TEST(test_load_bad_nvs_value_restores_default);
   RUN_TEST(test_set_rejects_nonfinite_without_dirtying);
   RUN_TEST(test_set_strict_rejects_out_of_range);
-  RUN_TEST(test_anchor_profile_setting_bounds);
   RUN_TEST(test_set_strict_rounds_integer_values);
   RUN_TEST(test_set_normalizes_integer_values);
   RUN_TEST(test_load_schema_mismatch_preserves_keyed_values);

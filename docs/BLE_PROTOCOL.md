@@ -28,7 +28,7 @@ Control point payloads are application-level command byte strings, not a text st
 | `MANUAL_OFF` | none | Stop Manual mode and zero manual stepper/thruster output |
 | `NUDGE_DIR:<FWD\|BACK\|LEFT\|RIGHT>` | direction | Shift anchor point by the fixed 1.5 m jog step in boat frame (allowed only while Anchor is active and safety checks pass) |
 | `NUDGE_BRG:<bearingDeg>` | absolute bearing | Shift anchor point by the fixed 1.5 m jog step on the given bearing (allowed only while Anchor is active and safety checks pass) |
-| `SET_ANCHOR_PROFILE:<quiet\|normal\|current>` | profile id | Atomically apply preset Anchor control params and persist them |
+| `SET_ANCHOR_PROFILE:<quiet\|normal\|current>` | profile id | Apply and persist preset `HoldRadius`, `DeadbandM`, `MaxThrustA`, and `ThrRampA` values |
 | `PAIR_SET:<ownerSecretHex>` | 32-hex owner secret | Set/replace owner secret while pairing window is open from hardware STOP long-press |
 | `PAIR_CLEAR` | none | Clear pairing; accepted only from owner session or while pairing window is physically open |
 | `AUTH_HELLO` | none | Start owner auth challenge; firmware generates `secNonce` |

@@ -19,7 +19,6 @@
 #include "AnchorSupervisor.h"
 #include "AnchorDiagnostics.h"
 #include "GnssQualityGate.h"
-#include "AnchorProfiles.h"
 #include "AnchorReasons.h"
 #include "RuntimeButtons.h"
 #include "RuntimeBleParams.h"
@@ -63,17 +62,10 @@ bool bleStarted = false;
 namespace cfg {
 constexpr char kFirmwareVersion[] = "0.2.0";
 
-#if defined(BOATLOCK_BOARD_JC4832W535)
-constexpr int kStepIn1Pin = 11;
-constexpr int kStepIn2Pin = 12;
-constexpr int kStepIn3Pin = 13;
-constexpr int kStepIn4Pin = 14;
-#else
 constexpr int kStepIn1Pin = 2;
 constexpr int kStepIn2Pin = 4;
 constexpr int kStepIn3Pin = 6;
 constexpr int kStepIn4Pin = 16;
-#endif
 constexpr int kGpsRxPin = 17;
 constexpr int kGpsTxPin = 18;
 constexpr int kCompassRxPin = 12;

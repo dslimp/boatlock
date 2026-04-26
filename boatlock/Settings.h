@@ -38,8 +38,6 @@ const SettingEntry defaultEntries[] = {
     {"MaxThrustA", "Max thrust anchor", TYPE_INT,   60.0, 60.0,  10.0, 100.0,   1.0, "%", true},
     {"ThrRampA",   "Thrust ramp anchor",TYPE_FLOAT, 35.0, 35.0,  1.0, 100.0,    1.0, "%/s", true},
     {"MaxTurnRt",  "Max turn rate",     TYPE_FLOAT, 120.0,120.0, 30.0, 720.0,   1.0, "deg/s", false},
-    {"ReacqStrat", "Reacquire strategy",TYPE_INT,   0.0,  0.0,   0.0,   1.0,    1.0, "", false},
-    {"AnchorProf", "Anchor profile",    TYPE_INT,   1.0,  1.0,   0.0,   2.0,    1.0, "", true},
 
     // Safety supervisor
     {"CommToutMs", "Comm timeout",      TYPE_INT,   4000, 4000,  3000, 60000,  100.0, "ms", false},
@@ -83,7 +81,7 @@ const char* imuTypeNames[] = { "BNO055", "MPU9250", "BNO085", "LSM9DS1", "None" 
 
 class Settings {
 public:
-    static constexpr uint8_t VERSION = 0x18;
+    static constexpr uint8_t VERSION = 0x19;
     static constexpr const char* NVS_NAMESPACE = "boatlock_cfg";
     static constexpr const char* NVS_SCHEMA_KEY = "schema";
     // Keeps the existing BleSecurity EEPROM offset stable while settings live in NVS.
