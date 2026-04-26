@@ -21,8 +21,13 @@ from anchor_sim import (
     simulate_scenario,
     wave_rocking_roll_deg,
 )
-from run_sim import check_thresholds, thresholds_for_scenario_set
-from scenario_data import environment_scenarios_for_set, scenario_set_names, thresholds_for_set
+from run_sim import check_thresholds, provenance_for_scenario_set, thresholds_for_scenario_set
+from scenario_data import (
+    environment_scenarios_for_set,
+    provenance_for_set,
+    scenario_set_names,
+    thresholds_for_set,
+)
 
 
 class SimCoreTests(unittest.TestCase):
@@ -39,13 +44,18 @@ class SimCoreTests(unittest.TestCase):
 
     def _minimal_catalog(self, scenario: dict | None = None) -> dict:
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "scenario_sets": {
                 "test": [
                     scenario
                     or {
                         "id": "test_profile",
                         "water_body": "Test water",
+                        "provenance": {
+                            "source": "test_fixture",
+                            "source_candidate_id": "test_profile_source",
+                            "confidence": "test_confidence",
+                        },
                         "duration_s": 60,
                         "initial_pos_m": [1.0, 2.0],
                         "environment": {
@@ -135,9 +145,24 @@ class SimCoreTests(unittest.TestCase):
         )
         self.assertEqual(thresholds["river_oka_normal_55lb"]["p95_error_m_max"], 34.0)
 
+    def test_scenario_data_exports_provenance(self) -> None:
+        provenance = provenance_for_set("russian")
+        self.assertEqual(
+            provenance["river_oka_normal_55lb"]["source"],
+            "tools/sim/research/environment_inputs.raw.json",
+        )
+        self.assertEqual(
+            provenance["river_oka_normal_55lb"]["source_candidate_id"],
+            "river_oka_normal_55lb",
+        )
+        self.assertEqual(
+            provenance["river_oka_normal_55lb"]["confidence"],
+            "low_for_current_high_for_size",
+        )
+
     def test_scenario_data_rejects_bad_schema_version(self) -> None:
         catalog = self._minimal_catalog()
-        catalog["schema_version"] = 2
+        catalog["schema_version"] = 1
         path = self._write_scenario_catalog(catalog)
 
         with self.assertRaisesRegex(ValueError, "schema_version"):
@@ -160,7 +185,8 @@ class SimCoreTests(unittest.TestCase):
     def test_scenario_data_rejects_nonfinite_and_nonintegral_values(self) -> None:
         path = Path(self._tmpdir.name) / "bad.json"
         path.write_text(
-            '{"schema_version":1,"scenario_sets":{"test":[{"id":"bad","water_body":"x",'
+            '{"schema_version":2,"scenario_sets":{"test":[{"id":"bad","water_body":"x",'
+            '"provenance":{"source":"x","source_candidate_id":"bad","confidence":"x"},'
             '"duration_s":NaN,"initial_pos_m":[1,2],"environment":{}}]}}',
             encoding="utf-8",
         )
@@ -190,9 +216,29 @@ class SimCoreTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "not a known threshold key"):
             thresholds_for_set("test", path)
 
+    def test_scenario_data_rejects_bad_provenance(self) -> None:
+        catalog = self._minimal_catalog()
+        catalog["scenario_sets"]["test"][0]["provenance"]["extra"] = "stale"
+        path = self._write_scenario_catalog(catalog)
+
+        with self.assertRaisesRegex(ValueError, "unknown keys"):
+            environment_scenarios_for_set("test", path)
+
+        catalog = self._minimal_catalog()
+        catalog["scenario_sets"]["test"][0]["provenance"]["confidence"] = ""
+        path = self._write_scenario_catalog(catalog)
+
+        with self.assertRaisesRegex(ValueError, "confidence"):
+            provenance_for_set("test", path)
+
     def test_all_scenario_set_names_are_unique(self) -> None:
         names = [scenario.name for scenario in scenarios_for_set("all")]
         self.assertEqual(len(names), len(set(names)))
+
+    def test_run_sim_provenance_for_all_is_catalog_backed(self) -> None:
+        provenance = provenance_for_scenario_set("all")
+        self.assertIn("river_oka_normal_55lb", provenance)
+        self.assertNotIn("calm_good_gps", provenance)
 
     def test_ladoga_required_failsafe_threshold_is_enforced(self) -> None:
         thresholds = thresholds_for_scenario_set("russian")

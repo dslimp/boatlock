@@ -15,12 +15,13 @@ from anchor_sim import (
 
 
 DEFAULT_SCENARIO_DATA = Path(__file__).with_name("scenarios") / "environment_profiles.json"
+SCENARIO_SCHEMA_VERSION = 2
 
 ALLOWED_ROOT_KEYS = {"schema_version", "scenario_sets"}
 ALLOWED_SCENARIO_KEYS = {
     "id",
     "water_body",
-    "source_candidate_id",
+    "provenance",
     "motor_class",
     "expected",
     "duration_s",
@@ -29,6 +30,7 @@ ALLOWED_SCENARIO_KEYS = {
     "gnss",
     "thresholds",
 }
+ALLOWED_PROVENANCE_KEYS = {"source", "source_candidate_id", "confidence"}
 ALLOWED_ENVIRONMENT_KEYS = {
     "current_mps",
     "current_direction_deg",
@@ -88,7 +90,7 @@ def _finite_number_value(value: object, path: str) -> float:
 
 def _required_str(data: Mapping[str, object], key: str, path: str) -> str:
     value = data.get(key)
-    if not isinstance(value, str) or not value:
+    if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{path}.{key} must be a non-empty string")
     return value
 
@@ -184,6 +186,16 @@ def _environment_profile(data: Mapping[str, object], scenario_id: str, water_bod
     return profile
 
 
+def _provenance(data: Mapping[str, object], path: str) -> Dict[str, str]:
+    raw = _as_mapping(data.get("provenance"), f"{path}.provenance")
+    _reject_unknown_keys(raw, ALLOWED_PROVENANCE_KEYS, f"{path}.provenance")
+    return {
+        "source": _required_str(raw, "source", f"{path}.provenance"),
+        "source_candidate_id": _required_str(raw, "source_candidate_id", f"{path}.provenance"),
+        "confidence": _required_str(raw, "confidence", f"{path}.provenance"),
+    }
+
+
 def _thresholds(data: Mapping[str, object], path: str) -> Dict[str, object]:
     raw = _as_mapping(data.get("thresholds", {}), f"{path}.thresholds")
     thresholds: Dict[str, object] = {}
@@ -210,9 +222,31 @@ def _catalog(path: Path = DEFAULT_SCENARIO_DATA) -> Mapping[str, object]:
     )
     root = _as_mapping(data, str(path))
     _reject_unknown_keys(root, ALLOWED_ROOT_KEYS, str(path))
-    if root.get("schema_version") != 1:
-        raise ValueError(f"{path}.schema_version must be 1")
+    if root.get("schema_version") != SCENARIO_SCHEMA_VERSION:
+        raise ValueError(f"{path}.schema_version must be {SCENARIO_SCHEMA_VERSION}")
     return _as_mapping(root.get("scenario_sets"), f"{path}.scenario_sets")
+
+
+def _scenario_items(name: str, path: Path) -> List[Tuple[str, Mapping[str, object], str]]:
+    sets = _catalog(path)
+    if name not in sets:
+        valid = ", ".join(sorted(sets))
+        raise ValueError(f"unknown scenario set {name}; valid sets: {valid}")
+    rows = _as_list(sets.get(name), f"{path}.scenario_sets.{name}")
+    if not rows:
+        raise ValueError(f"{path}.scenario_sets.{name} must not be empty")
+    items: List[Tuple[str, Mapping[str, object], str]] = []
+    seen: set[str] = set()
+    for index, row in enumerate(rows):
+        item_path = f"{path}.scenario_sets.{name}[{index}]"
+        item = _as_mapping(row, item_path)
+        _reject_unknown_keys(item, ALLOWED_SCENARIO_KEYS, item_path)
+        scenario_id = _required_str(item, "id", item_path)
+        if scenario_id in seen:
+            raise ValueError(f"{item_path}.id duplicates {scenario_id}")
+        seen.add(scenario_id)
+        items.append((scenario_id, item, item_path))
+    return items
 
 
 def scenario_set_names(path: Path = DEFAULT_SCENARIO_DATA) -> List[str]:
@@ -226,25 +260,10 @@ def scenario_set_names(path: Path = DEFAULT_SCENARIO_DATA) -> List[str]:
 
 
 def environment_scenarios_for_set(name: str, path: Path = DEFAULT_SCENARIO_DATA) -> List[Scenario]:
-    sets = _catalog(path)
-    if name not in sets:
-        valid = ", ".join(sorted(sets))
-        raise ValueError(f"unknown scenario set {name}; valid sets: {valid}")
-    rows = _as_list(sets.get(name), f"{path}.scenario_sets.{name}")
-    if not rows:
-        raise ValueError(f"{path}.scenario_sets.{name} must not be empty")
     scenarios: List[Scenario] = []
-    seen: set[str] = set()
-    for index, row in enumerate(rows):
-        item_path = f"{path}.scenario_sets.{name}[{index}]"
-        item = _as_mapping(row, item_path)
-        _reject_unknown_keys(item, ALLOWED_SCENARIO_KEYS, item_path)
-        scenario_id = _required_str(item, "id", item_path)
-        if scenario_id in seen:
-            raise ValueError(f"{item_path}.id duplicates {scenario_id}")
-        seen.add(scenario_id)
+    for scenario_id, item, item_path in _scenario_items(name, path):
         water_body = _required_str(item, "water_body", item_path)
-        _optional_str(item, "source_candidate_id", item_path)
+        _provenance(item, item_path)
         _optional_str(item, "motor_class", item_path)
         _optional_str(item, "expected", item_path)
         duration_s = _positive_integer(item, "duration_s", item_path)
@@ -275,19 +294,16 @@ def environment_scenarios_for_set(name: str, path: Path = DEFAULT_SCENARIO_DATA)
     return scenarios
 
 
+def provenance_for_set(name: str, path: Path = DEFAULT_SCENARIO_DATA) -> Dict[str, Dict[str, str]]:
+    provenance: Dict[str, Dict[str, str]] = {}
+    for scenario_id, item, item_path in _scenario_items(name, path):
+        provenance[scenario_id] = _provenance(item, item_path)
+    return provenance
+
+
 def thresholds_for_set(name: str, path: Path = DEFAULT_SCENARIO_DATA) -> Dict[str, Dict[str, object]]:
-    sets = _catalog(path)
-    if name not in sets:
-        valid = ", ".join(sorted(sets))
-        raise ValueError(f"unknown scenario set {name}; valid sets: {valid}")
-    rows = _as_list(sets.get(name), f"{path}.scenario_sets.{name}")
-    if not rows:
-        raise ValueError(f"{path}.scenario_sets.{name} must not be empty")
     thresholds: Dict[str, Dict[str, object]] = {}
-    for index, row in enumerate(rows):
-        item_path = f"{path}.scenario_sets.{name}[{index}]"
-        item = _as_mapping(row, item_path)
-        _reject_unknown_keys(item, ALLOWED_SCENARIO_KEYS, item_path)
-        scenario_id = _required_str(item, "id", item_path)
+    for scenario_id, item, item_path in _scenario_items(name, path):
+        _provenance(item, item_path)
         thresholds[scenario_id] = _thresholds(item, item_path)
     return thresholds

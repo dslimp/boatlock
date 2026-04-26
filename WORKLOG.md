@@ -6017,3 +6017,137 @@ Validation:
 
 Self-review:
 - This reduces planning ambiguity only. Actual provenance/schema and physics-model changes remain future implementation work.
+
+### 2026-04-26 Stage 200: Multi-client control ownership design
+
+Scope:
+- Document the safe phone-plus-remote ownership model before accepting a future BLE remote as a second controller.
+- Keep this docs-only and limited to manual-control/protocol/readiness backlog files.
+
+External baseline:
+- Reused `skills/boatlock/references/ble-ui.md` multi-client and manual-control rules.
+- Reused `skills/boatlock/references/external-patterns.md` guidance that BLE transport support is not control arbitration, manual input needs a source-owned deadman lease, and future HID/HOGP remotes must feed the same manual-control path.
+
+Key outcomes:
+- Defined firmware-owned per-central controller identity.
+- Kept read-only telemetry clients separate from control owners.
+- Specified a single authenticated control-owner lease, conservative takeover, per-client auth/session state, app-vs-remote constraints, manual sublease behavior, and STOP priority.
+- Marked the design TODO complete while leaving implementation and two-central validation as a new open item.
+
+Validation:
+- `git diff --check -- docs/MANUAL_CONTROL.md docs/BLE_PROTOCOL.md docs/PRODUCT_READINESS_PLAN.md boatlock/TODO.md` -> PASS.
+- `rg -n "Multi-Client|controller identity|read-only telemetry|control-owner|Takeover|secPaired|SEC_CMD|remote role|Manual control is a sublease|STOP priority|Required validation|two-central|per-client|control ownership" docs/MANUAL_CONTROL.md docs/BLE_PROTOCOL.md docs/PRODUCT_READINESS_PLAN.md boatlock/TODO.md` -> PASS.
+
+Self-review:
+- This is a design contract, not implementation. The remaining risk is proving the BLE stack exposes enough per-connection metadata and adding two-central bench/Android coverage before enabling a real remote.
+
+### 2026-04-26 Stage 201: Ground simulator scale correction
+
+Scope:
+- Capture the corrected mechanical scope for a future BoatLock ground simulator.
+- Keep this design-note only; no firmware, UI, or CAD files changed.
+
+External baseline:
+- Reused the repo-local BoatLock hardware/manual-control source of truth.
+- No external source was needed for this scale correction.
+
+Key outcomes:
+- User clarified that the BoatLock ground simulator should be a small platform around child-car scale, not a full-size cart.
+- Simulator mechanics should represent the current firmware control split: discrete steering commands through the 28BYJ-48/ULN2003 stepper path and PWM/direction thrust through the brushed motor path.
+
+Validation:
+- Read `AGENTS.md`, `docs/MANUAL_CONTROL.md`, `docs/POWERED_BENCH_CHECKLIST.md`, `boatlock/main.cpp`, `boatlock/ManualControl.h`, `boatlock/StepperControl.h`, and `boatlock/MotorControl.h`.
+
+Self-review:
+- This correction is durable project context. The actual mechanical design still needs chosen wheel size, desired speed, payload mass, and whether the forward wheel carries traction.
+
+### 2026-04-26 Stage 202: Local pre-powered gate runner
+
+Scope:
+- Add one canonical local command for the software-only checks before any powered bench work.
+- Keep the runner local-only: no `nh02`, Android device, or server-facing mutation.
+
+External baseline:
+- Reused the existing BoatLock validation reference and powered-bench checklist.
+- No new external source was needed; this is workflow consolidation.
+
+Key outcomes:
+- Added `tools/ci/run_local_prepowered_gate.sh`.
+- The runner covers native firmware tests, production firmware build, core/all/soak simulator checks, Flutter analyze/tests, firmware/config version checks, CI helper tests, Werror, and cppcheck in a sequential order.
+- Updated the powered-bench checklist, product plan, validation reference, and TODO so local pre-powered validation is distinct from later `nh02`, Android, and no-load output checks.
+
+Validation:
+- `bash -n tools/ci/run_local_prepowered_gate.sh` -> PASS.
+- `tools/ci/run_local_prepowered_gate.sh` -> PASS.
+
+Self-review:
+- This removes ambiguity around the local gate but does not replace hardware proof. The next powered-readiness blocker is still `nh02` flash/acceptance, Android smokes, and output-instrumented no-load checks.
+
+### 2026-04-26 Stage 203: Simulator provenance schema and reports
+
+Scope:
+- Make normalized simulator scenario provenance executable metadata instead of prose-only context.
+
+External baseline:
+- Reused the simulator backlog and the existing normalized Russian water-body research files.
+- No new external source was needed for this schema/report pass.
+
+Key outcomes:
+- Bumped `tools/sim/scenarios/environment_profiles.json` schema to version 2.
+- Replaced per-scenario `source_candidate_id` with a required `provenance` object containing source file, source candidate id, and confidence label.
+- Added schema validation and `run_sim.py` JSON report propagation for data-backed scenarios while keeping built-in core scenarios provenance-free.
+- Marked the provenance/confidence TODO complete and narrowed future sim work to calibration and richer physics.
+
+Validation:
+- `python3 tools/sim/test_sim_core.py` -> PASS (`30/30`).
+- `python3 tools/sim/run_sim.py --scenario-set all --check --json-out /tmp/boatlock-all-sim-provenance-report.json` -> PASS.
+- `python3 -m py_compile tools/sim/anchor_sim.py tools/sim/run_sim.py tools/sim/run_soak.py tools/sim/scenario_data.py tools/sim/test_sim_core.py tools/sim/test_soak.py` -> PASS.
+
+Self-review:
+- Provenance is now present in machine-readable outputs, but confidence labels are still manually assigned. Real calibration still depends on powered bench and protected-water logs.
+
+### 2026-04-26 Stage 204: Profile-aware build and flash scaffolding
+
+Scope:
+- Add explicit release/service/acceptance PlatformIO profile aliases and make the `nh02` flash wrapper report the selected command-surface profile.
+- Keep runtime command enforcement open; this stage is scaffolding only.
+
+External baseline:
+- Reused the service/dev/HIL rollout plan from the validation reference and BLE protocol docs.
+- No new external source was needed for profile naming or wrapper validation.
+
+Key outcomes:
+- Added `esp32s3_release`, `esp32s3_service`, and `esp32s3_acceptance` PlatformIO environments.
+- Made `tools/hw/nh02/flash.sh` accept `--profile release|service|acceptance`, map profile aliases, reject empty/unknown envs and `native`, and print the selected profile/env before build or flash.
+- Updated validation docs to use `esp32s3_service` for BLE OTA firmware artifacts.
+
+Validation:
+- `bash -n tools/hw/nh02/flash.sh` -> PASS.
+- `pio project config` -> PASS.
+- `for env in esp32s3_release esp32s3_service esp32s3_acceptance; do pio run -e "$env"; done` -> PASS.
+- Wrapper negative probes rejected empty `BOATLOCK_PIO_ENV`, unknown env, unknown profile, and `native` before build/flash -> PASS.
+- `tools/ci/run_local_prepowered_gate.sh` -> PASS after the final patch set.
+- `git diff --check` -> PASS.
+
+Self-review:
+- This prevents ambiguous artifact selection, but release/service/acceptance command allow/deny enforcement still has to be implemented and tested before treating profiles as a security boundary.
+
+### 2026-04-26 Stage 205: Steering driver intake checklist
+
+Scope:
+- Add a hardware-independent intake for the reported non-A4988 steering driver before any powered steering connection.
+
+External baseline:
+- Reused the repo's powered-bench safety rules and current firmware source of truth for the 28BYJ-48 + ULN2003 path.
+- No new external source was used because the installed driver identity is still unknown.
+
+Key outcomes:
+- Added `docs/STEERING_DRIVER_INTAKE.md` with identity, pinout, voltage/current, mechanics, end-stop, direction, idle/hold, jam/limit, bow-zero, firmware/docs follow-up, and completion criteria.
+- Linked the intake from the powered-bench checklist, product plan, and TODO without marking the real hardware identification task complete.
+
+Validation:
+- `git diff --check -- docs/STEERING_DRIVER_INTAKE.md docs/POWERED_BENCH_CHECKLIST.md docs/PRODUCT_READINESS_PLAN.md boatlock/TODO.md` -> PASS.
+- `rg -n "STEERING_DRIVER_INTAKE|steering driver|not A4988|28BYJ-48|ULN2003" docs/STEERING_DRIVER_INTAKE.md docs/POWERED_BENCH_CHECKLIST.md docs/PRODUCT_READINESS_PLAN.md boatlock/TODO.md` -> PASS.
+
+Self-review:
+- The checklist reduces powered-test risk only if it is filled from real hardware evidence. It deliberately does not approve the current firmware to drive an unknown steering driver.

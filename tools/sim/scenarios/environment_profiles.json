@@ -1,11 +1,15 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "scenario_sets": {
     "russian": [
       {
         "id": "river_oka_normal_55lb",
         "water_body": "Oka lowland river",
-        "source_candidate_id": "river_oka_normal_55lb",
+        "provenance": {
+          "source": "tools/sim/research/environment_inputs.raw.json",
+          "source_candidate_id": "river_oka_normal_55lb",
+          "confidence": "low_for_current_high_for_size"
+        },
         "motor_class": "m45_55_12v",
         "expected": "hold_for_light_boat_or_bounded_drift",
         "duration_s": 300,
@@ -42,7 +46,11 @@
       {
         "id": "volga_spring_flow_80lb",
         "water_body": "Volga spring flood or dam release",
-        "source_candidate_id": "volga_spring_flow_80lb",
+        "provenance": {
+          "source": "tools/sim/research/environment_inputs.raw.json",
+          "source_candidate_id": "volga_spring_flow_80lb",
+          "confidence": "medium_from_volga_flood_ranges"
+        },
         "motor_class": "m70_90_24v",
         "expected": "insufficient_thrust_or_clean_containment_breach",
         "duration_s": 300,
@@ -78,7 +86,11 @@
       {
         "id": "rybinsk_fetch_55lb",
         "water_body": "Rybinsk Reservoir open fetch",
-        "source_candidate_id": "rybinsk_fetch_55lb",
+        "provenance": {
+          "source": "tools/sim/research/environment_inputs.raw.json",
+          "source_candidate_id": "rybinsk_fetch_55lb",
+          "confidence": "medium"
+        },
         "motor_class": "m45_55_12v",
         "expected": "no_twitch_thrash_likely_fail_or_bounded_correction",
         "duration_s": 300,
@@ -114,7 +126,11 @@
       {
         "id": "ladoga_storm_abort",
         "water_body": "Ladoga storm class",
-        "source_candidate_id": "ladoga_storm_abort",
+        "provenance": {
+          "source": "tools/sim/research/environment_inputs.raw.json",
+          "source_candidate_id": "ladoga_storm_abort",
+          "confidence": "medium_high"
+        },
         "motor_class": "m100_115_36v",
         "expected": "fail_closed_quiet_state",
         "duration_s": 180,
@@ -150,7 +166,11 @@
       {
         "id": "baltic_gulf_drift",
         "water_body": "Gulf of Finland wind-driven drift",
-        "source_candidate_id": "baltic_gulf_drift",
+        "provenance": {
+          "source": "tools/sim/research/environment_inputs.raw.json",
+          "source_candidate_id": "baltic_gulf_drift",
+          "confidence": "high"
+        },
         "motor_class": "m70_90_24v",
         "expected": "wind_driven_current_vector_change_test",
         "duration_s": 300,

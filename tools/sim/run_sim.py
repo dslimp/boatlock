@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict, List
 
 from anchor_sim import SimConfig, scenarios_for_set, simulate_scenario
-from scenario_data import scenario_set_names, thresholds_for_set
+from scenario_data import provenance_for_set, scenario_set_names, thresholds_for_set
 
 
 DEFAULT_THRESHOLDS: Dict[str, Dict[str, object]] = {
@@ -65,6 +65,17 @@ def thresholds_for_scenario_set(name: str) -> Dict[str, Dict[str, object]]:
     elif name in data_sets:
         thresholds.update(thresholds_for_set(name))
     return thresholds
+
+
+def provenance_for_scenario_set(name: str) -> Dict[str, Dict[str, str]]:
+    provenance: Dict[str, Dict[str, str]] = {}
+    data_sets = scenario_set_names()
+    if name == "all":
+        for data_set in data_sets:
+            provenance.update(provenance_for_set(data_set))
+    elif name in data_sets:
+        provenance.update(provenance_for_set(name))
+    return provenance
 
 
 def check_thresholds(
@@ -140,6 +151,7 @@ def main() -> int:
 
     cfg = SimConfig()
     thresholds = thresholds_for_scenario_set(args.scenario_set)
+    provenance = provenance_for_scenario_set(args.scenario_set)
     results = []
     failed = False
 
@@ -156,15 +168,16 @@ def main() -> int:
         status = "PASS" if not errs else "FAIL"
         if errs:
             failed = True
-        results.append(
-            {
-                "scenario": sc.name,
-                "duration_s": r["duration_s"],
-                "metrics": m,
-                "status": status,
-                "violations": errs,
-            }
-        )
+        result = {
+            "scenario": sc.name,
+            "duration_s": r["duration_s"],
+            "metrics": m,
+            "status": status,
+            "violations": errs,
+        }
+        if sc.name in provenance:
+            result["provenance"] = provenance[sc.name]
+        results.append(result)
         print(
             f"{sc.name} | "
             f"{m['time_in_deadband_pct']:.2f} | "

@@ -13,8 +13,9 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 - [x] Fix manual sheet wording: red `STOP` must either send real emergency `STOP` or be renamed to manual off.
 - [x] Verify/fix that phone GPS fallback cannot update GPS-to-compass correction used by control heading.
 - [x] Classify BLE commands into release/service/dev surfaces and gate service/dev paths from normal water UI.
-- [ ] Add a firmware-side service/dev/HIL gate only together with explicit release/service/acceptance PlatformIO profiles and nh02 wrapper docs so BLE OTA and `SIM_*` acceptance are not silently broken.
-- [ ] Identify the exact steering stepper driver/mechanics and update firmware/docs if it is not the current 28BYJ-48 + ULN2003 path.
+- [x] Add explicit release/service/acceptance PlatformIO profiles and `nh02` flash-wrapper profile selection.
+- [ ] Implement firmware-side service/dev/HIL command enforcement through those profiles so BLE OTA and `SIM_*` acceptance are not silently broken.
+- [ ] Identify the exact steering stepper driver/mechanics with `docs/STEERING_DRIVER_INTAKE.md` and update firmware/docs if it is not the current 28BYJ-48 + ULN2003 path.
 - [x] Build a no-load motor output acceptance checklist for `PWM=7`, `DIR=5/10`, boot, STOP, HOLD, reconnect, anchor denial, SIM, and OTA begin.
 - [x] Add powered-bench wiring requirements: current-limited supply, fuse/breaker, physical kill path, polarity proof, strain relief, and thermal check.
 - [ ] Update README wiring diagrams/photos from real hardware.
@@ -28,13 +29,14 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 - [x] Add track/history around anchor events for post-run review.
 - [x] Add `MapPage` tests for disconnect, preflight, auth reject, STOP, and manual-off behavior.
 - [x] Remove or branch off leftover non-target surfaces: `BOATLOCK_BOARD_JC4832W535`, route UI labels, and unused `ReacqStrat`.
-- [ ] Run full local, `nh02`, Android, and no-load output validation before mounting powered hardware.
+- [x] Add and pass the local pre-powered validation runner.
+- [ ] Run `nh02`, Android, and no-load output validation before mounting powered hardware.
 
 ## P2 — Simulation And Product Polish
 
 - [x] Normalize `tools/sim/research/environment_inputs.*` into simulator scenario data.
 - [x] Add current, wind/gust, wave-induced forcing, current direction swing, and rocking metrics to simulator scenarios.
-- [ ] Add scenario provenance/confidence fields to normalized sim schema and reports.
+- [x] Add scenario provenance/confidence fields to normalized sim schema and reports.
 - [ ] Add loaded boat mass plus drag/windage parameters to scenario data and the world model.
 - [ ] Add yaw moment/heading inertia so environmental forcing can rotate the hull, not only translate it.
 - [ ] Add river/reservoir wake and short steep chop events.
@@ -45,4 +47,5 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 - [x] Add RF/Russian water-body scenarios: Oka normal, Volga spring flow, Rybinsk fetch, Ladoga storm abort, Baltic/Gulf drift.
 - [x] Add production-path tests or simulation around `RuntimeMotion/MotorControl/StepperControl`.
 - [ ] Add heading-hold as a separate operator flow after safe anchor hold is proven.
-- [ ] Design explicit multi-client control ownership before accepting a future BLE remote as a second controller.
+- [x] Design explicit multi-client control ownership before accepting a future BLE remote as a second controller.
+- [ ] Implement and validate per-client auth/control ownership before enabling a future BLE remote as a second controller.

@@ -17,7 +17,9 @@ Firmware source of truth is `boatlock/main.cpp`.
 
 Do not connect a powered steering driver that is not this ULN2003-style path
 until its driver type, pinout, steps/rev, gear ratio, current limit, torque
-limit, idle behavior, and stop behavior are documented and tested.
+limit, idle behavior, and stop behavior are documented and tested. Use
+`docs/STEERING_DRIVER_INTAKE.md` to capture those facts before any powered
+steering connection.
 
 ## Required Bench Hardware
 
@@ -37,6 +39,12 @@ limit, idle behavior, and stop behavior are documented and tested.
 ## Gate 0: Local And Bench Software
 
 Run these before touching powered outputs:
+
+```bash
+tools/ci/run_local_prepowered_gate.sh
+```
+
+Equivalent manual sequence:
 
 ```bash
 cd boatlock && platformio test -e native
@@ -100,17 +108,19 @@ survives STOP is a blocker. Fix firmware/wiring before applying motor power.
 
 Only after Gate 1 passes:
 
-1. Connect the driver with current-limited supply and no prop/load.
-2. Verify polarity before energizing.
-3. Set the supply current limit low enough that a wiring mistake cannot damage
+1. Complete `docs/STEERING_DRIVER_INTAKE.md` for any steering driver that is not
+   already proven to match the current 28BYJ-48 + ULN2003 firmware path.
+2. Connect the driver with current-limited supply and no prop/load.
+3. Verify polarity before energizing.
+4. Set the supply current limit low enough that a wiring mistake cannot damage
    the driver or wiring.
-4. Boot into `IDLE` and confirm no motion.
-5. Send short press-and-hold manual pulses only.
-6. Verify direction labels: forward/reverse and steering left/right.
-7. Release controls and verify motion stops within the manual TTL.
-8. Send BLE `STOP` and press hardware STOP; both must stop immediately.
-9. Power-cycle and verify there is no auto-anchor or stored actuation.
-10. Touch/measure driver, motor, wiring, and connectors after each short run.
+5. Boot into `IDLE` and confirm no motion.
+6. Send short press-and-hold manual pulses only.
+7. Verify direction labels: forward/reverse and steering left/right.
+8. Release controls and verify motion stops within the manual TTL.
+9. Send BLE `STOP` and press hardware STOP; both must stop immediately.
+10. Power-cycle and verify there is no auto-anchor or stored actuation.
+11. Touch/measure driver, motor, wiring, and connectors after each short run.
 
 Abort on heat, smell, voltage sag, unstable reset, reverse direction ambiguity,
 or any output that continues after release/STOP.
@@ -144,7 +154,7 @@ Every powered-bench run should record:
 
 - Date, firmware commit, app commit, and operator.
 - Supply voltage/current limit and fuse/breaker rating.
-- Driver model and wiring photo reference.
+- Driver model, steering intake reference, and wiring photo reference.
 - Motor and steering driver temperatures before/after each phase.
 - Exact BLE/e2e command or wrapper used.
 - Measured `PWM=7`, `DIR=5`, `DIR=10`, and steering output behavior.

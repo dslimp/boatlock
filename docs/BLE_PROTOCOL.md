@@ -80,6 +80,101 @@ These commands correspond to the implementation in [`boatlock/BleCommandHandler.
 
 Manual control is intentionally a single atomic command instead of separate mode/direction/speed writes. Each accepted `MANUAL_SET` refreshes the deadman TTL for the current controller source; a different source cannot take over until the lease expires or `MANUAL_OFF`/`STOP` clears it. If updates stop, firmware exits Manual mode and the normal quiet-output path stops motion. `MANUAL_SET` is a control command and must be wrapped in `SEC_CMD` when pairing/auth is enabled.
 
+## Multi-Client Control Ownership
+
+This section is a design contract for future phone-plus-remote operation. It is
+not a claim that simultaneous control is implemented today.
+
+BLE may keep advertising while connected and may allow multiple centrals to
+subscribe to telemetry. Multiple clients do not imply multiple controllers.
+Firmware must keep an explicit controller identity per connected central and an
+explicit single control-owner lease before any future BLE remote is accepted as
+a second controller.
+
+Controller identity is server-owned. It must be derived from connection-local
+BLE metadata such as connection handle, sanitized peer address when available,
+and a monotonic connection generation. Command payloads must not let clients
+choose or spoof the controller id. Reconnect creates a new identity; any previous
+auth and lease state is invalid for that connection.
+
+Allowed read-only clients:
+
+- subscribe to `34cd` live telemetry
+- subscribe to `78ab` logs
+- send transport-only `STREAM_START`, `STREAM_STOP`, and `SNAPSHOT`
+- do not hold a control lease
+- cannot refresh control heartbeat or manual TTL for another client
+- cannot send actuation, mode, settings, pairing-clear, OTA, `SIM_*`, or
+  injected-sensor commands
+
+Exactly one control owner is allowed. The lease records controller identity,
+client role (`app` or `remote`), authenticated session identity when paired,
+acquire time, last refresh time, and expiry. The lease is acquired only by an
+eligible control command when no live owner exists. Owner commands and owner
+`HEARTBEAT` refresh it. Commands from any other client while the lease is live
+are rejected before parsing can mutate settings, modes, security state, OTA
+state, simulation state, injected sensor state, or outputs.
+
+Takeover rules:
+
+- same owner may continue sending allowed commands while the lease is live
+- non-owner control commands are rejected while the owner lease is live
+- a new owner may acquire only after owner lease expiry, owner disconnect cleanup,
+  or emergency `STOP`
+- owner disconnect during Manual or Anchor is a control-link loss and must quiet
+  outputs or latch the existing failsafe path before any other connected client
+  can acquire control
+- a telemetry-only client never becomes owner merely because the current owner
+  disconnected
+
+Security is per client. `AUTH_HELLO`, `secNonce`, `AUTH_PROVE`, secure-command
+counter, replay window, and `secAuth` must be scoped to the controller identity.
+When `secPaired=1`, every control/write command from every client must be inside
+that client's valid `SEC_CMD`; one authenticated app session cannot authorize a
+remote session. `PAIR_CLEAR` remains accepted only from an owner session or while
+the hardware STOP pairing window is physically open.
+
+Phone app and remote constraints are intentionally different. The phone app is
+the full product controller for anchor save/enable/disable, jog, hold-heading,
+manual, STOP, and service flows in service builds. A future BLE remote starts
+with a narrower allowlist: `MANUAL_SET`, `MANUAL_OFF`, `ANCHOR_OFF`,
+`HEARTBEAT`, and `STOP`. It must not save or jog anchor points, change security,
+change settings, start OTA, run HIL, inject sensors, or use service/dev commands
+unless those surfaces are explicitly added to the remote role and covered by the
+same ownership and security tests.
+
+Manual control is nested under the control-owner lease. The first accepted
+`MANUAL_SET` may acquire control and enter Manual atomically when no owner
+exists. After that, only the control owner can refresh the manual deadman TTL or
+send `MANUAL_OFF`. Manual TTL expiry stops Manual output but does not grant
+takeover. Control lease expiry, owner disconnect, or `STOP` clears the manual
+lease.
+
+STOP priority:
+
+- physical STOP always wins, opens the pairing long-press path when held, and
+  clears control ownership, Manual, Anchor, and outputs
+- BLE `STOP` is accepted from any authenticated client even if it is not the
+  current control owner
+- when paired, BLE `STOP` still goes through `SEC_CMD`; raw BLE `STOP` is not an
+  auth bypass
+
+Required validation before implementation is accepted:
+
+- unit tests for controller identity creation, reconnect invalidation, lease
+  acquire/refresh/expiry, busy rejection, and disconnect cleanup
+- security tests proving per-client nonce/counter/auth isolation and rejection
+  of secondary-client secure commands
+- command-scope tests proving non-owner commands cannot mutate modes, settings,
+  pairing, OTA, simulation, injected sensors, or outputs
+- manual tests for same-owner refresh, non-owner rejection, TTL quieting,
+  `MANUAL_OFF`, disconnect, and reconnect
+- role tests proving the remote allowlist is narrower than the app allowlist
+- STOP tests proving hardware STOP and authenticated non-owner BLE STOP preempt a
+  live owner
+- two-central bench or Android smoke with simultaneous telemetry subscribers and
+  one owner, including observable busy rejection for the loser
+
 ## Planned Firmware Scope Gate
 
 This section is a rollout contract for the open P0 firmware-side scope gate. It does not describe an implemented firmware gate yet. The gate must not land as a parser-only or UI-only change; it must land with explicit PlatformIO profiles, updated `nh02` wrappers, and acceptance docs so BLE OTA and on-device `SIM_*` validation stay intentional.

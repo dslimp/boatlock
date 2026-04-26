@@ -24,15 +24,21 @@
 
 ## Common Commands
 
+- Local pre-powered validation gate:
+  - `tools/ci/run_local_prepowered_gate.sh`
 - Firmware build:
   - `cd boatlock && pio run -e esp32s3`
+- Explicit firmware profile builds:
+  - `cd boatlock && pio run -e esp32s3_release`
+  - `cd boatlock && pio run -e esp32s3_service`
+  - `cd boatlock && pio run -e esp32s3_acceptance`
 - Debug Wi-Fi/OTA firmware build:
   - `cd boatlock && BOATLOCK_WIFI_SSID=... BOATLOCK_WIFI_PASS=... BOATLOCK_OTA_PASS=... pio run -e esp32s3_debug_wifi_ota`
 - BLE OTA phone bridge after a USB seed flash:
-  - build `boatlock/.pio/build/esp32s3/firmware.bin`
+  - build `boatlock/.pio/build/esp32s3_service/firmware.bin`
   - publish/serve the binary from a trusted URL and copy its SHA-256
   - in the app Settings screen, use Firmware OTA URL + SHA-256 to upload over BLE
-  - bench automation: `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin`
+  - bench automation: `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin`
 - Full native tests:
   - `cd boatlock && platformio test -e native`
 - Do not run multiple `platformio test -e native ...` commands in parallel against the same checkout/build directory. PlatformIO shares `.pio/build/native`, and parallel suites can kill or corrupt each other; run suites sequentially or use isolated worktrees/build dirs.
@@ -52,6 +58,9 @@
 - NH02 hardware bench:
   - `tools/hw/nh02/install.sh`
   - `tools/hw/nh02/flash.sh`
+  - `tools/hw/nh02/flash.sh --profile release`
+  - `tools/hw/nh02/flash.sh --profile service`
+  - `tools/hw/nh02/flash.sh --profile acceptance`
   - `tools/hw/nh02/acceptance.sh`
   - `pytest -q tools/hw/nh02/test_acceptance.py`
   - `tools/hw/nh02/monitor.sh`
@@ -69,7 +78,7 @@
   - `tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130`
   - `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130`
   - `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180`
-  - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin`
+  - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin`
   - `tools/hw/nh02/android-run-app-e2e.sh --reconnect --wait-secs 130`
   - `tools/hw/nh02/android-run-app-e2e.sh --esp-reset --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130`
@@ -88,38 +97,44 @@
 
 ## Planned Service/Dev/HIL Gate Validation
 
-This section is for the open firmware-side command-scope gate and is implementation planning only. Do not treat it as proof that the gate exists.
+This section is for the open firmware-side command-scope gate. PlatformIO profile aliases and the `nh02` flash wrapper profile report exist now, but firmware command enforcement is still implementation planning only. Do not treat these profiles as proof that the gate exists at runtime.
 
-The gate may land only with explicit PlatformIO profile rules and `nh02` wrapper support:
+The gate may land only with explicit PlatformIO profile rules and full `nh02` wrapper support:
 
 - `release` profile: accepts only release commands and rejects service plus dev/HIL commands before side effects.
 - `service` profile: accepts release plus service commands, including BLE OTA, and rejects dev/HIL.
 - `acceptance` profile: accepts release, service, and dev/HIL so on-device `SIM_*` remains available for bench acceptance.
-- Existing environments such as `esp32s3`, `esp32s3_bno08x_sh2_uart`, and `esp32s3_debug_wifi_ota` must be mapped to one of those profiles or replaced by unambiguous profile-specific names before the firmware gate merges.
+- `esp32s3_release`, `esp32s3_service`, and `esp32s3_acceptance` are the explicit profile aliases.
+- `tools/hw/nh02/flash.sh --profile release|service|acceptance` maps to those explicit aliases.
+- `BOATLOCK_PIO_ENV=release|service|acceptance` maps to those explicit aliases; an empty or unknown `BOATLOCK_PIO_ENV` is an error.
+- Legacy `esp32s3` is a release-compatible environment for existing local and CI workflows.
+- `esp32s3_bno08x_sh2_uart` and `esp32s3_debug_wifi_ota` are treated as service profile environments by the flash wrapper.
+- `gpio_probe` and `uart_rvc_probe_rx12` are debug probe builds with no release/service/acceptance command-scope profile.
 
 Minimum validation order for the gate rollout:
 
 1. Local docs/static checks:
-   - `git diff --check -- docs/BLE_PROTOCOL.md docs/HARDWARE_NH02.md skills/boatlock/references/validation.md boatlock/TODO.md`
-   - `rg -n "release|service|dev/HIL|SIM_|OTA|BOATLOCK_PIO_ENV|PlatformIO|nh02" docs/BLE_PROTOCOL.md docs/HARDWARE_NH02.md skills/boatlock/references/validation.md boatlock/TODO.md`
+   - `bash -n tools/hw/nh02/flash.sh`
+   - `git diff --check -- boatlock/platformio.ini tools/hw/nh02/flash.sh docs/BLE_PROTOCOL.md docs/HARDWARE_NH02.md skills/boatlock/references/validation.md boatlock/TODO.md`
+   - `rg -n "esp32s3_release|esp32s3_service|esp32s3_acceptance|release|service|dev/HIL|SIM_|OTA|BOATLOCK_PIO_ENV|PlatformIO|nh02" boatlock/platformio.ini tools/hw/nh02/flash.sh docs/BLE_PROTOCOL.md docs/HARDWARE_NH02.md skills/boatlock/references/validation.md boatlock/TODO.md`
 2. Local firmware/unit checks, run sequentially in one build directory:
    - native BLE command/security tests cover each profile's allow/deny matrix
    - native HIL tests cover `SIM_*` only for the acceptance profile
    - each PlatformIO firmware profile builds without relying on stale `.pio` artifacts
 3. Release-profile bench checks:
-   - flash the release profile through `tools/hw/nh02/flash.sh`
+   - flash the release profile through `tools/hw/nh02/flash.sh --profile release`
    - run `tools/hw/nh02/acceptance.sh`
    - prove a representative service command, `OTA_BEGIN`, and `SIM_RUN` are rejected with stable gate logs and no output motion
 4. Service-profile bench checks:
-   - flash the service profile
-   - run `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/<service-env>/firmware.bin`
+   - flash the service profile through `tools/hw/nh02/flash.sh --profile service`
+   - run `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin`
    - prove `SIM_*` is rejected with stable gate logs
 5. Acceptance-profile bench checks:
-   - flash the acceptance profile
+   - flash the acceptance profile through `tools/hw/nh02/flash.sh --profile acceptance`
    - run `tools/hw/nh02/acceptance.sh`
    - run Android `sim` smoke/e2e and require `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, and `SIM_ABORT` through the normal BLE command path
 6. Recovery check:
-   - flash the release profile again and confirm the normal BLE reconnect/manual/anchor readiness smoke still uses the release surface only
+   - flash the release profile again through `tools/hw/nh02/flash.sh --profile release` and confirm the normal BLE reconnect/manual/anchor readiness smoke still uses the release surface only
 
 Risk review items for the rollout:
 

@@ -69,6 +69,9 @@ What matches the target:
   pairing/auth envelope, logs, and OTA partition safety.
 - Manual control uses atomic `MANUAL_SET:<steer>,<throttlePct>,<ttlMs>` and
   `MANUAL_OFF`, with a short deadman TTL and source-owned lease.
+- Multi-client control ownership is now specified as a future implementation
+  contract: read-only telemetry clients may coexist, but only one eligible
+  controller, authenticated when paired, can hold the control lease.
 - `ANCHOR_ON` is behind anchor-point, heading, and GNSS quality gates.
 - STOP/failsafes latch quiet `HOLD` instead of auto-entering manual control.
 - On-device HIL `S0..S19` and offline `tools/sim` are real validation assets and
@@ -110,6 +113,8 @@ Important mismatch:
   fixed to 28BYJ-48 + ULN2003 HALF4WIRE. If the real steering drive is not that
   stack and is also not A4988 STEP/DIR, add an explicit supported driver path with
   pinout, steps/rev, gear ratio, torque/current limits, stop behavior, and tests.
+  Use `docs/STEERING_DRIVER_INTAKE.md` to capture the facts without assuming the
+  driver type.
 - Build a powered-bench acceptance procedure for `PWM=7`, `DIR=5/10`, the actual
   brushed motor driver, and the actual steering drive. Before connecting the
   prop/motor load, prove boot/STOP/HOLD/reconnect/anchor-denial keep outputs at
@@ -151,8 +156,11 @@ Important mismatch:
 - Add heading-hold as a separate operator concept from position hold in the app.
 - Add service-only setup flows for heading offset, steering bow-zero, and boat
   scale style tuning.
-- Add optional second-controller design: read-only multi-client telemetry first,
-  then per-client auth/control ownership before accepting two real controllers.
+- Implement the documented second-controller gate in `docs/MANUAL_CONTROL.md`
+  and `docs/BLE_PROTOCOL.md`: per-client identity/auth, read-only telemetry
+  clients, single control-owner lease, conservative takeover, remote role
+  allowlist, STOP preemption, and two-central tests before accepting a real BLE
+  remote.
 - Optimize BLE OTA throughput only after the powered path is stable; keep SHA-256,
   auth envelope, abort-on-disconnect, and USB flash recovery.
 
@@ -167,8 +175,8 @@ Keep two layers:
 Next simulation work:
 
 - Keep the already-normalized Russian water-body profiles as executable scenario
-  data, but add explicit provenance and confidence fields to the schema/report so
-  sourced ranges, heuristics, and research gaps stay visible.
+  data with visible provenance and confidence in JSON reports; next, improve
+  source granularity and confidence calibration after real bench/water logs exist.
 - Add loaded boat mass plus drag/windage parameters to scenario data and the
   world model. Thrust margin needs to be judged against the configured boat, not
   only against generic motor class.
@@ -194,6 +202,7 @@ Next simulation work:
 ## Bench Plan
 
 1. Local validation:
+   `tools/ci/run_local_prepowered_gate.sh`, or the equivalent manual sequence:
    `cd boatlock && platformio test -e native`,
    `cd boatlock && pio run -e esp32s3`,
    `python3 tools/sim/test_sim_core.py`,
@@ -212,9 +221,10 @@ Next simulation work:
    steering driver outputs observed, prove idle on boot, STOP, HOLD, reconnect,
    anchor denial, SIM start/abort, and OTA begin.
 4. Low-power powered gate:
-   current-limited supply, fuse/breaker, prop removed or safe test load, real
-   driver connected, short manual pulses, direction proof, STOP proof, thermal
-   check, no auto anchor.
+   complete `docs/STEERING_DRIVER_INTAKE.md` if the steering driver is not the
+   current 28BYJ-48 + ULN2003 path, then use current-limited supply,
+   fuse/breaker, prop removed or safe test load, real driver connected, short
+   manual pulses, direction proof, STOP proof, thermal check, no auto anchor.
 5. Integrated dry steering gate:
    steering motor attached to the turn mechanism without thrust load, bow-zero
    captured, manual left/right, auto point-to-bearing with compass rotation,

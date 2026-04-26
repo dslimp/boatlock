@@ -79,9 +79,12 @@ Normalized scenario inputs live in
 `tools/sim/research/` remain source material and should not be treated as
 directly executable simulator configuration.
 
+Each normalized data-backed scenario includes a `provenance` object with the
+source file, source candidate id, and confidence label. `run_sim.py` copies that
+object into each matching JSON report result; built-in core scenarios omit it.
+
 Known remaining gaps:
 
-- scenario provenance/confidence fields in schema and reports
 - loaded boat mass plus drag/windage parameters
 - yaw moment and heading inertia from environmental forcing
 - river/reservoir wake and short steep chop events
