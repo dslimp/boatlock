@@ -6421,3 +6421,22 @@ Validation:
 
 Self-review:
 - This turns chat-only agent output into a working backlog. The list should be pruned as tasks are implemented so it does not become a stale parallel TODO.
+
+### 2026-04-26 Stage 220: App e2e profile rejection fast-fail
+
+Scope:
+- Make production app e2e flows fail fast when firmware rejects service/dev/HIL commands by profile.
+- Keep this in Flutter e2e parsing and tests; no firmware command behavior changed.
+
+Key outcomes:
+- Added app e2e rejection reason mapping for `SIM_RUN`/`SIM_ABORT`, compass service commands, `OTA_BEGIN`, and `OTA_FINISH`.
+- App e2e now emits a command-rejected stage and finishes with a profile-specific reason instead of waiting for timeout or returning generic OTA failure.
+- Extended firmware rejection parsing to accept `scope=unknown`, matching the stricter firmware profile gate.
+
+Validation:
+- `cd boatlock_ui && flutter test test/app_e2e_probe_test.dart test/ble_command_rejection_test.dart test/ble_smoke_logic_test.dart` -> PASS (`14/14`).
+- `cd boatlock_ui && flutter analyze` -> PASS.
+- `git diff --check -- boatlock_ui/lib/e2e/app_e2e_probe.dart boatlock_ui/lib/ble/ble_command_rejection.dart boatlock_ui/test/app_e2e_probe_test.dart boatlock_ui/test/ble_command_rejection_test.dart WORKLOG.md` -> PASS.
+
+Self-review:
+- This closes the highest-risk e2e timeout gap. Settings rollback, OTA detailed UI failures, and structured smoke payload fields remain separate open tasks.

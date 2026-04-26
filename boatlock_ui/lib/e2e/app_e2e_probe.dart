@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../ble/ble_boatlock.dart';
+import '../ble/ble_command_rejection.dart';
 import '../ble/ble_ota_payload.dart';
 import '../models/boat_data.dart';
 import '../smoke/ble_smoke_logic.dart';
@@ -26,6 +27,47 @@ const kBoatLockAppE2eOtaSha256 = String.fromEnvironment(
   kBoatLockAppE2eOtaSha256Define,
   defaultValue: '',
 );
+
+String? appE2eProfileRejectionStage(BleCommandRejection? rejection) {
+  if (rejection == null) return null;
+  return 'command_rejected_${rejection.commandName}_${rejection.profile}';
+}
+
+String? appE2eProfileRejectionReason(
+  BleSmokeMode mode,
+  BleCommandRejection? rejection,
+) {
+  if (rejection == null) return null;
+  final profile = rejection.profile;
+  switch (mode) {
+    case BleSmokeMode.sim:
+      if (rejection.matchesCommandPrefix('SIM_RUN') ||
+          rejection.matchesCommandPrefix('SIM_ABORT')) {
+        return 'app_sim_rejected_by_profile_$profile';
+      }
+    case BleSmokeMode.compass:
+      if (rejection.matchesCommandPrefix('COMPASS_CAL_START') ||
+          rejection.matchesCommandPrefix('COMPASS_DCD_AUTOSAVE_OFF') ||
+          rejection.matchesCommandPrefix('COMPASS_DCD_SAVE')) {
+        return 'app_compass_rejected_by_profile_$profile';
+      }
+    case BleSmokeMode.ota:
+      if (rejection.matchesCommandPrefix('OTA_BEGIN')) {
+        return 'app_ota_begin_rejected_by_profile_$profile';
+      }
+      if (rejection.matchesCommandPrefix('OTA_FINISH')) {
+        return 'app_ota_finish_rejected_by_profile_$profile';
+      }
+    case BleSmokeMode.basic:
+    case BleSmokeMode.reconnect:
+    case BleSmokeMode.manual:
+    case BleSmokeMode.status:
+    case BleSmokeMode.anchor:
+    case BleSmokeMode.gps:
+      return null;
+  }
+  return null;
+}
 
 class BoatLockAppE2eProbe {
   BoatLockAppE2eProbe._({required BleBoatLock ble, required BleSmokeMode mode})
@@ -147,6 +189,16 @@ class BoatLockAppE2eProbe {
     _deviceLogEvents += 1;
     _lastDeviceLog = line.trim();
     _log('device_log $_lastDeviceLog');
+    final rejection = smokeProfileRejection(_lastDeviceLog);
+    final rejectionReason = appE2eProfileRejectionReason(_mode, rejection);
+    if (rejectionReason != null) {
+      final stage = appE2eProfileRejectionStage(rejection);
+      if (stage != null) {
+        _stage(stage);
+      }
+      _finish(false, rejectionReason);
+      return;
+    }
     if (_mode == BleSmokeMode.anchor &&
         smokeAnchorDeniedLogSeen(_lastDeviceLog)) {
       _anchorDeniedSeen = true;

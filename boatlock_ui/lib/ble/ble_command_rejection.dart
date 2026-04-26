@@ -30,7 +30,7 @@ class BleCommandRejection {
 final RegExp _profileRejectLine = RegExp(
   r'^\[BLE\] command rejected reason=(profile) '
   r'profile=(release|service|acceptance) '
-  r'scope=(service|dev_hil) command=(.+)$',
+  r'scope=(service|dev_hil|unknown) command=(.+)$',
 );
 
 BleCommandRejection? parseBleCommandRejectionLog(String line) {
