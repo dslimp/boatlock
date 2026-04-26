@@ -5571,6 +5571,34 @@ Self-review:
 - This change deliberately leaves phone GPS as a visible fix source for telemetry/UI while keeping `controlGpsAvailable()` and corrected control heading hardware-only.
 - No Flutter, anchor UI, BLE command surface, or hardware pinout files were touched.
 
+### 2026-04-26 Stage 182: Offline RF water scenarios and wave forcing
+
+Scope:
+- Own only the offline simulator slice under `tools/sim` plus this worklog entry.
+- Convert the first useful subset of `tools/sim/research/environment_inputs.*` into runnable wave/current scenarios without changing firmware or Flutter files.
+
+External baseline:
+- No new external source was needed; this stage used the already-captured source-backed ranges in `tools/sim/research/environment_inputs.md` and `.raw.json`.
+
+Key outcomes:
+- Added `EnvironmentProfile` for normalized current, wind/gust, wave, direction-swing, and environment-abort inputs.
+- Added wave-induced forcing and `p95_rocking_roll_deg`/`max_rocking_roll_deg` metrics while keeping the legacy core scenario set unchanged by default.
+- Added optional RF water scenarios behind `run_sim.py --scenario-set russian`: Oka normal, Volga spring flow, Rybinsk fetch, Ladoga storm abort, and Baltic/Gulf drift.
+- Modeled `ladoga_storm_abort` as an expected environment abort, not as a normal anchor-hold success target.
+
+Validation:
+- `python3 tools/sim/test_sim_core.py` -> PASS (`7/7`).
+- `python3 tools/sim/run_sim.py --check --json-out /tmp/boatlock-sim-report.json` -> PASS.
+- `python3 tools/sim/run_sim.py --scenario-set russian --check --json-out /tmp/boatlock-russian-sim-report.json` -> PASS.
+- `python3 tools/sim/run_sim.py --scenario-set all --check --json-out /tmp/boatlock-all-sim-report.json` -> PASS.
+- `python3 tools/sim/test_soak.py` -> PASS (`2/2`).
+- `python3 tools/sim/run_soak.py --hours 6 --check --json-out /tmp/boatlock-soak-report.json` -> PASS, no violations.
+- `git diff --check -- tools/sim WORKLOG.md boatlock/TODO.md` -> PASS.
+
+Self-review:
+- This is still a lightweight kinematic model: waves currently affect forcing and rocking metrics, not sensor-frame roll/pitch, prop ventilation, steering backlash, battery sag, current limit, or thermal derate.
+- Russian scenarios are now executable and gated, but thresholds are coarse sanity bounds rather than water-test acceptance criteria.
+
 ### 2026-04-26 Stage 183: Anchor enable preflight
 
 Scope:
@@ -5594,3 +5622,32 @@ Validation:
 Self-review:
 - Motor readiness is still bounded by available telemetry; the app can only check stepper config fields today, while firmware remains the final authority for actuation gates.
 - A full readiness panel with link age, hardware GPS source, current/power, and richer blocked reasons remains a separate P1/P0 follow-up before powered bench.
+
+### 2026-04-26 Stage 184: BLE command-surface classification
+
+Scope:
+- Own only release/service/dev classification for the BLE command surface.
+- Keep simulation internals untouched and avoid commit/push so the parent can integrate the slice.
+
+External baseline:
+- Reused existing BoatLock external-pattern notes: GATT command handling should use narrow allowlists, HIL command surfaces should be deterministic and explicit, calibration/update flows belong outside normal water operation, and Dart compile-time environment flags are the current app-side feature gate mechanism.
+- No new external source was needed for this narrow classifier/gating cut.
+
+Key outcomes:
+- Added a pure Flutter command classifier with `release`, `service`, `devHil`, and `unknown` scopes.
+- `BleBoatLock.sendCustomCommand()` now rejects unknown commands, service commands without explicit service opt-in, and dev/HIL commands without explicit HIL opt-in.
+- Raw `SEC_CMD` is not accepted through the custom-command classifier; callers pass the unwrapped command and the BLE transport builds the secure envelope after scope classification.
+- Normal Settings UI hides service controls by default: stepper tuning, compass offset/reset, firmware OTA, and raw BNO08x quality panes now require `BOATLOCK_SERVICE_UI=true`.
+- Smoke and main-app e2e probes now opt in explicitly for `SIM_*` and compass service commands.
+- Documented command scopes in `docs/BLE_PROTOCOL.md` and `skills/boatlock/references/ble-ui.md`; updated the active TODO to split app-side UI gating from a possible future firmware-side service/dev gate.
+
+Validation:
+- `dart format boatlock_ui/lib/ble/ble_command_scope.dart boatlock_ui/lib/ble/ble_boatlock.dart boatlock_ui/lib/pages/settings_page.dart boatlock_ui/lib/smoke/ble_smoke_page.dart boatlock_ui/lib/e2e/app_e2e_probe.dart boatlock_ui/test/ble_command_scope_test.dart boatlock_ui/test/settings_page_test.dart` -> PASS.
+- `cd boatlock_ui && flutter analyze` -> PASS, no issues found.
+- `cd boatlock_ui && flutter test test/ble_command_scope_test.dart test/settings_page_test.dart` -> PASS (`7/7`).
+- `cd boatlock_ui && flutter test test/app_e2e_probe_test.dart test/ble_smoke_logic_test.dart test/ble_smoke_mode_test.dart` -> PASS (`11/11`).
+- `git diff --check` -> PASS.
+
+Self-review:
+- This is an app-side product-surface gate, not a firmware authorization boundary. Raw BLE clients can still send service/dev/HIL commands if they satisfy the current firmware security rules.
+- Direct service helpers such as OTA upload remain callable from service/e2e paths; normal UI no longer exposes them by default.

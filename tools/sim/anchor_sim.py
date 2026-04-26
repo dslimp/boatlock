@@ -8,6 +8,8 @@ import random
 
 
 EARTH_RADIUS_M = 6378137.0
+ANCHOR_LAT = 59.938600
+ANCHOR_LON = 30.314100
 
 
 def clamp(v: float, lo: float, hi: float) -> float:
@@ -29,6 +31,11 @@ def angle_diff_deg(a: float, b: float) -> float:
 def bearing_deg(dx_m: float, dy_m: float) -> float:
     # dx east, dy north
     return wrap_deg(math.degrees(math.atan2(dx_m, dy_m)))
+
+
+def vector_from_bearing(magnitude: float, bearing_deg_value: float) -> Tuple[float, float]:
+    rad = math.radians(bearing_deg_value)
+    return math.sin(rad) * magnitude, math.cos(rad) * magnitude
 
 
 def latlon_to_local_m(lat: float, lon: float, lat0: float, lon0: float) -> Tuple[float, float]:
@@ -71,6 +78,27 @@ class SimConfig:
     required_sentences: int = 0
 
 
+@dataclass(frozen=True)
+class EnvironmentProfile:
+    name: str
+    water_body: str
+    current_mps: float = 0.0
+    current_direction_deg: float = 90.0
+    current_swing_deg: float = 0.0
+    current_swing_period_s: float = 180.0
+    wind_mps: float = 0.0
+    wind_direction_deg: float = 90.0
+    wind_swing_deg: float = 0.0
+    wind_swing_period_s: float = 180.0
+    gust_mps: float = 0.0
+    gust_period_s: float = 90.0
+    gust_duration_s: float = 0.0
+    wave_height_m: float = 0.0
+    wave_period_s: float = 4.0
+    wave_direction_deg: float = 90.0
+    abort_expected: bool = False
+
+
 @dataclass
 class GnssObservation:
     lat: Optional[float]
@@ -92,6 +120,7 @@ class StepSample:
     gnss_ok: bool
     gnss_reason: str
     failsafe_reason: str
+    rocking_roll_deg: float = 0.0
 
 
 @dataclass
@@ -103,6 +132,76 @@ class Scenario:
     obs_fn: Callable[[int, float, float, random.Random], GnssObservation]
     comm_ok_fn: Callable[[int], bool] = lambda _t: True
     inject_nan_fn: Callable[[int], bool] = lambda _t: False
+    profile: Optional[EnvironmentProfile] = None
+
+
+def make_gnss_observer(
+    noise_sigma_m: float = 0.7,
+    sats: int = 12,
+    hdop: float = 0.9,
+    sentences: int = 10,
+) -> Callable[[int, float, float, random.Random], GnssObservation]:
+    def obs(_t: int, x: float, y: float, rnd: random.Random) -> GnssObservation:
+        nx = x + rnd.gauss(0.0, noise_sigma_m)
+        ny = y + rnd.gauss(0.0, noise_sigma_m)
+        lat, lon = local_m_to_latlon(nx, ny, ANCHOR_LAT, ANCHOR_LON)
+        return GnssObservation(lat=lat, lon=lon, sats=sats, hdop=hdop, valid=True, sentences=sentences)
+
+    return obs
+
+
+def _oscillated_direction(base_deg: float, swing_deg: float, period_s: float, t_s: int) -> float:
+    if swing_deg == 0.0:
+        return base_deg
+    period = max(1.0, period_s)
+    return base_deg + swing_deg * math.sin((2.0 * math.pi * t_s) / period)
+
+
+def _gust_speed_mps(profile: EnvironmentProfile, t_s: int) -> float:
+    if profile.gust_mps <= profile.wind_mps or profile.gust_duration_s <= 0.0:
+        return profile.wind_mps
+    period = max(profile.gust_duration_s, profile.gust_period_s)
+    return profile.gust_mps if (t_s % period) < profile.gust_duration_s else profile.wind_mps
+
+
+def wave_rocking_roll_deg(profile: Optional[EnvironmentProfile], t_s: int) -> float:
+    if profile is None or profile.wave_height_m <= 0.0:
+        return 0.0
+    period = max(1.5, profile.wave_period_s)
+    phase = (2.0 * math.pi * t_s) / period
+    amp = min(24.0, profile.wave_height_m * 7.0)
+    return amp * math.sin(phase) + 0.25 * amp * math.sin((phase * 2.0) + 0.7)
+
+
+def environment_accel_mps2(profile: EnvironmentProfile, t_s: int) -> Tuple[float, float]:
+    current_dir = _oscillated_direction(
+        profile.current_direction_deg,
+        profile.current_swing_deg,
+        profile.current_swing_period_s,
+        t_s,
+    )
+    wind_dir = _oscillated_direction(
+        profile.wind_direction_deg,
+        profile.wind_swing_deg,
+        profile.wind_swing_period_s,
+        t_s,
+    )
+    current_ax, current_ay = vector_from_bearing(profile.current_mps * 0.18, current_dir)
+    wind_speed = _gust_speed_mps(profile, t_s)
+    wind_ax, wind_ay = vector_from_bearing((wind_speed * wind_speed) * 0.00035, wind_dir)
+
+    wave_ax, wave_ay = 0.0, 0.0
+    if profile.wave_height_m > 0.0:
+        period = max(1.5, profile.wave_period_s)
+        phase = (2.0 * math.pi * t_s) / period
+        amp = min(0.12, profile.wave_height_m * 0.018 * (4.0 / period))
+        wave_ax, wave_ay = vector_from_bearing(amp * math.sin(phase), profile.wave_direction_deg)
+
+    return current_ax + wind_ax + wave_ax, current_ay + wind_ay + wave_ay
+
+
+def profiled_environment_accel_fn(profile: EnvironmentProfile) -> Callable[[int], Tuple[float, float]]:
+    return lambda t_s: environment_accel_mps2(profile, t_s)
 
 
 class GnssGate:
@@ -211,8 +310,8 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
     gate = GnssGate(cfg)
     ctrl = AnchorController(cfg)
 
-    anchor_lat = 59.938600
-    anchor_lon = 30.314100
+    anchor_lat = ANCHOR_LAT
+    anchor_lon = ANCHOR_LON
     x_m, y_m = scenario.initial_pos_m
     vx, vy = 0.0, 0.0
     heading = 0.0
@@ -236,6 +335,9 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
         gnss_ok, gnss_reason, meas_x, meas_y = gate.evaluate(t, last_obs, anchor_lat, anchor_lon, age_ms)
 
         failsafe_reason = "NONE"
+        if scenario.profile is not None and scenario.profile.abort_expected:
+            anchor_enabled = False
+            failsafe_reason = "ENV_ABORT_EXPECTED"
         if not scenario.comm_ok_fn(t):
             anchor_enabled = False
             failsafe_reason = "COMM_TIMEOUT"
@@ -272,6 +374,7 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
         hx = math.sin(math.radians(heading))
         hy = math.cos(math.radians(heading))
         ax_env, ay_env = scenario.env_accel_fn(t)
+        rocking_roll = wave_rocking_roll_deg(scenario.profile, t)
         ax = ax_env + thrust_acc * hx - cfg.drag_per_s * vx
         ay = ay_env + thrust_acc * hy - cfg.drag_per_s * vy
         vx += ax * cfg.dt_s
@@ -297,6 +400,7 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
                 gnss_ok=gnss_ok,
                 gnss_reason=gnss_reason,
                 failsafe_reason=failsafe_reason,
+                rocking_roll_deg=rocking_roll,
             )
         )
 
@@ -314,6 +418,8 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
     sorted_dists = sorted(dists)
     idx95 = int(0.95 * (len(sorted_dists) - 1))
     p95 = sorted_dists[idx95]
+    rocking_abs = sorted(abs(s.rocking_roll_deg) for s in samples)
+    idx95_rock = int(0.95 * (len(rocking_abs) - 1)) if rocking_abs else 0
 
     metrics = {
         "time_in_deadband_pct": (deadband_hits * 100.0) / max(1, len(samples)),
@@ -323,6 +429,9 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
         "num_thrust_direction_changes_per_min": dir_changes * 60.0 / max(1, scenario.duration_s),
         "invalid_thrust_count": float(invalid_thrust_count),
         "invalid_distance_count": float(invalid_distance_count),
+        "p95_rocking_roll_deg": rocking_abs[idx95_rock] if rocking_abs else 0.0,
+        "max_rocking_roll_deg": max(rocking_abs) if rocking_abs else 0.0,
+        "environment_abort_expected": 1.0 if scenario.profile is not None and scenario.profile.abort_expected else 0.0,
         "events": events,
     }
     return {
@@ -333,12 +442,7 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
 
 
 def default_scenarios() -> List[Scenario]:
-    def obs_good(t: int, x: float, y: float, rnd: random.Random) -> GnssObservation:
-        lat0, lon0 = 59.938600, 30.314100
-        nx = x + rnd.gauss(0.0, 0.7)
-        ny = y + rnd.gauss(0.0, 0.7)
-        lat, lon = local_m_to_latlon(nx, ny, lat0, lon0)
-        return GnssObservation(lat=lat, lon=lon, sats=12, hdop=0.9, valid=True, sentences=10)
+    obs_good = make_gnss_observer()
 
     def obs_dropout(t: int, x: float, y: float, rnd: random.Random) -> GnssObservation:
         if (80 <= t <= 84) or (160 <= t <= 164):
@@ -380,3 +484,115 @@ def default_scenarios() -> List[Scenario]:
         Scenario("comm_loss", 240, (9.0, 0.0), accel_current, obs_good, comm_ok_fn=lambda t: not (110 <= t <= 140)),
         Scenario("nan_data", 240, (9.0, 2.0), accel_current, obs_good, inject_nan_fn=lambda t: t == 120),
     ]
+
+
+def russian_water_scenarios() -> List[Scenario]:
+    profiles = [
+        EnvironmentProfile(
+            name="river_oka_normal_55lb",
+            water_body="Oka lowland river",
+            current_mps=0.35,
+            current_direction_deg=90.0,
+            wind_mps=4.0,
+            wind_direction_deg=45.0,
+            wave_height_m=0.2,
+            wave_period_s=2.5,
+            wave_direction_deg=45.0,
+        ),
+        EnvironmentProfile(
+            name="volga_spring_flow_80lb",
+            water_body="Volga spring flood or dam release",
+            current_mps=1.2,
+            current_direction_deg=90.0,
+            wind_mps=6.0,
+            wind_direction_deg=70.0,
+            wave_height_m=0.5,
+            wave_period_s=3.0,
+            wave_direction_deg=70.0,
+        ),
+        EnvironmentProfile(
+            name="rybinsk_fetch_55lb",
+            water_body="Rybinsk Reservoir open fetch",
+            current_mps=0.1,
+            current_direction_deg=120.0,
+            wind_mps=10.0,
+            wind_direction_deg=260.0,
+            wind_swing_deg=15.0,
+            wind_swing_period_s=120.0,
+            gust_mps=14.0,
+            gust_period_s=80.0,
+            gust_duration_s=18.0,
+            wave_height_m=1.5,
+            wave_period_s=3.0,
+            wave_direction_deg=260.0,
+        ),
+        EnvironmentProfile(
+            name="ladoga_storm_abort",
+            water_body="Ladoga storm class",
+            current_mps=0.4,
+            current_direction_deg=160.0,
+            wind_mps=18.0,
+            wind_direction_deg=210.0,
+            gust_mps=20.0,
+            gust_period_s=70.0,
+            gust_duration_s=25.0,
+            wave_height_m=3.0,
+            wave_period_s=3.5,
+            wave_direction_deg=210.0,
+            abort_expected=True,
+        ),
+        EnvironmentProfile(
+            name="baltic_gulf_drift",
+            water_body="Gulf of Finland wind-driven drift",
+            current_mps=0.15,
+            current_direction_deg=80.0,
+            current_swing_deg=35.0,
+            current_swing_period_s=180.0,
+            wind_mps=10.0,
+            wind_direction_deg=80.0,
+            wind_swing_deg=25.0,
+            wind_swing_period_s=180.0,
+            gust_mps=12.0,
+            gust_period_s=100.0,
+            gust_duration_s=20.0,
+            wave_height_m=1.2,
+            wave_period_s=3.5,
+            wave_direction_deg=80.0,
+        ),
+    ]
+
+    starts = {
+        "river_oka_normal_55lb": (12.0, -3.0),
+        "volga_spring_flow_80lb": (16.0, -4.0),
+        "rybinsk_fetch_55lb": (14.0, 6.0),
+        "ladoga_storm_abort": (14.0, 5.0),
+        "baltic_gulf_drift": (12.0, 4.0),
+    }
+    durations = {
+        "ladoga_storm_abort": 180,
+    }
+
+    scenarios: List[Scenario] = []
+    for profile in profiles:
+        noise_sigma = 0.8 + min(2.5, profile.wave_height_m * 0.55)
+        scenarios.append(
+            Scenario(
+                profile.name,
+                durations.get(profile.name, 300),
+                starts[profile.name],
+                profiled_environment_accel_fn(profile),
+                make_gnss_observer(noise_sigma_m=noise_sigma, sats=11, hdop=1.2),
+                profile=profile,
+            )
+        )
+    return scenarios
+
+
+def scenarios_for_set(name: str) -> List[Scenario]:
+    if name == "core":
+        return default_scenarios()
+    if name == "russian":
+        return russian_water_scenarios()
+    if name == "all":
+        return default_scenarios() + russian_water_scenarios()
+    raise ValueError(f"unknown scenario set: {name}")

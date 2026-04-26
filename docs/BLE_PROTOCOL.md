@@ -14,6 +14,20 @@ The live path is not a serial/JSON tunnel. The app subscribes to `34cd`, sends `
 
 Control point payloads are application-level command byte strings, not a text stream. Valid command writes are `1..191` printable ASCII bytes (`0x20..0x7E`). Clients must reject empty, overlong, control-byte, embedded-NUL, and non-ASCII commands before writing `56ef`; firmware rejects the same malformed payloads before queueing.
 
+Command scopes are product boundaries, not wire-level security:
+
+- `release`: normal water UI, app security/session setup, and app telemetry transport.
+- `service`: installer, calibration, firmware update, and tuning operations. The normal Flutter app hides these controls unless built with `--dart-define=BOATLOCK_SERVICE_UI=true`; test/service harnesses must opt in explicitly.
+- `dev/HIL`: injected sensor data and on-device simulation. These commands are for validation harnesses only and must not appear in the normal water UI. Flutter custom-command callers must opt in explicitly or use `--dart-define=BOATLOCK_DEV_HIL_COMMANDS=true`.
+
+`SEC_CMD` is the security envelope; the effective scope is the scope of the wrapped payload. The Flutter custom-command classifier does not accept raw `SEC_CMD` input; the BLE transport builds the envelope internally after classifying the unwrapped command.
+
+Current classification:
+
+- `release`: `STREAM_START`, `STREAM_STOP`, `SNAPSHOT`, `SET_ANCHOR`, `ANCHOR_ON`, `ANCHOR_OFF`, `STOP`, `HEARTBEAT`, `MANUAL_SET`, `MANUAL_OFF`, `NUDGE_DIR`, `NUDGE_BRG`, `SET_HOLD_HEADING`, `PAIR_SET`, `PAIR_CLEAR`, `AUTH_HELLO`, `AUTH_PROVE`.
+- `service`: `SET_ANCHOR_PROFILE`, `SET_COMPASS_OFFSET`, `RESET_COMPASS_OFFSET`, `COMPASS_CAL_START`, `COMPASS_DCD_SAVE`, `COMPASS_DCD_AUTOSAVE_ON`, `COMPASS_DCD_AUTOSAVE_OFF`, `COMPASS_TARE_Z`, `COMPASS_TARE_SAVE`, `COMPASS_TARE_CLEAR`, `SET_STEP_MAXSPD`, `SET_STEP_ACCEL`, `SET_STEPPER_BOW`, `OTA_BEGIN`, `OTA_FINISH`, `OTA_ABORT`.
+- `dev/HIL`: `SET_PHONE_GPS`, `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, `SIM_ABORT`.
+
 | Command | Parameters | Description |
 |--------|------------|-------------|
 | `STREAM_START` | none | Enable periodic live-state notifications and immediately emit one live frame |
@@ -62,7 +76,7 @@ Current built-in HIL groups:
 - `S4..S9`: GNSS/control-loop/NaN safety regressions
 - `S10..S19`: randomized + hardware-failure emulation (compass/power/display/actuator)
 
-These commands correspond to the implementation in [`boatlock/BleCommandHandler.h`](../boatlock/BleCommandHandler.h) and are used by the mobile application.
+These commands correspond to the implementation in [`boatlock/BleCommandHandler.h`](../boatlock/BleCommandHandler.h). The normal mobile application exposes the release subset; service and dev/HIL commands are accepted only through explicit service/test paths on the app side.
 
 Manual control is intentionally a single atomic command instead of separate mode/direction/speed writes. Each accepted `MANUAL_SET` refreshes the deadman TTL for the current controller source; a different source cannot take over until the lease expires or `MANUAL_OFF`/`STOP` clears it. If updates stop, firmware exits Manual mode and the normal quiet-output path stops motion. `MANUAL_SET` is a control command and must be wrapped in `SEC_CMD` when pairing/auth is enabled.
 

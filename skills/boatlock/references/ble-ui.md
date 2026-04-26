@@ -14,6 +14,7 @@
 - `boatlock_ui/lib/ble/ble_scan_config.dart`: scan service filter and scan timing constants
 - `boatlock_ui/lib/ble/ble_rssi_throttle.dart`: app-side RSSI read throttling policy
 - `boatlock_ui/lib/ble/ble_commands.dart`: pure command builders and value allowlists for app-originated commands
+- `boatlock_ui/lib/ble/ble_command_scope.dart`: app-side release/service/dev command-surface classifier and compile-time service/dev UI gates
 - `boatlock_ui/lib/ble/ble_security_codec.dart`: owner-secret normalization, owner auth proof, and secure command envelope formatting
 - `boatlock_ui/lib/ble/ble_live_frame.dart`: live binary telemetry decoder
 - `boatlock_ui/lib/ble/ble_log_line.dart`: log characteristic byte-string decoder
@@ -101,16 +102,14 @@
 
 ## Command Surface
 
-- High-traffic command groups:
-  - stream/control point: `STREAM_START`, `STREAM_STOP`, `SNAPSHOT`
-  - anchor: `SET_ANCHOR`, `ANCHOR_ON`, `ANCHOR_OFF`, `NUDGE_*`, `SET_ANCHOR_PROFILE`, `SET_HOLD_HEADING`
-  - manual control: `MANUAL_SET`, `MANUAL_OFF`
-  - safety and link: `STOP`, `HEARTBEAT`
-  - GPS and compass: `SET_PHONE_GPS`, `SET_COMPASS_OFFSET`, `RESET_COMPASS_OFFSET`
-  - stepper service: `SET_STEPPER_BOW`
-  - stepper tuning: `SET_STEP_MAXSPD`, `SET_STEP_ACCEL`
-  - firmware OTA: `OTA_BEGIN:<size>,<sha256>`, `OTA_FINISH`, `OTA_ABORT` plus binary chunks on `9abc`
-  - simulation: `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, `SIM_ABORT`
+- Command scope groups:
+  - release: stream/control point, explicit anchor save/enable/disable, manual deadman, STOP/heartbeat, anchor jog, hold-heading, and pairing/auth commands.
+  - service: anchor tuning profiles, heading offset/reset, SH2 compass calibration/DCD/tare, stepper bow/tuning, and BLE OTA.
+  - dev/HIL: `SET_PHONE_GPS` and `SIM_*`.
+- The normal Flutter water UI must expose only release commands.
+- Service UI is hidden unless the app is built with `--dart-define=BOATLOCK_SERVICE_UI=true` or a test/service harness passes `allowService: true` to `sendCustomCommand()`.
+- Dev/HIL commands are hidden unless the app is built with `--dart-define=BOATLOCK_DEV_HIL_COMMANDS=true` or a validation harness passes `allowDevHil: true` to `sendCustomCommand()`.
+- `SEC_CMD` is the security envelope; the effective scope is the scope of the wrapped payload. Flutter custom-command callers should pass the unwrapped command and let `BleBoatLock` build the envelope after classification.
 - Do not keep compatibility-only BLE commands in firmware or Flutter. If a command is obsolete, remove it from command handling, UI, tests, and docs in the same change.
 - Route commands, phone-heading commands, and log-export commands are removed and should stay no-op unless intentionally restored.
 

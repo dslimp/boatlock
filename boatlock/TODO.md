@@ -11,8 +11,9 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 - [x] Add a normal `ANCHOR_OFF` UI action separate from emergency STOP.
 - [x] Surface command/auth failures from map anchor actions.
 - [x] Fix manual sheet wording: red `STOP` must either send real emergency `STOP` or be renamed to manual off.
-- [ ] Verify/fix that phone GPS fallback cannot update GPS-to-compass correction used by control heading.
-- [ ] Classify BLE commands into release/service/dev surfaces and gate service/dev paths from normal water UI.
+- [x] Verify/fix that phone GPS fallback cannot update GPS-to-compass correction used by control heading.
+- [x] Classify BLE commands into release/service/dev surfaces and gate service/dev paths from normal water UI.
+- [ ] Decide whether service/dev/HIL commands also need a firmware-side gate beyond pairing/auth before untrusted BLE clients are in scope.
 - [ ] Identify the exact steering stepper driver/mechanics and update firmware/docs if it is not the current 28BYJ-48 + ULN2003 path.
 - [ ] Build a no-load motor output acceptance checklist for `PWM=7`, `DIR=5/10`, boot, STOP, HOLD, reconnect, anchor denial, SIM, and OTA begin.
 - [ ] Add powered-bench wiring requirements: current-limited supply, fuse/breaker, physical kill path, polarity proof, strain relief, and thermal check.

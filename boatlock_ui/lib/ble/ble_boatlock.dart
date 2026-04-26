@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/boat_data.dart';
 import 'ble_debug_snapshot.dart';
+import 'ble_command_scope.dart';
 import 'ble_commands.dart';
 import 'ble_command_text.dart';
 import 'ble_device_match.dart';
@@ -131,7 +132,28 @@ class BleBoatLock with WidgetsBindingObserver {
     );
   }
 
-  Future<bool> sendCustomCommand(String cmd) async {
+  Future<bool> sendCustomCommand(
+    String cmd, {
+    bool allowService = false,
+    bool allowDevHil = false,
+  }) async {
+    final scope = classifyBoatLockCommand(cmd);
+    if (scope == BoatLockCommandScope.unknown) {
+      _log('custom command rejected scope=unknown command="$cmd"');
+      return false;
+    }
+    if (scope == BoatLockCommandScope.service &&
+        !allowService &&
+        !kBoatLockServiceUiEnabled) {
+      _log('custom command rejected scope=service command="$cmd"');
+      return false;
+    }
+    if (scope == BoatLockCommandScope.devHil &&
+        !allowDevHil &&
+        !kBoatLockDevHilCommandsEnabled) {
+      _log('custom command rejected scope=devHil command="$cmd"');
+      return false;
+    }
     return _writeCommand(cmd);
   }
 
@@ -140,8 +162,13 @@ class BleBoatLock with WidgetsBindingObserver {
     double lon, {
     double speedKmh = 0.0,
     int? satellites,
+    bool allowDevHil = false,
   }) async {
     if (_cmdChar == null) return;
+    if (!allowDevHil && !kBoatLockDevHilCommandsEnabled) {
+      _log('phone GPS command rejected scope=devHil');
+      return;
+    }
     final cmd = buildSetPhoneGpsCommand(
       lat,
       lon,

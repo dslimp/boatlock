@@ -27,11 +27,27 @@
 7. `comm_loss`
 8. `nan_data`
 
+## Optional RF Water Scenarios
+
+The `russian` scenario set normalizes the first slice of
+`tools/sim/research/environment_inputs.*` into runnable profiles:
+
+1. `river_oka_normal_55lb`
+2. `volga_spring_flow_80lb`
+3. `rybinsk_fetch_55lb`
+4. `ladoga_storm_abort`
+5. `baltic_gulf_drift`
+
+These scenarios add current, wind/gusts, wave-induced forcing, and a
+`p95_rocking_roll_deg` metric. `ladoga_storm_abort` is intentionally modeled as
+an environment-abort case, not as a normal anchor-hold success case.
+
 ## Run locally
 
 ```bash
 python3 tools/sim/test_sim_core.py
 python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json
+python3 tools/sim/run_sim.py --scenario-set russian --check --json-out tools/sim/russian_report.json
 python3 tools/sim/test_soak.py
 python3 tools/sim/run_soak.py --hours 6 --check --json-out tools/sim/soak_report.json
 ```

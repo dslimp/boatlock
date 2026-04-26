@@ -19,6 +19,7 @@ def clone_scenario(base: Scenario, duration_s: int, name_suffix: str) -> Scenari
         obs_fn=base.obs_fn,
         comm_ok_fn=base.comm_ok_fn,
         inject_nan_fn=base.inject_nan_fn,
+        profile=base.profile,
     )
 
 

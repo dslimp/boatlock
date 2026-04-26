@@ -423,7 +423,10 @@ class _BleSmokePageState extends State<BleSmokePage> {
   }
 
   Future<void> _sendSimRun() async {
-    final ok = await _ble.sendCustomCommand('SIM_RUN:S0_hold_still_good,1');
+    final ok = await _ble.sendCustomCommand(
+      'SIM_RUN:S0_hold_still_good,1',
+      allowDevHil: true,
+    );
     _appendEvent('sim_run ok=$ok');
     if (!ok) {
       _finish(false, 'sim_run_failed');
@@ -431,7 +434,7 @@ class _BleSmokePageState extends State<BleSmokePage> {
   }
 
   Future<void> _sendSimAbort() async {
-    final ok = await _ble.sendCustomCommand('SIM_ABORT');
+    final ok = await _ble.sendCustomCommand('SIM_ABORT', allowDevHil: true);
     _simAbortSent = ok;
     _appendEvent('sim_abort ok=$ok');
     if (!ok) {
@@ -479,11 +482,18 @@ class _BleSmokePageState extends State<BleSmokePage> {
   }
 
   Future<void> _sendCompassCommands() async {
-    final calOk = await _ble.sendCustomCommand('COMPASS_CAL_START');
+    final calOk = await _ble.sendCustomCommand(
+      'COMPASS_CAL_START',
+      allowService: true,
+    );
     final autosaveOffOk = await _ble.sendCustomCommand(
       'COMPASS_DCD_AUTOSAVE_OFF',
+      allowService: true,
     );
-    final saveOk = await _ble.sendCustomCommand('COMPASS_DCD_SAVE');
+    final saveOk = await _ble.sendCustomCommand(
+      'COMPASS_DCD_SAVE',
+      allowService: true,
+    );
     _appendEvent(
       'compass_commands cal=$calOk autosaveOff=$autosaveOffOk dcdSave=$saveOk',
     );

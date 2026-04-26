@@ -3,7 +3,18 @@ from __future__ import annotations
 
 import unittest
 
-from anchor_sim import SimConfig, GnssObservation, GnssGate, AnchorController, clamp
+from anchor_sim import (
+    AnchorController,
+    EnvironmentProfile,
+    GnssGate,
+    GnssObservation,
+    SimConfig,
+    clamp,
+    environment_accel_mps2,
+    russian_water_scenarios,
+    simulate_scenario,
+    wave_rocking_roll_deg,
+)
 
 
 class SimCoreTests(unittest.TestCase):
@@ -38,6 +49,34 @@ class SimCoreTests(unittest.TestCase):
         p2 = ctrl.update(0.1, 20.0, True)
         self.assertGreaterEqual(p2, p1)
         self.assertLessEqual((p2 - p1), 4.0)
+
+    def test_environment_profile_adds_wave_rocking_and_forcing(self) -> None:
+        profile = EnvironmentProfile(
+            name="test_fetch",
+            water_body="test",
+            current_mps=0.3,
+            wind_mps=8.0,
+            wave_height_m=1.2,
+            wave_period_s=3.0,
+        )
+        ax0, ay0 = environment_accel_mps2(profile, 0)
+        ax1, ay1 = environment_accel_mps2(profile, 1)
+        self.assertNotEqual((ax0, ay0), (ax1, ay1))
+        self.assertGreater(abs(wave_rocking_roll_deg(profile, 1)), 1.0)
+
+    def test_russian_water_scenarios_are_catalogued(self) -> None:
+        scenarios = russian_water_scenarios()
+        names = {s.name for s in scenarios}
+        self.assertIn("river_oka_normal_55lb", names)
+        self.assertIn("ladoga_storm_abort", names)
+        self.assertTrue(any(s.profile is not None and s.profile.abort_expected for s in scenarios))
+
+    def test_ladoga_storm_marks_environment_abort(self) -> None:
+        cfg = SimConfig()
+        scenario = next(s for s in russian_water_scenarios() if s.name == "ladoga_storm_abort")
+        result = simulate_scenario(cfg, scenario, seed=3)
+        events = result["metrics"]["events"]
+        self.assertTrue(any(e["failsafe_reason"] == "ENV_ABORT_EXPECTED" for e in events))
 
 
 if __name__ == "__main__":

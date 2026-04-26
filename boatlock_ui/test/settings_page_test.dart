@@ -110,4 +110,19 @@ void main() {
     await tester.pumpAndSettle();
     expect(ble.holdHeadingValue, true);
   });
+
+  testWidgets('service command controls are hidden in normal app build', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(900, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final ble = FakeBleBoatLock();
+    await tester.pumpWidget(_wrap(_page(ble)));
+
+    expect(find.text('Макс. скорость'), findsNothing);
+    expect(find.text('Офсет компаса'), findsNothing);
+    expect(find.text('Firmware OTA'), findsNothing);
+    expect(find.text('BNO08x quality'), findsNothing);
+    expect(find.text('Owner secret'), findsOneWidget);
+  });
 }

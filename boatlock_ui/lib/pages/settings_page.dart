@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import '../ble/ble_boatlock.dart';
+import '../ble/ble_command_scope.dart';
 import '../ble/ble_ota_payload.dart';
 import '../ble/ble_security_codec.dart';
 
@@ -521,34 +522,36 @@ class _SettingsPageState extends State<SettingsPage> {
             value: holdHeading,
             onChanged: isConnected ? _toggleHoldHeading : null,
           ),
-          ListTile(
-            title: const Text('Макс. скорость'),
-            subtitle: Text(stepMaxSpd.round().toString()),
-            trailing: const Icon(Icons.chevron_right),
-            enabled: isConnected,
-            onTap: isConnected ? _editStepMaxSpd : null,
-          ),
-          ListTile(
-            title: const Text('Ускорение'),
-            subtitle: Text(stepAccel.round().toString()),
-            trailing: const Icon(Icons.chevron_right),
-            enabled: isConnected,
-            onTap: isConnected ? _editStepAccel : null,
-          ),
-          const Divider(),
-          ListTile(
-            title: const Text('Офсет компаса'),
-            subtitle: Text('${compassOffset.toStringAsFixed(1)}°'),
-            trailing: const Icon(Icons.chevron_right),
-            enabled: isConnected,
-            onTap: isConnected ? _editCompassOffset : null,
-          ),
-          ListTile(
-            title: const Text('Сбросить офсет'),
-            enabled: isConnected,
-            onTap: isConnected ? _resetCompassOffset : null,
-          ),
-          const Divider(),
+          if (kBoatLockServiceUiEnabled) ...[
+            ListTile(
+              title: const Text('Макс. скорость'),
+              subtitle: Text(stepMaxSpd.round().toString()),
+              trailing: const Icon(Icons.chevron_right),
+              enabled: isConnected,
+              onTap: isConnected ? _editStepMaxSpd : null,
+            ),
+            ListTile(
+              title: const Text('Ускорение'),
+              subtitle: Text(stepAccel.round().toString()),
+              trailing: const Icon(Icons.chevron_right),
+              enabled: isConnected,
+              onTap: isConnected ? _editStepAccel : null,
+            ),
+            const Divider(),
+            ListTile(
+              title: const Text('Офсет компаса'),
+              subtitle: Text('${compassOffset.toStringAsFixed(1)}°'),
+              trailing: const Icon(Icons.chevron_right),
+              enabled: isConnected,
+              onTap: isConnected ? _editCompassOffset : null,
+            ),
+            ListTile(
+              title: const Text('Сбросить офсет'),
+              enabled: isConnected,
+              onTap: isConnected ? _resetCompassOffset : null,
+            ),
+            const Divider(),
+          ],
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: Text(
@@ -602,93 +605,95 @@ class _SettingsPageState extends State<SettingsPage> {
           _securityTile('Auth', secAuth ? 'YES' : 'NO'),
           _securityTile('Pair window', secPairWindowOpen ? 'OPEN' : 'CLOSED'),
           _securityTile('Last reject', secReject),
-          const Divider(),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Text(
-              'Firmware OTA',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: TextField(
-              controller: _otaUrlCtrl,
-              enabled: isConnected && !_otaBusy,
-              autocorrect: false,
-              enableSuggestions: false,
-              keyboardType: TextInputType.url,
-              decoration: const InputDecoration(
-                labelText: 'Firmware URL',
-                hintText: 'https://.../firmware.bin',
+          if (kBoatLockServiceUiEnabled) ...[
+            const Divider(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Text(
+                'Firmware OTA',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: TextField(
-              controller: _otaShaCtrl,
-              enabled: isConnected && !_otaBusy,
-              autocorrect: false,
-              enableSuggestions: false,
-              textCapitalization: TextCapitalization.characters,
-              decoration: const InputDecoration(
-                labelText: 'SHA-256',
-                hintText: '64 HEX символа',
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Row(
-              children: [
-                FilledButton(
-                  onPressed: isConnected && !_otaBusy ? _runBleOta : null,
-                  child: const Text('Обновить по BLE'),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                controller: _otaUrlCtrl,
+                enabled: isConnected && !_otaBusy,
+                autocorrect: false,
+                enableSuggestions: false,
+                keyboardType: TextInputType.url,
+                decoration: const InputDecoration(
+                  labelText: 'Firmware URL',
+                  hintText: 'https://.../firmware.bin',
                 ),
-                const SizedBox(width: 12),
-                Expanded(child: Text(_otaStatus)),
-              ],
+              ),
             ),
-          ),
-          if (_otaProgress != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: TextField(
+                controller: _otaShaCtrl,
+                enabled: isConnected && !_otaBusy,
+                autocorrect: false,
+                enableSuggestions: false,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(
+                  labelText: 'SHA-256',
+                  hintText: '64 HEX символа',
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Row(
                 children: [
-                  LinearProgressIndicator(value: _otaProgress),
-                  if (_otaProgressLabel.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      _otaProgressLabel,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
+                  FilledButton(
+                    onPressed: isConnected && !_otaBusy ? _runBleOta : null,
+                    child: const Text('Обновить по BLE'),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(_otaStatus)),
                 ],
               ),
             ),
-          const Divider(),
-          ListTile(
-            title: const Text('BNO08x quality'),
-            subtitle: Text('RV=$compassQ MAG=$magQ GYR=$gyroQ'),
-          ),
-          ListTile(
-            title: const Text('RV accuracy'),
-            subtitle: Text('${rvAcc.toStringAsFixed(2)}°'),
-          ),
-          ListTile(
-            title: const Text('Mag / Gyro'),
-            subtitle: Text(
-              '|B|=${magNorm.toStringAsFixed(1)} uT, |w|=${gyroNorm.toStringAsFixed(1)} dps',
+            if (_otaProgress != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    LinearProgressIndicator(value: _otaProgress),
+                    if (_otaProgressLabel.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        _otaProgressLabel,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            const Divider(),
+            ListTile(
+              title: const Text('BNO08x quality'),
+              subtitle: Text('RV=$compassQ MAG=$magQ GYR=$gyroQ'),
             ),
-          ),
-          ListTile(
-            title: const Text('Pitch / Roll'),
-            subtitle: Text(
-              '${pitch.toStringAsFixed(1)}° / ${roll.toStringAsFixed(1)}°',
+            ListTile(
+              title: const Text('RV accuracy'),
+              subtitle: Text('${rvAcc.toStringAsFixed(2)}°'),
             ),
-          ),
+            ListTile(
+              title: const Text('Mag / Gyro'),
+              subtitle: Text(
+                '|B|=${magNorm.toStringAsFixed(1)} uT, |w|=${gyroNorm.toStringAsFixed(1)} dps',
+              ),
+            ),
+            ListTile(
+              title: const Text('Pitch / Roll'),
+              subtitle: Text(
+                '${pitch.toStringAsFixed(1)}° / ${roll.toStringAsFixed(1)}°',
+              ),
+            ),
+          ],
         ],
       ),
     );
