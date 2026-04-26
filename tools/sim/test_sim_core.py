@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import json
+from pathlib import Path
+import tempfile
 import unittest
 
 from anchor_sim import (
@@ -18,9 +21,45 @@ from anchor_sim import (
     simulate_scenario,
     wave_rocking_roll_deg,
 )
+from run_sim import check_thresholds, thresholds_for_scenario_set
+from scenario_data import environment_scenarios_for_set, scenario_set_names, thresholds_for_set
 
 
 class SimCoreTests(unittest.TestCase):
+    def _write_scenario_catalog(self, body: dict) -> Path:
+        path = Path(self._tmpdir.name) / "environment_profiles.json"
+        path.write_text(json.dumps(body, ensure_ascii=True), encoding="utf-8")
+        return path
+
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+
+    def tearDown(self) -> None:
+        self._tmpdir.cleanup()
+
+    def _minimal_catalog(self, scenario: dict | None = None) -> dict:
+        return {
+            "schema_version": 1,
+            "scenario_sets": {
+                "test": [
+                    scenario
+                    or {
+                        "id": "test_profile",
+                        "water_body": "Test water",
+                        "duration_s": 60,
+                        "initial_pos_m": [1.0, 2.0],
+                        "environment": {
+                            "current_mps": 0.1,
+                            "wind_mps": 1.0,
+                            "wave_height_m": 0.2,
+                        },
+                        "gnss": {"noise_sigma_m": 0.7, "sats": 10, "hdop": 1.0},
+                        "thresholds": {"p95_error_m_max": 10.0},
+                    }
+                ]
+            },
+        }
+
     def test_clamp(self) -> None:
         self.assertEqual(clamp(5.0, 0.0, 1.0), 1.0)
         self.assertEqual(clamp(-1.0, 0.0, 1.0), 0.0)
@@ -73,6 +112,104 @@ class SimCoreTests(unittest.TestCase):
         self.assertIn("river_oka_normal_55lb", names)
         self.assertIn("ladoga_storm_abort", names)
         self.assertTrue(any(s.profile is not None and s.profile.abort_expected for s in scenarios))
+
+    def test_scenario_data_loads_russian_profiles(self) -> None:
+        self.assertIn("russian", scenario_set_names())
+        scenarios = environment_scenarios_for_set("russian")
+        oka = next(s for s in scenarios if s.name == "river_oka_normal_55lb")
+        ladoga = next(s for s in scenarios if s.name == "ladoga_storm_abort")
+        self.assertEqual(oka.duration_s, 300)
+        self.assertEqual(oka.initial_pos_m, (12.0, -3.0))
+        self.assertIsNotNone(oka.profile)
+        self.assertEqual(oka.profile.water_body, "Oka lowland river")
+        self.assertEqual(oka.profile.current_mps, 0.35)
+        self.assertEqual(oka.profile.wave_height_m, 0.2)
+        self.assertEqual(ladoga.duration_s, 180)
+        self.assertTrue(ladoga.profile.abort_expected)
+
+    def test_scenario_data_exports_thresholds(self) -> None:
+        thresholds = thresholds_for_set("russian")
+        self.assertEqual(
+            thresholds["ladoga_storm_abort"]["required_failsafe_reason"],
+            "ENV_ABORT_EXPECTED",
+        )
+        self.assertEqual(thresholds["river_oka_normal_55lb"]["p95_error_m_max"], 34.0)
+
+    def test_scenario_data_rejects_bad_schema_version(self) -> None:
+        catalog = self._minimal_catalog()
+        catalog["schema_version"] = 2
+        path = self._write_scenario_catalog(catalog)
+
+        with self.assertRaisesRegex(ValueError, "schema_version"):
+            scenario_set_names(path)
+
+    def test_scenario_data_rejects_unknown_set(self) -> None:
+        path = self._write_scenario_catalog(self._minimal_catalog())
+
+        with self.assertRaisesRegex(ValueError, "unknown scenario set missing"):
+            environment_scenarios_for_set("missing", path)
+
+    def test_scenario_data_rejects_duplicate_ids(self) -> None:
+        catalog = self._minimal_catalog()
+        catalog["scenario_sets"]["test"].append(catalog["scenario_sets"]["test"][0].copy())
+        path = self._write_scenario_catalog(catalog)
+
+        with self.assertRaisesRegex(ValueError, "duplicates test_profile"):
+            environment_scenarios_for_set("test", path)
+
+    def test_scenario_data_rejects_nonfinite_and_nonintegral_values(self) -> None:
+        path = Path(self._tmpdir.name) / "bad.json"
+        path.write_text(
+            '{"schema_version":1,"scenario_sets":{"test":[{"id":"bad","water_body":"x",'
+            '"duration_s":NaN,"initial_pos_m":[1,2],"environment":{}}]}}',
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "non-finite"):
+            environment_scenarios_for_set("test", path)
+
+        catalog = self._minimal_catalog()
+        catalog["scenario_sets"]["test"][0]["duration_s"] = 60.5
+        path = self._write_scenario_catalog(catalog)
+        with self.assertRaisesRegex(ValueError, "duration_s"):
+            environment_scenarios_for_set("test", path)
+
+    def test_scenario_data_rejects_bad_environment_ranges(self) -> None:
+        catalog = self._minimal_catalog()
+        catalog["scenario_sets"]["test"][0]["environment"]["gust_mps"] = 3.0
+        catalog["scenario_sets"]["test"][0]["environment"]["gust_duration_s"] = 0.0
+        path = self._write_scenario_catalog(catalog)
+
+        with self.assertRaisesRegex(ValueError, "gust duration"):
+            environment_scenarios_for_set("test", path)
+
+    def test_scenario_data_rejects_unknown_threshold_keys(self) -> None:
+        catalog = self._minimal_catalog()
+        catalog["scenario_sets"]["test"][0]["thresholds"]["p95_typo"] = 12.0
+        path = self._write_scenario_catalog(catalog)
+
+        with self.assertRaisesRegex(ValueError, "not a known threshold key"):
+            thresholds_for_set("test", path)
+
+    def test_all_scenario_set_names_are_unique(self) -> None:
+        names = [scenario.name for scenario in scenarios_for_set("all")]
+        self.assertEqual(len(names), len(set(names)))
+
+    def test_ladoga_required_failsafe_threshold_is_enforced(self) -> None:
+        thresholds = thresholds_for_scenario_set("russian")
+        metrics = {
+            "time_in_deadband_pct": 0.0,
+            "p95_error_m": 0.0,
+            "max_error_m": 0.0,
+            "p95_rocking_roll_deg": 30.0,
+            "p95_heading_error_deg": 0.0,
+            "steering_jammed_time_pct": 0.0,
+            "steering_backlash_crossings_per_min": 0.0,
+            "events": [],
+        }
+
+        violations = check_thresholds("ladoga_storm_abort", metrics, thresholds)
+
+        self.assertIn("missing failsafe_reason=ENV_ABORT_EXPECTED", violations)
 
     def test_ladoga_storm_marks_environment_abort(self) -> None:
         cfg = SimConfig()

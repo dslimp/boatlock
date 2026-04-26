@@ -5824,3 +5824,32 @@ Self-review:
 - This is a BLE protocol break by design; both firmware and Flutter now require v3/72-byte frames together.
 - Distance in the BLE frame still saturates at the existing `uint16` centimeter field limit, so long-range anchor display is not high precision. That is acceptable for current anchor-hold UX and can be widened only with another protocol bump.
 - The actuator tests prove quiet-output state transitions in native code, not the real steering driver, current limits, end stops, or powered water behavior.
+
+### 2026-04-26 Stage 192: Simulator scenario-data normalization
+
+Scope:
+- Move the first Russian water-body simulation slice out of hard-coded Python into normalized scenario data.
+- Keep the change offline-simulator only; no firmware, BLE, Flutter, or hardware wrapper behavior changes.
+
+External baseline:
+- Reused the research inputs already captured in `tools/sim/research/environment_inputs.*`.
+- No new external source was needed; this stage changes how the existing normalized values are stored and validated.
+
+Key outcomes:
+- Added `tools/sim/scenarios/environment_profiles.json` with Russian profile inputs, GNSS assumptions, starting positions, durations, and thresholds.
+- Added `tools/sim/scenario_data.py` to load and validate scenario data, build `EnvironmentProfile`/`Scenario` objects, and export scenario thresholds.
+- Hardened the loader against malformed schemas, unknown keys, non-finite values, non-integral integer fields, bad environment ranges, duplicate IDs, and unknown threshold keys.
+- Updated `russian_water_scenarios()` and `run_sim.py` to consume the data file while keeping core scenarios in code.
+- Updated simulator tests, README, readiness plan, and TODO state.
+
+Validation:
+- `python3 tools/sim/test_sim_core.py` -> PASS (`27/27`).
+- `python3 -m py_compile tools/sim/anchor_sim.py tools/sim/run_sim.py tools/sim/run_soak.py tools/sim/scenario_data.py tools/sim/test_sim_core.py tools/sim/test_soak.py` -> PASS.
+- `python3 tools/sim/run_sim.py --check --json-out /tmp/boatlock-core-scenario-data-report.json` -> PASS.
+- `python3 tools/sim/run_sim.py --scenario-set russian --check --json-out /tmp/boatlock-russian-scenario-data-report.json` -> PASS.
+- `python3 tools/sim/run_sim.py --scenario-set all --check --json-out /tmp/boatlock-all-scenario-data-report.json` -> PASS.
+- `python3 tools/sim/test_soak.py` -> PASS (`2/2`).
+- `python3 tools/sim/run_soak.py --hours 6 --check --json-out /tmp/boatlock-soak-scenario-data-report.json` -> PASS.
+
+Self-review:
+- This is still a manually normalized scenario catalog, not calibrated truth. The next sim work should add provenance/confidence metadata and real current/voltage/boat-mass calibration after bench data exists.

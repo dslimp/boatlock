@@ -738,112 +738,28 @@ def default_scenarios() -> List[Scenario]:
 
 
 def russian_water_scenarios() -> List[Scenario]:
-    profiles = [
-        EnvironmentProfile(
-            name="river_oka_normal_55lb",
-            water_body="Oka lowland river",
-            current_mps=0.35,
-            current_direction_deg=90.0,
-            wind_mps=4.0,
-            wind_direction_deg=45.0,
-            wave_height_m=0.2,
-            wave_period_s=2.5,
-            wave_direction_deg=45.0,
-        ),
-        EnvironmentProfile(
-            name="volga_spring_flow_80lb",
-            water_body="Volga spring flood or dam release",
-            current_mps=1.2,
-            current_direction_deg=90.0,
-            wind_mps=6.0,
-            wind_direction_deg=70.0,
-            wave_height_m=0.5,
-            wave_period_s=3.0,
-            wave_direction_deg=70.0,
-        ),
-        EnvironmentProfile(
-            name="rybinsk_fetch_55lb",
-            water_body="Rybinsk Reservoir open fetch",
-            current_mps=0.1,
-            current_direction_deg=120.0,
-            wind_mps=10.0,
-            wind_direction_deg=260.0,
-            wind_swing_deg=15.0,
-            wind_swing_period_s=120.0,
-            gust_mps=14.0,
-            gust_period_s=80.0,
-            gust_duration_s=18.0,
-            wave_height_m=1.5,
-            wave_period_s=3.0,
-            wave_direction_deg=260.0,
-        ),
-        EnvironmentProfile(
-            name="ladoga_storm_abort",
-            water_body="Ladoga storm class",
-            current_mps=0.4,
-            current_direction_deg=160.0,
-            wind_mps=18.0,
-            wind_direction_deg=210.0,
-            gust_mps=20.0,
-            gust_period_s=70.0,
-            gust_duration_s=25.0,
-            wave_height_m=3.0,
-            wave_period_s=3.5,
-            wave_direction_deg=210.0,
-            abort_expected=True,
-        ),
-        EnvironmentProfile(
-            name="baltic_gulf_drift",
-            water_body="Gulf of Finland wind-driven drift",
-            current_mps=0.15,
-            current_direction_deg=80.0,
-            current_swing_deg=35.0,
-            current_swing_period_s=180.0,
-            wind_mps=10.0,
-            wind_direction_deg=80.0,
-            wind_swing_deg=25.0,
-            wind_swing_period_s=180.0,
-            gust_mps=12.0,
-            gust_period_s=100.0,
-            gust_duration_s=20.0,
-            wave_height_m=1.2,
-            wave_period_s=3.5,
-            wave_direction_deg=80.0,
-        ),
-    ]
+    from scenario_data import environment_scenarios_for_set
 
-    starts = {
-        "river_oka_normal_55lb": (12.0, -3.0),
-        "volga_spring_flow_80lb": (16.0, -4.0),
-        "rybinsk_fetch_55lb": (14.0, 6.0),
-        "ladoga_storm_abort": (14.0, 5.0),
-        "baltic_gulf_drift": (12.0, 4.0),
-    }
-    durations = {
-        "ladoga_storm_abort": 180,
-    }
-
-    scenarios: List[Scenario] = []
-    for profile in profiles:
-        noise_sigma = 0.8 + min(2.5, profile.wave_height_m * 0.55)
-        scenarios.append(
-            Scenario(
-                profile.name,
-                durations.get(profile.name, 300),
-                starts[profile.name],
-                profiled_environment_accel_fn(profile),
-                make_gnss_observer(noise_sigma_m=noise_sigma, sats=11, hdop=1.2),
-                profile=profile,
-            )
-        )
-    return scenarios
+    return environment_scenarios_for_set("russian")
 
 
 def scenarios_for_set(name: str) -> List[Scenario]:
     if name == "core":
         return default_scenarios()
-    if name == "russian":
-        return russian_water_scenarios()
+    from scenario_data import environment_scenarios_for_set, scenario_set_names
+
+    data_sets = scenario_set_names()
+    if name in data_sets:
+        return environment_scenarios_for_set(name)
     if name == "all":
-        return default_scenarios() + russian_water_scenarios()
-    raise ValueError(f"unknown scenario set: {name}")
+        scenarios = default_scenarios()
+        seen = {scenario.name for scenario in scenarios}
+        for data_set in data_sets:
+            for scenario in environment_scenarios_for_set(data_set):
+                if scenario.name in seen:
+                    raise ValueError(f"scenario {scenario.name} is duplicated in all")
+                seen.add(scenario.name)
+                scenarios.append(scenario)
+        return scenarios
+    valid = ", ".join(["core", *data_sets, "all"])
+    raise ValueError(f"unknown scenario set: {name}; valid sets: {valid}")

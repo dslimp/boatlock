@@ -32,7 +32,7 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 
 ## P2 — Simulation And Product Polish
 
-- [ ] Normalize `tools/sim/research/environment_inputs.*` into simulator scenario data.
+- [x] Normalize `tools/sim/research/environment_inputs.*` into simulator scenario data.
 - [ ] Add windage, waves/rocking, wakes, and current direction changes to simulation.
 - [x] Add brushed motor, battery sag/current limit, thermal derate, and driver deadband to simulation.
 - [x] Add steering backlash/jam/wrong-zero scenarios.

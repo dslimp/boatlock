@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Dict, List
 
 from anchor_sim import SimConfig, scenarios_for_set, simulate_scenario
+from scenario_data import scenario_set_names, thresholds_for_set
 
 
 DEFAULT_THRESHOLDS: Dict[str, Dict[str, object]] = {
@@ -52,37 +53,26 @@ DEFAULT_THRESHOLDS: Dict[str, Dict[str, object]] = {
         "p95_error_m_max": 40.0,
         "max_error_m_max": 80.0,
     },
-    "river_oka_normal_55lb": {
-        "time_in_deadband_pct_min": 12.0,
-        "p95_error_m_max": 34.0,
-        "max_error_m_max": 70.0,
-        "p95_rocking_roll_deg_min": 0.8,
-    },
-    "volga_spring_flow_80lb": {
-        "p95_error_m_max": 90.0,
-        "max_error_m_max": 150.0,
-        "p95_rocking_roll_deg_min": 2.0,
-    },
-    "rybinsk_fetch_55lb": {
-        "p95_error_m_max": 110.0,
-        "max_error_m_max": 190.0,
-        "p95_rocking_roll_deg_min": 7.0,
-    },
-    "ladoga_storm_abort": {
-        "max_error_m_max": 500.0,
-        "p95_rocking_roll_deg_min": 14.0,
-        "required_failsafe_reason": "ENV_ABORT_EXPECTED",
-    },
-    "baltic_gulf_drift": {
-        "p95_error_m_max": 95.0,
-        "max_error_m_max": 170.0,
-        "p95_rocking_roll_deg_min": 5.0,
-    },
 }
 
 
-def check_thresholds(scenario_name: str, metrics: Dict[str, object]) -> List[str]:
-    limits = DEFAULT_THRESHOLDS.get(scenario_name, {})
+def thresholds_for_scenario_set(name: str) -> Dict[str, Dict[str, object]]:
+    thresholds = {key: value.copy() for key, value in DEFAULT_THRESHOLDS.items()}
+    data_sets = scenario_set_names()
+    if name == "all":
+        for data_set in data_sets:
+            thresholds.update(thresholds_for_set(data_set))
+    elif name in data_sets:
+        thresholds.update(thresholds_for_set(name))
+    return thresholds
+
+
+def check_thresholds(
+    scenario_name: str,
+    metrics: Dict[str, object],
+    thresholds: Dict[str, Dict[str, object]],
+) -> List[str]:
+    limits = thresholds.get(scenario_name, {})
     errs: List[str] = []
     min_dead = limits.get("time_in_deadband_pct_min")
     max_p95 = limits.get("p95_error_m_max")
@@ -136,9 +126,8 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=7, help="Random seed")
     ap.add_argument(
         "--scenario-set",
-        choices=("core", "russian", "all"),
         default="core",
-        help="Scenario set to run",
+        help="Scenario set to run: core, all, or a JSON scenario set name",
     )
     ap.add_argument("--check", action="store_true", help="Fail on threshold violations")
     ap.add_argument(
@@ -150,6 +139,7 @@ def main() -> int:
     args = ap.parse_args()
 
     cfg = SimConfig()
+    thresholds = thresholds_for_scenario_set(args.scenario_set)
     results = []
     failed = False
 
@@ -162,7 +152,7 @@ def main() -> int:
     for i, sc in enumerate(scenarios_for_set(args.scenario_set)):
         r = simulate_scenario(cfg, sc, seed=args.seed + i)
         m = r["metrics"]
-        errs = check_thresholds(sc.name, m)
+        errs = check_thresholds(sc.name, m, thresholds)
         status = "PASS" if not errs else "FAIL"
         if errs:
             failed = True
@@ -199,7 +189,7 @@ def main() -> int:
             {
                 "config": cfg.__dict__,
                 "scenario_set": args.scenario_set,
-                "thresholds": DEFAULT_THRESHOLDS,
+                "thresholds": thresholds,
                 "results": results,
             },
             ensure_ascii=True,

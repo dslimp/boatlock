@@ -1,0 +1,188 @@
+{
+  "schema_version": 1,
+  "scenario_sets": {
+    "russian": [
+      {
+        "id": "river_oka_normal_55lb",
+        "water_body": "Oka lowland river",
+        "source_candidate_id": "river_oka_normal_55lb",
+        "motor_class": "m45_55_12v",
+        "expected": "hold_for_light_boat_or_bounded_drift",
+        "duration_s": 300,
+        "initial_pos_m": [12.0, -3.0],
+        "environment": {
+          "current_mps": 0.35,
+          "current_direction_deg": 90.0,
+          "current_swing_deg": 0.0,
+          "current_swing_period_s": 180.0,
+          "wind_mps": 4.0,
+          "wind_direction_deg": 45.0,
+          "wind_swing_deg": 0.0,
+          "wind_swing_period_s": 180.0,
+          "gust_mps": 0.0,
+          "gust_period_s": 90.0,
+          "gust_duration_s": 0.0,
+          "wave_height_m": 0.2,
+          "wave_period_s": 2.5,
+          "wave_direction_deg": 45.0,
+          "abort_expected": false
+        },
+        "gnss": {
+          "noise_sigma_m": 0.91,
+          "sats": 11,
+          "hdop": 1.2
+        },
+        "thresholds": {
+          "time_in_deadband_pct_min": 12.0,
+          "p95_error_m_max": 34.0,
+          "max_error_m_max": 70.0,
+          "p95_rocking_roll_deg_min": 0.8
+        }
+      },
+      {
+        "id": "volga_spring_flow_80lb",
+        "water_body": "Volga spring flood or dam release",
+        "source_candidate_id": "volga_spring_flow_80lb",
+        "motor_class": "m70_90_24v",
+        "expected": "insufficient_thrust_or_clean_containment_breach",
+        "duration_s": 300,
+        "initial_pos_m": [16.0, -4.0],
+        "environment": {
+          "current_mps": 1.2,
+          "current_direction_deg": 90.0,
+          "current_swing_deg": 0.0,
+          "current_swing_period_s": 180.0,
+          "wind_mps": 6.0,
+          "wind_direction_deg": 70.0,
+          "wind_swing_deg": 0.0,
+          "wind_swing_period_s": 180.0,
+          "gust_mps": 0.0,
+          "gust_period_s": 90.0,
+          "gust_duration_s": 0.0,
+          "wave_height_m": 0.5,
+          "wave_period_s": 3.0,
+          "wave_direction_deg": 70.0,
+          "abort_expected": false
+        },
+        "gnss": {
+          "noise_sigma_m": 1.075,
+          "sats": 11,
+          "hdop": 1.2
+        },
+        "thresholds": {
+          "p95_error_m_max": 90.0,
+          "max_error_m_max": 150.0,
+          "p95_rocking_roll_deg_min": 2.0
+        }
+      },
+      {
+        "id": "rybinsk_fetch_55lb",
+        "water_body": "Rybinsk Reservoir open fetch",
+        "source_candidate_id": "rybinsk_fetch_55lb",
+        "motor_class": "m45_55_12v",
+        "expected": "no_twitch_thrash_likely_fail_or_bounded_correction",
+        "duration_s": 300,
+        "initial_pos_m": [14.0, 6.0],
+        "environment": {
+          "current_mps": 0.1,
+          "current_direction_deg": 120.0,
+          "current_swing_deg": 0.0,
+          "current_swing_period_s": 180.0,
+          "wind_mps": 10.0,
+          "wind_direction_deg": 260.0,
+          "wind_swing_deg": 15.0,
+          "wind_swing_period_s": 120.0,
+          "gust_mps": 14.0,
+          "gust_period_s": 80.0,
+          "gust_duration_s": 18.0,
+          "wave_height_m": 1.5,
+          "wave_period_s": 3.0,
+          "wave_direction_deg": 260.0,
+          "abort_expected": false
+        },
+        "gnss": {
+          "noise_sigma_m": 1.625,
+          "sats": 11,
+          "hdop": 1.2
+        },
+        "thresholds": {
+          "p95_error_m_max": 110.0,
+          "max_error_m_max": 190.0,
+          "p95_rocking_roll_deg_min": 7.0
+        }
+      },
+      {
+        "id": "ladoga_storm_abort",
+        "water_body": "Ladoga storm class",
+        "source_candidate_id": "ladoga_storm_abort",
+        "motor_class": "m100_115_36v",
+        "expected": "fail_closed_quiet_state",
+        "duration_s": 180,
+        "initial_pos_m": [14.0, 5.0],
+        "environment": {
+          "current_mps": 0.4,
+          "current_direction_deg": 160.0,
+          "current_swing_deg": 0.0,
+          "current_swing_period_s": 180.0,
+          "wind_mps": 18.0,
+          "wind_direction_deg": 210.0,
+          "wind_swing_deg": 0.0,
+          "wind_swing_period_s": 180.0,
+          "gust_mps": 20.0,
+          "gust_period_s": 70.0,
+          "gust_duration_s": 25.0,
+          "wave_height_m": 3.0,
+          "wave_period_s": 3.5,
+          "wave_direction_deg": 210.0,
+          "abort_expected": true
+        },
+        "gnss": {
+          "noise_sigma_m": 2.45,
+          "sats": 11,
+          "hdop": 1.2
+        },
+        "thresholds": {
+          "max_error_m_max": 500.0,
+          "p95_rocking_roll_deg_min": 14.0,
+          "required_failsafe_reason": "ENV_ABORT_EXPECTED"
+        }
+      },
+      {
+        "id": "baltic_gulf_drift",
+        "water_body": "Gulf of Finland wind-driven drift",
+        "source_candidate_id": "baltic_gulf_drift",
+        "motor_class": "m70_90_24v",
+        "expected": "wind_driven_current_vector_change_test",
+        "duration_s": 300,
+        "initial_pos_m": [12.0, 4.0],
+        "environment": {
+          "current_mps": 0.15,
+          "current_direction_deg": 80.0,
+          "current_swing_deg": 35.0,
+          "current_swing_period_s": 180.0,
+          "wind_mps": 10.0,
+          "wind_direction_deg": 80.0,
+          "wind_swing_deg": 25.0,
+          "wind_swing_period_s": 180.0,
+          "gust_mps": 12.0,
+          "gust_period_s": 100.0,
+          "gust_duration_s": 20.0,
+          "wave_height_m": 1.2,
+          "wave_period_s": 3.5,
+          "wave_direction_deg": 80.0,
+          "abort_expected": false
+        },
+        "gnss": {
+          "noise_sigma_m": 1.46,
+          "sats": 11,
+          "hdop": 1.2
+        },
+        "thresholds": {
+          "p95_error_m_max": 95.0,
+          "max_error_m_max": 170.0,
+          "p95_rocking_roll_deg_min": 5.0
+        }
+      }
+    ]
+  }
+}

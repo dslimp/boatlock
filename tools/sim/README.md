@@ -74,6 +74,11 @@ These scenarios add current, wind/gusts, wave-induced forcing, and a
 `p95_rocking_roll_deg` metric. `ladoga_storm_abort` is intentionally modeled as
 an environment-abort case, not as a normal anchor-hold success case.
 
+Normalized scenario inputs live in
+`tools/sim/scenarios/environment_profiles.json`. The research files under
+`tools/sim/research/` remain source material and should not be treated as
+directly executable simulator configuration.
+
 ## Run locally
 
 ```bash

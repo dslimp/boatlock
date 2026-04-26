@@ -162,9 +162,9 @@ Keep two layers:
 
 Next simulation work:
 
-- Convert `tools/sim/research/environment_inputs.*` into a normalized scenario
-  schema with motor class, loaded boat mass, wind, current, wave, wake, GNSS, and
-  compass fields.
+- Extend the normalized `tools/sim/scenarios/environment_profiles.json` schema
+  beyond the first Russian water-body slice with loaded boat mass, wake, compass,
+  provenance, and calibration confidence fields.
 - Add windage and yaw moment to the world model.
 - Add waves/rocking: significant wave height, peak wave, period, direction,
   roll/pitch/heave perturbations, and their effect on BNO08x/GNSS samples.
