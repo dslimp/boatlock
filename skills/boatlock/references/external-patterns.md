@@ -65,6 +65,8 @@ Use this file for:
 - Arduino Blink Without Delay example: <https://docs.arduino.cc/built-in-examples/digital/BlinkWithoutDelay/>
 - Espressif OTA API: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/ota.html>
 - Espressif BLE OTA component: <https://components.espressif.com/components/espressif/ble_ota>
+- NOAA/NWS Significant Wave Height: <https://www.weather.gov/mfl/waves>
+- NOAA/NDBC Wave Measurement and Steepness: <https://www.ndbc.noaa.gov/faq/wavecalc.shtml> and <https://www.ndbc.noaa.gov/faq/algorithm.shtml>
 
 ## What OpenCPN Gets Right
 
@@ -172,6 +174,7 @@ Implication for BoatLock:
 - HIL logs are part of the test interface. Keep log records single-line, bounded, and neutralize CR/LF/control characters before logging command-derived fields.
 - HIL JSON reports are also a test interface. Build JSON strings through one escaping helper; quote, backslash, and control characters must never be interpolated raw into `SIM_REPORT`.
 - Periodic UI/BLE/sensor cadence should use one shared non-blocking elapsed-time helper. Floor interval `0` instead of allowing same-timestamp bursts, and test unsigned rollover directly instead of relying only on normal interval scenarios.
+- Offline water simulation should treat wave height as a significant-wave-height input and expose steepness/roll-rate as separate stress metrics. A high wave-height number alone is not enough; short-period steep waves are the cases most likely to degrade GNSS/heading frame quality and should produce explicit report fields/events.
 - One-shot UI/diagnostic banners follow the same timer rule: store the start timestamp and duration, then compare unsigned elapsed time. Do not store absolute expiry timestamps as the authority.
 - Do not auto-enter manual control from failsafe. After a fault clears, operator control must be an explicit new action.
 - Treat non-finite sensor/control values like unavailable inputs at module boundaries, not as values to normalize later inside actuator code.

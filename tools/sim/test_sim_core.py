@@ -20,6 +20,7 @@ from anchor_sim import (
     scenarios_for_set,
     simulate_scenario,
     wave_rocking_roll_deg,
+    wave_steepness_ratio,
 )
 from run_sim import check_thresholds, provenance_for_scenario_set, thresholds_for_scenario_set
 from scenario_data import (
@@ -122,6 +123,7 @@ class SimCoreTests(unittest.TestCase):
         ax1, ay1 = environment_accel_mps2(profile, 1)
         self.assertNotEqual((ax0, ay0), (ax1, ay1))
         self.assertGreater(abs(wave_rocking_roll_deg(profile, 1)), 1.0)
+        self.assertGreater(wave_steepness_ratio(profile), 0.05)
 
     def test_environment_profile_uses_loaded_mass_for_force_acceleration(self) -> None:
         light = EnvironmentProfile(
@@ -295,6 +297,10 @@ class SimCoreTests(unittest.TestCase):
             "p95_error_m": 0.0,
             "max_error_m": 0.0,
             "p95_rocking_roll_deg": 30.0,
+            "p95_rocking_roll_rate_dps": 50.0,
+            "max_wave_steepness": 0.2,
+            "gnss_frame_degraded_time_pct": 100.0,
+            "heading_frame_degraded_time_pct": 100.0,
             "p95_heading_error_deg": 0.0,
             "steering_jammed_time_pct": 0.0,
             "steering_backlash_crossings_per_min": 0.0,
@@ -311,6 +317,17 @@ class SimCoreTests(unittest.TestCase):
         result = simulate_scenario(cfg, scenario, seed=3)
         events = result["metrics"]["events"]
         self.assertTrue(any(e["failsafe_reason"] == "ENV_ABORT_EXPECTED" for e in events))
+        self.assertTrue(any(e.get("sensor_reason") == "SENSOR_FRAME_ROLL_AND_CHOP" for e in events))
+
+    def test_wave_chop_reports_sensor_frame_degradation_metrics(self) -> None:
+        cfg = SimConfig()
+        scenario = next(s for s in russian_water_scenarios() if s.name == "rybinsk_fetch_55lb")
+        result = simulate_scenario(cfg, scenario, seed=6)
+        metrics = result["metrics"]
+        self.assertGreater(metrics["max_wave_steepness"], 0.09)
+        self.assertGreater(metrics["p95_rocking_roll_rate_dps"], 14.0)
+        self.assertGreater(metrics["gnss_frame_degraded_time_pct"], 80.0)
+        self.assertTrue(any(e.get("sensor_reason") != "NONE" for e in metrics["events"]))
 
     def test_motor_deadband_blocks_low_command(self) -> None:
         cfg = SimConfig(motor_deadband_pct=10.0)

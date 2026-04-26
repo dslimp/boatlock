@@ -23,6 +23,9 @@ Status after the 2026-04-26 autonomous pass.
   profile, and required profile instead of a generic rejection.
 - Smoke and production-app e2e result JSON now include structured
   `commandReject*` fields for firmware profile rejections.
+- Offline Russian-water simulation now reports wave steepness, roll-rate, and
+  GNSS/heading sensor-frame degradation metrics/events with thresholds for
+  Rybinsk fetch and Ladoga storm scenarios.
 
 ## Active Background Work
 
@@ -43,8 +46,6 @@ Status after the 2026-04-26 autonomous pass.
   `--dart-define=BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL=https://dslimp.github.io/boatlock/firmware/main/manifest.json`.
 - Add production app e2e fast-fail for firmware profile rejections:
   `SIM_RUN`, compass service commands, `OTA_BEGIN`, and `OTA_FINISH`.
-- Implement the next offline simulator slice: wake/short-chop events plus
-  BNO08x/GNSS sensor-frame degradation metrics and thresholds.
 - Keep multi-client controller support deferred until per-client auth/session and
   a single control-owner lease are implemented.
 

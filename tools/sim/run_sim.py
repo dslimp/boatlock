@@ -89,6 +89,10 @@ def check_thresholds(
     max_p95 = limits.get("p95_error_m_max")
     max_max = limits.get("max_error_m_max")
     min_rocking = limits.get("p95_rocking_roll_deg_min")
+    min_rocking_rate = limits.get("p95_rocking_roll_rate_dps_min")
+    min_wave_steepness = limits.get("max_wave_steepness_min")
+    min_gnss_degraded = limits.get("gnss_frame_degraded_time_pct_min")
+    min_heading_degraded = limits.get("heading_frame_degraded_time_pct_min")
     max_p95_heading = limits.get("p95_heading_error_deg_max")
     min_jammed = limits.get("steering_jammed_time_pct_min")
     min_backlash_crossings = limits.get("steering_backlash_crossings_per_min_min")
@@ -104,6 +108,24 @@ def check_thresholds(
     if isinstance(min_rocking, float) and metrics["p95_rocking_roll_deg"] < min_rocking:
         errs.append(
             f"p95_rocking_roll_deg={metrics['p95_rocking_roll_deg']:.2f} < {min_rocking:.2f}"
+        )
+    if isinstance(min_rocking_rate, float) and metrics["p95_rocking_roll_rate_dps"] < min_rocking_rate:
+        errs.append(
+            f"p95_rocking_roll_rate_dps={metrics['p95_rocking_roll_rate_dps']:.2f} < {min_rocking_rate:.2f}"
+        )
+    if isinstance(min_wave_steepness, float) and metrics["max_wave_steepness"] < min_wave_steepness:
+        errs.append(
+            f"max_wave_steepness={metrics['max_wave_steepness']:.3f} < {min_wave_steepness:.3f}"
+        )
+    if isinstance(min_gnss_degraded, float) and metrics["gnss_frame_degraded_time_pct"] < min_gnss_degraded:
+        errs.append(
+            "gnss_frame_degraded_time_pct="
+            f"{metrics['gnss_frame_degraded_time_pct']:.2f} < {min_gnss_degraded:.2f}"
+        )
+    if isinstance(min_heading_degraded, float) and metrics["heading_frame_degraded_time_pct"] < min_heading_degraded:
+        errs.append(
+            "heading_frame_degraded_time_pct="
+            f"{metrics['heading_frame_degraded_time_pct']:.2f} < {min_heading_degraded:.2f}"
         )
     if isinstance(max_p95_heading, float) and metrics["p95_heading_error_deg"] > max_p95_heading:
         errs.append(
@@ -158,9 +180,10 @@ def main() -> int:
     print("Scenario summary:")
     print(
         "name | deadband% | p95(m) | max(m) | head95(deg) | jam% | "
-        "backlash/min | misalignThrust% | sat% | dirChanges/min | rock95(deg) | status"
+        "backlash/min | misalignThrust% | sat% | dirChanges/min | rock95(deg) | "
+        "rollRate95(dps) | steep | gnssDeg% | headDeg% | status"
     )
-    print("-" * 160)
+    print("-" * 205)
     for i, sc in enumerate(scenarios_for_set(args.scenario_set)):
         r = simulate_scenario(cfg, sc, seed=args.seed + i)
         m = r["metrics"]
@@ -190,6 +213,10 @@ def main() -> int:
             f"{m['control_saturation_time_pct']:.2f} | "
             f"{m['num_thrust_direction_changes_per_min']:.2f} | "
             f"{m['p95_rocking_roll_deg']:.2f} | "
+            f"{m['p95_rocking_roll_rate_dps']:.2f} | "
+            f"{m['max_wave_steepness']:.3f} | "
+            f"{m['gnss_frame_degraded_time_pct']:.2f} | "
+            f"{m['heading_frame_degraded_time_pct']:.2f} | "
             f"{status}"
         )
         for e in errs:

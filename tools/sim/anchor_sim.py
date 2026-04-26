@@ -13,6 +13,7 @@ ANCHOR_LON = 30.314100
 REFERENCE_LOADED_BOAT_MASS_KG = 320.0
 AIR_DENSITY_KG_M3 = 1.225
 WATER_DENSITY_KG_M3 = 1000.0
+GRAVITY_MPS2 = 9.80665
 
 
 def clamp(v: float, lo: float, hi: float) -> float:
@@ -149,6 +150,10 @@ class StepSample:
     gnss_reason: str
     failsafe_reason: str
     rocking_roll_deg: float = 0.0
+    rocking_roll_rate_dps: float = 0.0
+    wave_steepness: float = 0.0
+    gnss_frame_degraded: bool = False
+    heading_frame_degraded: bool = False
     battery_voltage_v: float = 12.6
     motor_current_a: float = 0.0
     motor_temp_c: float = 25.0
@@ -208,6 +213,41 @@ def wave_rocking_roll_deg(profile: Optional[EnvironmentProfile], t_s: int) -> fl
     phase = (2.0 * math.pi * t_s) / period
     amp = min(24.0, profile.wave_height_m * 7.0)
     return amp * math.sin(phase) + 0.25 * amp * math.sin((phase * 2.0) + 0.7)
+
+
+def wave_length_m(profile: Optional[EnvironmentProfile]) -> float:
+    if profile is None or profile.wave_height_m <= 0.0:
+        return 0.0
+    period = max(1.5, profile.wave_period_s)
+    return (GRAVITY_MPS2 * period * period) / (2.0 * math.pi)
+
+
+def wave_steepness_ratio(profile: Optional[EnvironmentProfile]) -> float:
+    length = wave_length_m(profile)
+    if profile is None or length <= 0.0:
+        return 0.0
+    return profile.wave_height_m / length
+
+
+def sensor_frame_degradation(
+    profile: Optional[EnvironmentProfile],
+    rocking_roll_deg: float,
+    rocking_roll_rate_dps: float,
+) -> Tuple[bool, bool, str]:
+    steepness = wave_steepness_ratio(profile)
+    roll_abs = abs(rocking_roll_deg)
+    rate_abs = abs(rocking_roll_rate_dps)
+    gnss_degraded = steepness >= 0.08 or rate_abs >= 35.0
+    heading_degraded = steepness >= 0.12 or roll_abs >= 12.0 or rate_abs >= 45.0
+    if gnss_degraded and heading_degraded:
+        reason = "SENSOR_FRAME_ROLL_AND_CHOP"
+    elif gnss_degraded:
+        reason = "GNSS_FRAME_CHOP"
+    elif heading_degraded:
+        reason = "HEADING_FRAME_ROLL"
+    else:
+        reason = "NONE"
+    return gnss_degraded, heading_degraded, reason
 
 
 def _quadratic_fluid_accel_mps2(
@@ -550,12 +590,22 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
     samples: List[StepSample] = []
     events: List[Dict[str, object]] = []
     last_event_key = ""
+    previous_rocking_roll = wave_rocking_roll_deg(scenario.profile, 0)
     thrust_dirs: List[float] = []
     invalid_thrust_count = 0
     invalid_distance_count = 0
     invalid_motor_count = 0
 
     for t in range(0, scenario.duration_s):
+        rocking_roll = wave_rocking_roll_deg(scenario.profile, t)
+        rocking_roll_rate = 0.0 if t == 0 else (rocking_roll - previous_rocking_roll) / cfg.dt_s
+        previous_rocking_roll = rocking_roll
+        wave_steepness = wave_steepness_ratio(scenario.profile)
+        gnss_frame_degraded, heading_frame_degraded, sensor_reason = sensor_frame_degradation(
+            scenario.profile,
+            rocking_roll,
+            rocking_roll_rate,
+        )
         obs = scenario.obs_fn(t, x_m, y_m, rnd)
         if obs.valid and obs.lat is not None and obs.lon is not None:
             last_obs = obs
@@ -624,7 +674,6 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
             ax_env, ay_env = environment_accel_mps2(scenario.profile, t, vx, vy)
         else:
             ax_env, ay_env = scenario.env_accel_fn(t)
-        rocking_roll = wave_rocking_roll_deg(scenario.profile, t)
         ax = ax_env + thrust_acc * hx - cfg.drag_per_s * vx
         ay = ay_env + thrust_acc * hy - cfg.drag_per_s * vy
         vx += ax * cfg.dt_s
@@ -634,9 +683,18 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
         if (not math.isfinite(x_m)) or (not math.isfinite(y_m)) or (not math.isfinite(dist_true)):
             invalid_distance_count += 1
 
-        key = f"{gnss_reason}|{failsafe_reason}"
-        if key != last_event_key and (gnss_reason != "NONE" or failsafe_reason != "NONE"):
-            events.append({"t_s": t, "gnss_reason": gnss_reason, "failsafe_reason": failsafe_reason})
+        key = f"{gnss_reason}|{failsafe_reason}|{sensor_reason}"
+        if key != last_event_key and (
+            gnss_reason != "NONE" or failsafe_reason != "NONE" or sensor_reason != "NONE"
+        ):
+            events.append(
+                {
+                    "t_s": t,
+                    "gnss_reason": gnss_reason,
+                    "failsafe_reason": failsafe_reason,
+                    "sensor_reason": sensor_reason,
+                }
+            )
             last_event_key = key
 
         samples.append(
@@ -653,6 +711,10 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
                 gnss_reason=gnss_reason,
                 failsafe_reason=failsafe_reason,
                 rocking_roll_deg=rocking_roll,
+                rocking_roll_rate_dps=rocking_roll_rate,
+                wave_steepness=wave_steepness,
+                gnss_frame_degraded=gnss_frame_degraded,
+                heading_frame_degraded=heading_frame_degraded,
                 battery_voltage_v=motor_state.battery_voltage_v,
                 motor_current_a=motor_state.current_a,
                 motor_temp_c=motor_state.temp_c,
@@ -682,6 +744,10 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
     idx95_heading = int(0.95 * (len(heading_errors) - 1)) if heading_errors else 0
     rocking_abs = sorted(abs(s.rocking_roll_deg) for s in samples)
     idx95_rock = int(0.95 * (len(rocking_abs) - 1)) if rocking_abs else 0
+    rocking_rates = sorted(abs(s.rocking_roll_rate_dps) for s in samples)
+    idx95_rock_rate = int(0.95 * (len(rocking_rates) - 1)) if rocking_rates else 0
+    gnss_frame_degraded_hits = sum(1 for s in samples if s.gnss_frame_degraded)
+    heading_frame_degraded_hits = sum(1 for s in samples if s.heading_frame_degraded)
     applied = [s.applied_thrust_pct for s in samples]
     voltages = [s.battery_voltage_v for s in samples]
     currents = [s.motor_current_a for s in samples]
@@ -730,6 +796,10 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
         "invalid_motor_count": float(invalid_motor_count),
         "p95_rocking_roll_deg": rocking_abs[idx95_rock] if rocking_abs else 0.0,
         "max_rocking_roll_deg": max(rocking_abs) if rocking_abs else 0.0,
+        "p95_rocking_roll_rate_dps": rocking_rates[idx95_rock_rate] if rocking_rates else 0.0,
+        "max_wave_steepness": max((s.wave_steepness for s in samples), default=0.0),
+        "gnss_frame_degraded_time_pct": (gnss_frame_degraded_hits * 100.0) / max(1, len(samples)),
+        "heading_frame_degraded_time_pct": (heading_frame_degraded_hits * 100.0) / max(1, len(samples)),
         "avg_applied_thrust_pct": sum(applied) / max(1, len(applied)),
         "max_applied_thrust_pct": max(applied) if applied else 0.0,
         "min_battery_voltage_v": min(voltages) if voltages else cfg.motor_nominal_voltage_v,

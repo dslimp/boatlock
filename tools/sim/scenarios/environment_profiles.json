@@ -141,7 +141,10 @@
         "thresholds": {
           "p95_error_m_max": 110.0,
           "max_error_m_max": 190.0,
-          "p95_rocking_roll_deg_min": 7.0
+          "p95_rocking_roll_deg_min": 7.0,
+          "p95_rocking_roll_rate_dps_min": 14.0,
+          "max_wave_steepness_min": 0.09,
+          "gnss_frame_degraded_time_pct_min": 80.0
         }
       },
       {
@@ -188,6 +191,10 @@
         "thresholds": {
           "max_error_m_max": 500.0,
           "p95_rocking_roll_deg_min": 14.0,
+          "p95_rocking_roll_rate_dps_min": 25.0,
+          "max_wave_steepness_min": 0.14,
+          "gnss_frame_degraded_time_pct_min": 80.0,
+          "heading_frame_degraded_time_pct_min": 80.0,
           "required_failsafe_reason": "ENV_ABORT_EXPECTED"
         }
       },

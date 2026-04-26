@@ -6531,3 +6531,31 @@ Validation:
 
 Self-review:
 - This closes the wrapper-visible rejection-structure gap. The remaining autonomous software work is now mostly simulator physics/sensor scenarios and CI/Pages deployment proof, while motor/steering changes remain hardware-intake gated.
+
+### 2026-04-26 Stage 225: Wave chop sensor-frame simulation metrics
+
+Scope:
+- Add the next offline simulator slice for short, steep wave and rocking effects.
+- Keep this as metrics/events and thresholds; do not change runtime firmware control behavior.
+
+External baseline:
+- NOAA/NWS defines significant wave height as the average of the highest third of waves, with occasional individual waves much larger: https://www.weather.gov/mfl/waves.
+- NOAA/NDBC treats wave steepness as wave height divided by wavelength and uses wave height plus period to classify steepness: https://www.ndbc.noaa.gov/faq/algorithm.shtml.
+
+Key outcomes:
+- Added wave wavelength/steepness helpers and per-step rocking roll-rate calculation.
+- Added GNSS/heading sensor-frame degradation classification based on steepness, roll angle, and roll rate.
+- Added `sensor_reason` entries to simulation events plus report metrics for `p95_rocking_roll_rate_dps`, `max_wave_steepness`, `gnss_frame_degraded_time_pct`, and `heading_frame_degraded_time_pct`.
+- Added threshold support for the new metrics and enabled them for Rybinsk fetch and Ladoga storm scenarios.
+- Promoted the durable simulation baseline into `skills/boatlock/references/external-patterns.md`.
+
+Validation:
+- `python3 tools/sim/test_sim_core.py` -> PASS (`33/33`).
+- `python3 tools/sim/run_sim.py --scenario-set russian --check --json-out /tmp/boatlock-russian-report.json` -> PASS.
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> PASS.
+- `python3 tools/sim/test_soak.py` -> PASS (`2/2`).
+- `python3 tools/sim/run_soak.py --hours 6 --check --json-out tools/sim/soak_report.json` -> PASS.
+- `python3 -m py_compile tools/sim/anchor_sim.py tools/sim/run_sim.py tools/sim/scenario_data.py tools/sim/test_sim_core.py` -> PASS.
+
+Self-review:
+- This gives the product plan measurable wave/chop sensor stress without pretending the offline model is hardware-calibrated. The next simulator step should wait for powered motor/steering logs or add explicit scenario inputs for wake timing if we need non-periodic wake bursts before water tests.
