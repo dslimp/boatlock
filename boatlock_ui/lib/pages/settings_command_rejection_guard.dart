@@ -6,8 +6,22 @@ BleCommandRejection? findMatchingCommandRejectionAfter(
   required int baselineEvents,
   required String commandPrefix,
 }) {
+  return findAnyMatchingCommandRejectionAfter(
+    snapshot,
+    baselineEvents: baselineEvents,
+    commandPrefixes: [commandPrefix],
+  );
+}
+
+BleCommandRejection? findAnyMatchingCommandRejectionAfter(
+  BleDebugSnapshot snapshot, {
+  required int baselineEvents,
+  required Iterable<String> commandPrefixes,
+}) {
   final newEvents = snapshot.commandRejectEvents - baselineEvents;
   if (newEvents <= 0) return null;
+  final prefixes = commandPrefixes.toList(growable: false);
+  if (prefixes.isEmpty) return null;
 
   final rejects = snapshot.commandRejects;
   var firstNewIndex = rejects.length - newEvents;
@@ -15,13 +29,13 @@ BleCommandRejection? findMatchingCommandRejectionAfter(
 
   for (var i = rejects.length - 1; i >= firstNewIndex; i -= 1) {
     final rejection = rejects[i];
-    if (rejection.matchesCommandPrefix(commandPrefix)) {
+    if (prefixes.any(rejection.matchesCommandPrefix)) {
       return rejection;
     }
   }
 
   final last = snapshot.lastCommandRejection;
-  if (last != null && last.matchesCommandPrefix(commandPrefix)) {
+  if (last != null && prefixes.any(last.matchesCommandPrefix)) {
     return last;
   }
   return null;

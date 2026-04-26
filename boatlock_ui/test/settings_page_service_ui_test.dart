@@ -1,7 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:boatlock_ui/ble/ble_boatlock.dart';
 import 'package:boatlock_ui/ble/ble_command_rejection.dart';
 import 'package:boatlock_ui/ble/ble_command_scope.dart';
+import 'package:boatlock_ui/ble/ble_ota_payload.dart';
 import 'package:boatlock_ui/ble/ble_security_codec.dart';
+import 'package:boatlock_ui/ota/firmware_update_client.dart';
+import 'package:boatlock_ui/ota/firmware_update_manifest.dart';
 import 'package:boatlock_ui/pages/settings_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +15,7 @@ class ServiceFakeBleBoatLock extends BleBoatLock {
   ServiceFakeBleBoatLock() : super(onData: (_) {});
 
   bool rejectNextStepMaxSpeed = false;
+  bool rejectNextOtaBegin = false;
   String? ownerSecretValue;
   double? stepMaxSpeedValue;
 
@@ -25,6 +31,22 @@ class ServiceFakeBleBoatLock extends BleBoatLock {
       Future<void>.delayed(const Duration(milliseconds: 10), () {
         _emitProfileRejection('SET_STEP_MAXSPD:${value.round()}');
       });
+    }
+    return true;
+  }
+
+  @override
+  Future<bool> uploadFirmwareOtaBytes({
+    required List<int> firmware,
+    required String sha256Hex,
+    OtaProgressCallback? onProgress,
+  }) async {
+    onProgress?.call(0, firmware.length);
+    if (rejectNextOtaBegin) {
+      Future<void>.delayed(const Duration(milliseconds: 10), () {
+        _emitProfileRejection('OTA_BEGIN:${firmware.length},$sha256Hex');
+      });
+      return false;
     }
     return true;
   }
@@ -48,11 +70,39 @@ class ServiceFakeBleBoatLock extends BleBoatLock {
   }
 }
 
+class FakeFirmwareUpdateClient extends FirmwareUpdateClient {
+  const FakeFirmwareUpdateClient(this.bundle)
+    : super(manifestUrl: 'http://localhost/manifest.json');
+
+  final FirmwareUpdateBundle bundle;
+
+  @override
+  bool get configured => true;
+
+  @override
+  Future<FirmwareUpdateManifest> fetchLatestManifest() async {
+    return bundle.manifest;
+  }
+
+  @override
+  Future<FirmwareUpdateBundle> downloadFirmware(
+    FirmwareUpdateManifest manifest, {
+    void Function(int receivedBytes, int totalBytes)? onProgress,
+  }) async {
+    onProgress?.call(bundle.firmware.length, bundle.firmware.length);
+    return bundle;
+  }
+}
+
 Widget _wrap(Widget child) => MaterialApp(home: child);
 
-SettingsPage _page(ServiceFakeBleBoatLock ble) {
+SettingsPage _page(
+  ServiceFakeBleBoatLock ble, {
+  FirmwareUpdateClient firmwareUpdateClient = const FirmwareUpdateClient(),
+}) {
   return SettingsPage(
     ble: ble,
+    firmwareUpdateClient: firmwareUpdateClient,
     holdHeading: false,
     stepMaxSpd: 1000,
     stepAccel: 500,
@@ -108,6 +158,57 @@ void main() {
         'Команда SET_STEP_MAXSPD отклонена профилем release: нужен service',
       ),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('shows structured OTA profile rejection after upload failure', (
+    WidgetTester tester,
+  ) async {
+    if (!kBoatLockServiceUiEnabled) {
+      expect(kBoatLockServiceUiEnabled, isFalse);
+      return;
+    }
+
+    final firmware = Uint8List.fromList(List<int>.filled(64, 0x42));
+    final sha = boatLockSha256Hex(firmware);
+    final manifest = FirmwareUpdateManifest(
+      schema: 1,
+      channel: 'main',
+      repo: 'dslimp/boatlock',
+      branch: 'main',
+      gitSha: '14c43a5',
+      workflowRunId: 123,
+      firmwareVersion: '0.2.0',
+      platformioEnv: 'esp32s3_service',
+      commandProfile: 'service',
+      artifactName: 'firmware-esp32s3-service',
+      binaryUrl: Uri.parse('https://example.com/firmware.bin'),
+      size: firmware.length,
+      sha256: sha,
+      builtAt: DateTime.utc(2026, 4, 26),
+    );
+
+    await tester.binding.setSurfaceSize(const Size(900, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final ble = ServiceFakeBleBoatLock()..rejectNextOtaBegin = true;
+    await tester.pumpWidget(
+      _wrap(
+        _page(
+          ble,
+          firmwareUpdateClient: FakeFirmwareUpdateClient(
+            FirmwareUpdateBundle(manifest: manifest, firmware: firmware),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Обновить до main'));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 700));
+
+    expect(
+      find.text('Команда OTA_BEGIN отклонена профилем release: нужен service'),
+      findsWidgets,
     );
   });
 }

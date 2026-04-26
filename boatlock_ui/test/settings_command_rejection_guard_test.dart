@@ -64,4 +64,42 @@ void main() {
       rejection,
     );
   });
+
+  test('finds latest rejection matching any requested command prefix', () {
+    const beginRejection = BleCommandRejection(
+      reason: 'profile',
+      profile: 'release',
+      scope: 'service',
+      command: 'OTA_BEGIN:4096,abcd',
+    );
+    const finishRejection = BleCommandRejection(
+      reason: 'profile',
+      profile: 'release',
+      scope: 'service',
+      command: 'OTA_FINISH',
+    );
+
+    final snapshot = BleDebugSnapshot.initial().copyWith(
+      commandRejectEvents: 2,
+      lastCommandRejection: finishRejection,
+      commandRejects: const [beginRejection, finishRejection],
+    );
+
+    expect(
+      findAnyMatchingCommandRejectionAfter(
+        snapshot,
+        baselineEvents: 0,
+        commandPrefixes: const ['OTA_BEGIN', 'OTA_FINISH'],
+      ),
+      finishRejection,
+    );
+    expect(
+      findAnyMatchingCommandRejectionAfter(
+        snapshot,
+        baselineEvents: 0,
+        commandPrefixes: const ['SET_STEP_ACCEL'],
+      ),
+      isNull,
+    );
+  });
 }

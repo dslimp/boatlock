@@ -6486,3 +6486,26 @@ Validation:
 
 Self-review:
 - This does not make release assets the primary update channel; the static Pages manifest remains better for latest `main`. The release path is useful for one-button updates from published GitHub releases, but it still depends on publishing a service-profile release asset set with consistent SHA metadata.
+
+### 2026-04-26 Stage 223: Structured OTA profile rejection details
+
+Scope:
+- Replace generic Settings OTA rejection copy with command-profile details when firmware rejects `OTA_BEGIN` or `OTA_FINISH`.
+- Keep the change in app UI/diagnostics only; firmware OTA behavior is unchanged.
+
+External baseline:
+- Reuses the Stage 221 BLE/UI baseline: command write success is not command acceptance, and later device logs are the source of truth for profile rejection details.
+
+Key outcomes:
+- Extended the settings rejection guard to match any of several command prefixes, so one OTA upload can wait for `OTA_BEGIN` or `OTA_FINISH`.
+- Settings OTA now consumes matching profile rejections, shows `Команда <cmd> отклонена профилем <profile>: нужен <required>` in status and snackbar, and emits structured `BOATLOCK_OTA_PROGRESS event=upload_rejected detail=command=...,profile=...,required=...`.
+- Added a service-UI widget test for latest-main OTA upload failure using an injected fake firmware-update client, avoiding Flutter widget-test `HttpClient` interception.
+- Confirmed the public Pages probe is still a deployment gate: unauthenticated requests to `https://dslimp.github.io/boatlock/firmware/main/{manifest.json,firmware.bin,SHA256SUMS,BUILD_INFO.txt}` returned `404` while the GitHub connector reports `dslimp/boatlock` is private.
+
+Validation:
+- `cd boatlock_ui && flutter test test/settings_command_rejection_guard_test.dart test/settings_page_test.dart test/settings_page_service_ui_test.dart` -> PASS (`9/9`).
+- `cd boatlock_ui && flutter test --dart-define=BOATLOCK_SERVICE_UI=true test/settings_page_service_ui_test.dart` -> PASS (`2/2`).
+- `cd boatlock_ui && flutter analyze` -> PASS.
+
+Self-review:
+- This closes the app-side generic OTA rejection gap. The remaining rejection telemetry task is structured smoke/e2e result fields so wrappers do not have to scrape raw device-log text.

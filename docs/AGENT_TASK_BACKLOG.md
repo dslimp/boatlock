@@ -19,6 +19,8 @@ Status after the 2026-04-26 autonomous pass.
   matching SHA-256 metadata.
 - Flutter service settings now roll back optimistic values when firmware
   accepts the BLE write but then rejects the command by profile in diagnostics.
+- OTA upload failures in service UI now show the rejected command, active
+  profile, and required profile instead of a generic rejection.
 
 ## Active Background Work
 
@@ -27,17 +29,18 @@ Status after the 2026-04-26 autonomous pass.
 
 ## Next Autonomous Tasks
 
-- Prove the new latest-main Pages channel on the first real `main` CI run:
+- Prove the new latest-main Pages channel through an authenticated CI/Pages
+  check on the first real `main` run:
   confirm `https://dslimp.github.io/boatlock/firmware/main/manifest.json`,
   `firmware.bin`, `SHA256SUMS`, and `BUILD_INFO.txt` are public and match.
+  The unauthenticated probe on 2026-04-26 returned `404` for the private repo,
+  so the remaining gate is the Actions/Pages deployment result and visibility
+  setting, not local app code.
 - Build service app variants with:
   `--dart-define=BOATLOCK_SERVICE_UI=true` and
   `--dart-define=BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL=https://dslimp.github.io/boatlock/firmware/main/manifest.json`.
 - Add production app e2e fast-fail for firmware profile rejections:
   `SIM_RUN`, compass service commands, `OTA_BEGIN`, and `OTA_FINISH`.
-- Add structured OTA failure details in the app instead of generic
-  `OTA отклонено`, including rejected command, active profile, and required
-  profile.
 - Add structured command-rejection fields to smoke/e2e result payloads so wrapper
   parsing does not depend on the last raw device log line.
 - Implement the next offline simulator slice: wake/short-chop events plus

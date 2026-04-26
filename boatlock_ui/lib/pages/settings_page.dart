@@ -33,6 +33,7 @@ class SettingsPage extends StatefulWidget {
   final bool secAuth;
   final bool secPairWindowOpen;
   final String secReject;
+  final FirmwareUpdateClient firmwareUpdateClient;
 
   const SettingsPage({
     super.key,
@@ -54,6 +55,7 @@ class SettingsPage extends StatefulWidget {
     required this.secAuth,
     required this.secPairWindowOpen,
     required this.secReject,
+    this.firmwareUpdateClient = const FirmwareUpdateClient(),
   });
 
   @override
@@ -90,8 +92,7 @@ class _SettingsPageState extends State<SettingsPage> {
   int _otaLastLogBucket = -1;
   int _lastSeenCommandRejectEvents = 0;
   _ProfileRejectionWait? _profileRejectionWait;
-  final FirmwareUpdateClient _firmwareUpdateClient =
-      const FirmwareUpdateClient();
+  late final FirmwareUpdateClient _firmwareUpdateClient;
   FirmwareUpdateManifest? _latestFirmwareManifest;
 
   @override
@@ -119,6 +120,7 @@ class _SettingsPageState extends State<SettingsPage> {
     );
     _otaUrlCtrl = TextEditingController();
     _otaShaCtrl = TextEditingController();
+    _firmwareUpdateClient = widget.firmwareUpdateClient;
     widget.ble.setOwnerSecret(_ownerSecretCtrl.text);
     _lastSeenCommandRejectEvents =
         widget.ble.diagnostics.value.commandRejectEvents;
@@ -160,10 +162,10 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _completePendingProfileRejection(BleDebugSnapshot snapshot) {
     final wait = _profileRejectionWait;
     if (wait == null) return false;
-    final rejection = findMatchingCommandRejectionAfter(
+    final rejection = findAnyMatchingCommandRejectionAfter(
       snapshot,
       baselineEvents: wait.baselineEvents,
-      commandPrefix: wait.commandPrefix,
+      commandPrefixes: wait.commandPrefixes,
     );
     if (rejection == null) return false;
     _profileRejectionWait = null;
@@ -174,9 +176,15 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   _ProfileRejectionWait _beginProfileRejectionWait(String commandPrefix) {
+    return _beginProfileRejectionWaitFor([commandPrefix]);
+  }
+
+  _ProfileRejectionWait _beginProfileRejectionWaitFor(
+    List<String> commandPrefixes,
+  ) {
     final wait = _ProfileRejectionWait(
       baselineEvents: widget.ble.diagnostics.value.commandRejectEvents,
-      commandPrefix: commandPrefix,
+      commandPrefixes: commandPrefixes,
     );
     _profileRejectionWait = wait;
     _completePendingProfileRejection(widget.ble.diagnostics.value);
@@ -239,7 +247,23 @@ class _SettingsPageState extends State<SettingsPage> {
     String requiredProfile,
   ) {
     _showMessage(
-      'Команда $commandName отклонена профилем $profile: нужен $requiredProfile',
+      _profileRejectionMessage(commandName, profile, requiredProfile),
+    );
+  }
+
+  String _profileRejectionMessage(
+    String commandName,
+    String profile,
+    String requiredProfile,
+  ) {
+    return 'Команда $commandName отклонена профилем $profile: нужен $requiredProfile';
+  }
+
+  String _profileRejectionMessageFrom(BleCommandRejection rejection) {
+    return _profileRejectionMessage(
+      rejection.commandName,
+      rejection.profile,
+      rejection.requiredProfile,
     );
   }
 
@@ -539,6 +563,10 @@ class _SettingsPageState extends State<SettingsPage> {
       _otaLastLogBucket = -1;
     });
     _logOta('download_verified', sent: firmware.length, total: firmware.length);
+    final profileRejectWait = _beginProfileRejectionWaitFor([
+      'OTA_BEGIN',
+      'OTA_FINISH',
+    ]);
     final ok = await widget.ble.uploadFirmwareOtaBytes(
       firmware: firmware,
       sha256Hex: sha256Hex,
@@ -554,14 +582,28 @@ class _SettingsPageState extends State<SettingsPage> {
       },
     );
     if (!mounted) return;
+    final profileRejection = ok
+        ? null
+        : await _finishProfileRejectionWait(profileRejectWait);
+    if (ok) {
+      _cancelProfileRejectionWait(profileRejectWait);
+    }
+    final failureMessage = profileRejection == null
+        ? 'OTA отклонено'
+        : _profileRejectionMessageFrom(profileRejection);
     setState(() {
       _otaBusy = false;
       _otaProgress = ok ? 1 : _otaProgress;
-      _otaStatus = ok ? 'Готово, ESP перезагружается' : 'OTA отклонено';
+      _otaStatus = ok ? 'Готово, ESP перезагружается' : failureMessage;
       _otaProgressLabel = ok ? '100.0%' : _otaProgressLabel;
     });
-    _logOta(ok ? 'upload_done' : 'upload_rejected');
-    _showMessage(ok ? 'OTA завершено' : 'OTA не прошла');
+    _logOta(
+      ok ? 'upload_done' : 'upload_rejected',
+      detail: profileRejection == null
+          ? null
+          : 'command=${profileRejection.commandName},profile=${profileRejection.profile},required=${profileRejection.requiredProfile}',
+    );
+    _showMessage(ok ? 'OTA завершено' : failureMessage);
   }
 
   Future<void> _runLatestMainOta() async {
@@ -912,11 +954,11 @@ class _SettingsPageState extends State<SettingsPage> {
 class _ProfileRejectionWait {
   _ProfileRejectionWait({
     required this.baselineEvents,
-    required this.commandPrefix,
+    required this.commandPrefixes,
   });
 
   final int baselineEvents;
-  final String commandPrefix;
+  final List<String> commandPrefixes;
   final Completer<BleCommandRejection?> completer =
       Completer<BleCommandRejection?>();
 }
