@@ -16,6 +16,26 @@ def test_ci_uploads_firmware_artifact_with_hash_manifest():
     assert "sha256sum firmware.bin bootloader.bin partitions.bin firmware.elf > SHA256SUMS" in workflow
 
 
+def test_ci_publishes_latest_main_service_firmware_channel():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+
+    assert "firmware-main-channel" in workflow
+    assert "github.ref == 'refs/heads/main'" in workflow
+    assert "pio run -e esp32s3_service" in workflow
+    assert "dist/pages" in workflow
+    assert "firmware/main" in workflow
+    assert "generate_firmware_update_manifest.py" in workflow
+    assert "artifact_name=firmware-esp32s3-service" in workflow
+    assert "platformio_env=esp32s3_service" in workflow
+    assert "command_profile=service" in workflow
+    assert "manifest_url=${base_url}/manifest.json" in workflow
+    assert "uses: actions/configure-pages@v5" in workflow
+    assert "uses: actions/upload-pages-artifact@v4" in workflow
+    assert "uses: actions/deploy-pages@v4" in workflow
+    assert "pages: write" in workflow
+    assert "id-token: write" in workflow
+
+
 def test_ci_delivery_jobs_are_split_by_failure_domain():
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
 
@@ -24,6 +44,7 @@ def test_ci_delivery_jobs_are_split_by_failure_domain():
         "firmware-test",
         "firmware-sim",
         "firmware-build",
+        "firmware-main-channel",
         "flutter-checks",
         "flutter-build-android",
         "flutter-build-web",

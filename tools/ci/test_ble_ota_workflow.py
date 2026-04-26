@@ -34,6 +34,8 @@ def test_flutter_ble_ota_protocol_is_wired():
     transport = read("boatlock_ui/lib/ble/ble_boatlock.dart")
     payload = read("boatlock_ui/lib/ble/ble_ota_payload.dart")
     settings = read("boatlock_ui/lib/pages/settings_page.dart")
+    manifest = read("boatlock_ui/lib/ota/firmware_update_manifest.dart")
+    client = read("boatlock_ui/lib/ota/firmware_update_client.dart")
 
     assert "boatLockOtaCharacteristicUuid = '9abc'" in ids
     assert "uploadFirmwareOtaBytes" in transport
@@ -45,6 +47,11 @@ def test_flutter_ble_ota_protocol_is_wired():
     assert "boatLockOtaChunkBytesForMtu" in payload
     assert "boatLockSha256Hex" in payload
     assert "Обновить по BLE" in settings
+    assert "Обновить до main" in settings
+    assert "BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL" in client
+    assert "platformioEnv != 'esp32s3_service'" in manifest
+    assert "commandProfile != 'service'" in manifest
+    assert "binaryUrl must use HTTPS or localhost HTTP" in manifest
 
 
 def test_ble_protocol_docs_include_ota_surface():
@@ -52,3 +59,5 @@ def test_ble_protocol_docs_include_ota_surface():
     assert "Firmware OTA characteristic `9abc`" in protocol
     assert "OTA_BEGIN:<size>,<sha256>" in protocol
     assert "During active OTA" in protocol
+    assert "BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL" in protocol
+    assert "esp32s3_service" in protocol

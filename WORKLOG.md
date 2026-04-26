@@ -6381,3 +6381,27 @@ Validation:
 
 Self-review:
 - This makes the Android/macOS app ready to consume a latest-main channel, but the CI/static publishing side still needs to generate and host the manifest plus `esp32s3_service` binary before the one-button path has a production URL.
+
+### 2026-04-26 Stage 218: Latest-main firmware channel publishing
+
+Scope:
+- Add CI generation and static publishing for the OTA latest-main channel consumed by the app.
+- Keep the channel OTA-capable by building `esp32s3_service`, not the normal release-compatible image.
+
+External baseline:
+- GitHub Pages custom workflows use `upload-pages-artifact` plus `deploy-pages`, and the deploy job needs `pages: write` plus `id-token: write`: https://docs.github.com/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages.
+
+Key outcomes:
+- Added `tools/ci/generate_firmware_update_manifest.py` to generate the validated manifest with firmware size, SHA-256, git SHA, workflow run id, firmware version, service profile, and binary URL.
+- Added CI coverage for manifest generation and latest-main channel workflow wiring.
+- Added a `firmware-main-channel` CI job that runs after the main firmware/test/sim gates on pushes to `main`, builds `esp32s3_service`, packages `firmware/main/{firmware.bin,firmware.elf,manifest.json,BUILD_INFO.txt,SHA256SUMS}`, and deploys it to GitHub Pages.
+- Documented the service app build defines needed for the one-button latest-main OTA path on `nh02`.
+
+Validation:
+- `python3 -m pytest tools/ci/test_firmware_artifact_workflow.py tools/ci/test_ble_ota_workflow.py tools/ci/test_generate_firmware_update_manifest.py` -> PASS (`10/10`).
+- `python3 -m pytest tools/ci/test_*.py` -> PASS (`25/25`).
+- `python3 -m py_compile tools/ci/generate_firmware_update_manifest.py tools/ci/test_generate_firmware_update_manifest.py` -> PASS.
+- `git diff --check -- .github/workflows/ci.yml tools/ci/generate_firmware_update_manifest.py tools/ci/test_generate_firmware_update_manifest.py tools/ci/test_firmware_artifact_workflow.py tools/ci/test_ble_ota_workflow.py docs/HARDWARE_NH02.md WORKLOG.md` -> PASS.
+
+Self-review:
+- This makes the app's manifest URL actionable once GitHub Pages is enabled for Actions on the repository. It still needs the first real CI run to prove the Pages deployment settings and the generated public URL.

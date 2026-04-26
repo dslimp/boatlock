@@ -156,6 +156,12 @@ Do not merge the firmware gate until the rest of this wrapper contract is implem
 - If the monitor path fails, inspect `status.sh` before touching the USB device manually.
 - BLE OTA is the preferred no-USB firmware update path after the first seed flash.
 - Keep the expected SHA-256 from the build output or CI artifact metadata; do not let the phone trust an arbitrary downloaded binary without comparing the expected hash first.
+- The latest-main one-button app path expects a static manifest at
+  `https://dslimp.github.io/boatlock/firmware/main/manifest.json`, generated
+  from the `esp32s3_service` CI build. Build service Android/macOS app variants
+  with `--dart-define=BOATLOCK_SERVICE_UI=true` and
+  `--dart-define=BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL=<manifest-url>` when this
+  operator path is needed.
 - `tools/hw/nh02/flash.sh` stages `boot_app0.bin` and flashes it at `0xe000`, so a USB seed flash after prior OTA boots the freshly flashed `ota_0` image instead of a stale OTA slot.
 - Keep the seed flash recoverable through USB. If a BLE OTA upload fails before `OTA_FINISH`, the current firmware remains active; if the app cannot reconnect, flash the release profile again through `tools/hw/nh02/flash.sh --profile release`.
 

@@ -139,6 +139,85 @@ jobs:
           if-no-files-found: error
           path: dist/firmware-esp32s3/*
 
+  firmware-main-channel:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    name: firmware-main-channel
+    needs:
+      - firmware-checks
+      - firmware-test
+      - firmware-sim
+      - firmware-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PlatformIO
+        run: python3 -m pip install platformio
+
+      - name: Build OTA-capable main firmware
+        working-directory: boatlock
+        run: pio run -e esp32s3_service
+
+      - name: Pack latest-main firmware channel
+        run: |
+          set -euo pipefail
+          site_dir="dist/pages"
+          channel_dir="${site_dir}/firmware/main"
+          build_dir="boatlock/.pio/build/esp32s3_service"
+          base_url="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/firmware/main"
+          firmware_version="$(python3 tools/ci/check_firmware_version.py --print-only)"
+
+          mkdir -p "${channel_dir}"
+          cp "${build_dir}/firmware.bin" "${channel_dir}/firmware.bin"
+          cp "${build_dir}/firmware.elf" "${channel_dir}/firmware.elf"
+
+          python3 tools/ci/generate_firmware_update_manifest.py \
+            --firmware "${channel_dir}/firmware.bin" \
+            --out "${channel_dir}/manifest.json" \
+            --base-url "${base_url}" \
+            --git-sha "${GITHUB_SHA}" \
+            --workflow-run-id "${GITHUB_RUN_ID}" \
+            --firmware-version "${firmware_version}"
+
+          firmware_sha256="$(sha256sum "${channel_dir}/firmware.bin" | awk '{print $1}')"
+          {
+            echo "firmware_version=${firmware_version}"
+            echo "firmware_sha256=${firmware_sha256}"
+            echo "artifact_name=firmware-esp32s3-service"
+            echo "platformio_env=esp32s3_service"
+            echo "command_profile=service"
+            echo "github_ref=${GITHUB_REF}"
+            echo "github_sha=${GITHUB_SHA}"
+            echo "manifest_url=${base_url}/manifest.json"
+          } > "${channel_dir}/BUILD_INFO.txt"
+
+          (cd "${channel_dir}" && sha256sum firmware.bin firmware.elf manifest.json BUILD_INFO.txt > SHA256SUMS)
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload latest-main Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist/pages
+
+      - name: Deploy latest-main firmware channel
+        id: deployment
+        uses: actions/deploy-pages@v4
+
   flutter-checks:
     name: flutter-checks
     runs-on: ubuntu-latest
