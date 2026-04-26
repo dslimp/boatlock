@@ -5370,3 +5370,31 @@ Validation:
 Self-review:
 - The root mismatch was a telemetry coherence issue, not only a layout issue.
 - The UI fallback is intentionally diagnostic: it prevents a bare warning from being invisible, but exact reason flags still come from firmware after this firmware is flashed or delivered by OTA.
+
+### 2026-04-26 Stage 176: Android CI build cache optimization
+
+Scope:
+- Reduce the slow `flutter-build-android` GitHub Actions job without changing the Android artifact shape or release command.
+
+External baseline:
+- GitHub `actions/setup-java` documents built-in Gradle dependency caching, but points more advanced Gradle caching users to `gradle/actions/setup-gradle`.
+- Gradle `setup-gradle` caches Gradle User Home content such as downloaded dependencies, wrapper distributions, generated Gradle jars, compiled Kotlin DSL scripts, artifact transforms, and the local build cache.
+- Gradle build cache is off by default and is enabled through `org.gradle.caching=true`.
+- GitHub's `ubuntu-24.04` runner image already includes Android platform 34/35/36/37 and NDK 27.3/28/29, but the current Flutter/Android build downloads exact project-needed packages `ndk;27.0.12077973`, `platforms;android-33`, and `cmake;3.22.1`.
+
+Key outcomes:
+- `flutter-build-android` now uses `actions/setup-java@v5` to avoid the Node 20 deprecation warning on that job and keep Java setup current.
+- Added `gradle/actions/setup-gradle@v6` before the Flutter Android build so Gradle dependency/build-script/transform/build-cache state can be reused across CI runs.
+- Added an explicit Android SDK package cache for the exact NDK, Android 33 platform, and CMake versions that the job was previously installing inside `flutter build apk --release`.
+- Enabled Gradle build cache and parallel execution in `boatlock_ui/android/gradle.properties`.
+- Set `GRADLE_OPTS=-Dorg.gradle.vfs.watch=false` for the CI Android release build to avoid file-watcher overhead/noise on short-lived runners.
+- Added CI helper coverage so the Android cache layers stay present in the workflow.
+
+Validation:
+- Latest measured pre-change GitHub job durations: `flutter-build-android` `7:33` and `7:07`; the logged `assembleRelease` segment was `391.2s` and included SDK package installs.
+- `python3 -m pytest -q tools/ci/test_*.py && python3 tools/ci/check_config_schema_version.py && git diff --check` -> PASS (`20/20`, schema `0x18`).
+- `cd boatlock_ui && GRADLE_OPTS='-Dorg.gradle.vfs.watch=false' flutter build apk --release` -> PASS; local `assembleRelease` `68.5s`, APK `22.7MB`.
+
+Self-review:
+- The first GitHub run after this change may still populate caches; the meaningful comparison is the second run on `main` after both Gradle and Android SDK caches exist.
+- I did not change `ndkVersion`, compile SDK, APK ABI set, or release artifact format. Those could reduce time further, but they would change build environment or delivered artifact compatibility and should be separate decisions.

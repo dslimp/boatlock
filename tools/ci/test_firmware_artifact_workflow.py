@@ -39,6 +39,20 @@ def test_ci_delivery_jobs_are_split_by_failure_domain():
     assert "flutter-android-web" not in workflow
 
 
+def test_android_build_uses_ci_caches():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+    gradle_properties = (ROOT / "boatlock_ui/android/gradle.properties").read_text()
+
+    assert "uses: gradle/actions/setup-gradle@v6" in workflow
+    assert "Cache Android SDK packages" in workflow
+    assert "/usr/local/lib/android/sdk/ndk/27.0.12077973" in workflow
+    assert "/usr/local/lib/android/sdk/platforms/android-33" in workflow
+    assert "/usr/local/lib/android/sdk/cmake/3.22.1" in workflow
+    assert "GRADLE_OPTS: -Dorg.gradle.vfs.watch=false" in workflow
+    assert "org.gradle.caching=true" in gradle_properties
+    assert "org.gradle.parallel=true" in gradle_properties
+
+
 def test_macos_permissions_cover_ble_location_and_network():
     info_plist = (ROOT / "boatlock_ui/macos/Runner/Info.plist").read_text()
     debug_entitlements = (
