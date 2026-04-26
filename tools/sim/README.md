@@ -79,6 +79,15 @@ Normalized scenario inputs live in
 `tools/sim/research/` remain source material and should not be treated as
 directly executable simulator configuration.
 
+Known remaining gaps:
+
+- scenario provenance/confidence fields in schema and reports
+- loaded boat mass plus drag/windage parameters
+- yaw moment and heading inertia from environmental forcing
+- river/reservoir wake and short steep chop events
+- BNO08x/GNSS sensor-frame effects from rocking, not only rocking metrics
+- hardware calibration after powered bench and water logs exist
+
 ## Run locally
 
 ```bash

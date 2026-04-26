@@ -33,10 +33,10 @@ const SettingEntry defaultEntries[] = {
     {"ReqSent",    "Required sentences",TYPE_INT,   0.0,  0.0,   0.0,  20.0,    1.0, "", false},
 
     // Anchor control
-    {"HoldRadius", "Hold radius",       TYPE_FLOAT, 2.5,  2.5,   0.5,  20.0,    0.1, "m", true},
-    {"DeadbandM",  "Anchor deadband",   TYPE_FLOAT, 1.5,  1.5,   0.2,  10.0,    0.1, "m", true},
-    {"MaxThrustA", "Max thrust anchor", TYPE_INT,   60.0, 60.0,  10.0, 100.0,   1.0, "%", true},
-    {"ThrRampA",   "Thrust ramp anchor",TYPE_FLOAT, 35.0, 35.0,  1.0, 100.0,    1.0, "%/s", true},
+    {"HoldRadius", "Hold radius",       TYPE_FLOAT, 3.0,  3.0,   0.5,  20.0,    0.1, "m", true},
+    {"DeadbandM",  "Anchor deadband",   TYPE_FLOAT, 2.2,  2.2,   0.2,  10.0,    0.1, "m", true},
+    {"MaxThrustA", "Max thrust anchor", TYPE_INT,   45.0, 45.0,  10.0, 100.0,   1.0, "%", true},
+    {"ThrRampA",   "Thrust ramp anchor",TYPE_FLOAT, 20.0, 20.0,  1.0, 100.0,    1.0, "%/s", true},
     {"MaxTurnRt",  "Max turn rate",     TYPE_FLOAT, 120.0,120.0, 30.0, 720.0,   1.0, "deg/s", false},
 
     // Safety supervisor
@@ -81,7 +81,7 @@ const char* imuTypeNames[] = { "BNO055", "MPU9250", "BNO085", "LSM9DS1", "None" 
 
 class Settings {
 public:
-    static constexpr uint8_t VERSION = 0x19;
+    static constexpr uint8_t VERSION = 0x1A;
     static constexpr const char* NVS_NAMESPACE = "boatlock_cfg";
     static constexpr const char* NVS_SCHEMA_KEY = "schema";
     // Keeps the existing BleSecurity EEPROM offset stable while settings live in NVS.
@@ -430,6 +430,38 @@ private:
         return true;
     }
 
+    void migrateOldAnchorDefaults(uint8_t storedVersion, const bool loadedKeys[count]) {
+        if (storedVersion >= 0x1A) {
+            return;
+        }
+
+        const int holdIdx = idxByKey("HoldRadius");
+        const int deadbandIdx = idxByKey("DeadbandM");
+        const int maxThrustIdx = idxByKey("MaxThrustA");
+        const int rampIdx = idxByKey("ThrRampA");
+        if (holdIdx < 0 || deadbandIdx < 0 || maxThrustIdx < 0 || rampIdx < 0) {
+            return;
+        }
+        if (!loadedKeys[holdIdx] || !loadedKeys[deadbandIdx] ||
+            !loadedKeys[maxThrustIdx] || !loadedKeys[rampIdx]) {
+            return;
+        }
+        if (entries[holdIdx].value != 2.5f ||
+            entries[deadbandIdx].value != 1.5f ||
+            entries[maxThrustIdx].value != 60.0f ||
+            entries[rampIdx].value != 35.0f) {
+            return;
+        }
+
+        assignValue(holdIdx, 3.0f);
+        assignValue(deadbandIdx, 2.2f);
+        assignValue(maxThrustIdx, 45.0f);
+        assignValue(rampIdx, 20.0f);
+        logMessage("[EVENT] CONFIG_MIGRATION_ANCHOR_DEFAULTS from_ver=%d to_ver=%d\n",
+                   storedVersion,
+                   VERSION);
+    }
+
     void applyMigrations(nvs_handle_t handle, uint8_t storedVersion, const bool loadedKeys[count]) {
         migrateLegacyFloatKey(handle,
                               storedVersion,
@@ -438,6 +470,7 @@ private:
                               "MaxThrustA",
                               0,
                               0x18);
+        migrateOldAnchorDefaults(storedVersion, loadedKeys);
     }
 
 };

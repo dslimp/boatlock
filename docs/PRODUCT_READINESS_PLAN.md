@@ -56,6 +56,7 @@ Current commercial GPS-anchor products set the user expectation:
 BoatLock should not copy the full fishing-feature matrix. The useful baseline is
 the interaction model: explicit modes, visible readiness, small jog, separate
 setup/calibration, conservative power sizing, and clear errors.
+The focused comparison is tracked in `docs/COMMERCIAL_ANCHOR_UX_REVIEW.md`.
 
 ## Current Fit
 
@@ -165,18 +166,25 @@ Keep two layers:
 
 Next simulation work:
 
-- Extend the normalized `tools/sim/scenarios/environment_profiles.json` schema
-  beyond the first Russian water-body slice with loaded boat mass, wake, compass,
-  provenance, and calibration confidence fields.
-- Add windage and yaw moment to the world model.
-- Add waves/rocking: significant wave height, peak wave, period, direction,
-  roll/pitch/heave perturbations, and their effect on BNO08x/GNSS samples.
-- Add river/reservoir wake events and short steep chop.
+- Keep the already-normalized Russian water-body profiles as executable scenario
+  data, but add explicit provenance and confidence fields to the schema/report so
+  sourced ranges, heuristics, and research gaps stay visible.
+- Add loaded boat mass plus drag/windage parameters to scenario data and the
+  world model. Thrust margin needs to be judged against the configured boat, not
+  only against generic motor class.
+- Add yaw moment and heading inertia so current, wind/gust, and wave forcing can
+  rotate the hull, not only translate it.
+- Add river/reservoir wake events and short steep chop as separate transient
+  disturbances instead of folding them into steady wave height.
+- Extend current wave/rocking support from hull-motion metrics to sensor-frame
+  effects on BNO08x/GNSS samples: roll, pitch, heave, heading jitter, and
+  measurement quality changes.
 - Extend the initial brushed motor dynamics with reverse asymmetry, prop/weed
-  load, and calibration from real current/voltage logs.
+  load, and later calibration from real current/voltage logs.
 - Extend the initial steering mechanics beyond backlash, jam windows, wrong
   bow-zero, and response delay with gear ratio and current/torque limits.
-- Calibrate the Russian water-body scenarios now present in the simulator:
+- Calibrate the Russian water-body scenarios now present in the simulator after
+  powered bench and protected-water logs exist:
   `river_oka_normal_55lb`, `volga_spring_flow_80lb`,
   `rybinsk_fetch_55lb`, `ladoga_storm_abort`, `baltic_gulf_drift`.
 - Extend the current production-path actuator tests with hardware-calibrated

@@ -33,7 +33,13 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 ## P2 — Simulation And Product Polish
 
 - [x] Normalize `tools/sim/research/environment_inputs.*` into simulator scenario data.
-- [ ] Add windage, waves/rocking, wakes, and current direction changes to simulation.
+- [x] Add current, wind/gust, wave-induced forcing, current direction swing, and rocking metrics to simulator scenarios.
+- [ ] Add scenario provenance/confidence fields to normalized sim schema and reports.
+- [ ] Add loaded boat mass plus drag/windage parameters to scenario data and the world model.
+- [ ] Add yaw moment/heading inertia so environmental forcing can rotate the hull, not only translate it.
+- [ ] Add river/reservoir wake and short steep chop events.
+- [ ] Model sensor-frame rocking effects on BNO08x/GNSS samples, not only hull-rocking metrics.
+- [ ] Calibrate simulator profiles from hardware/current-voltage logs after powered bench data exists.
 - [x] Add brushed motor, battery sag/current limit, thermal derate, and driver deadband to simulation.
 - [x] Add steering backlash/jam/wrong-zero scenarios.
 - [x] Add RF/Russian water-body scenarios: Oka normal, Volga spring flow, Rybinsk fetch, Ladoga storm abort, Baltic/Gulf drift.

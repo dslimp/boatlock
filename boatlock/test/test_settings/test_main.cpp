@@ -5,6 +5,16 @@
 
 void logMessage(const char *, ...) {}
 
+static constexpr uint8_t kSchemaBeforeQuietDefaults = 0x19;
+static constexpr float kQuietHoldRadius = 3.0f;
+static constexpr float kQuietDeadband = 2.2f;
+static constexpr float kQuietMaxThrust = 45.0f;
+static constexpr float kQuietRamp = 20.0f;
+static constexpr float kOldHoldRadius = 2.5f;
+static constexpr float kOldDeadband = 1.5f;
+static constexpr float kOldMaxThrust = 60.0f;
+static constexpr float kOldRamp = 35.0f;
+
 void setUp() {
   nvs_mock_clear();
 }
@@ -24,6 +34,13 @@ static void fillDefaultValues(float values[count]) {
   for (int i = 0; i < count; ++i) {
     values[i] = defaultEntries[i].defaultValue;
   }
+}
+
+static void fillOldAnchorDefaults(float values[count]) {
+  values[defaultIdxByKey("HoldRadius")] = kOldHoldRadius;
+  values[defaultIdxByKey("DeadbandM")] = kOldDeadband;
+  values[defaultIdxByKey("MaxThrustA")] = kOldMaxThrust;
+  values[defaultIdxByKey("ThrRampA")] = kOldRamp;
 }
 
 static void storeNvsValues(const float values[count], uint8_t schema = Settings::VERSION) {
@@ -46,10 +63,24 @@ static uint8_t persistedSchema() {
   return value;
 }
 
+static void assertQuietAnchorDefaults(Settings& s) {
+  TEST_ASSERT_EQUAL_FLOAT(kQuietHoldRadius, s.get("HoldRadius"));
+  TEST_ASSERT_EQUAL_FLOAT(kQuietDeadband, s.get("DeadbandM"));
+  TEST_ASSERT_EQUAL_FLOAT(kQuietMaxThrust, s.get("MaxThrustA"));
+  TEST_ASSERT_EQUAL_FLOAT(kQuietRamp, s.get("ThrRampA"));
+}
+
+static void assertQuietAnchorDefaultsPersisted() {
+  TEST_ASSERT_EQUAL_FLOAT(kQuietHoldRadius, persistedFloat("HoldRadius"));
+  TEST_ASSERT_EQUAL_FLOAT(kQuietDeadband, persistedFloat("DeadbandM"));
+  TEST_ASSERT_EQUAL_FLOAT(kQuietMaxThrust, persistedFloat("MaxThrustA"));
+  TEST_ASSERT_EQUAL_FLOAT(kQuietRamp, persistedFloat("ThrRampA"));
+}
+
 void test_get_set() {
   Settings s;
   s.reset();
-  TEST_ASSERT_FLOAT_WITHIN(0.001, 2.5f, s.get("HoldRadius"));
+  TEST_ASSERT_FLOAT_WITHIN(0.001, kQuietHoldRadius, s.get("HoldRadius"));
   TEST_ASSERT_TRUE(s.set("HoldRadius", 4.0f));
   TEST_ASSERT_EQUAL_FLOAT(4.0f, s.get("HoldRadius"));
   s.set("HoldRadius", -1.0f);
@@ -61,7 +92,7 @@ void test_get_set() {
 void test_constructor_provides_safe_defaults_without_load_or_reset() {
   Settings s;
 
-  TEST_ASSERT_EQUAL_FLOAT(2.5f, s.get("HoldRadius"));
+  assertQuietAnchorDefaults(s);
   TEST_ASSERT_EQUAL_FLOAT(4096.0f, s.get("StepSpr"));
   TEST_ASSERT_TRUE(s.set("HoldRadius", 4.0f));
   TEST_ASSERT_EQUAL_FLOAT(4.0f, s.get("HoldRadius"));
@@ -152,8 +183,8 @@ void test_load_bad_nvs_value_restores_default() {
   Settings s;
   s.load();
   TEST_ASSERT_EQUAL_INT(1, nvs_mock_commit_count());
-  TEST_ASSERT_EQUAL_FLOAT(2.5f, s.get("HoldRadius"));
-  TEST_ASSERT_EQUAL_FLOAT(2.5f, persistedFloat("HoldRadius"));
+  TEST_ASSERT_EQUAL_FLOAT(kQuietHoldRadius, s.get("HoldRadius"));
+  TEST_ASSERT_EQUAL_FLOAT(kQuietHoldRadius, persistedFloat("HoldRadius"));
 }
 
 void test_set_rejects_nonfinite_without_dirtying() {
@@ -162,7 +193,7 @@ void test_set_rejects_nonfinite_without_dirtying() {
   const int resetCommits = nvs_mock_commit_count();
 
   TEST_ASSERT_FALSE(s.set("HoldRadius", NAN));
-  TEST_ASSERT_EQUAL_FLOAT(2.5f, s.get("HoldRadius"));
+  TEST_ASSERT_EQUAL_FLOAT(kQuietHoldRadius, s.get("HoldRadius"));
   s.save();
   TEST_ASSERT_EQUAL_INT(resetCommits, nvs_mock_commit_count());
 }
@@ -171,7 +202,7 @@ void test_set_strict_rejects_out_of_range() {
   Settings s;
   s.reset();
   TEST_ASSERT_FALSE(s.setStrict("HoldRadius", -1.0f));
-  TEST_ASSERT_EQUAL_FLOAT(2.5f, s.get("HoldRadius"));
+  TEST_ASSERT_EQUAL_FLOAT(kQuietHoldRadius, s.get("HoldRadius"));
   TEST_ASSERT_TRUE(s.setStrict("HoldRadius", 4.0f));
   TEST_ASSERT_EQUAL_FLOAT(4.0f, s.get("HoldRadius"));
 }
@@ -209,6 +240,43 @@ void test_load_schema_mismatch_preserves_keyed_values() {
   TEST_ASSERT_EQUAL_FLOAT(2.4f, s.get("MaxHdop"));
   TEST_ASSERT_EQUAL_FLOAT(8.0f, s.get("MinSats"));
   TEST_ASSERT_EQUAL_FLOAT(4000.0f, s.get("CommToutMs"));
+  TEST_ASSERT_EQUAL_UINT8(Settings::VERSION, persistedSchema());
+}
+
+void test_load_old_default_bundle_migrates_to_quiet_defaults() {
+  float values[count];
+  fillDefaultValues(values);
+  fillOldAnchorDefaults(values);
+  storeNvsValues(values, kSchemaBeforeQuietDefaults);
+
+  Settings s;
+  s.load();
+
+  TEST_ASSERT_EQUAL_INT(1, nvs_mock_commit_count());
+  assertQuietAnchorDefaults(s);
+  assertQuietAnchorDefaultsPersisted();
+  TEST_ASSERT_EQUAL_UINT8(Settings::VERSION, persistedSchema());
+}
+
+void test_load_old_default_migration_preserves_custom_anchor_values() {
+  float values[count];
+  fillDefaultValues(values);
+  fillOldAnchorDefaults(values);
+  values[defaultIdxByKey("MaxThrustA")] = 55.0f;
+  storeNvsValues(values, kSchemaBeforeQuietDefaults);
+
+  Settings s;
+  s.load();
+
+  TEST_ASSERT_EQUAL_INT(1, nvs_mock_commit_count());
+  TEST_ASSERT_EQUAL_FLOAT(kOldHoldRadius, s.get("HoldRadius"));
+  TEST_ASSERT_EQUAL_FLOAT(kOldDeadband, s.get("DeadbandM"));
+  TEST_ASSERT_EQUAL_FLOAT(55.0f, s.get("MaxThrustA"));
+  TEST_ASSERT_EQUAL_FLOAT(kOldRamp, s.get("ThrRampA"));
+  TEST_ASSERT_EQUAL_FLOAT(kOldHoldRadius, persistedFloat("HoldRadius"));
+  TEST_ASSERT_EQUAL_FLOAT(kOldDeadband, persistedFloat("DeadbandM"));
+  TEST_ASSERT_EQUAL_FLOAT(55.0f, persistedFloat("MaxThrustA"));
+  TEST_ASSERT_EQUAL_FLOAT(kOldRamp, persistedFloat("ThrRampA"));
   TEST_ASSERT_EQUAL_UINT8(Settings::VERSION, persistedSchema());
 }
 
@@ -272,7 +340,7 @@ void test_load_future_schema_does_not_downgrade_or_write_defaults() {
 
   TEST_ASSERT_EQUAL_INT(0, nvs_mock_commit_count());
   TEST_ASSERT_EQUAL_FLOAT(4.4f, s.get("HoldRadius"));
-  TEST_ASSERT_EQUAL_FLOAT(1.5f, s.get("DeadbandM"));
+  TEST_ASSERT_EQUAL_FLOAT(kQuietDeadband, s.get("DeadbandM"));
   TEST_ASSERT_FALSE(nvs_mock_get_blob(Settings::NVS_NAMESPACE, "DeadbandM", &values[0], sizeof(float)));
   TEST_ASSERT_EQUAL_UINT8(0x7F, persistedSchema());
 }
@@ -288,8 +356,8 @@ void test_load_missing_nvs_key_uses_default_and_persists_it() {
   s.load();
   TEST_ASSERT_EQUAL_INT(1, nvs_mock_commit_count());
   TEST_ASSERT_EQUAL_FLOAT(3.3f, s.get("HoldRadius"));
-  TEST_ASSERT_EQUAL_FLOAT(1.5f, s.get("DeadbandM"));
-  TEST_ASSERT_EQUAL_FLOAT(1.5f, persistedFloat("DeadbandM"));
+  TEST_ASSERT_EQUAL_FLOAT(kQuietDeadband, s.get("DeadbandM"));
+  TEST_ASSERT_EQUAL_FLOAT(kQuietDeadband, persistedFloat("DeadbandM"));
 }
 
 void test_load_sanitizes_nan_and_out_of_range_values() {
@@ -331,7 +399,7 @@ void test_failed_save_does_not_publish_partial_values() {
   TEST_ASSERT_TRUE(s.set("MaxHdop", 2.2f));
   TEST_ASSERT_FALSE(s.save());
   TEST_ASSERT_EQUAL_INT(1, nvs_mock_commit_count());
-  TEST_ASSERT_EQUAL_FLOAT(2.5f, persistedFloat("HoldRadius"));
+  TEST_ASSERT_EQUAL_FLOAT(kQuietHoldRadius, persistedFloat("HoldRadius"));
   TEST_ASSERT_EQUAL_FLOAT(1.8f, persistedFloat("MaxHdop"));
 
   nvs_mock_set_commit_result(ESP_OK);
@@ -373,6 +441,8 @@ int main(int argc, char **argv) {
   RUN_TEST(test_set_strict_rounds_integer_values);
   RUN_TEST(test_set_normalizes_integer_values);
   RUN_TEST(test_load_schema_mismatch_preserves_keyed_values);
+  RUN_TEST(test_load_old_default_bundle_migrates_to_quiet_defaults);
+  RUN_TEST(test_load_old_default_migration_preserves_custom_anchor_values);
   RUN_TEST(test_load_old_schema_migrates_legacy_key_when_current_key_missing);
   RUN_TEST(test_load_missing_schema_migrates_legacy_key);
   RUN_TEST(test_load_old_schema_keeps_current_key_over_legacy_key);

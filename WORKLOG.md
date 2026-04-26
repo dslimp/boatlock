@@ -5903,3 +5903,117 @@ Validation:
 Self-review:
 - This is session-local app history, not a persisted voyage log. That is enough for first bench/water review without widening storage or protocol scope.
 - The history depends on currently available app telemetry and BLE log lines; deeper correction/actuator trace review still belongs in firmware/device logs and simulation reports.
+
+### 2026-04-26 Stage 195: Commercial anchor UX review
+
+Scope:
+- Convert the requested commercial-example review into a short repo doc that maps official GPS-anchor product patterns to BoatLock decisions.
+- Keep this documentation-only; no firmware, Flutter, simulator, or hardware wrapper behavior changes.
+
+External baseline:
+- Checked official Minn Kota Spot-Lock/Advanced GPS, Garmin Force manual/support, Lowrance Ghost/Recon, and MotorGuide Tour Pro pages.
+- Focused on repeated product patterns rather than vendor performance claims.
+
+Key outcomes:
+- Added `docs/COMMERCIAL_ANCHOR_UX_REVIEW.md`.
+- Captured common expectations: primary anchor action, multiple control surfaces, short jog, separate heading hold, visible calibration/readiness, map/current/waypoint anchor entry, and post-run review.
+- Mapped BoatLock's current aligned features and remaining weak spots before powered/water tests.
+- Listed next autonomous non-powered work: command-scope helper, quiet defaults migration, service/dev/HIL gate spec, simulator backlog tightening, and multi-client control ownership design.
+
+Validation:
+- `git diff --check -- docs/COMMERCIAL_ANCHOR_UX_REVIEW.md WORKLOG.md` -> PASS.
+
+Self-review:
+- This review is intentionally product-level. It should guide prioritization, not substitute for powered bench measurements or water acceptance.
+
+### 2026-04-26 Stage 196: Firmware BLE command-scope helper
+
+Scope:
+- Add a pure firmware-side classifier for release/service/dev-HIL command scope without enforcing it in runtime behavior.
+- Keep this as helper plus native tests only; no command rejection, security rewrite, PlatformIO profile change, or wrapper change.
+
+External baseline:
+- Reused the existing BoatLock BLE/UI command-surface contract in `docs/BLE_PROTOCOL.md` and the Flutter classifier in `boatlock_ui/lib/ble/ble_command_scope.dart`.
+- No new external source was needed; this is parity coverage for an internal product boundary.
+
+Key outcomes:
+- Added `boatlock/RuntimeBleCommandScope.h` with `RuntimeBleCommandScope : uint8_t` and `runtimeBleClassifyCommand()`.
+- Raw `SEC_CMD:*` classifies as `UNKNOWN`; future enforcement must classify the unwrapped payload.
+- Added native coverage for release, service, dev/HIL, malformed, whitespace, envelope, and removed legacy command examples.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_command_scope` -> PASS (`6/6`).
+- `cd boatlock && platformio test -e native` -> PASS (`391/391`).
+- `cd boatlock && pio run -e esp32s3` -> PASS.
+
+Self-review:
+- This deliberately has zero runtime effect. The next gate implementation still needs explicit release/service/acceptance profiles and wrapper support before it can reject service or dev/HIL commands safely.
+
+### 2026-04-26 Stage 197: Quiet first-water settings defaults
+
+Scope:
+- Make the quiet anchor profile the actual default for first powered and protected-water tests.
+- Preserve non-default/custom persisted tuning during schema migration.
+
+External baseline:
+- Reused the product baseline that commercial GPS-anchor systems expose setup/calibration and conservative operating profiles before field use.
+- Reused the BoatLock safety invariant that first powered tests should minimize thrust and ramp aggressiveness.
+
+Key outcomes:
+- Updated `HoldRadius`, `DeadbandM`, `MaxThrustA`, and `ThrRampA` defaults to quiet values `3.0/2.2/45/20`.
+- Bumped settings schema from `0x19` to `0x1A`.
+- Added migration for the exact old untouched bundle `2.5/1.5/60/35`, while preserving custom/profile values.
+- Updated settings tests and config schema docs.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_settings` -> PASS (`25/25`).
+- `python3 tools/ci/check_config_schema_version.py` -> PASS (`0x1a`).
+- `cd boatlock && platformio test -e native` -> PASS (`391/391`).
+- `cd boatlock && pio run -e esp32s3` -> PASS.
+
+Self-review:
+- Exact float matching is acceptable here because the migrated bundle is made of the old compiled defaults. Operators with any custom/profile value keep their stored values instead of being silently reset to quiet.
+
+### 2026-04-26 Stage 198: Service/dev-HIL gate rollout plan
+
+Scope:
+- Document the required rollout contract before implementing firmware-side command-scope enforcement.
+- Keep this docs-only; the firmware gate is not implemented in this stage.
+
+External baseline:
+- Reused the existing BLE command-surface split and validation discipline that `main` should not expose service/dev commands in normal water UI.
+- No new external source was needed.
+
+Key outcomes:
+- Added planned release/service/acceptance profile rules to `docs/BLE_PROTOCOL.md`.
+- Added profile-aware `nh02` wrapper/operator-flow requirements to `docs/HARDWARE_NH02.md`.
+- Added validation order and risk checklist to `skills/boatlock/references/validation.md`.
+
+Validation:
+- `git diff --check -- docs/BLE_PROTOCOL.md docs/HARDWARE_NH02.md skills/boatlock/references/validation.md boatlock/TODO.md` -> PASS.
+- `rg -n "release|service|dev/HIL|SIM_|OTA|BOATLOCK_PIO_ENV|PlatformIO|nh02" docs/BLE_PROTOCOL.md docs/HARDWARE_NH02.md skills/boatlock/references/validation.md boatlock/TODO.md` -> PASS.
+
+Self-review:
+- The docs intentionally leave final PlatformIO environment names open, but they require unambiguous profile mapping before runtime enforcement can merge.
+
+### 2026-04-26 Stage 199: Simulator backlog split
+
+Scope:
+- Tighten simulator TODO/readiness wording after Russian scenario-data normalization and existing current/wind/wave/rocking work.
+- Keep this docs/backlog only; no simulator behavior or schema change.
+
+External baseline:
+- Reused the simulator best-practice baseline already captured in `skills/boatlock/references/external-patterns.md`.
+- No new external source was needed.
+
+Key outcomes:
+- Split the stale broad simulator item into concrete remaining gaps: provenance/confidence, loaded boat mass, drag/windage parameters, yaw moment/inertia, wake/chop events, sensor-frame rocking effects, and later hardware calibration.
+- Added the same known-gap summary to `tools/sim/README.md`.
+
+Validation:
+- `python3 tools/sim/test_sim_core.py` -> PASS (`27/27`).
+- `python3 tools/sim/run_sim.py --scenario-set all --check --json-out /tmp/boatlock-all-sim-report.json` -> PASS.
+- `git diff --check -- boatlock/TODO.md docs/PRODUCT_READINESS_PLAN.md tools/sim/README.md` -> PASS.
+
+Self-review:
+- This reduces planning ambiguity only. Actual provenance/schema and physics-model changes remain future implementation work.

@@ -1,6 +1,6 @@
 # Config Schema
 
-Schema version: `0x19` (`Settings::VERSION`).
+Schema version: `0x1A` (`Settings::VERSION`).
 
 Settings are stored in ESP32 NVS namespace `boatlock_cfg` as:
 
@@ -31,6 +31,9 @@ Migration rules:
 - versioned migrations live in `Settings::applyMigrations()`
 - key renames must be encoded as explicit legacy-key rules instead of relying on defaults
 - current legacy rule: schemas before `0x18` may migrate legacy `MaxThrust` into `MaxThrustA` when `MaxThrustA` is missing
+- schemas before `0x1A` migrate the exact untouched anchor default bundle
+  `HoldRadius=2.5`, `DeadbandM=1.5`, `MaxThrustA=60`, `ThrRampA=35`
+  to quiet defaults `3.0/2.2/45/20`; any custom/profile value preserves the stored bundle
 
 ## Groups
 

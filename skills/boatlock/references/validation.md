@@ -86,6 +86,49 @@
 - Quick audit for persistence call sites:
   - `rg -n "settings\\.save\\(" boatlock`
 
+## Planned Service/Dev/HIL Gate Validation
+
+This section is for the open firmware-side command-scope gate and is implementation planning only. Do not treat it as proof that the gate exists.
+
+The gate may land only with explicit PlatformIO profile rules and `nh02` wrapper support:
+
+- `release` profile: accepts only release commands and rejects service plus dev/HIL commands before side effects.
+- `service` profile: accepts release plus service commands, including BLE OTA, and rejects dev/HIL.
+- `acceptance` profile: accepts release, service, and dev/HIL so on-device `SIM_*` remains available for bench acceptance.
+- Existing environments such as `esp32s3`, `esp32s3_bno08x_sh2_uart`, and `esp32s3_debug_wifi_ota` must be mapped to one of those profiles or replaced by unambiguous profile-specific names before the firmware gate merges.
+
+Minimum validation order for the gate rollout:
+
+1. Local docs/static checks:
+   - `git diff --check -- docs/BLE_PROTOCOL.md docs/HARDWARE_NH02.md skills/boatlock/references/validation.md boatlock/TODO.md`
+   - `rg -n "release|service|dev/HIL|SIM_|OTA|BOATLOCK_PIO_ENV|PlatformIO|nh02" docs/BLE_PROTOCOL.md docs/HARDWARE_NH02.md skills/boatlock/references/validation.md boatlock/TODO.md`
+2. Local firmware/unit checks, run sequentially in one build directory:
+   - native BLE command/security tests cover each profile's allow/deny matrix
+   - native HIL tests cover `SIM_*` only for the acceptance profile
+   - each PlatformIO firmware profile builds without relying on stale `.pio` artifacts
+3. Release-profile bench checks:
+   - flash the release profile through `tools/hw/nh02/flash.sh`
+   - run `tools/hw/nh02/acceptance.sh`
+   - prove a representative service command, `OTA_BEGIN`, and `SIM_RUN` are rejected with stable gate logs and no output motion
+4. Service-profile bench checks:
+   - flash the service profile
+   - run `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/<service-env>/firmware.bin`
+   - prove `SIM_*` is rejected with stable gate logs
+5. Acceptance-profile bench checks:
+   - flash the acceptance profile
+   - run `tools/hw/nh02/acceptance.sh`
+   - run Android `sim` smoke/e2e and require `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, and `SIM_ABORT` through the normal BLE command path
+6. Recovery check:
+   - flash the release profile again and confirm the normal BLE reconnect/manual/anchor readiness smoke still uses the release surface only
+
+Risk review items for the rollout:
+
+- `SEC_CMD` must classify and gate the wrapped payload, not the raw envelope.
+- A release image without service commands removes BLE OTA from that image; the USB seed and service-profile update path must remain documented.
+- A service image must not accidentally expose `SIM_*` or phone-GPS injection.
+- An acceptance image must not be left on the boat for water use because it exposes injected sensor and HIL commands.
+- Wrapper output must distinguish profile-gated rejection from BLE timeout, auth failure, and parser failure.
+
 ## Useful Test Inventory
 
 - Native firmware test directories live under `boatlock/test/`.
