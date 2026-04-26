@@ -67,8 +67,8 @@ Still weak before powered or water confidence:
 - Calibration/setup UX is not yet a first-class operator path. Bow zero,
   compass readiness, and steering configuration still feel like service details.
 - Control ownership for a future remote/controller is not designed yet.
-- Firmware-side service/dev/HIL command gating is still a rollout item, not
-  runtime enforcement.
+- Firmware-side service/dev/HIL command gating is implemented, but release vs
+  service/acceptance rejection still needs powered bench and Android proof.
 - Simulation still needs provenance/confidence metadata, loaded boat mass,
   yaw/windage refinement, wake/chop events, and hardware-calibrated motor data.
 
@@ -92,9 +92,11 @@ Do not add to `main` yet:
 
 Next autonomous work that does not require powered hardware:
 
-1. Add the firmware command-scope helper and parity tests without enforcing it.
+1. Prove the firmware command-profile gate on `nh02` with release rejection logs
+   and service/acceptance positive paths.
 2. Make first-water quiet values the default with a safe settings migration.
-3. Write the service/dev/HIL gate rollout spec before runtime enforcement.
+3. Turn command-profile rejection into visible app/operator feedback where it
+   affects service or acceptance workflows.
 4. Tighten simulator backlog wording around the remaining physics and provenance
    gaps.
 5. Design multi-client control ownership before a second BLE controller exists.

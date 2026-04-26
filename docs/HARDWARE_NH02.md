@@ -70,15 +70,15 @@
 - Run the smoke app without reinstalling the APK:
   - `tools/hw/nh02/android-run-smoke.sh --no-install`
 
-## Profile-Aware Gate Scaffolding
+## Profile-Aware Gate
 
-This is scaffolding for the future firmware-side service/dev/HIL gate. PlatformIO profile aliases and `tools/hw/nh02/flash.sh` profile reporting exist now, but firmware command enforcement has not landed yet.
+Firmware command-scope enforcement is implemented in the shared BLE command path. PlatformIO profile aliases and `tools/hw/nh02/flash.sh` profile reporting select whether the flashed firmware accepts only release commands, service commands, or acceptance/HIL commands.
 
-The gate rollout must make the effective firmware profile visible at every bench entry point:
+The effective firmware profile must stay visible at every bench entry point:
 
 - USB flash wrappers must print the effective PlatformIO environment and whether it is a `release`, `service`, or `acceptance` command-scope profile.
 - `tools/hw/nh02/flash.sh` may keep `BOATLOCK_PIO_ENV` as the override, but the accepted values must be documented and must not silently fall back from a requested service or acceptance profile to release.
-- `tools/hw/nh02/acceptance.sh` must know which profile is flashed. Release acceptance must not run `SIM_*`; acceptance-profile validation must run `SIM_*` through the normal BLE command path.
+- `tools/hw/nh02/acceptance.sh` must know which profile is flashed. Release acceptance must prove `SIM_*` rejection; acceptance-profile validation must run `SIM_*` through the normal BLE command path.
 - `tools/hw/nh02/android-run-app-e2e.sh --ota` must require a service-capable target firmware before sending `OTA_BEGIN`. If the OTA candidate is a release image that intentionally disables BLE OTA after reboot, the wrapper output must say so.
 - `tools/hw/nh02/android-run-app-e2e.sh --sim` and the smoke `sim` mode must require the acceptance profile before sending `SIM_*`.
 - `tools/hw/nh02/install.sh` must be rerun after changing any tracked remote helper that enforces or reports the selected profile.

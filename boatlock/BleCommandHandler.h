@@ -9,6 +9,7 @@
 #include "Logger.h"
 #include "BNO08xCompass.h"
 #include "BleOtaUpdate.h"
+#include "RuntimeBleCommandScope.h"
 #include "RuntimeBleOtaCommand.h"
 
 extern AnchorControl anchor;
@@ -43,6 +44,16 @@ inline void handleBleCommand(const std::string& cmd) {
         return;
     }
     const std::string& command = effectiveCmd;
+
+    const RuntimeBleCommandScope commandScope = runtimeBleClassifyCommand(command);
+    const RuntimeBleCommandProfile commandProfile = runtimeBleActiveCommandProfile();
+    if (!runtimeBleCommandScopeAllowedInProfile(commandScope, commandProfile)) {
+        logMessage("[BLE] command rejected reason=profile profile=%s scope=%s command=%s\n",
+                   runtimeBleCommandProfileName(commandProfile),
+                   runtimeBleCommandScopeName(commandScope),
+                   command.c_str());
+        return;
+    }
 
     noteControlActivityNow();
 

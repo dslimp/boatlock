@@ -95,11 +95,11 @@
 - Quick audit for persistence call sites:
   - `rg -n "settings\\.save\\(" boatlock`
 
-## Planned Service/Dev/HIL Gate Validation
+## Service/Dev/HIL Gate Validation
 
-This section is for the open firmware-side command-scope gate. PlatformIO profile aliases and the `nh02` flash wrapper profile report exist now, but firmware command enforcement is still implementation planning only. Do not treat these profiles as proof that the gate exists at runtime.
+Firmware command enforcement is implemented in the shared BLE command path. PlatformIO profile aliases and the `nh02` flash wrapper profile report select which command scopes are compiled into the firmware command gate.
 
-The gate may land only with explicit PlatformIO profile rules and full `nh02` wrapper support:
+Profile rules:
 
 - `release` profile: accepts only release commands and rejects service plus dev/HIL commands before side effects.
 - `service` profile: accepts release plus service commands, including BLE OTA, and rejects dev/HIL.
@@ -111,7 +111,7 @@ The gate may land only with explicit PlatformIO profile rules and full `nh02` wr
 - `esp32s3_bno08x_sh2_uart` and `esp32s3_debug_wifi_ota` are treated as service profile environments by the flash wrapper.
 - `gpio_probe` and `uart_rvc_probe_rx12` are debug probe builds with no release/service/acceptance command-scope profile.
 
-Minimum validation order for the gate rollout:
+Minimum validation order after profile-gate changes:
 
 1. Local docs/static checks:
    - `bash -n tools/hw/nh02/flash.sh`

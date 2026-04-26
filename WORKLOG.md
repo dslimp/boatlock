@@ -6218,3 +6218,30 @@ Validation:
 
 Self-review:
 - This removes the previous fixed-acceleration shortcut for catalog-backed current/wind forcing, but coefficients are still coarse estimates. Remaining gaps are yaw moment/heading inertia, short chop/wake events, and sensor-frame effects from rocking.
+
+### 2026-04-26 Stage 209: Firmware command profile gate
+
+Scope:
+- Implement firmware-side release/service/acceptance command-profile enforcement in the shared BLE command path.
+- Keep the change limited to firmware command-scope/runtime command handling, focused native tests, and matching docs/TODO/reference updates.
+
+External baseline:
+- PlatformIO `build_flags` documentation confirms `-D name=definition` predefines compile-time macros for C/C++ preprocessing: https://docs.platformio.org/en/stable/projectconf/sections/env/options/build/build_flags.html.
+- OWASP least privilege guidance frames this as reducing attack surface by granting only the permissions needed for a profile: https://owasp.org/www-community/controls/Least_Privilege_Principle.
+
+Key outcomes:
+- Added `RuntimeBleCommandProfile` and profile allow/deny helpers to `RuntimeBleCommandScope.h`.
+- `handleBleCommand()` now gates the effective command after security preprocessing and before `noteControlActivityNow()`, OTA, SIM, service tuning, injected GNSS, settings writes, or actuation side effects.
+- Default/no-macro builds remain release-compatible; explicit service and acceptance macros enable their wider command scopes.
+- Rejection logs use stable `reason=profile profile=<...> scope=<...>` text.
+- Existing broad command-handler tests now compile under the acceptance profile; a new focused release-gate suite proves service/dev/HIL commands do not trigger side effects.
+- Updated BLE protocol docs, validation reference, and TODO to reflect the implemented gate.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_command_scope -f test_ble_command_profile_gate -f test_ble_command_handler` -> PASS (`52/52`).
+- `cd boatlock && platformio run -e esp32s3 -e esp32s3_release -e esp32s3_service -e esp32s3_acceptance` -> PASS (`4/4` environments).
+- `git diff --check` -> PASS.
+- No `nh02`, hardware, or Android validation run per task boundary.
+
+Self-review:
+- The local gate covers profile classification and pre-side-effect rejection, including wrapped `SEC_CMD` payload scope. Remaining proof is bench-level profile rejection logs and Android/HIL behavior, intentionally deferred by the task boundary.

@@ -1,3 +1,5 @@
+#define BOATLOCK_COMMAND_PROFILE_ACCEPTANCE 1
+
 #include "../mocks/BleCommandHandler.h"
 #include "ManualControl.h"
 #include <unity.h>

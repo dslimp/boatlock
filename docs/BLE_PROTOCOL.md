@@ -175,23 +175,23 @@ Required validation before implementation is accepted:
 - two-central bench or Android smoke with simultaneous telemetry subscribers and
   one owner, including observable busy rejection for the loser
 
-## Planned Firmware Scope Gate
+## Firmware Scope Gate
 
-This section is a rollout contract for the open P0 firmware-side scope gate. It does not describe an implemented firmware gate yet. The gate must not land as a parser-only or UI-only change; it must land with explicit PlatformIO profiles, updated `nh02` wrappers, and acceptance docs so BLE OTA and on-device `SIM_*` validation stay intentional.
+Firmware builds enforce the command scope selected by the PlatformIO profile. The default `esp32s3` environment is release-compatible; explicit `esp32s3_release`, `esp32s3_service`, and `esp32s3_acceptance` environments select the same release, service, and acceptance command profiles used by the `nh02` flash wrapper.
 
-Planned profile rules:
+Profile rules:
 
 - `release`: normal water image. It accepts only `release` commands plus the security envelope around allowed payloads. It rejects `service` and `dev/HIL` commands before they can mutate settings, start OTA, inject sensor data, start simulation, or actuate outputs.
 - `service`: maintenance image. It accepts `release` plus `service` commands, including BLE OTA, calibration, tuning, and installer flows. It rejects `dev/HIL`, including `SET_PHONE_GPS` and all `SIM_*` commands.
 - `acceptance`: bench validation image. It accepts `release`, `service`, and `dev/HIL` commands so `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, and `SIM_ABORT` remain available to the on-device HIL and Android smoke wrappers.
 
-The implementation may choose the final PlatformIO environment names, but they must be unambiguous and documented before the gate merges. Existing `esp32s3`, `esp32s3_bno08x_sh2_uart`, and debug Wi-Fi/OTA environments must either become clear aliases of one of the profiles above or state which command scopes they compile in. The debug Wi-Fi/OTA environment is not proof that BLE OTA works.
+`esp32s3_bno08x_sh2_uart` and `esp32s3_debug_wifi_ota` extend the service profile. Debug probe builds are not command-profile release artifacts.
 
 Gate behavior expectations:
 
 - Scope is evaluated on the unwrapped command payload. `SEC_CMD` must not become a bypass; the effective scope is the wrapped payload scope.
 - Rejected commands fail closed: no setting write, no OTA session, no simulation state change, no injected GNSS update, no motor or stepper output, and no transition out of the current safe runtime mode.
-- Rejections must be observable with stable log text or a stable status reason so wrappers can distinguish "command gated by profile" from "command parser bug" or "BLE link lost".
+- Rejections are observable in the log as `[BLE] command rejected reason=profile profile=<release|service|acceptance> scope=<service|dev_hil> command=<payload>` so wrappers can distinguish "command gated by profile" from "command parser bug" or "BLE link lost".
 - `OTA_BEGIN`, `OTA_FINISH`, and `OTA_ABORT` remain `service` commands. A release image that excludes service commands must document that BLE OTA is unavailable from that image, and the service update path must remain recoverable through USB seed flash.
 - `SIM_*` and `SET_PHONE_GPS` remain `dev/HIL` commands. They must be absent from normal water firmware unless the explicit acceptance profile is flashed.
 - During active OTA, the existing OTA safety rule still applies inside any profile that allows OTA: firmware rejects runtime commands except `HEARTBEAT`, `OTA_FINISH`, and `OTA_ABORT`.

@@ -10,6 +10,12 @@ enum class RuntimeBleCommandScope : uint8_t {
   DEV_HIL,
 };
 
+enum class RuntimeBleCommandProfile : uint8_t {
+  RELEASE,
+  SERVICE,
+  ACCEPTANCE,
+};
+
 inline bool runtimeBleCommandHasPrefix(const std::string& command,
                                        const char* prefix) {
   return command.rfind(prefix, 0) == 0;
@@ -59,4 +65,73 @@ inline RuntimeBleCommandScope runtimeBleClassifyCommand(
   }
 
   return RuntimeBleCommandScope::UNKNOWN;
+}
+
+inline const char* runtimeBleCommandScopeName(RuntimeBleCommandScope scope) {
+  switch (scope) {
+    case RuntimeBleCommandScope::RELEASE:
+      return "release";
+    case RuntimeBleCommandScope::SERVICE:
+      return "service";
+    case RuntimeBleCommandScope::DEV_HIL:
+      return "dev_hil";
+    case RuntimeBleCommandScope::UNKNOWN:
+    default:
+      return "unknown";
+  }
+}
+
+inline const char* runtimeBleCommandProfileName(RuntimeBleCommandProfile profile) {
+  switch (profile) {
+    case RuntimeBleCommandProfile::RELEASE:
+      return "release";
+    case RuntimeBleCommandProfile::SERVICE:
+      return "service";
+    case RuntimeBleCommandProfile::ACCEPTANCE:
+      return "acceptance";
+    default:
+      return "unknown";
+  }
+}
+
+inline bool runtimeBleCommandScopeAllowedInProfile(
+    RuntimeBleCommandScope scope,
+    RuntimeBleCommandProfile profile) {
+  switch (scope) {
+    case RuntimeBleCommandScope::RELEASE:
+      return true;
+    case RuntimeBleCommandScope::SERVICE:
+      return profile == RuntimeBleCommandProfile::SERVICE ||
+             profile == RuntimeBleCommandProfile::ACCEPTANCE;
+    case RuntimeBleCommandScope::DEV_HIL:
+      return profile == RuntimeBleCommandProfile::ACCEPTANCE;
+    case RuntimeBleCommandScope::UNKNOWN:
+    default:
+      return true;
+  }
+}
+
+inline bool runtimeBleCommandAllowedInProfile(
+    const std::string& command,
+    RuntimeBleCommandProfile profile) {
+  return runtimeBleCommandScopeAllowedInProfile(runtimeBleClassifyCommand(command),
+                                               profile);
+}
+
+#if defined(BOATLOCK_COMMAND_PROFILE_RELEASE) && \
+    (defined(BOATLOCK_COMMAND_PROFILE_SERVICE) || defined(BOATLOCK_COMMAND_PROFILE_ACCEPTANCE))
+#error "Only one BOATLOCK_COMMAND_PROFILE_* macro may be defined"
+#endif
+#if defined(BOATLOCK_COMMAND_PROFILE_SERVICE) && defined(BOATLOCK_COMMAND_PROFILE_ACCEPTANCE)
+#error "Only one BOATLOCK_COMMAND_PROFILE_* macro may be defined"
+#endif
+
+inline RuntimeBleCommandProfile runtimeBleActiveCommandProfile() {
+#if defined(BOATLOCK_COMMAND_PROFILE_ACCEPTANCE)
+  return RuntimeBleCommandProfile::ACCEPTANCE;
+#elif defined(BOATLOCK_COMMAND_PROFILE_SERVICE)
+  return RuntimeBleCommandProfile::SERVICE;
+#else
+  return RuntimeBleCommandProfile::RELEASE;
+#endif
 }

@@ -106,9 +106,9 @@ Important mismatch:
   ignore false returns from secure/session failures.
 - Prove or fix GPS-to-compass correction source ownership. Phone GPS fallback is
   display/telemetry only and must not indirectly bias control heading correction.
-- Classify BLE commands into `release`, `service`, and `dev/HIL`. Keep actuation
-  and settings writes authenticated once paired, and keep service/dev commands
-  visibly outside the normal water UI.
+- Keep BLE command profiles enforced across firmware, Flutter, tests, and docs:
+  release firmware must reject service/dev/HIL commands before side effects,
+  while service and acceptance profiles must stay explicit at bench entry points.
 - Decide the exact steering stepper driver and mechanics. Current firmware is
   fixed to 28BYJ-48 + ULN2003 HALF4WIRE. If the real steering drive is not that
   stack and is also not A4988 STEP/DIR, add an explicit supported driver path with
