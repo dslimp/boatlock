@@ -47,6 +47,16 @@ Status after the 2026-04-26 autonomous pass.
 - Firmware OTA ownership is tied to the BLE connection handle that starts the
   update, so a non-owner central disconnect no longer aborts an active phone
   OTA transfer.
+- macOS service app acceptance now has a local wrapper that builds or unpacks
+  the service artifact, validates the bundle/signature/entitlements, and can
+  run a no-BLE launch smoke or manual update checklist.
+- Latest-main Pages deployment now has a CI verifier that downloads
+  `manifest.json`, `firmware.bin`, `SHA256SUMS`, and `BUILD_INFO.txt` after
+  deploy and validates metadata plus SHA-256 consistency.
+- Offline simulator yaw inertia and explicit wake/chop events are implemented
+  with thresholds and reports for core and Russian water scenarios.
+- A pure firmware BLE control-owner lease policy helper is implemented and
+  covered by native tests; live command-path wiring remains deferred.
 
 ## Active Background Work
 
@@ -61,15 +71,11 @@ Status after the 2026-04-26 autonomous pass.
   `firmware.bin`, `SHA256SUMS`, and `BUILD_INFO.txt` are public and match.
   The unauthenticated probe on 2026-04-26 returned `404` for the private repo,
   so the remaining gate is the Actions/Pages deployment result and visibility
-  setting, not local app code.
-- Keep multi-client controller support deferred until per-client auth/session and
-  a single control-owner lease are implemented.
-- Add a macOS runtime/update smoke or manual acceptance path for the service app.
+  setting. The workflow now has an in-CI verifier for this.
+- Wire the pure multi-client control lease helper into the live BLE command path
+  only after per-client security/session metadata is available.
 - Decide whether Android/macOS service builds should intentionally replace the
   normal app or get distinct app/bundle IDs before operator distribution.
-- Add a CI/runtime probe for the public latest-main Pages channel after the
-  first real deployment, using the same manifest validation and SHA check as
-  the app.
 
 ## Hardware-Gated Tasks
 
@@ -122,5 +128,5 @@ Status after the 2026-04-26 autonomous pass.
   before hardware proof.
 - `Faraday`: prioritized the remaining autonomous/gated tasks; `nh02`
   manifest-backed OTA and release return-to-bench proof are now complete, while
-  Pages, macOS runtime, powered hardware intake, and control-owner lease remain
+  Pages, powered hardware intake, and control-owner lease remain
   open.

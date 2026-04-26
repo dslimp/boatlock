@@ -13,6 +13,10 @@
   - `max_error_m`
   - `p95_heading_error_deg`
   - `max_heading_error_deg`
+  - `p95_yaw_rate_dps`
+  - `max_yaw_rate_dps`
+  - `p95_heading_inertia_lag_deg`
+  - `p95_environment_yaw_accel_dps2`
   - `steering_jammed_time_pct`
   - `steering_backlash_crossings_per_min`
   - `thrust_while_misaligned_time_pct`
@@ -27,6 +31,10 @@
   - `motor_current_limited_time_pct`
   - `motor_thermal_derated_time_pct`
   - `motor_driver_deadband_time_pct`
+  - `wake_event_time_pct`
+  - `chop_event_time_pct`
+  - `wake_event_count`
+  - `chop_event_count`
 
 ## Actuator Model
 
@@ -38,6 +46,11 @@ The steering model supports:
 - backlash on steering reversal
 - static wrong-zero offset
 - scheduled jam windows
+
+Heading changes then pass through a yaw-rate state with acceleration limiting,
+damping, and environmental yaw acceleration. This keeps steering commands from
+turning the simulated boat instantly and lets off-axis wind/current/wake/chop
+forcing perturb heading without changing firmware runtime behavior.
 
 Applied thrust passes through a brushed motor model with:
 
@@ -53,7 +66,9 @@ Data-backed scenarios can include a `boat` block with loaded mass, submerged
 drag, and above-water windage inputs. Current and wind/gust forcing use a
 quadratic drag approximation, then divide force by loaded mass to get
 acceleration. Wave forcing remains a bounded disturbance term scaled by loaded
-mass until water-log data exists.
+mass until water-log data exists. Scenario `environment.events` can add explicit
+`wake` or `chop` packets with start time, duration, height, period, and
+direction; reports expose their event time/count and yaw/rocking effects.
 
 ## Scenarios (minimum set)
 
@@ -61,11 +76,12 @@ mass until water-log data exists.
 2. `constant_current`
 3. `gusts`
 4. `wake_steering_backlash`
-5. `gnss_dropout`
-6. `poor_hdop`
-7. `position_jumps`
-8. `comm_loss`
-9. `nan_data`
+5. `short_steep_chop`
+6. `gnss_dropout`
+7. `poor_hdop`
+8. `position_jumps`
+9. `comm_loss`
+10. `nan_data`
 
 ## Optional RF Water Scenarios
 
@@ -78,11 +94,11 @@ The `russian` scenario set normalizes the first slice of
 4. `ladoga_storm_abort`
 5. `baltic_gulf_drift`
 
-These scenarios add current, wind/gusts, wave-induced forcing, and a
-`p95_rocking_roll_deg` metric. Their reports also include the loaded boat mass,
-water drag, and windage inputs used by the world model. `ladoga_storm_abort` is
-intentionally modeled as an environment-abort case, not as a normal anchor-hold
-success case.
+These scenarios add current, wind/gusts, wave-induced forcing, explicit wake or
+chop event packets, and rocking/yaw metrics. Their reports also include the
+loaded boat mass, water drag, and windage inputs used by the world model.
+`ladoga_storm_abort` is intentionally modeled as an environment-abort case, not
+as a normal anchor-hold success case.
 
 Normalized scenario inputs live in
 `tools/sim/scenarios/environment_profiles.json`. The research files under
@@ -95,9 +111,6 @@ object into each matching JSON report result; built-in core scenarios omit it.
 
 Known remaining gaps:
 
-- yaw moment and heading inertia from environmental forcing
-- river/reservoir wake and short steep chop events
-- BNO08x/GNSS sensor-frame effects from rocking, not only rocking metrics
 - hardware calibration after powered bench and water logs exist
 
 ## Run locally

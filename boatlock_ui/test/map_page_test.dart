@@ -190,22 +190,20 @@ void main() {
     expect(find.text('NUDGE_DIR:FWD отклонена: AUTH'), findsOneWidget);
   });
 
-  testWidgets('emergency stop confirms before sending STOP', (tester) async {
+  testWidgets('emergency stop sends STOP immediately from left button', (
+    tester,
+  ) async {
     final ble = await _pumpMapPage(tester);
     ble.emit(_boatData());
     await tester.pump();
 
+    final stopRight = tester.getTopRight(find.byTooltip('Аварийный STOP')).dx;
+    final refreshLeft = tester.getTopLeft(find.byTooltip('Обновить данные')).dx;
+    expect(stopRight, lessThan(refreshLeft));
+
     await tester.tap(find.byTooltip('Аварийный STOP'));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.text('Остановить якорь и моторы прямо сейчас?'),
-      findsOneWidget,
-    );
-    expect(ble.stopAllCalls, 0);
-
-    await tester.tap(find.widgetWithText(FilledButton, 'STOP'));
     await tester.pump();
+    expect(find.text('Остановить якорь и моторы прямо сейчас?'), findsNothing);
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(ble.stopAllCalls, 1);

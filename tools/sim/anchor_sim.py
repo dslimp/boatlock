@@ -70,6 +70,9 @@ class SimConfig:
     steering_wrong_zero_deg: float = 0.0
     steering_jam_start_s: float = -1.0
     steering_jam_duration_s: float = 0.0
+    yaw_accel_limit_dps2: float = 130.0
+    yaw_damping_per_s: float = 0.18
+    yaw_env_accel_gain_dps2_per_mps2: float = 52.0
     ramp_span_m: float = 12.0
     min_pwm_raw: int = 35
     dist_filter_alpha: float = 0.22
@@ -101,6 +104,17 @@ class SimConfig:
 
 
 @dataclass(frozen=True)
+class EnvironmentEvent:
+    name: str
+    kind: str
+    start_s: float
+    duration_s: float
+    height_m: float
+    period_s: float
+    direction_deg: float
+
+
+@dataclass(frozen=True)
 class EnvironmentProfile:
     name: str
     water_body: str
@@ -124,6 +138,7 @@ class EnvironmentProfile:
     wave_period_s: float = 4.0
     wave_direction_deg: float = 90.0
     abort_expected: bool = False
+    events: Tuple[EnvironmentEvent, ...] = ()
 
 
 @dataclass
@@ -154,6 +169,11 @@ class StepSample:
     wave_steepness: float = 0.0
     gnss_frame_degraded: bool = False
     heading_frame_degraded: bool = False
+    yaw_rate_dps: float = 0.0
+    heading_inertia_lag_deg: float = 0.0
+    environment_yaw_accel_dps2: float = 0.0
+    wake_event_active: bool = False
+    chop_event_active: bool = False
     battery_voltage_v: float = 12.6
     motor_current_a: float = 0.0
     motor_temp_c: float = 25.0
@@ -206,13 +226,63 @@ def _gust_speed_mps(profile: EnvironmentProfile, t_s: int) -> float:
     return profile.gust_mps if (t_s % period) < profile.gust_duration_s else profile.wind_mps
 
 
+def active_environment_events(profile: Optional[EnvironmentProfile], t_s: int) -> Tuple[EnvironmentEvent, ...]:
+    if profile is None:
+        return ()
+    active: List[EnvironmentEvent] = []
+    for event in profile.events:
+        if event.start_s <= t_s < event.start_s + event.duration_s:
+            active.append(event)
+    return tuple(active)
+
+
+def _event_envelope(event: EnvironmentEvent, t_s: int) -> float:
+    duration = max(0.1, event.duration_s)
+    progress = clamp((t_s - event.start_s) / duration, 0.0, 1.0)
+    return math.sin(math.pi * progress) ** 2
+
+
+def _event_carrier(event: EnvironmentEvent, t_s: int) -> float:
+    period = max(0.8, event.period_s)
+    phase = (2.0 * math.pi * (t_s - event.start_s)) / period
+    return math.sin(phase)
+
+
+def _event_wave_length_m(event: EnvironmentEvent) -> float:
+    period = max(0.8, event.period_s)
+    return (GRAVITY_MPS2 * period * period) / (2.0 * math.pi)
+
+
+def _event_steepness_ratio(event: EnvironmentEvent) -> float:
+    length = _event_wave_length_m(event)
+    return event.height_m / length if length > 0.0 else 0.0
+
+
+def environment_event_reason(profile: Optional[EnvironmentProfile], t_s: int) -> str:
+    kinds = {event.kind for event in active_environment_events(profile, t_s)}
+    if "wake" in kinds and "chop" in kinds:
+        return "WAKE_AND_CHOP_EVENT"
+    if "wake" in kinds:
+        return "WAKE_EVENT"
+    if "chop" in kinds:
+        return "SHORT_CHOP_EVENT"
+    return "NONE"
+
+
 def wave_rocking_roll_deg(profile: Optional[EnvironmentProfile], t_s: int) -> float:
-    if profile is None or profile.wave_height_m <= 0.0:
+    if profile is None:
         return 0.0
-    period = max(1.5, profile.wave_period_s)
-    phase = (2.0 * math.pi * t_s) / period
-    amp = min(24.0, profile.wave_height_m * 7.0)
-    return amp * math.sin(phase) + 0.25 * amp * math.sin((phase * 2.0) + 0.7)
+    roll = 0.0
+    if profile.wave_height_m > 0.0:
+        period = max(1.5, profile.wave_period_s)
+        phase = (2.0 * math.pi * t_s) / period
+        amp = min(24.0, profile.wave_height_m * 7.0)
+        roll += amp * math.sin(phase) + 0.25 * amp * math.sin((phase * 2.0) + 0.7)
+    for event in active_environment_events(profile, t_s):
+        period = max(0.8, event.period_s)
+        amp = min(28.0, event.height_m * 10.0 * (2.5 / period))
+        roll += amp * _event_envelope(event, t_s) * _event_carrier(event, t_s)
+    return roll
 
 
 def wave_length_m(profile: Optional[EnvironmentProfile]) -> float:
@@ -222,19 +292,24 @@ def wave_length_m(profile: Optional[EnvironmentProfile]) -> float:
     return (GRAVITY_MPS2 * period * period) / (2.0 * math.pi)
 
 
-def wave_steepness_ratio(profile: Optional[EnvironmentProfile]) -> float:
+def wave_steepness_ratio(profile: Optional[EnvironmentProfile], t_s: Optional[int] = None) -> float:
     length = wave_length_m(profile)
-    if profile is None or length <= 0.0:
-        return 0.0
-    return profile.wave_height_m / length
+    steepness = 0.0 if profile is None or length <= 0.0 else profile.wave_height_m / length
+    if profile is None:
+        return steepness
+    events = active_environment_events(profile, t_s) if t_s is not None else profile.events
+    for event in events:
+        steepness = max(steepness, _event_steepness_ratio(event))
+    return steepness
 
 
 def sensor_frame_degradation(
     profile: Optional[EnvironmentProfile],
     rocking_roll_deg: float,
     rocking_roll_rate_dps: float,
+    wave_steepness: Optional[float] = None,
 ) -> Tuple[bool, bool, str]:
-    steepness = wave_steepness_ratio(profile)
+    steepness = wave_steepness_ratio(profile) if wave_steepness is None else wave_steepness
     roll_abs = abs(rocking_roll_deg)
     rate_abs = abs(rocking_roll_rate_dps)
     gnss_degraded = steepness >= 0.08 or rate_abs >= 35.0
@@ -319,12 +394,57 @@ def environment_accel_mps2(
         mass_scale = REFERENCE_LOADED_BOAT_MASS_KG / max(1.0, profile.loaded_boat_mass_kg)
         amp = min(0.12, profile.wave_height_m * 0.018 * (4.0 / period) * mass_scale)
         wave_ax, wave_ay = vector_from_bearing(amp * math.sin(phase), profile.wave_direction_deg)
+    for event in active_environment_events(profile, t_s):
+        mass_scale = REFERENCE_LOADED_BOAT_MASS_KG / max(1.0, profile.loaded_boat_mass_kg)
+        period = max(0.8, event.period_s)
+        kind_scale = 1.2 if event.kind == "wake" else 1.0
+        amp = min(0.18, event.height_m * 0.042 * (2.8 / period) * mass_scale * kind_scale)
+        event_ax, event_ay = vector_from_bearing(
+            amp * _event_envelope(event, t_s) * _event_carrier(event, t_s),
+            event.direction_deg,
+        )
+        wave_ax += event_ax
+        wave_ay += event_ay
 
     return current_ax + wind_ax + wave_ax, current_ay + wind_ay + wave_ay
 
 
 def profiled_environment_accel_fn(profile: EnvironmentProfile) -> Callable[[int], Tuple[float, float]]:
     return lambda t_s: environment_accel_mps2(profile, t_s)
+
+
+def environment_yaw_accel_dps2(
+    cfg: SimConfig,
+    profile: Optional[EnvironmentProfile],
+    t_s: int,
+    heading_deg: float,
+    boat_vx_mps: float,
+    boat_vy_mps: float,
+) -> float:
+    if profile is None:
+        return 0.0
+    ax, ay = environment_accel_mps2(profile, t_s, boat_vx_mps, boat_vy_mps)
+    accel = math.hypot(ax, ay)
+    if accel <= 1e-9:
+        base_yaw = 0.0
+    else:
+        force_dir = bearing_deg(ax, ay)
+        side = math.sin(math.radians(angle_diff_deg(force_dir, heading_deg)))
+        base_yaw = side * accel * cfg.yaw_env_accel_gain_dps2_per_mps2
+    event_yaw = 0.0
+    for event in active_environment_events(profile, t_s):
+        side = math.sin(math.radians(angle_diff_deg(event.direction_deg, heading_deg)))
+        period = max(0.8, event.period_s)
+        scale = 7.0 if event.kind == "wake" else 5.0
+        event_yaw += (
+            side
+            * event.height_m
+            * (2.5 / period)
+            * scale
+            * _event_envelope(event, t_s)
+            * _event_carrier(event, t_s)
+        )
+    return base_yaw + event_yaw
 
 
 class GnssGate:
@@ -569,6 +689,46 @@ class SteeringModel:
         )
 
 
+@dataclass
+class YawState:
+    heading_delta_deg: float
+    yaw_rate_dps: float
+    heading_inertia_lag_deg: float
+    environment_yaw_accel_dps2: float
+
+
+class YawModel:
+    def __init__(self, cfg: SimConfig) -> None:
+        self.cfg = cfg
+        self.yaw_rate_dps = 0.0
+
+    def update(self, desired_heading_delta_deg: float, environment_yaw_accel_dps2: float, dt_s: float) -> YawState:
+        dt = max(0.001, dt_s)
+        desired_rate = clamp(
+            desired_heading_delta_deg / dt,
+            -self.cfg.max_turn_rate_dps,
+            self.cfg.max_turn_rate_dps,
+        )
+        max_delta_rate = max(0.0, self.cfg.yaw_accel_limit_dps2) * dt
+        rate_delta = clamp(desired_rate - self.yaw_rate_dps, -max_delta_rate, max_delta_rate)
+        self.yaw_rate_dps += rate_delta
+        self.yaw_rate_dps += environment_yaw_accel_dps2 * dt
+        damping = clamp(self.cfg.yaw_damping_per_s * dt, 0.0, 0.95)
+        self.yaw_rate_dps *= 1.0 - damping
+        self.yaw_rate_dps = clamp(
+            self.yaw_rate_dps,
+            -self.cfg.max_turn_rate_dps,
+            self.cfg.max_turn_rate_dps,
+        )
+        heading_delta = self.yaw_rate_dps * dt
+        return YawState(
+            heading_delta_deg=heading_delta,
+            yaw_rate_dps=self.yaw_rate_dps,
+            heading_inertia_lag_deg=abs(desired_heading_delta_deg - heading_delta),
+            environment_yaw_accel_dps2=environment_yaw_accel_dps2,
+        )
+
+
 def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict[str, object]:
     if scenario.config_overrides:
         cfg = replace(cfg, **scenario.config_overrides)
@@ -577,6 +737,7 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
     ctrl = AnchorController(cfg)
     motor = BrushedMotorModel(cfg)
     steering = SteeringModel(cfg)
+    yaw = YawModel(cfg)
 
     anchor_lat = ANCHOR_LAT
     anchor_lon = ANCHOR_LON
@@ -600,12 +761,17 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
         rocking_roll = wave_rocking_roll_deg(scenario.profile, t)
         rocking_roll_rate = 0.0 if t == 0 else (rocking_roll - previous_rocking_roll) / cfg.dt_s
         previous_rocking_roll = rocking_roll
-        wave_steepness = wave_steepness_ratio(scenario.profile)
+        wave_steepness = wave_steepness_ratio(scenario.profile, t)
         gnss_frame_degraded, heading_frame_degraded, sensor_reason = sensor_frame_degradation(
             scenario.profile,
             rocking_roll,
             rocking_roll_rate,
+            wave_steepness,
         )
+        environment_reason = environment_event_reason(scenario.profile, t)
+        active_events = active_environment_events(scenario.profile, t)
+        wake_event_active = any(event.kind == "wake" for event in active_events)
+        chop_event_active = any(event.kind == "chop" for event in active_events)
         obs = scenario.obs_fn(t, x_m, y_m, rnd)
         if obs.valid and obs.lat is not None and obs.lon is not None:
             last_obs = obs
@@ -644,7 +810,9 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
             cfg.max_turn_rate_dps * cfg.dt_s,
         )
         steering_state = steering.update(float(t), requested_heading_delta, cfg.dt_s)
-        heading += steering_state.heading_delta_deg
+        env_yaw_accel = environment_yaw_accel_dps2(cfg, scenario.profile, t, heading, vx, vy)
+        yaw_state = yaw.update(steering_state.heading_delta_deg, env_yaw_accel, cfg.dt_s)
+        heading += yaw_state.heading_delta_deg
         heading = wrap_deg(heading)
         heading_err = angle_diff_deg(brg_to_anchor, heading)
 
@@ -683,9 +851,12 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
         if (not math.isfinite(x_m)) or (not math.isfinite(y_m)) or (not math.isfinite(dist_true)):
             invalid_distance_count += 1
 
-        key = f"{gnss_reason}|{failsafe_reason}|{sensor_reason}"
+        key = f"{gnss_reason}|{failsafe_reason}|{sensor_reason}|{environment_reason}"
         if key != last_event_key and (
-            gnss_reason != "NONE" or failsafe_reason != "NONE" or sensor_reason != "NONE"
+            gnss_reason != "NONE"
+            or failsafe_reason != "NONE"
+            or sensor_reason != "NONE"
+            or environment_reason != "NONE"
         ):
             events.append(
                 {
@@ -693,6 +864,7 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
                     "gnss_reason": gnss_reason,
                     "failsafe_reason": failsafe_reason,
                     "sensor_reason": sensor_reason,
+                    "environment_reason": environment_reason,
                 }
             )
             last_event_key = key
@@ -715,6 +887,11 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
                 wave_steepness=wave_steepness,
                 gnss_frame_degraded=gnss_frame_degraded,
                 heading_frame_degraded=heading_frame_degraded,
+                yaw_rate_dps=yaw_state.yaw_rate_dps,
+                heading_inertia_lag_deg=yaw_state.heading_inertia_lag_deg,
+                environment_yaw_accel_dps2=yaw_state.environment_yaw_accel_dps2,
+                wake_event_active=wake_event_active,
+                chop_event_active=chop_event_active,
                 battery_voltage_v=motor_state.battery_voltage_v,
                 motor_current_a=motor_state.current_a,
                 motor_temp_c=motor_state.temp_c,
@@ -746,8 +923,16 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
     idx95_rock = int(0.95 * (len(rocking_abs) - 1)) if rocking_abs else 0
     rocking_rates = sorted(abs(s.rocking_roll_rate_dps) for s in samples)
     idx95_rock_rate = int(0.95 * (len(rocking_rates) - 1)) if rocking_rates else 0
+    yaw_rates = sorted(abs(s.yaw_rate_dps) for s in samples)
+    idx95_yaw_rate = int(0.95 * (len(yaw_rates) - 1)) if yaw_rates else 0
+    heading_inertia_lags = sorted(abs(s.heading_inertia_lag_deg) for s in samples)
+    idx95_heading_lag = int(0.95 * (len(heading_inertia_lags) - 1)) if heading_inertia_lags else 0
+    env_yaw_accels = sorted(abs(s.environment_yaw_accel_dps2) for s in samples)
+    idx95_env_yaw = int(0.95 * (len(env_yaw_accels) - 1)) if env_yaw_accels else 0
     gnss_frame_degraded_hits = sum(1 for s in samples if s.gnss_frame_degraded)
     heading_frame_degraded_hits = sum(1 for s in samples if s.heading_frame_degraded)
+    wake_event_hits = sum(1 for s in samples if s.wake_event_active)
+    chop_event_hits = sum(1 for s in samples if s.chop_event_active)
     applied = [s.applied_thrust_pct for s in samples]
     voltages = [s.battery_voltage_v for s in samples]
     currents = [s.motor_current_a for s in samples]
@@ -786,6 +971,12 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
         "max_error_m": max(dists) if dists else 0.0,
         "p95_heading_error_deg": heading_errors[idx95_heading] if heading_errors else 0.0,
         "max_heading_error_deg": max(heading_errors) if heading_errors else 0.0,
+        "p95_yaw_rate_dps": yaw_rates[idx95_yaw_rate] if yaw_rates else 0.0,
+        "max_yaw_rate_dps": max(yaw_rates) if yaw_rates else 0.0,
+        "p95_heading_inertia_lag_deg": (
+            heading_inertia_lags[idx95_heading_lag] if heading_inertia_lags else 0.0
+        ),
+        "p95_environment_yaw_accel_dps2": env_yaw_accels[idx95_env_yaw] if env_yaw_accels else 0.0,
         "steering_jammed_time_pct": (steering_jammed_hits * 100.0) / max(1, len(samples)),
         "steering_backlash_crossings_per_min": backlash_crossings * 60.0 / max(1, scenario.duration_s),
         "thrust_while_misaligned_time_pct": (thrust_misaligned_hits * 100.0) / max(1, len(samples)),
@@ -800,6 +991,18 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
         "max_wave_steepness": max((s.wave_steepness for s in samples), default=0.0),
         "gnss_frame_degraded_time_pct": (gnss_frame_degraded_hits * 100.0) / max(1, len(samples)),
         "heading_frame_degraded_time_pct": (heading_frame_degraded_hits * 100.0) / max(1, len(samples)),
+        "wake_event_time_pct": (wake_event_hits * 100.0) / max(1, len(samples)),
+        "chop_event_time_pct": (chop_event_hits * 100.0) / max(1, len(samples)),
+        "wake_event_count": float(
+            len({event.name for event in scenario.profile.events if event.kind == "wake"})
+            if scenario.profile is not None
+            else 0
+        ),
+        "chop_event_count": float(
+            len({event.name for event in scenario.profile.events if event.kind == "chop"})
+            if scenario.profile is not None
+            else 0
+        ),
         "avg_applied_thrust_pct": sum(applied) / max(1, len(applied)),
         "max_applied_thrust_pct": max(applied) if applied else 0.0,
         "min_battery_voltage_v": min(voltages) if voltages else cfg.motor_nominal_voltage_v,
@@ -851,12 +1054,40 @@ def default_scenarios() -> List[Scenario]:
             return 0.09, -0.02
         return 0.025, 0.0
 
-    def accel_wake(t: int) -> Tuple[float, float]:
-        base_x, base_y = 0.022, 0.0
-        wake = 0.0
-        if 35 <= t <= 55 or 115 <= t <= 135 or 195 <= t <= 215:
-            wake = 0.11 * math.sin((t % 20) * math.pi / 10.0)
-        return base_x, base_y + wake
+    wake_profile = EnvironmentProfile(
+        name="wake_steering_backlash",
+        water_body="offline river wake",
+        current_mps=0.26,
+        current_direction_deg=90.0,
+        wind_mps=2.0,
+        wind_direction_deg=40.0,
+        wave_height_m=0.12,
+        wave_period_s=2.4,
+        wave_direction_deg=90.0,
+        events=(
+            EnvironmentEvent("river_wake_1", "wake", 35.0, 24.0, 0.55, 1.7, 185.0),
+            EnvironmentEvent("river_wake_2", "wake", 115.0, 26.0, 0.65, 1.6, 210.0),
+            EnvironmentEvent("river_wake_3", "wake", 195.0, 22.0, 0.50, 1.8, 160.0),
+        ),
+    )
+    chop_profile = EnvironmentProfile(
+        name="short_steep_chop",
+        water_body="offline reservoir chop",
+        current_mps=0.08,
+        current_direction_deg=120.0,
+        wind_mps=8.0,
+        wind_direction_deg=255.0,
+        gust_mps=11.0,
+        gust_period_s=70.0,
+        gust_duration_s=18.0,
+        wave_height_m=0.35,
+        wave_period_s=2.0,
+        wave_direction_deg=255.0,
+        events=(
+            EnvironmentEvent("reservoir_chop_1", "chop", 58.0, 36.0, 0.75, 1.35, 250.0),
+            EnvironmentEvent("reservoir_chop_2", "chop", 154.0, 42.0, 0.85, 1.45, 265.0),
+        ),
+    )
 
     return [
         Scenario("calm_good_gps", 240, (8.0, 0.0), accel_zero, obs_good),
@@ -866,14 +1097,27 @@ def default_scenarios() -> List[Scenario]:
             "wake_steering_backlash",
             260,
             (11.0, -5.0),
-            accel_wake,
+            profiled_environment_accel_fn(wake_profile),
             obs_good,
+            profile=wake_profile,
             config_overrides={
                 "steering_response_dps": 55.0,
                 "steering_backlash_deg": 7.0,
                 "steering_wrong_zero_deg": 1.5,
                 "steering_jam_start_s": 150.0,
                 "steering_jam_duration_s": 8.0,
+            },
+        ),
+        Scenario(
+            "short_steep_chop",
+            240,
+            (10.0, 5.0),
+            profiled_environment_accel_fn(chop_profile),
+            obs_good,
+            profile=chop_profile,
+            config_overrides={
+                "heading_align_deg": 6.0,
+                "steering_response_dps": 70.0,
             },
         ),
         Scenario("gnss_dropout", 240, (9.0, -3.0), accel_current, obs_dropout),

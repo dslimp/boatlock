@@ -67,6 +67,8 @@ Use this file for:
 - Espressif BLE OTA component: <https://components.espressif.com/components/espressif/ble_ota>
 - NOAA/NWS Significant Wave Height: <https://www.weather.gov/mfl/waves>
 - NOAA/NDBC Wave Measurement and Steepness: <https://www.ndbc.noaa.gov/faq/wavecalc.shtml> and <https://www.ndbc.noaa.gov/faq/algorithm.shtml>
+- Fossen Marine Craft Model: <https://www.fossen.biz/html/marineCraftModel.html>
+- USACE/ERDC FUNWAVE vessel wake overview: <https://www.erdc.usace.army.mil/Media/News-Stories/Article/3854349/funwave-model-is-a-feasible-solution-for-vessel-wake-issues/>
 
 ## What OpenCPN Gets Right
 
@@ -175,6 +177,8 @@ Implication for BoatLock:
 - HIL JSON reports are also a test interface. Build JSON strings through one escaping helper; quote, backslash, and control characters must never be interpolated raw into `SIM_REPORT`.
 - Periodic UI/BLE/sensor cadence should use one shared non-blocking elapsed-time helper. Floor interval `0` instead of allowing same-timestamp bursts, and test unsigned rollover directly instead of relying only on normal interval scenarios.
 - Offline water simulation should treat wave height as a significant-wave-height input and expose steepness/roll-rate as separate stress metrics. A high wave-height number alone is not enough; short-period steep waves are the cases most likely to degrade GNSS/heading frame quality and should produce explicit report fields/events.
+- Offline water simulation should model heading as a yaw-rate state, not as instantaneous heading assignment. For a low-fidelity simulator, use bounded yaw acceleration, damping, and explicit environmental yaw acceleration metrics so wake/current/wind/chop moments are visible without pretending the constants are water-calibrated.
+- Transient river/reservoir wakes and chop should be explicit time-bounded packets, not hidden inside steady wave height. Record event counts/time separately from performance metrics so thresholds can prove the scenario actually exercised wake/chop.
 - One-shot UI/diagnostic banners follow the same timer rule: store the start timestamp and duration, then compare unsigned elapsed time. Do not store absolute expiry timestamps as the authority.
 - Do not auto-enter manual control from failsafe. After a fault clears, operator control must be an explicit new action.
 - Treat non-finite sensor/control values like unavailable inputs at module boundaries, not as values to normalize later inside actuator code.

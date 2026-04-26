@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Dict, List, Mapping, Tuple
 
 from anchor_sim import (
+    EnvironmentEvent,
     EnvironmentProfile,
     Scenario,
     make_gnss_observer,
@@ -15,7 +16,7 @@ from anchor_sim import (
 
 
 DEFAULT_SCENARIO_DATA = Path(__file__).with_name("scenarios") / "environment_profiles.json"
-SCENARIO_SCHEMA_VERSION = 2
+SCENARIO_SCHEMA_VERSION = 3
 
 ALLOWED_ROOT_KEYS = {"schema_version", "scenario_sets"}
 ALLOWED_SCENARIO_KEYS = {
@@ -55,6 +56,16 @@ ALLOWED_ENVIRONMENT_KEYS = {
     "wave_period_s",
     "wave_direction_deg",
     "abort_expected",
+    "events",
+}
+ALLOWED_ENVIRONMENT_EVENT_KEYS = {
+    "name",
+    "kind",
+    "start_s",
+    "duration_s",
+    "height_m",
+    "period_s",
+    "direction_deg",
 }
 ALLOWED_GNSS_KEYS = {"noise_sigma_m", "sats", "hdop", "sentences"}
 ALLOWED_THRESHOLD_KEYS = {
@@ -66,7 +77,14 @@ ALLOWED_THRESHOLD_KEYS = {
     "max_wave_steepness_min",
     "gnss_frame_degraded_time_pct_min",
     "heading_frame_degraded_time_pct_min",
+    "wake_event_time_pct_min",
+    "chop_event_time_pct_min",
+    "wake_event_count_min",
+    "chop_event_count_min",
     "p95_heading_error_deg_max",
+    "p95_yaw_rate_dps_max",
+    "p95_heading_inertia_lag_deg_min",
+    "p95_environment_yaw_accel_dps2_min",
     "steering_jammed_time_pct_min",
     "steering_backlash_crossings_per_min_min",
     "required_failsafe_reason",
@@ -170,6 +188,37 @@ def _position(data: Mapping[str, object], path: str) -> Tuple[float, float]:
     )
 
 
+def _environment_events(env: Mapping[str, object], path: str) -> Tuple[EnvironmentEvent, ...]:
+    if "events" not in env:
+        return ()
+    rows = _as_list(env.get("events"), f"{path}.events")
+    events: List[EnvironmentEvent] = []
+    seen: set[str] = set()
+    for index, row in enumerate(rows):
+        event_path = f"{path}.events[{index}]"
+        event = _as_mapping(row, event_path)
+        _reject_unknown_keys(event, ALLOWED_ENVIRONMENT_EVENT_KEYS, event_path)
+        name = _required_str(event, "name", event_path)
+        if name in seen:
+            raise ValueError(f"{event_path}.name duplicates {name}")
+        seen.add(name)
+        kind = _required_str(event, "kind", event_path)
+        if kind not in ("wake", "chop"):
+            raise ValueError(f"{event_path}.kind must be wake or chop")
+        events.append(
+            EnvironmentEvent(
+                name=name,
+                kind=kind,
+                start_s=_non_negative(event, "start_s", event_path, 0.0),
+                duration_s=_positive(event, "duration_s", event_path, 1.0),
+                height_m=_positive(event, "height_m", event_path, 0.1),
+                period_s=_positive(event, "period_s", event_path, 1.0),
+                direction_deg=_direction(event, "direction_deg", event_path, 90.0),
+            )
+        )
+    return tuple(events)
+
+
 def _environment_profile(data: Mapping[str, object], scenario_id: str, water_body: str, path: str) -> EnvironmentProfile:
     boat = _as_mapping(data.get("boat", {}), f"{path}.boat")
     _reject_unknown_keys(boat, ALLOWED_BOAT_KEYS, f"{path}.boat")
@@ -200,6 +249,7 @@ def _environment_profile(data: Mapping[str, object], scenario_id: str, water_bod
         wave_period_s=_number(env, "wave_period_s", env_path, 4.0),
         wave_direction_deg=_direction(env, "wave_direction_deg", env_path, 90.0),
         abort_expected=_bool(env, "abort_expected", env_path, False),
+        events=_environment_events(env, env_path),
     )
     if profile.wave_period_s <= 0.0:
         raise ValueError(f"{path}.environment.wave_period_s must be positive")
@@ -296,6 +346,9 @@ def environment_scenarios_for_set(name: str, path: Path = DEFAULT_SCENARIO_DATA)
         _optional_str(item, "expected", item_path)
         duration_s = _positive_integer(item, "duration_s", item_path)
         profile = _environment_profile(item, scenario_id, water_body, item_path)
+        for event in profile.events:
+            if event.start_s >= duration_s:
+                raise ValueError(f"{item_path}.environment.events.{event.name} starts after duration_s")
         gnss = _as_mapping(item.get("gnss", {}), f"{item_path}.gnss")
         _reject_unknown_keys(gnss, ALLOWED_GNSS_KEYS, f"{item_path}.gnss")
         sats = _integer(gnss, "sats", item_path, 12)

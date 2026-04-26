@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "scenario_sets": {
     "russian": [
       {
@@ -36,7 +36,18 @@
           "wave_height_m": 0.2,
           "wave_period_s": 2.5,
           "wave_direction_deg": 45.0,
-          "abort_expected": false
+          "abort_expected": false,
+          "events": [
+            {
+              "name": "oka_passing_wake",
+              "kind": "wake",
+              "start_s": 110.0,
+              "duration_s": 24.0,
+              "height_m": 0.45,
+              "period_s": 1.7,
+              "direction_deg": 210.0
+            }
+          ]
         },
         "gnss": {
           "noise_sigma_m": 0.91,
@@ -47,7 +58,12 @@
           "time_in_deadband_pct_min": 12.0,
           "p95_error_m_max": 34.0,
           "max_error_m_max": 70.0,
-          "p95_rocking_roll_deg_min": 0.8
+          "p95_rocking_roll_deg_min": 0.8,
+          "wake_event_count_min": 1.0,
+          "wake_event_time_pct_min": 7.0,
+          "p95_heading_inertia_lag_deg_min": 1.0,
+          "p95_environment_yaw_accel_dps2_min": 0.15,
+          "p95_yaw_rate_dps_max": 120.0
         }
       },
       {
@@ -131,7 +147,27 @@
           "wave_height_m": 1.5,
           "wave_period_s": 3.0,
           "wave_direction_deg": 260.0,
-          "abort_expected": false
+          "abort_expected": false,
+          "events": [
+            {
+              "name": "rybinsk_steep_chop_1",
+              "kind": "chop",
+              "start_s": 72.0,
+              "duration_s": 38.0,
+              "height_m": 0.85,
+              "period_s": 1.45,
+              "direction_deg": 255.0
+            },
+            {
+              "name": "rybinsk_steep_chop_2",
+              "kind": "chop",
+              "start_s": 184.0,
+              "duration_s": 42.0,
+              "height_m": 0.95,
+              "period_s": 1.5,
+              "direction_deg": 270.0
+            }
+          ]
         },
         "gnss": {
           "noise_sigma_m": 1.625,
@@ -144,7 +180,12 @@
           "p95_rocking_roll_deg_min": 7.0,
           "p95_rocking_roll_rate_dps_min": 14.0,
           "max_wave_steepness_min": 0.09,
-          "gnss_frame_degraded_time_pct_min": 80.0
+          "gnss_frame_degraded_time_pct_min": 80.0,
+          "chop_event_count_min": 2.0,
+          "chop_event_time_pct_min": 25.0,
+          "p95_heading_inertia_lag_deg_min": 2.0,
+          "p95_environment_yaw_accel_dps2_min": 0.5,
+          "p95_yaw_rate_dps_max": 120.0
         }
       },
       {

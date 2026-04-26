@@ -171,6 +171,11 @@ Do not merge the firmware gate until the rest of this wrapper contract is implem
   `flutter-android-service-apk/boatlock-service-main.apk` and
   `flutter-macos-service-app/boatlock-macos-service-main.zip` alongside the
   normal app artifacts.
+- macOS service app local acceptance is covered by
+  `tools/macos/acceptance.sh`. Use `--static-only` for bundle/signature/
+  entitlement checks, `--artifact-zip boatlock-macos-service-main.zip` for a CI
+  artifact, and `--manual` to open the app with the service update checklist.
+  Without BLE hardware this proves only bundle/runtime readiness, not OTA.
 - Android app e2e can exercise the manifest-backed latest-main path with
   `tools/hw/nh02/android-run-app-e2e.sh --ota-latest-main --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin`.
   The wrapper serves both `manifest.json` and `firmware.bin`, builds the app

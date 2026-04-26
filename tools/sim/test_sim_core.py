@@ -9,13 +9,18 @@ import unittest
 from anchor_sim import (
     AnchorController,
     BrushedMotorModel,
+    EnvironmentEvent,
     EnvironmentProfile,
     GnssGate,
     GnssObservation,
     SimConfig,
     SteeringModel,
+    YawModel,
     clamp,
+    active_environment_events,
+    environment_event_reason,
     environment_accel_mps2,
+    environment_yaw_accel_dps2,
     russian_water_scenarios,
     scenarios_for_set,
     simulate_scenario,
@@ -45,7 +50,7 @@ class SimCoreTests(unittest.TestCase):
 
     def _minimal_catalog(self, scenario: dict | None = None) -> dict:
         return {
-            "schema_version": 2,
+            "schema_version": 3,
             "scenario_sets": {
                 "test": [
                     scenario
@@ -125,6 +130,43 @@ class SimCoreTests(unittest.TestCase):
         self.assertGreater(abs(wave_rocking_roll_deg(profile, 1)), 1.0)
         self.assertGreater(wave_steepness_ratio(profile), 0.05)
 
+    def test_environment_events_add_transient_wake_and_chop(self) -> None:
+        profile = EnvironmentProfile(
+            name="test_events",
+            water_body="test",
+            events=(
+                EnvironmentEvent("wake_a", "wake", 10.0, 20.0, 0.6, 1.6, 180.0),
+                EnvironmentEvent("chop_a", "chop", 40.0, 20.0, 0.7, 1.2, 250.0),
+            ),
+        )
+        self.assertEqual(environment_event_reason(profile, 12), "WAKE_EVENT")
+        self.assertEqual(environment_event_reason(profile, 45), "SHORT_CHOP_EVENT")
+        self.assertEqual(len(active_environment_events(profile, 45)), 1)
+        self.assertGreater(wave_steepness_ratio(profile, 45), 0.15)
+        self.assertGreater(abs(wave_rocking_roll_deg(profile, 45)), 0.1)
+
+    def test_environment_yaw_accel_uses_cross_axis_forcing(self) -> None:
+        cfg = SimConfig()
+        profile = EnvironmentProfile(
+            name="test_yaw",
+            water_body="test",
+            current_mps=0.5,
+            current_direction_deg=90.0,
+        )
+        beam = environment_yaw_accel_dps2(cfg, profile, 0, 0.0, 0.0, 0.0)
+        aligned = environment_yaw_accel_dps2(cfg, profile, 0, 90.0, 0.0, 0.0)
+        self.assertGreater(abs(beam), 0.1)
+        self.assertLess(abs(aligned), abs(beam))
+
+    def test_yaw_model_adds_heading_inertia(self) -> None:
+        cfg = SimConfig(yaw_accel_limit_dps2=30.0, yaw_damping_per_s=0.0)
+        yaw = YawModel(cfg)
+        first = yaw.update(90.0, 0.0, 1.0)
+        second = yaw.update(90.0, 0.0, 1.0)
+        self.assertEqual(first.heading_delta_deg, 30.0)
+        self.assertEqual(second.heading_delta_deg, 60.0)
+        self.assertGreater(first.heading_inertia_lag_deg, second.heading_inertia_lag_deg)
+
     def test_environment_profile_uses_loaded_mass_for_force_acceleration(self) -> None:
         light = EnvironmentProfile(
             name="light",
@@ -169,6 +211,7 @@ class SimCoreTests(unittest.TestCase):
         self.assertEqual(oka.profile.windage_area_m2, 1.1)
         self.assertEqual(oka.profile.current_mps, 0.35)
         self.assertEqual(oka.profile.wave_height_m, 0.2)
+        self.assertEqual(oka.profile.events[0].kind, "wake")
         self.assertEqual(ladoga.duration_s, 180)
         self.assertTrue(ladoga.profile.abort_expected)
 
@@ -179,6 +222,8 @@ class SimCoreTests(unittest.TestCase):
             "ENV_ABORT_EXPECTED",
         )
         self.assertEqual(thresholds["river_oka_normal_55lb"]["p95_error_m_max"], 34.0)
+        self.assertEqual(thresholds["river_oka_normal_55lb"]["wake_event_count_min"], 1.0)
+        self.assertEqual(thresholds["rybinsk_fetch_55lb"]["chop_event_count_min"], 2.0)
 
     def test_scenario_data_exports_provenance(self) -> None:
         provenance = provenance_for_set("russian")
@@ -220,7 +265,7 @@ class SimCoreTests(unittest.TestCase):
     def test_scenario_data_rejects_nonfinite_and_nonintegral_values(self) -> None:
         path = Path(self._tmpdir.name) / "bad.json"
         path.write_text(
-            '{"schema_version":2,"scenario_sets":{"test":[{"id":"bad","water_body":"x",'
+            '{"schema_version":3,"scenario_sets":{"test":[{"id":"bad","water_body":"x",'
             '"provenance":{"source":"x","source_candidate_id":"bad","confidence":"x"},'
             '"duration_s":NaN,"initial_pos_m":[1,2],"environment":{}}]}}',
             encoding="utf-8",
@@ -241,6 +286,29 @@ class SimCoreTests(unittest.TestCase):
         path = self._write_scenario_catalog(catalog)
 
         with self.assertRaisesRegex(ValueError, "gust duration"):
+            environment_scenarios_for_set("test", path)
+
+    def test_scenario_data_loads_and_validates_environment_events(self) -> None:
+        catalog = self._minimal_catalog()
+        catalog["scenario_sets"]["test"][0]["environment"]["events"] = [
+            {
+                "name": "wake_a",
+                "kind": "wake",
+                "start_s": 10.0,
+                "duration_s": 12.0,
+                "height_m": 0.5,
+                "period_s": 1.6,
+                "direction_deg": 200.0,
+            }
+        ]
+        path = self._write_scenario_catalog(catalog)
+        scenario = environment_scenarios_for_set("test", path)[0]
+        self.assertEqual(len(scenario.profile.events), 1)
+        self.assertEqual(scenario.profile.events[0].kind, "wake")
+
+        catalog["scenario_sets"]["test"][0]["environment"]["events"][0]["kind"] = "swell"
+        path = self._write_scenario_catalog(catalog)
+        with self.assertRaisesRegex(ValueError, "kind"):
             environment_scenarios_for_set("test", path)
 
     def test_scenario_data_rejects_bad_boat_physics_ranges(self) -> None:
@@ -416,10 +484,25 @@ class SimCoreTests(unittest.TestCase):
         self.assertGreater(metrics["steering_jammed_time_pct"], 0.0)
         self.assertGreater(metrics["steering_backlash_crossings_per_min"], 0.0)
         self.assertIn("thrust_while_misaligned_time_pct", metrics)
+        self.assertGreaterEqual(metrics["wake_event_count"], 3.0)
+        self.assertGreater(metrics["wake_event_time_pct"], 20.0)
+        self.assertGreater(metrics["p95_heading_inertia_lag_deg"], 1.0)
+        self.assertGreater(metrics["p95_environment_yaw_accel_dps2"], 0.1)
+        self.assertTrue(any(e.get("environment_reason") == "WAKE_EVENT" for e in metrics["events"]))
 
     def test_wake_steering_backlash_is_offline_scenario(self) -> None:
         names = {s.name for s in scenarios_for_set("core")}
         self.assertIn("wake_steering_backlash", names)
+
+    def test_short_steep_chop_is_offline_scenario(self) -> None:
+        scenario = next(s for s in scenarios_for_set("core") if s.name == "short_steep_chop")
+        result = simulate_scenario(SimConfig(), scenario, seed=8)
+        metrics = result["metrics"]
+        self.assertGreaterEqual(metrics["chop_event_count"], 2.0)
+        self.assertGreater(metrics["chop_event_time_pct"], 25.0)
+        self.assertGreater(metrics["max_wave_steepness"], 0.16)
+        self.assertGreater(metrics["gnss_frame_degraded_time_pct"], 20.0)
+        self.assertTrue(any(e.get("environment_reason") == "SHORT_CHOP_EVENT" for e in metrics["events"]))
 
 
 if __name__ == "__main__":

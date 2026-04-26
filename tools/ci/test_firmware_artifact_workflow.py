@@ -46,6 +46,10 @@ def test_ci_publishes_latest_main_service_firmware_channel():
     assert "uses: actions/configure-pages@v5" in workflow
     assert "uses: actions/upload-pages-artifact@v4" in workflow
     assert "uses: actions/deploy-pages@v4" in workflow
+    assert "Verify latest-main Pages channel" in workflow
+    assert "verify_firmware_update_channel.py" in workflow
+    assert "--expected-git-sha \"${GITHUB_SHA}\"" in workflow
+    assert "--expected-workflow-run-id \"${GITHUB_RUN_ID}\"" in workflow
     assert "pages: write" in workflow
     assert "id-token: write" in workflow
 
@@ -109,6 +113,27 @@ def test_macos_build_wrapper_supports_latest_main_service_variant():
     assert "https://dslimp.github.io/boatlock/firmware/main/manifest.json" in script
     assert "build macos" in script
     assert "boatlock_ui.app" in script
+
+
+def test_macos_acceptance_wrapper_covers_service_artifact_and_runtime_smoke():
+    script = (ROOT / "tools/macos/acceptance.sh").read_text()
+
+    assert "--latest-main-service" in script
+    assert "--firmware-manifest-url" in script
+    assert "--firmware-github-repo" in script
+    assert "--artifact-zip" in script
+    assert "boatlock-macos-service-main.zip" in script
+    assert "ditto -x -k" in script
+    assert "plutil -lint -s" in script
+    assert "codesign --verify --verbose" in script
+    assert "codesign -d --entitlements :-" in script
+    assert "com.apple.security.device.bluetooth" in script
+    assert "com.apple.security.network.client" in script
+    assert "com.apple.security.personal-information.location" in script
+    assert "CoreBluetooth.framework" in script
+    assert "open -n -F -W" in script
+    assert "--manual" in script
+    assert "Without BLE hardware" in script
 
 
 def test_android_build_uses_ci_caches():

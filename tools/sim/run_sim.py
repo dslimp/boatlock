@@ -30,8 +30,24 @@ DEFAULT_THRESHOLDS: Dict[str, Dict[str, object]] = {
         "p95_error_m_max": 32.0,
         "max_error_m_max": 65.0,
         "p95_heading_error_deg_max": 45.0,
+        "p95_yaw_rate_dps_max": 95.0,
+        "p95_heading_inertia_lag_deg_min": 2.0,
+        "p95_environment_yaw_accel_dps2_min": 0.4,
+        "wake_event_count_min": 3.0,
+        "wake_event_time_pct_min": 25.0,
         "steering_jammed_time_pct_min": 2.5,
         "steering_backlash_crossings_per_min_min": 1.0,
+    },
+    "short_steep_chop": {
+        "p95_error_m_max": 52.0,
+        "max_error_m_max": 100.0,
+        "p95_yaw_rate_dps_max": 105.0,
+        "p95_heading_inertia_lag_deg_min": 2.0,
+        "p95_environment_yaw_accel_dps2_min": 0.6,
+        "chop_event_count_min": 2.0,
+        "chop_event_time_pct_min": 28.0,
+        "max_wave_steepness_min": 0.16,
+        "gnss_frame_degraded_time_pct_min": 25.0,
     },
     "gnss_dropout": {
         "p95_error_m_max": 28.0,
@@ -93,7 +109,14 @@ def check_thresholds(
     min_wave_steepness = limits.get("max_wave_steepness_min")
     min_gnss_degraded = limits.get("gnss_frame_degraded_time_pct_min")
     min_heading_degraded = limits.get("heading_frame_degraded_time_pct_min")
+    min_wake_time = limits.get("wake_event_time_pct_min")
+    min_chop_time = limits.get("chop_event_time_pct_min")
+    min_wake_count = limits.get("wake_event_count_min")
+    min_chop_count = limits.get("chop_event_count_min")
     max_p95_heading = limits.get("p95_heading_error_deg_max")
+    max_p95_yaw_rate = limits.get("p95_yaw_rate_dps_max")
+    min_heading_lag = limits.get("p95_heading_inertia_lag_deg_min")
+    min_env_yaw = limits.get("p95_environment_yaw_accel_dps2_min")
     min_jammed = limits.get("steering_jammed_time_pct_min")
     min_backlash_crossings = limits.get("steering_backlash_crossings_per_min_min")
     required_failsafe = limits.get("required_failsafe_reason")
@@ -127,9 +150,33 @@ def check_thresholds(
             "heading_frame_degraded_time_pct="
             f"{metrics['heading_frame_degraded_time_pct']:.2f} < {min_heading_degraded:.2f}"
         )
+    if isinstance(min_wake_time, float) and metrics["wake_event_time_pct"] < min_wake_time:
+        errs.append(
+            f"wake_event_time_pct={metrics['wake_event_time_pct']:.2f} < {min_wake_time:.2f}"
+        )
+    if isinstance(min_chop_time, float) and metrics["chop_event_time_pct"] < min_chop_time:
+        errs.append(
+            f"chop_event_time_pct={metrics['chop_event_time_pct']:.2f} < {min_chop_time:.2f}"
+        )
+    if isinstance(min_wake_count, float) and metrics["wake_event_count"] < min_wake_count:
+        errs.append(f"wake_event_count={metrics['wake_event_count']:.0f} < {min_wake_count:.0f}")
+    if isinstance(min_chop_count, float) and metrics["chop_event_count"] < min_chop_count:
+        errs.append(f"chop_event_count={metrics['chop_event_count']:.0f} < {min_chop_count:.0f}")
     if isinstance(max_p95_heading, float) and metrics["p95_heading_error_deg"] > max_p95_heading:
         errs.append(
             f"p95_heading_error_deg={metrics['p95_heading_error_deg']:.2f} > {max_p95_heading:.2f}"
+        )
+    if isinstance(max_p95_yaw_rate, float) and metrics["p95_yaw_rate_dps"] > max_p95_yaw_rate:
+        errs.append(f"p95_yaw_rate_dps={metrics['p95_yaw_rate_dps']:.2f} > {max_p95_yaw_rate:.2f}")
+    if isinstance(min_heading_lag, float) and metrics["p95_heading_inertia_lag_deg"] < min_heading_lag:
+        errs.append(
+            "p95_heading_inertia_lag_deg="
+            f"{metrics['p95_heading_inertia_lag_deg']:.2f} < {min_heading_lag:.2f}"
+        )
+    if isinstance(min_env_yaw, float) and metrics["p95_environment_yaw_accel_dps2"] < min_env_yaw:
+        errs.append(
+            "p95_environment_yaw_accel_dps2="
+            f"{metrics['p95_environment_yaw_accel_dps2']:.2f} < {min_env_yaw:.2f}"
         )
     if isinstance(min_jammed, float) and metrics["steering_jammed_time_pct"] < min_jammed:
         errs.append(
@@ -181,7 +228,8 @@ def main() -> int:
     print(
         "name | deadband% | p95(m) | max(m) | head95(deg) | jam% | "
         "backlash/min | misalignThrust% | sat% | dirChanges/min | rock95(deg) | "
-        "rollRate95(dps) | steep | gnssDeg% | headDeg% | status"
+        "rollRate95(dps) | steep | yaw95(dps) | yawLag95(deg) | envYaw95 | "
+        "wake% | chop% | gnssDeg% | headDeg% | status"
     )
     print("-" * 205)
     for i, sc in enumerate(scenarios_for_set(args.scenario_set)):
@@ -215,6 +263,11 @@ def main() -> int:
             f"{m['p95_rocking_roll_deg']:.2f} | "
             f"{m['p95_rocking_roll_rate_dps']:.2f} | "
             f"{m['max_wave_steepness']:.3f} | "
+            f"{m['p95_yaw_rate_dps']:.2f} | "
+            f"{m['p95_heading_inertia_lag_deg']:.2f} | "
+            f"{m['p95_environment_yaw_accel_dps2']:.2f} | "
+            f"{m['wake_event_time_pct']:.2f} | "
+            f"{m['chop_event_time_pct']:.2f} | "
             f"{m['gnss_frame_degraded_time_pct']:.2f} | "
             f"{m['heading_frame_degraded_time_pct']:.2f} | "
             f"{status}"

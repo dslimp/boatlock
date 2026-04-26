@@ -21,6 +21,30 @@ This file records the actual execution stages for BoatLock work so the repo keep
 
 ## Stages
 
+### 2026-04-26 Stage app emergency STOP immediate action
+
+Scope:
+- Remove the confirmation gate from the normal app emergency STOP control and keep the write scoped to the Flutter UI/test surface.
+
+External baseline:
+- Flutter `FloatingActionButton` docs state that tooltips describe the pressed action and are used for accessibility, and that multiple FABs on one route need unique `heroTag` values.
+- Flutter `showDialog` docs describe a modal dialog route; the STOP path now avoids that route so the safety command is dispatched directly from the button press.
+
+Key outcomes:
+- Replaced the emergency STOP confirmation dialog with an immediate `ble.stopAll()` call while preserving the existing anchor-history event and snackbar feedback.
+- Moved the STOP FAB into a separated left slot and kept refresh/save/enable/disable controls grouped on the right.
+- Updated the `MapPage` widget test to assert immediate STOP dispatch, absence of the old confirmation text, and left-of-controls placement.
+- Checked off the matching P0 readiness TODO.
+
+Validation:
+- `cd boatlock_ui && flutter test test/map_page_test.dart` -> PASS (`10/10`).
+- `cd boatlock_ui && flutter analyze` -> PASS, no issues found.
+
+Self-review:
+- This is an app-only safety UI change; firmware STOP handling, simulator code, and tooling were intentionally untouched.
+- Remaining weakness: widget geometry proves ordering/separation in the test viewport, not visual QA on every device size.
+- No durable workflow lesson emerged.
+
 ### 2026-04-26 Stage app emergency STOP backlog
 
 Scope:
@@ -6717,3 +6741,127 @@ Validation:
 Self-review:
 - The original app race happened because telemetry could arrive immediately after notifications were enabled while `_otaChar` was still unset; this is now captured in the BLE/UI reference.
 - The firmware owner fix is validated by the exact failing Android OTA path, but the pure owner-policy logic is still embedded in NimBLE callbacks. If this grows, extract a tiny testable policy helper rather than adding more callback branching.
+
+### 2026-04-26 Stage 229: BLE control-owner lease policy helper
+
+Scope:
+- Implement the next safe firmware-only slice of multi-client control ownership without enabling a BLE remote or changing the live command path.
+- Keep behavior-preserving release semantics while making owner lease, expiry, disconnect, per-client identity, and STOP preemption executable in native tests.
+
+External baseline:
+- NimBLE-Arduino `NimBLECharacteristicCallbacks::onWrite` receives `NimBLEConnInfo`, so command writes can be tied to server-owned per-connection metadata instead of client-supplied payload identity: https://h2zero.github.io/NimBLE-Arduino/class_nim_b_l_e_characteristic_callbacks.html.
+- NimBLE-Arduino server callbacks receive `NimBLEConnInfo` on connect/disconnect, and `NimBLEServer` exposes connection handles and connected-client counts, which is enough for later lease cleanup and multi-central arbitration: https://h2zero.github.io/NimBLE-Arduino/class_nim_b_l_e_server_callbacks.html and https://h2zero.github.io/NimBLE-Arduino/class_nim_b_l_e_server.html.
+
+Key outcomes:
+- Added `RuntimeBleControlLease.h` as a pure policy helper.
+- The helper distinguishes read-only transport commands, security-session setup, owner-gated control commands, STOP preemption, and rejected/unknown commands.
+- Control owner identity includes connection handle, generation, security session, and role. Reconnects or new security sessions do not match an existing live owner.
+- Only the current app role can acquire a control lease in this slice. The future remote role remains unable to acquire control; STOP still preempts and clears ownership.
+- Owner disconnect clears the lease, peer disconnect does not, and a competing client can acquire only after expiry or STOP cleanup.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_control_lease` -> PASS (`10/10`).
+- `cd boatlock && platformio test -e native` -> PASS (`414/414`).
+
+Self-review:
+- This deliberately avoids queue/handler rewiring, so release behavior and current Flutter/app operation are unchanged. The remaining implementation work is to create connection generations in `BLEBoatLock`, make security state per-client, carry owner metadata through the command path, and then add two-central hardware/app validation before any remote can control the boat.
+
+### 2026-04-26 Stage 230: macOS service app acceptance wrapper
+
+Scope:
+- Close the macOS service-app validation gap without changing Flutter UI logic,
+  firmware, or simulator code.
+- Add a local path that can be run without BLE hardware while staying honest
+  about what is and is not accepted.
+
+External baseline:
+- macOS `open(1)` supports launching a bundle as LaunchServices would, with
+  `-n`, `-F`, `-W`, `--stdout`, and `--stderr` for a fresh launch plus log
+  capture.
+- macOS `plutil(1)` is the local property-list syntax and key extraction tool.
+- macOS `codesign(1)` is the local signature and entitlement verification tool.
+
+Key outcomes:
+- Added `tools/macos/acceptance.sh`.
+- The wrapper builds the latest-main service app by default, or accepts an
+  existing `.app` / CI `boatlock-macos-service-main.zip` artifact.
+- Static acceptance validates `Info.plist`, executable presence, code
+  signature, Bluetooth/location/network sandbox entitlements, and
+  CoreBluetooth linkage.
+- Runtime smoke launches the app without BLE hardware, confirms it remains
+  alive for a short window, captures stdout/stderr, and terminates the launched
+  instance.
+- Manual mode opens the app and prints a checklist that separates no-BLE
+  bundle/runtime acceptance from real BLE OTA acceptance.
+- Backlog and `docs/HARDWARE_NH02.md` now point operators at the macOS wrapper.
+
+Validation:
+- `bash -n tools/macos/acceptance.sh tools/macos/build-app.sh` -> PASS.
+- `tools/macos/acceptance.sh --no-build --static-only` -> PASS against the
+  existing release app bundle.
+- `tools/macos/acceptance.sh --artifact-zip /tmp/.../boatlock-macos-service-main-test.zip --static-only` -> PASS against a locally packed app artifact.
+- `tools/macos/acceptance.sh --no-build --runtime-seconds 2` -> PASS; app
+  stayed alive for the smoke window and was terminated by the wrapper.
+- `python3 -m pytest -q tools/ci/test_firmware_artifact_workflow.py` -> PASS
+  (`11/11`).
+
+Self-review:
+- This closes the local macOS acceptance-wrapper gap, but it does not prove BLE
+  OTA on macOS. Real update acceptance still needs service-capable BoatLock
+  hardware, app connection/auth, OTA progress, reboot, reconnect, and telemetry
+  recovery.
+- No durable skill/reference promotion is needed beyond the operator doc update;
+  this is a repo-specific wrapper contract.
+
+### 2026-04-26 Stage 231: Offline yaw and wake/chop simulator slice
+
+Scope:
+- Advance the autonomous offline simulator backlog without changing firmware runtime behavior.
+- Keep writes scoped to `tools/sim`, the durable external-pattern reference, and this worklog.
+
+External baseline:
+- Fossen's marine craft model treats surface-craft maneuvering as coupled surge, sway, and yaw with inertia/damping and environmental wind/wave/current forces and moments superposed: https://www.fossen.biz/html/marineCraftModel.html.
+- NOAA/NDBC treats wave steepness as wave height divided by wavelength and identifies steepness as a stability/breaking indicator: https://www.ndbc.noaa.gov/faq/measdes.shtml and https://www.ndbc.noaa.gov/faq/algorithm.shtml.
+- USACE/ERDC describes vessel wakes as complex wave systems whose effects can persist after vessel passage, so offline wake tests should be explicit time-bounded events instead of hidden steady forcing: https://www.erdc.usace.army.mil/Media/News-Stories/Article/3854349/funwave-model-is-a-feasible-solution-for-vessel-wake-issues/.
+
+Key outcomes:
+- Added an offline yaw-rate model with bounded yaw acceleration, damping, heading-inertia lag, and environmental yaw-acceleration metrics.
+- Added explicit `wake` and `chop` environment event packets with start time, duration, height, period, and direction.
+- Added event-driven rocking, steepness, acceleration, yaw moment, event reasons, event time/count metrics, and threshold support.
+- Added a core `short_steep_chop` scenario, converted `wake_steering_backlash` to explicit wake packets, and added Oka/Rybinsk wake/chop packets to the JSON-backed Russian set.
+- Promoted the durable simulator baseline into `skills/boatlock/references/external-patterns.md`.
+
+Validation:
+- `python3 tools/sim/test_sim_core.py` -> PASS (`38/38`).
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> PASS.
+- `python3 tools/sim/run_sim.py --scenario-set russian --check --json-out tools/sim/russian_report.json` -> PASS; generated report removed after the run.
+- `python3 tools/sim/run_sim.py --scenario-set all --check --json-out /tmp/boatlock-all-report.json` -> PASS.
+- `python3 tools/sim/test_soak.py` -> PASS (`2/2`).
+- `python3 tools/sim/run_soak.py --hours 6 --check --json-out /tmp/boatlock-soak-report.json` -> PASS.
+- `python3 -m py_compile tools/sim/anchor_sim.py tools/sim/run_sim.py tools/sim/run_soak.py tools/sim/scenario_data.py tools/sim/test_sim_core.py tools/sim/test_soak.py` -> PASS.
+- `git diff --check -- tools/sim skills/boatlock/references/external-patterns.md WORKLOG.md` -> PASS.
+
+Self-review:
+- This is a deliberately low-fidelity offline model; constants are thresholded for regression value, not claimed as water-calibrated. The next improvement should use powered bench or water logs before changing yaw/wake coefficients.
+
+### 2026-04-26 Stage 232: Latest-main Pages channel verifier
+
+Scope:
+- Add the missing CI gate that proves the deployed latest-main firmware channel is readable and internally consistent after GitHub Pages deployment.
+- Keep this separate from app OTA logic and hardware OTA proof.
+
+External baseline:
+- GitHub Pages deploy is asynchronous from the repo's point of view; the verifier treats the deployed URL as the source of truth and checks the same manifest, firmware, checksum, and build-info files consumed by the service app.
+
+Key outcomes:
+- Added `tools/ci/verify_firmware_update_channel.py`.
+- The verifier downloads `manifest.json`, checks the expected main/service metadata, downloads `firmware.bin`, validates size and SHA-256, then cross-checks `SHA256SUMS` and `BUILD_INFO.txt`.
+- The `firmware-main-channel` workflow now runs the verifier immediately after `actions/deploy-pages`.
+- Added focused CI tests for the verifier and workflow hook.
+
+Validation:
+- `python3 -m pytest tools/ci/test_generate_firmware_update_manifest.py tools/ci/test_firmware_artifact_workflow.py` -> PASS (`12/12`).
+- `python3 -m py_compile tools/ci/verify_firmware_update_channel.py tools/ci/generate_firmware_update_manifest.py` -> PASS.
+
+Self-review:
+- This does not make the current public Pages URL live locally; it makes the next real `main` CI run fail loudly if Pages visibility, deployment, manifest metadata, binary SHA, or build info are wrong.

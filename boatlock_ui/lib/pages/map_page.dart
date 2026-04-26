@@ -50,38 +50,17 @@ class _MapPageState extends State<MapPage> {
   StreamSubscription<Position>? _posSub;
   bool _autoCenter = true;
 
-  Future<void> _confirmAndStopAll() async {
+  Future<void> _stopAllImmediately() async {
     if (boatData == null) return;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Аварийный STOP'),
-        content: const Text('Остановить якорь и моторы прямо сейчас?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('STOP'),
-          ),
-        ],
-      ),
+    final sent = await ble.stopAll();
+    if (!mounted) return;
+    _recordAnchorEvent(
+      'STOP',
+      sent ? 'request sent' : _commandFailedText('STOP'),
+      sent ? AnchorEventLevel.critical : AnchorEventLevel.warning,
+      AnchorEventSource.app,
     );
-
-    if (ok == true) {
-      final sent = await ble.stopAll();
-      if (!mounted) return;
-      _recordAnchorEvent(
-        'STOP',
-        sent ? 'request sent' : _commandFailedText('STOP'),
-        sent ? AnchorEventLevel.critical : AnchorEventLevel.warning,
-        AnchorEventSource.app,
-      );
-      _showCommandSnack(sent ? 'STOP отправлен' : 'STOP не отправлен');
-    }
+    _showCommandSnack(sent ? 'STOP отправлен' : 'STOP не отправлен');
   }
 
   void _showCommandSnack(String message) {
@@ -753,60 +732,80 @@ class _MapPageState extends State<MapPage> {
             ),
         ],
       ),
-      floatingActionButton: Wrap(
-        alignment: WrapAlignment.end,
-        spacing: 12,
-        runSpacing: 12,
-        children: [
-          FloatingActionButton(
-            heroTag: 'stop_all',
-            tooltip: "Аварийный STOP",
-            onPressed: boatData == null ? null : _confirmAndStopAll,
-            backgroundColor: boatData == null ? Colors.grey : Colors.red,
-            foregroundColor: Colors.white,
-            child: const Icon(Icons.stop),
-          ),
-          FloatingActionButton(
-            heroTag: 'refresh',
-            tooltip: "Обновить данные",
-            onPressed: () => ble.requestSnapshot(),
-            child: const Icon(Icons.refresh),
-          ),
-          FloatingActionButton(
-            heroTag: 'set_anchor',
-            tooltip: "Сохранить якорь",
-            onPressed: boatData == null
-                ? null
-                : () => _sendMapCommand(
-                    command: 'SET_ANCHOR',
-                    success: 'Точка якоря сохранена',
-                    send: ble.setAnchor,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            FloatingActionButton(
+              heroTag: 'stop_all',
+              tooltip: "Аварийный STOP",
+              onPressed: boatData == null ? null : _stopAllImmediately,
+              backgroundColor: boatData == null ? Colors.grey : Colors.red,
+              foregroundColor: Colors.white,
+              child: const Icon(Icons.stop),
+            ),
+            const SizedBox(width: 32),
+            Expanded(
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  FloatingActionButton(
+                    heroTag: 'refresh',
+                    tooltip: "Обновить данные",
+                    onPressed: () => ble.requestSnapshot(),
+                    child: const Icon(Icons.refresh),
                   ),
-            backgroundColor: boatData == null ? Colors.grey : Colors.deepOrange,
-            child: const Icon(Icons.anchor),
-          ),
-          FloatingActionButton(
-            heroTag: 'anchor_on',
-            tooltip: "Включить якорь",
-            onPressed: boatData == null ? null : _confirmAndEnableAnchor,
-            backgroundColor: boatData == null ? Colors.grey : Colors.green,
-            child: const Icon(Icons.play_arrow),
-          ),
-          FloatingActionButton(
-            heroTag: 'anchor_off',
-            tooltip: "Выключить якорь",
-            onPressed: boatData == null
-                ? null
-                : () => _sendMapCommand(
-                    command: 'ANCHOR_OFF',
-                    success: 'Якорь выключен',
-                    send: ble.anchorOff,
+                  FloatingActionButton(
+                    heroTag: 'set_anchor',
+                    tooltip: "Сохранить якорь",
+                    onPressed: boatData == null
+                        ? null
+                        : () => _sendMapCommand(
+                            command: 'SET_ANCHOR',
+                            success: 'Точка якоря сохранена',
+                            send: ble.setAnchor,
+                          ),
+                    backgroundColor: boatData == null
+                        ? Colors.grey
+                        : Colors.deepOrange,
+                    child: const Icon(Icons.anchor),
                   ),
-            backgroundColor: boatData == null ? Colors.grey : Colors.amber[800],
-            foregroundColor: Colors.white,
-            child: const Icon(Icons.power_settings_new),
-          ),
-        ],
+                  FloatingActionButton(
+                    heroTag: 'anchor_on',
+                    tooltip: "Включить якорь",
+                    onPressed: boatData == null
+                        ? null
+                        : _confirmAndEnableAnchor,
+                    backgroundColor: boatData == null
+                        ? Colors.grey
+                        : Colors.green,
+                    child: const Icon(Icons.play_arrow),
+                  ),
+                  FloatingActionButton(
+                    heroTag: 'anchor_off',
+                    tooltip: "Выключить якорь",
+                    onPressed: boatData == null
+                        ? null
+                        : () => _sendMapCommand(
+                            command: 'ANCHOR_OFF',
+                            success: 'Якорь выключен',
+                            send: ble.anchorOff,
+                          ),
+                    backgroundColor: boatData == null
+                        ? Colors.grey
+                        : Colors.amber[800],
+                    foregroundColor: Colors.white,
+                    child: const Icon(Icons.power_settings_new),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

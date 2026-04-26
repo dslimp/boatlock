@@ -255,6 +255,13 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
+      - name: Verify latest-main Pages channel
+        run: |
+          python3 tools/ci/verify_firmware_update_channel.py \
+            --manifest-url "${{ steps.deployment.outputs.page_url }}firmware/main/manifest.json" \
+            --expected-git-sha "${GITHUB_SHA}" \
+            --expected-workflow-run-id "${GITHUB_RUN_ID}"
+
   flutter-checks:
     name: flutter-checks
     runs-on: ubuntu-latest
