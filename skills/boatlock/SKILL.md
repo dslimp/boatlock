@@ -27,6 +27,14 @@ Use this skill for any code, review, debugging, test, or docs task in the BoatLo
 - External best practices and comparable systems: `references/external-patterns.md`
 - Real hardware acceptance on `nh02` and Android USB/BLE smoke planning: `../boatlock-hardware-acceptance/SKILL.md`
 
+## CAD And Mechanical Modeling
+
+- For BoatLock mechanical/CAD work, read `cad/README.md` first.
+- Prefer FreeCAD through the repo-enabled MCP workflow for live model inspection
+  and FreeCAD Python scripts for repeatable `.FCStd`/STL exports.
+- Keep generated model outputs under each model's `out/` directory unless the
+  task explicitly promotes them into another release/artifact location.
+
 ## Execution Log
 
 - Keep the repo work trail in `WORKLOG.md`.

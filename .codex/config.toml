@@ -1,0 +1,13 @@
+# Project-local Codex config for BoatLock.
+# Keep the repo's skill and FreeCAD MCP expectation discoverable from the repo
+# itself. The user-level Codex config also enables this MCP server on this
+# workstation.
+
+[[skills.config]]
+path = "skills/boatlock"
+enabled = true
+
+[mcp_servers.freecad]
+command = "/Users/user/.local/bin/uvx"
+args = ["freecad-mcp"]
+enabled = true

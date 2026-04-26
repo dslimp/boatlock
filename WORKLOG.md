@@ -6319,6 +6319,52 @@ Validation:
 Self-review:
 - This closes the immediate paired-mode auth bypass for safety/control commands. It does not solve per-client auth or control ownership; those still require a separate multi-client lease implementation before accepting a second controller.
 
+### 2026-04-26 Stage 210: Ground trike printable CAD concept
+
+Scope:
+- Add a first-pass printable ground simulator concept under `cad/ground_trike`.
+- Keep firmware unchanged while capturing that the requested NEMA17 steering path is mechanically different from the current 28BYJ-48 + ULN2003 bench path.
+
+External baseline:
+- No new web baseline was needed for this CAD slice. The mechanical pattern uses stable commodity dimensions: NEMA17 face/mounting pattern, 608 bearing envelope, M3/M4/M6 clearances, and BoatLock's existing split between steering and thrust actuation.
+
+Key outcomes:
+- Added `boatlock_ground_trike.scad` with selectable OpenSCAD parts: deck plate, steering bearing carrier, front driven steering fork, rear axle block, and 25GA motor cap.
+- Chose an 8 mm kingpin carried by two 608 bearings so the NEMA17 transmits steering torque but does not carry wheel load.
+- Modeled the front wheel as the single driven wheel and left the default drive concept as a 25GA/25D gearmotor on the rotating fork, driving a 6 mm wheel axle through a belt or spur stage.
+- Added export notes and print notes in `cad/ground_trike/README.md`.
+
+Validation:
+- `python3` delimiter check for `cad/ground_trike/boatlock_ground_trike.scad` -> PASS.
+- `bash -n cad/ground_trike/export_stl.sh` -> PASS.
+- STL export was not run in this first slice because neither OpenSCAD nor FreeCAD was found in `PATH`; FreeCAD app bundle discovery and export moved to Stage 212.
+
+Self-review:
+- This is a V0 geometry concept, not a final powertrain drawing. The remaining critical input is the exact front drive motor and wheel, after which the motor mount, axle support, belt/pulley spacing, and mechanical steering stops should be tightened.
+
+### 2026-04-26 Stage 212: Ground trike FreeCAD export path
+
+Scope:
+- Move the ground trike CAD concept onto a FreeCAD-generated path after confirming FreeCAD is installed as a macOS app bundle, not exposed in `PATH`.
+- Keep the OpenSCAD model as a text fallback, but make FreeCAD the primary source for `.FCStd` and STL export.
+
+Key outcomes:
+- Added `cad/ground_trike/boatlock_ground_trike_freecad.py` and `export_freecad.sh`.
+- Added `cad/README.md`, repo-local `.codex/config.toml`, and `tools/cad/freecad_mcp_smoke.py` to keep the FreeCAD MCP workflow reproducible from this repo.
+- The FreeCAD build script exports a single `.FCStd` assembly plus individual printable STLs for the deck, steering carrier, front fork, rear axle block, and motor cap.
+- Fixed the rear passive wheel block geometry so the drop bracket reaches from the high deck to the rear wheel axle instead of leaving the rear axle visually/mechanically disconnected.
+- Added reference solids for the NEMA17, front 25GA motor, and wheels in the FreeCAD assembly.
+- Updated the repo-local BoatLock skill so future CAD/mechanical work starts from `cad/README.md` and the FreeCAD MCP/export workflow.
+
+Validation:
+- `codex mcp list` -> `freecad` is enabled with `/Users/user/.local/bin/uvx freecad-mcp`.
+- `python3 tools/cad/freecad_mcp_smoke.py` -> PASS; FreeCAD RPC responded at `127.0.0.1:9875` and reported FreeCAD `1.1.0`.
+- `cad/ground_trike/export_freecad.sh` -> PASS; generated `cad/ground_trike/out/boatlock_ground_trike.FCStd` and STL files under `cad/ground_trike/out/stl/`.
+- FreeCAD export metrics: deck `260 x 150 x 4 mm`, wheelbase `160 mm`, rear track `178 mm`, rear drop bracket `67.5 mm`, and all five exported parts reported one solid body.
+
+Self-review:
+- FreeCAD now matches the requested workflow, but the model is still a concept until the exact front wheel, gearmotor, and belt/spur drive parts are selected and dimensioned.
+
 ### 2026-04-26 Stage 214: Product readiness docs cleanup
 
 Scope:
