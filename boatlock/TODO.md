@@ -15,8 +15,8 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 - [x] Classify BLE commands into release/service/dev surfaces and gate service/dev paths from normal water UI.
 - [ ] Decide whether service/dev/HIL commands also need a firmware-side gate beyond pairing/auth before untrusted BLE clients are in scope.
 - [ ] Identify the exact steering stepper driver/mechanics and update firmware/docs if it is not the current 28BYJ-48 + ULN2003 path.
-- [ ] Build a no-load motor output acceptance checklist for `PWM=7`, `DIR=5/10`, boot, STOP, HOLD, reconnect, anchor denial, SIM, and OTA begin.
-- [ ] Add powered-bench wiring requirements: current-limited supply, fuse/breaker, physical kill path, polarity proof, strain relief, and thermal check.
+- [x] Build a no-load motor output acceptance checklist for `PWM=7`, `DIR=5/10`, boot, STOP, HOLD, reconnect, anchor denial, SIM, and OTA begin.
+- [x] Add powered-bench wiring requirements: current-limited supply, fuse/breaker, physical kill path, polarity proof, strain relief, and thermal check.
 - [ ] Update README wiring diagrams/photos from real hardware.
 
 ## P1 — Before First Protected-Water Test

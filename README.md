@@ -145,6 +145,10 @@ Pin 1 should be HIGH and Pin 2 LOW for forward rotation. The logic is reversed
 for reverse rotation. Adjust the GPIO numbers if you wire the controller to
 different pins on the ESP32 board.
 
+Before connecting powered motor or steering hardware, pass the no-load and
+low-power gates in
+[docs/POWERED_BENCH_CHECKLIST.md](docs/POWERED_BENCH_CHECKLIST.md).
+
 ## Emergency STOP Button (Hardware)
 
 Firmware supports a dedicated hardware STOP input:

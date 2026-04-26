@@ -5651,3 +5651,23 @@ Validation:
 Self-review:
 - This is an app-side product-surface gate, not a firmware authorization boundary. Raw BLE clients can still send service/dev/HIL commands if they satisfy the current firmware security rules.
 - Direct service helpers such as OTA upload remain callable from service/e2e paths; normal UI no longer exposes them by default.
+
+### 2026-04-26 Stage 185: Powered bench checklist
+
+Scope:
+- Convert the powered-bench TODOs that do not require new hardware facts into a concrete checklist.
+- Keep exact steering-driver selection open until the real non-A4988 hardware is identified.
+
+External baseline:
+- Reused Stage 179 commercial/power-sizing baseline and repo hardware invariants; no new external source was needed for this documentation-only safety gate.
+
+Key outcomes:
+- Added `docs/POWERED_BENCH_CHECKLIST.md` with current output pin truth, required bench safety hardware, software gates, no-load output instrumentation, low-power driver proof, dry steering, wet/tethered test, and required log fields.
+- Linked the checklist from the README motor-controller section so wiring readers hit the safety gate before powered connection.
+- Marked the no-load acceptance checklist and powered-bench wiring requirements TODO items done.
+
+Validation:
+- `git diff --check` -> PASS.
+
+Self-review:
+- This does not identify the actual steering driver. The checklist deliberately blocks powered steering if the hardware is not the current 28BYJ-48 + ULN2003 path until driver type, pinout, current/torque limits, gear ratio, and stop behavior are documented and tested.
