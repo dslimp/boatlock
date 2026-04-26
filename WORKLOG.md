@@ -6440,3 +6440,49 @@ Validation:
 
 Self-review:
 - This closes the highest-risk e2e timeout gap. Settings rollback, OTA detailed UI failures, and structured smoke payload fields remain separate open tasks.
+
+### 2026-04-26 Stage 221: Service settings rollback on profile rejection
+
+Scope:
+- Roll back optimistic Flutter service setting values when firmware rejects the command asynchronously by profile after the BLE write succeeds.
+- Cover `SET_COMPASS_OFFSET`, `RESET_COMPASS_OFFSET`, `SET_STEP_MAXSPD`, and `SET_STEP_ACCEL`.
+
+External baseline:
+- Reuses the BLE/UI baseline in `skills/boatlock/references/ble-ui.md`: a successful app-side BLE write is only transport delivery, not firmware acceptance. Firmware acceptance must come from telemetry transitions or allowlisted device event logs.
+
+Key outcomes:
+- Added a small settings rejection guard that finds matching command rejections only after a baseline diagnostics event count.
+- SettingsPage now starts a pending profile-rejection watch before each service setting write, consumes the matching rejection without duplicate global snackbar handling, and rolls the displayed value back to the previous value.
+- Added a service-UI widget test for late `SET_STEP_MAXSPD` rejection rollback plus pure guard tests.
+
+Validation:
+- `cd boatlock_ui && flutter test test/settings_command_rejection_guard_test.dart test/settings_page_test.dart test/settings_page_service_ui_test.dart` -> PASS (`7/7`).
+- `cd boatlock_ui && flutter test --dart-define=BOATLOCK_SERVICE_UI=true test/settings_page_service_ui_test.dart` -> PASS (`1/1`).
+- `cd boatlock_ui && flutter analyze` -> PASS.
+- `git diff --check -- boatlock_ui/lib/pages/settings_page.dart boatlock_ui/lib/pages/settings_command_rejection_guard.dart boatlock_ui/test/settings_command_rejection_guard_test.dart boatlock_ui/test/settings_page_service_ui_test.dart WORKLOG.md` -> PASS.
+
+Self-review:
+- This keeps the normal water UI unchanged because the controls remain service-gated. The remaining app-side profile work is structured OTA failure detail and structured smoke/e2e rejection payloads.
+
+### 2026-04-26 Stage 222: GitHub latest-release firmware source
+
+Scope:
+- Integrate the background-agent GitHub latest-release firmware source into the app OTA client.
+- Keep the existing GitHub Pages latest-main manifest channel as the preferred operator path while adding a release-asset fallback for Android/macOS service builds.
+
+External baseline:
+- GitHub's REST Releases API exposes a latest-release endpoint and release assets with `browser_download_url`, size, and optional SHA-256 digest metadata: https://docs.github.com/rest/releases.
+
+Key outcomes:
+- Added `GitHubReleaseFirmwareSource`, which fetches the latest release, prefers a manifest asset, and otherwise reconstructs the app manifest from `firmware.bin`, `BUILD_INFO.txt`, and agreeing SHA-256 metadata from asset digest, `SHA256SUMS`, or build info.
+- Extended `FirmwareUpdateClient` so `BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL` remains first priority, and `BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO` enables latest-release scanning when no manifest URL is configured.
+- Forwarded an optional GitHub token to both latest-release API requests and release asset downloads so private release validation can use one source configuration.
+- Documented the release-source define in BLE protocol and nh02 notes, and moved the `Epicurus` agent output from active work into completed backlog.
+
+Validation:
+- `cd boatlock_ui && flutter test test/github_release_firmware_source_test.dart test/firmware_update_manifest_test.dart test/settings_command_rejection_guard_test.dart test/settings_page_test.dart test/settings_page_service_ui_test.dart` -> PASS (`14/14`).
+- `cd boatlock_ui && flutter analyze` -> PASS.
+- `git diff --check -- boatlock_ui/lib/ota/firmware_update_client.dart boatlock_ui/lib/ota/github_release_firmware_source.dart boatlock_ui/test/github_release_firmware_source_test.dart docs/BLE_PROTOCOL.md docs/HARDWARE_NH02.md docs/AGENT_TASK_BACKLOG.md WORKLOG.md` -> PASS.
+
+Self-review:
+- This does not make release assets the primary update channel; the static Pages manifest remains better for latest `main`. The release path is useful for one-button updates from published GitHub releases, but it still depends on publishing a service-profile release asset set with consistent SHA metadata.

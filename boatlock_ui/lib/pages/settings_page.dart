@@ -1,14 +1,18 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import '../ble/ble_boatlock.dart';
+import '../ble/ble_command_rejection.dart';
 import '../ble/ble_command_scope.dart';
+import '../ble/ble_debug_snapshot.dart';
 import '../ble/ble_ota_payload.dart';
 import '../ble/ble_security_codec.dart';
 import '../ota/firmware_update_client.dart';
 import '../ota/firmware_update_manifest.dart';
+import 'settings_command_rejection_guard.dart';
 
 class SettingsPage extends StatefulWidget {
   final BleBoatLock ble;
@@ -85,6 +89,7 @@ class _SettingsPageState extends State<SettingsPage> {
   DateTime? _otaLastLogAt;
   int _otaLastLogBucket = -1;
   int _lastSeenCommandRejectEvents = 0;
+  _ProfileRejectionWait? _profileRejectionWait;
   final FirmwareUpdateClient _firmwareUpdateClient =
       const FirmwareUpdateClient();
   FirmwareUpdateManifest? _latestFirmwareManifest;
@@ -142,8 +147,85 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
     _lastSeenCommandRejectEvents = snapshot.commandRejectEvents;
+    if (_completePendingProfileRejection(snapshot)) return;
     final rejection = snapshot.lastCommandRejection;
     if (rejection == null) return;
+    _showProfileRejection(
+      rejection.commandName,
+      rejection.profile,
+      rejection.requiredProfile,
+    );
+  }
+
+  bool _completePendingProfileRejection(BleDebugSnapshot snapshot) {
+    final wait = _profileRejectionWait;
+    if (wait == null) return false;
+    final rejection = findMatchingCommandRejectionAfter(
+      snapshot,
+      baselineEvents: wait.baselineEvents,
+      commandPrefix: wait.commandPrefix,
+    );
+    if (rejection == null) return false;
+    _profileRejectionWait = null;
+    if (!wait.completer.isCompleted) {
+      wait.completer.complete(rejection);
+    }
+    return true;
+  }
+
+  _ProfileRejectionWait _beginProfileRejectionWait(String commandPrefix) {
+    final wait = _ProfileRejectionWait(
+      baselineEvents: widget.ble.diagnostics.value.commandRejectEvents,
+      commandPrefix: commandPrefix,
+    );
+    _profileRejectionWait = wait;
+    _completePendingProfileRejection(widget.ble.diagnostics.value);
+    return wait;
+  }
+
+  void _cancelProfileRejectionWait(_ProfileRejectionWait wait) {
+    if (!identical(_profileRejectionWait, wait)) return;
+    _profileRejectionWait = null;
+    if (!wait.completer.isCompleted) {
+      wait.completer.complete(null);
+    }
+  }
+
+  Future<BleCommandRejection?> _finishProfileRejectionWait(
+    _ProfileRejectionWait wait,
+  ) async {
+    _completePendingProfileRejection(widget.ble.diagnostics.value);
+    final result = await wait.completer.future.timeout(
+      const Duration(milliseconds: 600),
+      onTimeout: () => null,
+    );
+    if (identical(_profileRejectionWait, wait)) {
+      _profileRejectionWait = null;
+    }
+    return result;
+  }
+
+  Future<void> _commitServiceSetting({
+    required String commandPrefix,
+    required Future<bool> Function() write,
+    required VoidCallback rollback,
+  }) async {
+    final wait = _beginProfileRejectionWait(commandPrefix);
+    final ok = await write();
+    if (!mounted) {
+      _cancelProfileRejectionWait(wait);
+      return;
+    }
+    if (!ok) {
+      _cancelProfileRejectionWait(wait);
+      setState(rollback);
+      _showMessage('Команда отклонена: ${widget.ble.secReject}');
+      return;
+    }
+
+    final rejection = await _finishProfileRejectionWait(wait);
+    if (!mounted || rejection == null) return;
+    setState(rollback);
     _showProfileRejection(
       rejection.commandName,
       rejection.profile,
@@ -202,22 +284,22 @@ class _SettingsPageState extends State<SettingsPage> {
     if (val == null) return;
     final previous = compassOffset;
     setState(() => compassOffset = val);
-    final ok = await widget.ble.setCompassOffset(val);
-    if (!ok) {
-      setState(() => compassOffset = previous);
-      _showMessage('Команда отклонена: ${widget.ble.secReject}');
-    }
+    await _commitServiceSetting(
+      commandPrefix: 'SET_COMPASS_OFFSET',
+      write: () => widget.ble.setCompassOffset(val),
+      rollback: () => compassOffset = previous,
+    );
   }
 
   Future<void> _resetCompassOffset() async {
     if (!isConnected) return;
     final previous = compassOffset;
     setState(() => compassOffset = 0.0);
-    final ok = await widget.ble.resetCompassOffset();
-    if (!ok) {
-      setState(() => compassOffset = previous);
-      _showMessage('Команда отклонена: ${widget.ble.secReject}');
-    }
+    await _commitServiceSetting(
+      commandPrefix: 'RESET_COMPASS_OFFSET',
+      write: widget.ble.resetCompassOffset,
+      rollback: () => compassOffset = previous,
+    );
   }
 
   Future<void> _editStepMaxSpd() async {
@@ -246,11 +328,11 @@ class _SettingsPageState extends State<SettingsPage> {
     if (val == null || val == stepMaxSpd) return;
     final previous = stepMaxSpd;
     setState(() => stepMaxSpd = val);
-    final ok = await widget.ble.setStepMaxSpeed(val);
-    if (!ok) {
-      setState(() => stepMaxSpd = previous);
-      _showMessage('Команда отклонена: ${widget.ble.secReject}');
-    }
+    await _commitServiceSetting(
+      commandPrefix: 'SET_STEP_MAXSPD',
+      write: () => widget.ble.setStepMaxSpeed(val),
+      rollback: () => stepMaxSpd = previous,
+    );
   }
 
   Future<void> _editStepAccel() async {
@@ -279,11 +361,11 @@ class _SettingsPageState extends State<SettingsPage> {
     if (val == null || val == stepAccel) return;
     final previous = stepAccel;
     setState(() => stepAccel = val);
-    final ok = await widget.ble.setStepAccel(val);
-    if (!ok) {
-      setState(() => stepAccel = previous);
-      _showMessage('Команда отклонена: ${widget.ble.secReject}');
-    }
+    await _commitServiceSetting(
+      commandPrefix: 'SET_STEP_ACCEL',
+      write: () => widget.ble.setStepAccel(val),
+      rollback: () => stepAccel = previous,
+    );
   }
 
   void _generateOwnerSecret() {
@@ -825,4 +907,16 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
   }
+}
+
+class _ProfileRejectionWait {
+  _ProfileRejectionWait({
+    required this.baselineEvents,
+    required this.commandPrefix,
+  });
+
+  final int baselineEvents;
+  final String commandPrefix;
+  final Completer<BleCommandRejection?> completer =
+      Completer<BleCommandRejection?>();
 }

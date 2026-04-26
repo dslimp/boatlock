@@ -14,12 +14,16 @@ Status after the 2026-04-26 autonomous pass.
   expose `Обновить до main`.
 - CI now generates and deploys an OTA-capable `esp32s3_service` latest-main
   firmware channel under GitHub Pages.
+- The app can also resolve the latest GitHub release as a firmware source,
+  preferring a release manifest asset and falling back to release assets with
+  matching SHA-256 metadata.
+- Flutter service settings now roll back optimistic values when firmware
+  accepts the BLE write but then rejects the command by profile in diagnostics.
 
 ## Active Background Work
 
-- `Epicurus`: GitHub latest-release firmware source for the app. Scope is pure
-  OTA/release parsing and tests under `boatlock_ui/lib/ota/` and
-  `boatlock_ui/test/`; it must not touch the current latest-main Pages workflow.
+- None. `Epicurus` left the GitHub latest-release source in the shared tree; it
+  was reviewed, completed, and moved into main work.
 
 ## Next Autonomous Tasks
 
@@ -31,9 +35,6 @@ Status after the 2026-04-26 autonomous pass.
   `--dart-define=BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL=https://dslimp.github.io/boatlock/firmware/main/manifest.json`.
 - Add production app e2e fast-fail for firmware profile rejections:
   `SIM_RUN`, compass service commands, `OTA_BEGIN`, and `OTA_FINISH`.
-- Add service settings rollback for async profile rejections after successful BLE
-  writes: `SET_COMPASS_OFFSET`, `RESET_COMPASS_OFFSET`, `SET_STEP_MAXSPD`,
-  `SET_STEP_ACCEL`.
 - Add structured OTA failure details in the app instead of generic
   `OTA отклонено`, including rejected command, active profile, and required
   profile.
@@ -77,3 +78,6 @@ Status after the 2026-04-26 autonomous pass.
 - `Jason`: latest-main OTA should use a durable manifest/static channel, not raw
   expiring Actions artifacts; implemented through app manifest client and Pages
   publishing.
+- `Epicurus`: latest GitHub release source; implemented through pure release
+  parsing plus `FirmwareUpdateClient` fallback behind
+  `BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO`.

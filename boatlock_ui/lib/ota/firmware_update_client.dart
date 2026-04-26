@@ -4,9 +4,13 @@ import 'dart:typed_data';
 
 import '../ble/ble_ota_payload.dart';
 import 'firmware_update_manifest.dart';
+import 'github_release_firmware_source.dart';
 
 const String kBoatLockFirmwareUpdateManifestUrl = String.fromEnvironment(
   'BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL',
+);
+const String kBoatLockFirmwareUpdateGithubRepo = String.fromEnvironment(
+  'BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO',
 );
 
 class FirmwareUpdateBundle {
@@ -19,16 +23,33 @@ class FirmwareUpdateBundle {
 class FirmwareUpdateClient {
   const FirmwareUpdateClient({
     this.manifestUrl = kBoatLockFirmwareUpdateManifestUrl,
+    this.githubRepository = kBoatLockFirmwareUpdateGithubRepo,
+    this.githubApiBaseUrl = 'https://api.github.com',
+    this.githubToken,
   });
 
   final String manifestUrl;
+  final String githubRepository;
+  final String githubApiBaseUrl;
+  final String? githubToken;
 
-  bool get configured => manifestUrl.trim().isNotEmpty;
+  bool get configured =>
+      manifestUrl.trim().isNotEmpty || githubRepository.trim().isNotEmpty;
 
   Future<FirmwareUpdateManifest> fetchLatestManifest() async {
-    final uri = _configuredManifestUri();
-    final text = await _downloadText(uri);
-    return FirmwareUpdateManifest.fromJsonText(text);
+    if (manifestUrl.trim().isNotEmpty) {
+      final uri = _configuredManifestUri();
+      final text = await _downloadText(uri);
+      return FirmwareUpdateManifest.fromJsonText(text);
+    }
+    if (githubRepository.trim().isNotEmpty) {
+      return GitHubReleaseFirmwareSource(
+        repository: githubRepository.trim(),
+        apiBaseUrl: githubApiBaseUrl,
+        token: githubToken,
+      ).fetchLatestManifest();
+    }
+    throw const FormatException('firmware manifest URL is not configured');
   }
 
   Future<FirmwareUpdateBundle> downloadFirmware(

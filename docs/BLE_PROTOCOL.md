@@ -212,10 +212,14 @@ During active OTA, firmware rejects all runtime commands except `HEARTBEAT`, `OT
 The service UI can also use a build-defined latest-main manifest URL from
 `BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL`. That manifest must describe a
 `main` branch `esp32s3_service` binary with `commandProfile=service`, positive
-size, HTTPS binary URL, and a 64-hex SHA-256. The app validates the manifest,
-downloads the binary, verifies size and SHA-256, then reuses the same BLE OTA
-transport path. This intentionally avoids trusting expiring workflow artifact
-links or unauthenticated binaries.
+size, HTTPS binary URL, and a 64-hex SHA-256. If no manifest URL is configured,
+the app can instead scan the latest GitHub release from
+`BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO`, preferring a release manifest asset and
+falling back to `firmware.bin` plus `BUILD_INFO.txt` and matching SHA-256
+metadata. The app validates the resolved manifest, downloads the binary,
+verifies size and SHA-256, then reuses the same BLE OTA transport path. This
+intentionally avoids trusting expiring workflow artifact links or
+unauthenticated binaries.
 
 The current phone bridge intentionally uses acknowledged BLE writes for the first reliable acceptance path. This is slow on the bench, roughly sub-1 KB/s, so a 700 KB firmware image can take around 15 minutes; throughput optimization should be a separate change that preserves abort/retry safety.
 
