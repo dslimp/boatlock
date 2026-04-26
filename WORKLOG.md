@@ -6909,3 +6909,35 @@ Self-review:
 - The standard release path is now coherent, but the next tag must still prove
   the GitHub Release upload and a real service-app OTA against the public release
   manifest.
+
+### 2026-04-26 Stage 234: On-device RF HIL sim suite
+
+Scope:
+- Make hardware simulation a standard bench path instead of only a quick
+  `SIM_RUN`/`SIM_ABORT` smoke.
+- Add RF water-body scenarios to the ESP32 on-device HIL catalog, not only the
+  offline Python simulator.
+
+Key outcomes:
+- Added ESP-side RF scenarios `RF0..RF4` for Oka, Volga, Rybinsk, Ladoga, and
+  Gulf of Finland cases.
+- Added compact ESP wave/wake packets with `kind`, start/duration, height,
+  period, and direction. Packets perturb current/yaw and emit `SIM_REPORT`
+  events such as `WAKE_PACKET_EMU` and `CHOP_PACKET_EMU`.
+- Added production-app e2e mode `sim_suite`: it sends `SIM_LIST`, runs every
+  listed scenario with `SIM_RUN:<id>,0`, polls `SIM_STATUS`, collects chunked
+  `SIM_REPORT`, and fails on any non-passing report.
+- Added `tools/hw/nh02/run-sim-suite.sh` as the standard bench wrapper:
+  helper install, target proof, acceptance flash, boot acceptance, production
+  app `sim_suite`, release restore, and release boot acceptance.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_hil_sim` -> PASS (`12/12`).
+- `python3 -m pytest -q tools/ci/test_*.py` -> PASS (`35/35`).
+- `cd boatlock_ui && flutter test` -> PASS (`119/119`).
+- `bash -n tools/android/run-app-e2e.sh tools/android/run-smoke.sh tools/hw/nh02/android-run-app-e2e.sh tools/hw/nh02/android-run-smoke.sh tools/hw/nh02/remote/boatlock-run-android-smoke.sh tools/hw/nh02/run-sim-suite.sh` -> PASS.
+
+Self-review:
+- This proves local firmware/app/wrapper readiness for the full hardware suite.
+  It still needs an actual `nh02` `tools/hw/nh02/run-sim-suite.sh` run to call
+  the RF packet suite hardware-proven.
