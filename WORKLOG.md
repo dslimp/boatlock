@@ -6357,3 +6357,27 @@ Validation:
 
 Self-review:
 - This is intentionally stricter before the command handler can treat unknown text as control activity. It may change the log reason for unknown legacy commands from downstream no-op to profile rejection, but it does not add actuation or settings side effects.
+
+### 2026-04-26 Stage 217: Flutter latest-main OTA manifest client
+
+Scope:
+- Add the app-side foundation for one-button OTA to the latest firmware built from `main`.
+- Keep secrets and private repository access out of the app; the latest-main source is a build-defined manifest URL.
+
+External baseline:
+- GitHub Actions artifacts are API/list/download resources and download redirects are short-lived, so the app should not depend on raw workflow artifact URLs as a durable update channel: https://docs.github.com/en/rest/actions/artifacts.
+
+Key outcomes:
+- Added a validated `FirmwareUpdateManifest` requiring `schema=1`, `channel=main`, `branch=main`, `repo=dslimp/boatlock`, `platformioEnv=esp32s3_service`, `commandProfile=service`, positive size, HTTPS-or-localhost binary URL, and 64-hex SHA-256.
+- Added `FirmwareUpdateClient` that fetches the manifest, downloads the firmware binary, and checks size plus SHA before upload.
+- Added a service UI button, `Обновить до main`, that fetches latest-main metadata and firmware then reuses the existing BLE OTA transport.
+- Kept manual URL/SHA OTA as the advanced fallback.
+- Documented the manifest-based OTA path in `docs/BLE_PROTOCOL.md`.
+
+Validation:
+- `cd boatlock_ui && flutter test test/firmware_update_manifest_test.dart test/ble_ota_payload_test.dart test/settings_page_test.dart` -> PASS (`12/12`).
+- `cd boatlock_ui && flutter analyze` -> PASS.
+- `git diff --check -- boatlock_ui/lib/ota/firmware_update_manifest.dart boatlock_ui/lib/ota/firmware_update_client.dart boatlock_ui/lib/pages/settings_page.dart boatlock_ui/test/firmware_update_manifest_test.dart docs/BLE_PROTOCOL.md WORKLOG.md` -> PASS.
+
+Self-review:
+- This makes the Android/macOS app ready to consume a latest-main channel, but the CI/static publishing side still needs to generate and host the manifest plus `esp32s3_service` binary before the one-button path has a production URL.

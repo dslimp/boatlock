@@ -209,6 +209,14 @@ BLE OTA uses the phone as the bridge:
 
 During active OTA, firmware rejects all runtime commands except `HEARTBEAT`, `OTA_FINISH`, and `OTA_ABORT`. Chunk writes before a successful `OTA_BEGIN` are ignored. If the BLE link disconnects during an active transfer, firmware aborts the update and keeps the current boot partition.
 
+The service UI can also use a build-defined latest-main manifest URL from
+`BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL`. That manifest must describe a
+`main` branch `esp32s3_service` binary with `commandProfile=service`, positive
+size, HTTPS binary URL, and a 64-hex SHA-256. The app validates the manifest,
+downloads the binary, verifies size and SHA-256, then reuses the same BLE OTA
+transport path. This intentionally avoids trusting expiring workflow artifact
+links or unauthenticated binaries.
+
 The current phone bridge intentionally uses acknowledged BLE writes for the first reliable acceptance path. This is slow on the bench, roughly sub-1 KB/s, so a 700 KB firmware image can take around 15 minutes; throughput optimization should be a separate change that preserves abort/retry safety.
 
 ## Live State Frame

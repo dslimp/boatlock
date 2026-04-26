@@ -7,6 +7,8 @@ import '../ble/ble_boatlock.dart';
 import '../ble/ble_command_scope.dart';
 import '../ble/ble_ota_payload.dart';
 import '../ble/ble_security_codec.dart';
+import '../ota/firmware_update_client.dart';
+import '../ota/firmware_update_manifest.dart';
 
 class SettingsPage extends StatefulWidget {
   final BleBoatLock ble;
@@ -83,6 +85,9 @@ class _SettingsPageState extends State<SettingsPage> {
   DateTime? _otaLastLogAt;
   int _otaLastLogBucket = -1;
   int _lastSeenCommandRejectEvents = 0;
+  final FirmwareUpdateClient _firmwareUpdateClient =
+      const FirmwareUpdateClient();
+  FirmwareUpdateManifest? _latestFirmwareManifest;
 
   @override
   void initState() {
@@ -439,6 +444,106 @@ class _SettingsPageState extends State<SettingsPage> {
     _logOta(event, sent: sent, total: total);
   }
 
+  Future<void> _uploadVerifiedFirmware(
+    Uint8List firmware,
+    String sha256Hex,
+  ) async {
+    setState(() {
+      _otaProgress = 0;
+      _otaProgressLabel = 'Передача по BLE 0.0%';
+      _otaStatus = _otaProgressLabel;
+      _otaStartedAt = DateTime.now();
+      _otaLastLogAt = null;
+      _otaLastLogBucket = -1;
+    });
+    _logOta('download_verified', sent: firmware.length, total: firmware.length);
+    final ok = await widget.ble.uploadFirmwareOtaBytes(
+      firmware: firmware,
+      sha256Hex: sha256Hex,
+      onProgress: (sent, total) {
+        if (!mounted || total <= 0) return;
+        final label = _formatOtaProgress('Передача по BLE', sent, total);
+        setState(() {
+          _otaProgress = sent / total;
+          _otaProgressLabel = label;
+          _otaStatus = label;
+        });
+        _logOtaProgress('upload', sent, total);
+      },
+    );
+    if (!mounted) return;
+    setState(() {
+      _otaBusy = false;
+      _otaProgress = ok ? 1 : _otaProgress;
+      _otaStatus = ok ? 'Готово, ESP перезагружается' : 'OTA отклонено';
+      _otaProgressLabel = ok ? '100.0%' : _otaProgressLabel;
+    });
+    _logOta(ok ? 'upload_done' : 'upload_rejected');
+    _showMessage(ok ? 'OTA завершено' : 'OTA не прошла');
+  }
+
+  Future<void> _runLatestMainOta() async {
+    if (!isConnected || _otaBusy) return;
+    if (!_firmwareUpdateClient.configured) {
+      _showMessage('Manifest URL не задан в сборке приложения');
+      return;
+    }
+
+    setState(() {
+      _otaBusy = true;
+      _otaProgress = null;
+      _otaProgressLabel = '';
+      _otaStatus = 'Поиск latest main';
+      _otaStartedAt = DateTime.now();
+      _otaLastLogAt = null;
+      _otaLastLogBucket = -1;
+      _latestFirmwareManifest = null;
+    });
+    _logOta('manifest_fetch_start');
+    try {
+      final manifest = await _firmwareUpdateClient.fetchLatestManifest();
+      if (!mounted) return;
+      setState(() {
+        _latestFirmwareManifest = manifest;
+        _otaStatus = 'Найдена ${manifest.displayLabel}, скачивание';
+      });
+      _logOta(
+        'manifest_ready',
+        total: manifest.size,
+        detail: '${manifest.platformioEnv}/${manifest.shortGitSha}',
+      );
+
+      final bundle = await _firmwareUpdateClient.downloadFirmware(
+        manifest,
+        onProgress: (received, total) {
+          if (!mounted) return;
+          final progress = total > 0 ? received / total : null;
+          final label = _formatOtaProgress(
+            'Скачивание latest main',
+            received,
+            total,
+          );
+          setState(() {
+            _otaProgress = progress;
+            _otaProgressLabel = label;
+            _otaStatus = label;
+          });
+          _logOtaProgress('download_latest_main', received, total);
+        },
+      );
+      if (!mounted) return;
+      await _uploadVerifiedFirmware(bundle.firmware, bundle.manifest.sha256);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _otaBusy = false;
+        _otaStatus = 'Ошибка latest main OTA';
+      });
+      _logOta('latest_main_error', detail: e.toString());
+      _showMessage('Ошибка latest main OTA: $e');
+    }
+  }
+
   Future<void> _runBleOta() async {
     if (!isConnected || _otaBusy) return;
     final uri = Uri.tryParse(_otaUrlCtrl.text.trim());
@@ -489,42 +594,7 @@ class _SettingsPageState extends State<SettingsPage> {
         return;
       }
 
-      setState(() {
-        _otaProgress = 0;
-        _otaProgressLabel = 'Передача по BLE 0.0%';
-        _otaStatus = _otaProgressLabel;
-        _otaStartedAt = DateTime.now();
-        _otaLastLogAt = null;
-        _otaLastLogBucket = -1;
-      });
-      _logOta(
-        'download_verified',
-        sent: firmware.length,
-        total: firmware.length,
-      );
-      final ok = await widget.ble.uploadFirmwareOtaBytes(
-        firmware: firmware,
-        sha256Hex: actualSha,
-        onProgress: (sent, total) {
-          if (!mounted || total <= 0) return;
-          final label = _formatOtaProgress('Передача по BLE', sent, total);
-          setState(() {
-            _otaProgress = sent / total;
-            _otaProgressLabel = label;
-            _otaStatus = label;
-          });
-          _logOtaProgress('upload', sent, total);
-        },
-      );
-      if (!mounted) return;
-      setState(() {
-        _otaBusy = false;
-        _otaProgress = ok ? 1 : _otaProgress;
-        _otaStatus = ok ? 'Готово, ESP перезагружается' : 'OTA отклонено';
-        _otaProgressLabel = ok ? '100.0%' : _otaProgressLabel;
-      });
-      _logOta(ok ? 'upload_done' : 'upload_rejected');
-      _showMessage(ok ? 'OTA завершено' : 'OTA не прошла');
+      await _uploadVerifiedFirmware(firmware, actualSha);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -682,6 +752,33 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(child: Text(_otaStatus)),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  FilledButton.icon(
+                    onPressed:
+                        isConnected &&
+                            !_otaBusy &&
+                            _firmwareUpdateClient.configured
+                        ? _runLatestMainOta
+                        : null,
+                    icon: const Icon(Icons.system_update_alt),
+                    label: const Text('Обновить до main'),
+                  ),
+                  if (_latestFirmwareManifest != null)
+                    Text(
+                      '${_latestFirmwareManifest!.displayLabel} '
+                      '${_latestFirmwareManifest!.platformioEnv}',
+                    )
+                  else if (!_firmwareUpdateClient.configured)
+                    const Text('Latest-main manifest не задан'),
                 ],
               ),
             ),
