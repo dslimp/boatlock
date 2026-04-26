@@ -237,6 +237,8 @@ Next simulation work:
 
 Start only in protected small lake/cove conditions: low wind, minimal current,
 two operators, physical recovery available, and a hard way to remove power.
+Use `docs/PROTECTED_WATER_TEST_LOG.md` as the session checklist and do not
+advance phases after any abort condition.
 
 Phases:
 

@@ -19,15 +19,15 @@ Current firmware release: `0.2.0`
 
 ## Photos
 
-![Boatlock device](https://via.placeholder.com/400x300?text=Boatlock+device)
-
-*Replace the placeholder above with a photo of the assembled hardware.*
+No verified assembled-hardware photo is checked in yet. Add one only after the
+current bench wiring has been photographed and tied to the firmware commit or
+powered-bench log.
 
 ## Connection Diagram
 
-![Connection diagram](https://via.placeholder.com/600x400?text=Wiring+diagram)
-
-*Replace the placeholder above with the actual wiring diagram.*
+No verified wiring diagram is checked in yet. Until the real diagram is captured,
+use the firmware pinout below plus the powered-bench checklist as the source for
+wiring decisions.
 
 ## Typical Scenarios
 
@@ -95,8 +95,8 @@ Ensure these tools are installed and available in your `PATH` before attempting 
 The firmware is preconfigured for a hardware GPS receiver on UART1. Connect the
 GPS side of the module to the ESP32-S3 board as follows:
 
-- **GPS TX** → **GPIO17**
-- **GPS RX** → **GPIO18**
+- **GPS module TX** → **ESP32 GPIO17** (`GPS RX`)
+- **GPS module RX** → **ESP32 GPIO18** (`GPS TX`)
 - **VCC** → 5 V (or 3.3 V if your module supports it)
 - **GND** → **GND**
 
@@ -111,7 +111,7 @@ path is not part of production firmware.
 
 Current default wiring:
 
-- **BNO08x SDA/TX** → **GPIO12**
+- **BNO08x RVC TX/SDA** → **ESP32 GPIO12** (`BNO08x RX`)
 - **BNO08x RST** → **GPIO13**
 - **BNO08x P0/PS0** → **3V3**
 - **BNO08x P1/PS1** → **GND**
@@ -125,25 +125,32 @@ settings (`SET_COMPASS_OFFSET` / `RESET_COMPASS_OFFSET`).
 
 See [CHANGELOG.md](CHANGELOG.md) for recent changes and firmware versions.
 
-## HC 160A S2 Motor Controller
+## Hardware Wiring Summary
 
-The HC 160A S2 driver requires two direction pins. They are configured in
-`boatlock/main.cpp`:
+`boatlock/main.cpp` is the source of truth for the default ESP32-S3 bench
+pinout. Current wiring:
 
-```cpp
-constexpr int kMotorDirPin1 = 5;   // IN1 on the driver
-constexpr int kMotorDirPin2 = 10;  // IN2 on the driver
-```
+- **ESP32 GPS RX** = **GPIO17**; connect the GPS module TX here
+- **ESP32 GPS TX** = **GPIO18**; connect the GPS module RX here
+- **ESP32 BNO08x UART-RVC RX** = **GPIO12**; connect the BNO08x RVC TX/SDA here
+- **BNO08x RST** → **GPIO13**
+- **BNO08x P0/PS0** → **3V3**
+- **BNO08x P1/PS1** → **GND**
+- **Thruster PWM** → **GPIO7**
+- **Thruster direction** → **GPIO5** and **GPIO10**
+- **Steering 28BYJ-48 + ULN2003 HALF4WIRE inputs** → **GPIO2**, **GPIO4**,
+  **GPIO6**, and **GPIO16**
+- **BOOT anchor-save button** → **GPIO0**
+- **STOP button** → **GPIO15**
 
-During setup the firmware calls:
+Do not treat old HC 160A snippets or direction-pin examples as current wiring
+authority. The present release path only documents the two thruster direction
+outputs above and the current 28BYJ-48 + ULN2003-style steering path.
 
-```cpp
-motor.setDirPins(kMotorDirPin1, kMotorDirPin2);
-```
-
-Pin 1 should be HIGH and Pin 2 LOW for forward rotation. The logic is reversed
-for reverse rotation. Adjust the GPIO numbers if you wire the controller to
-different pins on the ESP32 board.
+If the installed steering driver is not the documented 28BYJ-48 + ULN2003 path,
+complete [docs/STEERING_DRIVER_INTAKE.md](docs/STEERING_DRIVER_INTAKE.md) first.
+The real driver identity, pinout, limits, idle behavior, and STOP behavior must
+be captured before powered steering tests or firmware changes.
 
 Before connecting powered motor or steering hardware, pass the no-load and
 low-power gates in

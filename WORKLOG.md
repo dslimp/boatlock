@@ -6151,3 +6151,45 @@ Validation:
 
 Self-review:
 - The checklist reduces powered-test risk only if it is filled from real hardware evidence. It deliberately does not approve the current firmware to drive an unknown steering driver.
+
+### 2026-04-26 Stage 206: Protected-water phase gate log
+
+Scope:
+- Tighten the existing protected-water/tank/tether log so the first water plan has explicit phase advancement criteria.
+- Keep this docs-only and independent from firmware/simulator work currently delegated to agents.
+
+External baseline:
+- Reused `docs/PRODUCT_READINESS_PLAN.md` first-water phases and `docs/POWERED_BENCH_CHECKLIST.md` pre-powered gates.
+- No new external source was needed; this is local test-procedure consolidation.
+
+Key outcomes:
+- Added pre-run rows for the local pre-powered runner, firmware profile, `nh02` acceptance, Android smokes, and steering-driver intake.
+- Added phase advancement rules with entry condition, first-run exposure, pass condition, and next-phase permission for telemetry, manual low-power, steering-only, anchor preflight, quiet hold, longer hold, and controlled disturbance.
+- Added required captures for wiring photos, app readiness screenshots, serial/BLE logs, external power readings, track/drift notes, and weather/water conditions.
+
+Validation:
+- `git diff --check -- docs/PROTECTED_WATER_TEST_LOG.md docs/PRODUCT_READINESS_PLAN.md WORKLOG.md` -> PASS.
+
+Self-review:
+- This improves operator discipline but does not replace the actual `nh02`, Android, no-load, powered bench, or protected-water evidence.
+
+### 2026-04-26 Stage 207: README hardware wiring cleanup
+
+Scope:
+- Remove stale README wiring/photo placeholders and align the visible hardware summary with the current firmware pinout.
+- Keep this docs-only; no firmware or test behavior changed.
+
+External baseline:
+- Reused `boatlock/main.cpp` and the repo firmware reference as the wiring source of truth.
+- No new external source was needed.
+
+Key outcomes:
+- Replaced placeholder photo/diagram links with honest notes that verified hardware media is not checked in yet.
+- Replaced stale HC 160A direction-pin wording with the current default bench pinout for GPS, BNO08x RVC, thruster, steering, BOOT, and STOP.
+- Linked `docs/STEERING_DRIVER_INTAKE.md` before using any steering driver that is not proven to match the documented 28BYJ-48 + ULN2003 path.
+
+Validation:
+- `git diff --check -- README.md WORKLOG.md` -> PASS.
+
+Self-review:
+- This reduces README confusion but does not complete the real-hardware photo/diagram TODO. That should stay open until bench media exists.
