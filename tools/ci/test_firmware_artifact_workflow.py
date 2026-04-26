@@ -47,6 +47,8 @@ def test_android_build_uses_ci_caches():
     assert "image: ghcr.io/${{ github.repository }}/flutter-android-ci:3.32.4-android33-ndk27.0" in workflow
     assert "username: ${{ github.actor }}" in workflow
     assert "password: ${{ secrets.GITHUB_TOKEN }}" in workflow
+    assert "Trust Flutter SDK" in workflow
+    assert "git config --global --add safe.directory /opt/flutter" in workflow
     assert "uses: gradle/actions/setup-gradle@v6" in workflow
     assert "Cache Android SDK packages" not in workflow
     assert "uses: actions/setup-java@v5" not in workflow
@@ -76,6 +78,7 @@ def test_flutter_ci_image_workflow_publishes_pinned_ghcr_image():
     assert "ARG ANDROID_NDK_VERSION=27.0.12077973" in dockerfile
     assert "ARG ANDROID_CMAKE_VERSION=3.22.1" in dockerfile
     assert "set +o pipefail" in dockerfile
+    assert "git config --system --add safe.directory" in dockerfile
     assert "flutter precache --android --web" in dockerfile
     assert "flutter build apk --debug --no-pub" not in dockerfile
     assert "COPY boatlock_ui" not in dockerfile

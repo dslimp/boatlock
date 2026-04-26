@@ -52,6 +52,7 @@ RUN curl -fsSL "https://storage.googleapis.com/flutter_infra_release/releases/st
     && tar -xJf /tmp/flutter.tar.xz -C /opt \
     && rm /tmp/flutter.tar.xz \
     && git config --global --add safe.directory "${FLUTTER_HOME}" \
+    && git config --system --add safe.directory "${FLUTTER_HOME}" \
     && flutter config --no-analytics --android-sdk "${ANDROID_HOME}" \
     && flutter precache --android --web \
     && flutter --version \

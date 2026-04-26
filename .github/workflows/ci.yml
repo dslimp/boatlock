@@ -151,6 +151,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Trust Flutter SDK
+        run: git config --global --add safe.directory /opt/flutter
+
       - name: Install dependencies
         working-directory: boatlock_ui
         run: flutter pub get
@@ -178,6 +181,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Trust Flutter SDK
+        run: git config --global --add safe.directory /opt/flutter
 
       - name: Setup Gradle cache
         uses: gradle/actions/setup-gradle@v6
@@ -210,6 +216,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Trust Flutter SDK
+        run: git config --global --add safe.directory /opt/flutter
 
       - name: Install dependencies
         working-directory: boatlock_ui
