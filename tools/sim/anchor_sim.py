@@ -10,6 +10,9 @@ import random
 EARTH_RADIUS_M = 6378137.0
 ANCHOR_LAT = 59.938600
 ANCHOR_LON = 30.314100
+REFERENCE_LOADED_BOAT_MASS_KG = 320.0
+AIR_DENSITY_KG_M3 = 1.225
+WATER_DENSITY_KG_M3 = 1000.0
 
 
 def clamp(v: float, lo: float, hi: float) -> float:
@@ -100,6 +103,11 @@ class SimConfig:
 class EnvironmentProfile:
     name: str
     water_body: str
+    loaded_boat_mass_kg: float = REFERENCE_LOADED_BOAT_MASS_KG
+    water_drag_coefficient: float = 0.9
+    water_drag_area_m2: float = 0.28
+    windage_drag_coefficient: float = 1.05
+    windage_area_m2: float = 1.2
     current_mps: float = 0.0
     current_direction_deg: float = 90.0
     current_swing_deg: float = 0.0
@@ -202,7 +210,32 @@ def wave_rocking_roll_deg(profile: Optional[EnvironmentProfile], t_s: int) -> fl
     return amp * math.sin(phase) + 0.25 * amp * math.sin((phase * 2.0) + 0.7)
 
 
-def environment_accel_mps2(profile: EnvironmentProfile, t_s: int) -> Tuple[float, float]:
+def _quadratic_fluid_accel_mps2(
+    fluid_vx_mps: float,
+    fluid_vy_mps: float,
+    boat_vx_mps: float,
+    boat_vy_mps: float,
+    density_kg_m3: float,
+    drag_coefficient: float,
+    reference_area_m2: float,
+    mass_kg: float,
+) -> Tuple[float, float]:
+    rel_vx = fluid_vx_mps - boat_vx_mps
+    rel_vy = fluid_vy_mps - boat_vy_mps
+    rel_speed = math.hypot(rel_vx, rel_vy)
+    if rel_speed <= 1e-9:
+        return 0.0, 0.0
+    mass = max(1.0, mass_kg)
+    scale = 0.5 * density_kg_m3 * drag_coefficient * reference_area_m2 * rel_speed / mass
+    return scale * rel_vx, scale * rel_vy
+
+
+def environment_accel_mps2(
+    profile: EnvironmentProfile,
+    t_s: int,
+    boat_vx_mps: float = 0.0,
+    boat_vy_mps: float = 0.0,
+) -> Tuple[float, float]:
     current_dir = _oscillated_direction(
         profile.current_direction_deg,
         profile.current_swing_deg,
@@ -215,15 +248,36 @@ def environment_accel_mps2(profile: EnvironmentProfile, t_s: int) -> Tuple[float
         profile.wind_swing_period_s,
         t_s,
     )
-    current_ax, current_ay = vector_from_bearing(profile.current_mps * 0.18, current_dir)
+    current_vx, current_vy = vector_from_bearing(profile.current_mps, current_dir)
+    current_ax, current_ay = _quadratic_fluid_accel_mps2(
+        current_vx,
+        current_vy,
+        boat_vx_mps,
+        boat_vy_mps,
+        WATER_DENSITY_KG_M3,
+        profile.water_drag_coefficient,
+        profile.water_drag_area_m2,
+        profile.loaded_boat_mass_kg,
+    )
     wind_speed = _gust_speed_mps(profile, t_s)
-    wind_ax, wind_ay = vector_from_bearing((wind_speed * wind_speed) * 0.00035, wind_dir)
+    wind_vx, wind_vy = vector_from_bearing(wind_speed, wind_dir)
+    wind_ax, wind_ay = _quadratic_fluid_accel_mps2(
+        wind_vx,
+        wind_vy,
+        boat_vx_mps,
+        boat_vy_mps,
+        AIR_DENSITY_KG_M3,
+        profile.windage_drag_coefficient,
+        profile.windage_area_m2,
+        profile.loaded_boat_mass_kg,
+    )
 
     wave_ax, wave_ay = 0.0, 0.0
     if profile.wave_height_m > 0.0:
         period = max(1.5, profile.wave_period_s)
         phase = (2.0 * math.pi * t_s) / period
-        amp = min(0.12, profile.wave_height_m * 0.018 * (4.0 / period))
+        mass_scale = REFERENCE_LOADED_BOAT_MASS_KG / max(1.0, profile.loaded_boat_mass_kg)
+        amp = min(0.12, profile.wave_height_m * 0.018 * (4.0 / period) * mass_scale)
         wave_ax, wave_ay = vector_from_bearing(amp * math.sin(phase), profile.wave_direction_deg)
 
     return current_ax + wind_ax + wave_ax, current_ay + wind_ay + wave_ay
@@ -561,9 +615,15 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
             invalid_motor_count += 1
 
         thrust_acc = (motor_state.applied_thrust_pct / 100.0) * cfg.thrust_accel_mps2
+        if scenario.profile is not None:
+            mass_scale = REFERENCE_LOADED_BOAT_MASS_KG / max(1.0, scenario.profile.loaded_boat_mass_kg)
+            thrust_acc *= mass_scale
         hx = math.sin(math.radians(heading))
         hy = math.cos(math.radians(heading))
-        ax_env, ay_env = scenario.env_accel_fn(t)
+        if scenario.profile is not None:
+            ax_env, ay_env = environment_accel_mps2(scenario.profile, t, vx, vy)
+        else:
+            ax_env, ay_env = scenario.env_accel_fn(t)
         rocking_roll = wave_rocking_roll_deg(scenario.profile, t)
         ax = ax_env + thrust_acc * hx - cfg.drag_per_s * vx
         ay = ay_env + thrust_acc * hy - cfg.drag_per_s * vy
@@ -638,6 +698,23 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
     )
 
     metrics = {
+        "loaded_boat_mass_kg": (
+            scenario.profile.loaded_boat_mass_kg
+            if scenario.profile is not None
+            else REFERENCE_LOADED_BOAT_MASS_KG
+        ),
+        "water_drag_coefficient": (
+            scenario.profile.water_drag_coefficient if scenario.profile is not None else 0.0
+        ),
+        "water_drag_area_m2": (
+            scenario.profile.water_drag_area_m2 if scenario.profile is not None else 0.0
+        ),
+        "windage_drag_coefficient": (
+            scenario.profile.windage_drag_coefficient if scenario.profile is not None else 0.0
+        ),
+        "windage_area_m2": (
+            scenario.profile.windage_area_m2 if scenario.profile is not None else 0.0
+        ),
         "time_in_deadband_pct": (deadband_hits * 100.0) / max(1, len(samples)),
         "p95_error_m": p95,
         "max_error_m": max(dists) if dists else 0.0,

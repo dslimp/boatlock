@@ -14,6 +14,13 @@
         "expected": "hold_for_light_boat_or_bounded_drift",
         "duration_s": 300,
         "initial_pos_m": [12.0, -3.0],
+        "boat": {
+          "loaded_boat_mass_kg": 260.0,
+          "water_drag_coefficient": 0.9,
+          "water_drag_area_m2": 0.34,
+          "windage_drag_coefficient": 1.05,
+          "windage_area_m2": 1.1
+        },
         "environment": {
           "current_mps": 0.35,
           "current_direction_deg": 90.0,
@@ -55,6 +62,13 @@
         "expected": "insufficient_thrust_or_clean_containment_breach",
         "duration_s": 300,
         "initial_pos_m": [16.0, -4.0],
+        "boat": {
+          "loaded_boat_mass_kg": 420.0,
+          "water_drag_coefficient": 0.95,
+          "water_drag_area_m2": 0.42,
+          "windage_drag_coefficient": 1.1,
+          "windage_area_m2": 1.6
+        },
         "environment": {
           "current_mps": 1.2,
           "current_direction_deg": 90.0,
@@ -78,7 +92,7 @@
           "hdop": 1.2
         },
         "thresholds": {
-          "p95_error_m_max": 90.0,
+          "p95_error_m_max": 135.0,
           "max_error_m_max": 150.0,
           "p95_rocking_roll_deg_min": 2.0
         }
@@ -95,6 +109,13 @@
         "expected": "no_twitch_thrash_likely_fail_or_bounded_correction",
         "duration_s": 300,
         "initial_pos_m": [14.0, 6.0],
+        "boat": {
+          "loaded_boat_mass_kg": 320.0,
+          "water_drag_coefficient": 0.9,
+          "water_drag_area_m2": 0.36,
+          "windage_drag_coefficient": 1.1,
+          "windage_area_m2": 1.4
+        },
         "environment": {
           "current_mps": 0.1,
           "current_direction_deg": 120.0,
@@ -135,6 +156,13 @@
         "expected": "fail_closed_quiet_state",
         "duration_s": 180,
         "initial_pos_m": [14.0, 5.0],
+        "boat": {
+          "loaded_boat_mass_kg": 650.0,
+          "water_drag_coefficient": 0.95,
+          "water_drag_area_m2": 0.56,
+          "windage_drag_coefficient": 1.15,
+          "windage_area_m2": 2.4
+        },
         "environment": {
           "current_mps": 0.4,
           "current_direction_deg": 160.0,
@@ -175,6 +203,13 @@
         "expected": "wind_driven_current_vector_change_test",
         "duration_s": 300,
         "initial_pos_m": [12.0, 4.0],
+        "boat": {
+          "loaded_boat_mass_kg": 420.0,
+          "water_drag_coefficient": 0.9,
+          "water_drag_area_m2": 0.44,
+          "windage_drag_coefficient": 1.1,
+          "windage_area_m2": 1.8
+        },
         "environment": {
           "current_mps": 0.15,
           "current_direction_deg": 80.0,

@@ -6193,3 +6193,28 @@ Validation:
 
 Self-review:
 - This reduces README confusion but does not complete the real-hardware photo/diagram TODO. That should stay open until bench media exists.
+
+### 2026-04-26 Stage 208: Offline simulator boat mass and drag model
+
+Scope:
+- Add loaded boat mass, submerged drag, and windage inputs to data-backed offline simulator scenarios.
+- Keep the change inside `tools/sim`; no firmware, Flutter, or hardware wrapper paths were touched by this stage.
+
+External baseline:
+- Used NASA Glenn's modern drag equation as the baseline: drag scales with drag coefficient, fluid density, velocity squared, and reference area.
+- Treated the result as an offline approximation only; there is still no water-log calibration for BoatLock hulls.
+
+Key outcomes:
+- Added a `boat` block to Russian scenario data with loaded mass, water drag coefficient/area, and windage coefficient/area.
+- Validated the new schema keys and positive ranges in `scenario_data.py`.
+- Updated data-backed simulation to compute current and wind/gust acceleration from quadratic relative-fluid force divided by loaded mass, and to mass-scale thrust and wave disturbance for catalog-backed scenarios.
+- Added report metrics for the boat physics inputs and updated the simulator README.
+
+Validation:
+- `python3 tools/sim/test_sim_core.py` -> PASS (`32` tests).
+- `python3 tools/sim/run_sim.py --scenario-set all --check --json-out /tmp/boatlock_all_report.json` -> PASS.
+- `python3 -m py_compile tools/sim/anchor_sim.py tools/sim/scenario_data.py tools/sim/run_sim.py tools/sim/test_sim_core.py` -> PASS.
+- `git diff --check -- tools/sim/anchor_sim.py tools/sim/scenario_data.py tools/sim/scenarios/environment_profiles.json tools/sim/test_sim_core.py tools/sim/README.md WORKLOG.md` -> PASS.
+
+Self-review:
+- This removes the previous fixed-acceleration shortcut for catalog-backed current/wind forcing, but coefficients are still coarse estimates. Remaining gaps are yaw moment/heading inertia, short chop/wake events, and sensor-frame effects from rocking.

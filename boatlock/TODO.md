@@ -37,7 +37,7 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 - [x] Normalize `tools/sim/research/environment_inputs.*` into simulator scenario data.
 - [x] Add current, wind/gust, wave-induced forcing, current direction swing, and rocking metrics to simulator scenarios.
 - [x] Add scenario provenance/confidence fields to normalized sim schema and reports.
-- [ ] Add loaded boat mass plus drag/windage parameters to scenario data and the world model.
+- [x] Add loaded boat mass plus drag/windage parameters to scenario data and the world model.
 - [ ] Add yaw moment/heading inertia so environmental forcing can rotate the hull, not only translate it.
 - [ ] Add river/reservoir wake and short steep chop events.
 - [ ] Model sensor-frame rocking effects on BNO08x/GNSS samples, not only hull-rocking metrics.

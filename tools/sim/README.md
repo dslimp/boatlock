@@ -47,6 +47,14 @@ Applied thrust passes through a brushed motor model with:
 - current limiting
 - thermal accumulation, cooling, and derating
 
+## Catalog World Model
+
+Data-backed scenarios can include a `boat` block with loaded mass, submerged
+drag, and above-water windage inputs. Current and wind/gust forcing use a
+quadratic drag approximation, then divide force by loaded mass to get
+acceleration. Wave forcing remains a bounded disturbance term scaled by loaded
+mass until water-log data exists.
+
 ## Scenarios (minimum set)
 
 1. `calm_good_gps`
@@ -71,8 +79,10 @@ The `russian` scenario set normalizes the first slice of
 5. `baltic_gulf_drift`
 
 These scenarios add current, wind/gusts, wave-induced forcing, and a
-`p95_rocking_roll_deg` metric. `ladoga_storm_abort` is intentionally modeled as
-an environment-abort case, not as a normal anchor-hold success case.
+`p95_rocking_roll_deg` metric. Their reports also include the loaded boat mass,
+water drag, and windage inputs used by the world model. `ladoga_storm_abort` is
+intentionally modeled as an environment-abort case, not as a normal anchor-hold
+success case.
 
 Normalized scenario inputs live in
 `tools/sim/scenarios/environment_profiles.json`. The research files under
@@ -85,7 +95,6 @@ object into each matching JSON report result; built-in core scenarios omit it.
 
 Known remaining gaps:
 
-- loaded boat mass plus drag/windage parameters
 - yaw moment and heading inertia from environmental forcing
 - river/reservoir wake and short steep chop events
 - BNO08x/GNSS sensor-frame effects from rocking, not only rocking metrics

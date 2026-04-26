@@ -26,11 +26,19 @@ ALLOWED_SCENARIO_KEYS = {
     "expected",
     "duration_s",
     "initial_pos_m",
+    "boat",
     "environment",
     "gnss",
     "thresholds",
 }
 ALLOWED_PROVENANCE_KEYS = {"source", "source_candidate_id", "confidence"}
+ALLOWED_BOAT_KEYS = {
+    "loaded_boat_mass_kg",
+    "water_drag_coefficient",
+    "water_drag_area_m2",
+    "windage_drag_coefficient",
+    "windage_area_m2",
+}
 ALLOWED_ENVIRONMENT_KEYS = {
     "current_mps",
     "current_direction_deg",
@@ -134,6 +142,13 @@ def _non_negative(data: Mapping[str, object], key: str, path: str, default: floa
     return value
 
 
+def _positive(data: Mapping[str, object], key: str, path: str, default: float) -> float:
+    value = _number(data, key, path, default)
+    if value <= 0.0:
+        raise ValueError(f"{path}.{key} must be positive")
+    return value
+
+
 def _bool(data: Mapping[str, object], key: str, path: str, default: bool = False) -> bool:
     value = data.get(key, default)
     if not isinstance(value, bool):
@@ -152,26 +167,35 @@ def _position(data: Mapping[str, object], path: str) -> Tuple[float, float]:
 
 
 def _environment_profile(data: Mapping[str, object], scenario_id: str, water_body: str, path: str) -> EnvironmentProfile:
+    boat = _as_mapping(data.get("boat", {}), f"{path}.boat")
+    _reject_unknown_keys(boat, ALLOWED_BOAT_KEYS, f"{path}.boat")
     env = _as_mapping(data.get("environment"), f"{path}.environment")
     _reject_unknown_keys(env, ALLOWED_ENVIRONMENT_KEYS, f"{path}.environment")
+    boat_path = f"{path}.boat"
+    env_path = f"{path}.environment"
     profile = EnvironmentProfile(
         name=scenario_id,
         water_body=water_body,
-        current_mps=_non_negative(env, "current_mps", path, 0.0),
-        current_direction_deg=_direction(env, "current_direction_deg", path, 90.0),
-        current_swing_deg=_non_negative(env, "current_swing_deg", path, 0.0),
-        current_swing_period_s=_number(env, "current_swing_period_s", path, 180.0),
-        wind_mps=_non_negative(env, "wind_mps", path, 0.0),
-        wind_direction_deg=_direction(env, "wind_direction_deg", path, 90.0),
-        wind_swing_deg=_non_negative(env, "wind_swing_deg", path, 0.0),
-        wind_swing_period_s=_number(env, "wind_swing_period_s", path, 180.0),
-        gust_mps=_non_negative(env, "gust_mps", path, 0.0),
-        gust_period_s=_number(env, "gust_period_s", path, 90.0),
-        gust_duration_s=_number(env, "gust_duration_s", path, 0.0),
-        wave_height_m=_non_negative(env, "wave_height_m", path, 0.0),
-        wave_period_s=_number(env, "wave_period_s", path, 4.0),
-        wave_direction_deg=_direction(env, "wave_direction_deg", path, 90.0),
-        abort_expected=_bool(env, "abort_expected", path, False),
+        loaded_boat_mass_kg=_positive(boat, "loaded_boat_mass_kg", boat_path, 320.0),
+        water_drag_coefficient=_positive(boat, "water_drag_coefficient", boat_path, 0.9),
+        water_drag_area_m2=_positive(boat, "water_drag_area_m2", boat_path, 0.28),
+        windage_drag_coefficient=_positive(boat, "windage_drag_coefficient", boat_path, 1.05),
+        windage_area_m2=_positive(boat, "windage_area_m2", boat_path, 1.2),
+        current_mps=_non_negative(env, "current_mps", env_path, 0.0),
+        current_direction_deg=_direction(env, "current_direction_deg", env_path, 90.0),
+        current_swing_deg=_non_negative(env, "current_swing_deg", env_path, 0.0),
+        current_swing_period_s=_number(env, "current_swing_period_s", env_path, 180.0),
+        wind_mps=_non_negative(env, "wind_mps", env_path, 0.0),
+        wind_direction_deg=_direction(env, "wind_direction_deg", env_path, 90.0),
+        wind_swing_deg=_non_negative(env, "wind_swing_deg", env_path, 0.0),
+        wind_swing_period_s=_number(env, "wind_swing_period_s", env_path, 180.0),
+        gust_mps=_non_negative(env, "gust_mps", env_path, 0.0),
+        gust_period_s=_number(env, "gust_period_s", env_path, 90.0),
+        gust_duration_s=_number(env, "gust_duration_s", env_path, 0.0),
+        wave_height_m=_non_negative(env, "wave_height_m", env_path, 0.0),
+        wave_period_s=_number(env, "wave_period_s", env_path, 4.0),
+        wave_direction_deg=_direction(env, "wave_direction_deg", env_path, 90.0),
+        abort_expected=_bool(env, "abort_expected", env_path, False),
     )
     if profile.wave_period_s <= 0.0:
         raise ValueError(f"{path}.environment.wave_period_s must be positive")

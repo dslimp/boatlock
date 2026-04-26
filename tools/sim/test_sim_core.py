@@ -58,6 +58,13 @@ class SimCoreTests(unittest.TestCase):
                         },
                         "duration_s": 60,
                         "initial_pos_m": [1.0, 2.0],
+                        "boat": {
+                            "loaded_boat_mass_kg": 260.0,
+                            "water_drag_coefficient": 0.9,
+                            "water_drag_area_m2": 0.3,
+                            "windage_drag_coefficient": 1.05,
+                            "windage_area_m2": 1.1,
+                        },
                         "environment": {
                             "current_mps": 0.1,
                             "wind_mps": 1.0,
@@ -116,6 +123,29 @@ class SimCoreTests(unittest.TestCase):
         self.assertNotEqual((ax0, ay0), (ax1, ay1))
         self.assertGreater(abs(wave_rocking_roll_deg(profile, 1)), 1.0)
 
+    def test_environment_profile_uses_loaded_mass_for_force_acceleration(self) -> None:
+        light = EnvironmentProfile(
+            name="light",
+            water_body="test",
+            loaded_boat_mass_kg=200.0,
+            water_drag_area_m2=0.35,
+            windage_area_m2=0.000001,
+            current_mps=0.6,
+        )
+        heavy = EnvironmentProfile(
+            name="heavy",
+            water_body="test",
+            loaded_boat_mass_kg=600.0,
+            water_drag_area_m2=0.35,
+            windage_area_m2=0.000001,
+            current_mps=0.6,
+        )
+        light_ax, _ = environment_accel_mps2(light, 0)
+        heavy_ax, _ = environment_accel_mps2(heavy, 0)
+        opposed_ax, _ = environment_accel_mps2(light, 0, boat_vx_mps=0.6)
+        self.assertGreater(light_ax, heavy_ax)
+        self.assertAlmostEqual(opposed_ax, 0.0)
+
     def test_russian_water_scenarios_are_catalogued(self) -> None:
         scenarios = russian_water_scenarios()
         names = {s.name for s in scenarios}
@@ -132,6 +162,9 @@ class SimCoreTests(unittest.TestCase):
         self.assertEqual(oka.initial_pos_m, (12.0, -3.0))
         self.assertIsNotNone(oka.profile)
         self.assertEqual(oka.profile.water_body, "Oka lowland river")
+        self.assertEqual(oka.profile.loaded_boat_mass_kg, 260.0)
+        self.assertEqual(oka.profile.water_drag_area_m2, 0.34)
+        self.assertEqual(oka.profile.windage_area_m2, 1.1)
         self.assertEqual(oka.profile.current_mps, 0.35)
         self.assertEqual(oka.profile.wave_height_m, 0.2)
         self.assertEqual(ladoga.duration_s, 180)
@@ -206,6 +239,21 @@ class SimCoreTests(unittest.TestCase):
         path = self._write_scenario_catalog(catalog)
 
         with self.assertRaisesRegex(ValueError, "gust duration"):
+            environment_scenarios_for_set("test", path)
+
+    def test_scenario_data_rejects_bad_boat_physics_ranges(self) -> None:
+        catalog = self._minimal_catalog()
+        catalog["scenario_sets"]["test"][0]["boat"]["loaded_boat_mass_kg"] = 0.0
+        path = self._write_scenario_catalog(catalog)
+
+        with self.assertRaisesRegex(ValueError, "loaded_boat_mass_kg"):
+            environment_scenarios_for_set("test", path)
+
+        catalog = self._minimal_catalog()
+        catalog["scenario_sets"]["test"][0]["boat"]["extra_drag_knob"] = 1.0
+        path = self._write_scenario_catalog(catalog)
+
+        with self.assertRaisesRegex(ValueError, "unknown keys"):
             environment_scenarios_for_set("test", path)
 
     def test_scenario_data_rejects_unknown_threshold_keys(self) -> None:
@@ -333,6 +381,9 @@ class SimCoreTests(unittest.TestCase):
         scenario = next(s for s in russian_water_scenarios() if s.name == "river_oka_normal_55lb")
         result = simulate_scenario(cfg, scenario, seed=4)
         metrics = result["metrics"]
+        self.assertEqual(metrics["loaded_boat_mass_kg"], 260.0)
+        self.assertEqual(metrics["water_drag_area_m2"], 0.34)
+        self.assertEqual(metrics["windage_area_m2"], 1.1)
         self.assertIn("max_motor_current_a", metrics)
         self.assertGreater(metrics["max_motor_current_a"], 0.0)
         self.assertLess(metrics["min_battery_voltage_v"], cfg.motor_nominal_voltage_v)
