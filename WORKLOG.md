@@ -5424,7 +5424,8 @@ Validation:
 - Toolchain-only publisher run succeeded in `5:37`.
 - First consumer workflow did not create jobs because `jobs.<job_id>.container.image` does not allow the `env` context. Replaced the shared env indirection with the literal GHCR image expression in each Flutter Linux job.
 - First runnable consumer workflow pulled the GHCR image successfully, but Flutter failed with Git dubious ownership for `/opt/flutter` because Actions sets `HOME=/github/home`, hiding the image build-time root global git config. Added a `Trust Flutter SDK` step in the Flutter Linux jobs and system-level safe-directory config to the Dockerfile for the next image build.
-- Pending: run CI with the GHCR image consumers and compare warm-run durations.
+- Clean GHCR consumer verification after the publisher finished was green, but performance was worse: `flutter-build-android` `10:35`, `flutter-checks` `2:32`, and `flutter-build-web` `2:12`. Previous cached hosted-runner path was Android `5:46`, checks `1:27`, and web `1:12`.
+- Reverted the main CI Flutter Linux jobs to the previous hosted-runner `subosito/flutter-action` plus Gradle/Android SDK cache path. Kept the GHCR image publisher only as an experimental artifact until a self-hosted or larger runner can make image reuse worthwhile.
 
 Self-review:
 - This deliberately lands the image publisher before switching CI consumers, so `main` does not point at a non-existent container image.

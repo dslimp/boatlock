@@ -142,17 +142,16 @@ jobs:
   flutter-checks:
     name: flutter-checks
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/${{ github.repository }}/flutter-android-ci:3.32.4-android33-ndk27.0
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Trust Flutter SDK
-        run: git config --global --add safe.directory /opt/flutter
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.32.4"
+          channel: stable
+          cache: true
 
       - name: Install dependencies
         working-directory: boatlock_ui
@@ -173,20 +172,34 @@ jobs:
   flutter-build-android:
     name: flutter-build-android
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/${{ github.repository }}/flutter-android-ci:3.32.4-android33-ndk27.0
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Trust Flutter SDK
-        run: git config --global --add safe.directory /opt/flutter
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.32.4"
+          channel: stable
+          cache: true
 
       - name: Setup Gradle cache
         uses: gradle/actions/setup-gradle@v6
+
+      - name: Cache Android SDK packages
+        uses: actions/cache@v5
+        with:
+          path: |
+            /usr/local/lib/android/sdk/ndk/27.0.12077973
+            /usr/local/lib/android/sdk/platforms/android-33
+            /usr/local/lib/android/sdk/cmake/3.22.1
+          key: android-sdk-${{ runner.os }}-ndk-27.0.12077973-platform-33-cmake-3.22.1
 
       - name: Install dependencies
         working-directory: boatlock_ui
@@ -208,17 +221,16 @@ jobs:
   flutter-build-web:
     name: flutter-build-web
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/${{ github.repository }}/flutter-android-ci:3.32.4-android33-ndk27.0
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Trust Flutter SDK
-        run: git config --global --add safe.directory /opt/flutter
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.32.4"
+          channel: stable
+          cache: true
 
       - name: Install dependencies
         working-directory: boatlock_ui
