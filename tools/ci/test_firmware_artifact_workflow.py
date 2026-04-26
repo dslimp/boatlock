@@ -62,19 +62,20 @@ def test_flutter_ci_image_workflow_publishes_pinned_ghcr_image():
     assert "ghcr.io/${{ github.repository }}/flutter-android-ci" in workflow
     assert "IMAGE_TAG: 3.32.4-android33-ndk27.0" in workflow
     assert '- ".dockerignore"' in workflow
-    assert '- "boatlock_ui/android/**"' in workflow
     assert "uses: docker/login-action@v4" in workflow
     assert "uses: docker/setup-buildx-action@v4" in workflow
     assert "uses: docker/build-push-action@v7" in workflow
-    assert "cache-from: type=gha,scope=flutter-android-ci" in workflow
-    assert "cache-to: type=gha,mode=max,scope=flutter-android-ci" in workflow
+    assert "platforms: linux/amd64" in workflow
+    assert "provenance: false" in workflow
+    assert "cache-to: type=gha" not in workflow
     assert "ARG FLUTTER_VERSION=3.32.4" in dockerfile
     assert "ARG ANDROID_PLATFORM_LEGACY=android-33" in dockerfile
     assert "ARG ANDROID_NDK_VERSION=27.0.12077973" in dockerfile
     assert "ARG ANDROID_CMAKE_VERSION=3.22.1" in dockerfile
     assert "set +o pipefail" in dockerfile
     assert "flutter precache --android --web" in dockerfile
-    assert "flutter build apk --debug --no-pub" in dockerfile
+    assert "flutter build apk --debug --no-pub" not in dockerfile
+    assert "COPY boatlock_ui" not in dockerfile
     assert "**/local.properties" in dockerignore
     assert "**/build" in dockerignore
 

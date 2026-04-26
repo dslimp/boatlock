@@ -9,10 +9,6 @@ on:
       - ".dockerignore"
       - ".github/images/flutter-android-ci/**"
       - ".github/workflows/flutter-ci-image.yml"
-      - "boatlock_ui/pubspec.yaml"
-      - "boatlock_ui/pubspec.lock"
-      - "boatlock_ui/android/**"
-      - "boatlock_ui/lib/**"
 
 permissions:
   contents: read
@@ -45,7 +41,9 @@ jobs:
         with:
           context: .
           file: .github/images/flutter-android-ci/Dockerfile
+          platforms: linux/amd64
           push: true
+          provenance: false
           tags: |
             ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
             ${{ env.IMAGE_NAME }}:latest
@@ -53,5 +51,3 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.description=BoatLock Flutter Android CI image
-          cache-from: type=gha,scope=flutter-android-ci
-          cache-to: type=gha,mode=max,scope=flutter-android-ci

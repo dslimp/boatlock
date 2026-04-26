@@ -5410,7 +5410,7 @@ External baseline:
 - Docker's official Buildx action supports `type=gha` layer caching; using a dedicated scope prevents unrelated image builds from overwriting each other's cache.
 
 Key outcomes:
-- Added `.github/images/flutter-android-ci/Dockerfile` with pinned Flutter `3.32.4`, JDK 17, Android platforms `35` and `33`, build tools `35.0.0`, NDK `27.0.12077973`, CMake `3.22.1`, and prewarmed Flutter pub/Gradle dependency caches.
+- Added `.github/images/flutter-android-ci/Dockerfile` with pinned Flutter `3.32.4`, JDK 17, Android platforms `35` and `33`, build tools `35.0.0`, NDK `27.0.12077973`, and CMake `3.22.1`.
 - Added `.github/workflows/flutter-ci-image.yml` to publish `ghcr.io/dslimp/boatlock/flutter-android-ci:3.32.4-android33-ndk27.0`, `latest`, and `sha-*` tags.
 - Added CI helper coverage for the image workflow, pinned toolchain values, and GHCR publishing permissions.
 - Added `.dockerignore` so local Flutter/Gradle/PlatformIO build artifacts and `local.properties` are not accidentally sent into the CI image context.
@@ -5418,6 +5418,7 @@ Key outcomes:
 Validation:
 - First publisher run failed because the Dockerfile copied local `boatlock_ui/android/gradlew`, which exists on this Mac but is not tracked in git. Fixed the image warmup to use the real Flutter build path instead of the untracked local wrapper.
 - Second publisher run failed because `yes | sdkmanager --licenses` trips `pipefail` with exit `141` after `sdkmanager` closes the pipe. Scoped `pipefail` off only around license acceptance and kept the rest of the Dockerfile strict.
+- Third publisher run exhausted the GitHub-hosted runner disk while building the prewarmed project image. Removed project source copy, debug APK warmup, Buildx GHA layer export, and provenance attestation so the GHCR image is toolchain-only rather than a full project build cache snapshot.
 - Pending: publish the first GHCR image from GitHub Actions, then switch Flutter CI jobs to consume it and compare warm-run durations.
 
 Self-review:

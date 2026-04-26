@@ -54,16 +54,7 @@ RUN curl -fsSL "https://storage.googleapis.com/flutter_infra_release/releases/st
     && git config --global --add safe.directory "${FLUTTER_HOME}" \
     && flutter config --no-analytics --android-sdk "${ANDROID_HOME}" \
     && flutter precache --android --web \
-    && flutter doctor -v
-
-WORKDIR /opt/boatlock_ui_warmup
-
-COPY boatlock_ui ./
-
-RUN rm -f android/local.properties \
-    && flutter pub get \
-    && printf 'sdk.dir=%s\nflutter.sdk=%s\n' "${ANDROID_HOME}" "${FLUTTER_HOME}" > android/local.properties \
-    && flutter build apk --debug --no-pub \
-    && rm -rf build .dart_tool android/.gradle
+    && flutter --version \
+    && rm -rf "${PUB_CACHE}" "${GRADLE_USER_HOME}" /root/.gradle /tmp/*
 
 WORKDIR /workspace
