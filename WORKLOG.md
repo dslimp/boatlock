@@ -6336,3 +6336,24 @@ Validation:
 
 Self-review:
 - This is documentation cleanup only. It does not change firmware, Flutter, simulation code, CAD, or the underlying acceptance gates.
+
+### 2026-04-26 Stage 216: Unknown BLE command profile fail-closed
+
+Scope:
+- Tighten the firmware command-profile gate so unknown commands are rejected in every profile.
+- Keep this focused on profile classification proof; removed commands still have no side effects.
+
+External baseline:
+- Reuses the command-profile least-privilege baseline from Stage 209: commands outside an explicitly known release/service/dev-HIL surface should not receive profile permission by default.
+
+Key outcomes:
+- `RuntimeBleCommandScope::UNKNOWN` now fails `runtimeBleCommandScopeAllowedInProfile()` for release, service, and acceptance profiles.
+- Updated profile tests so removed commands such as `SET_ROUTE:old` are rejected even by acceptance firmware.
+- Clarified `docs/BLE_PROTOCOL.md` that acceptance accepts all known scopes, not arbitrary unknown commands.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_command_scope -f test_ble_command_handler -f test_ble_command_profile_gate` -> PASS (`54/54`).
+- `git diff --check -- boatlock/RuntimeBleCommandScope.h boatlock/test/test_runtime_ble_command_scope/test_main.cpp docs/BLE_PROTOCOL.md WORKLOG.md` -> PASS.
+
+Self-review:
+- This is intentionally stricter before the command handler can treat unknown text as control activity. It may change the log reason for unknown legacy commands from downstream no-op to profile rejection, but it does not add actuation or settings side effects.

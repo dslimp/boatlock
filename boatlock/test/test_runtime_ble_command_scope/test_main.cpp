@@ -139,7 +139,7 @@ void test_release_profile_rejects_service_and_dev_hil_commands() {
   assertAllowed(false, RuntimeBleCommandProfile::RELEASE, "SET_ANCHOR_PROFILE:quiet");
   assertAllowed(false, RuntimeBleCommandProfile::RELEASE, "SET_PHONE_GPS:59,30");
   assertAllowed(false, RuntimeBleCommandProfile::RELEASE, "SIM_RUN:S0,1");
-  assertAllowed(true, RuntimeBleCommandProfile::RELEASE, "SET_ROUTE:old");
+  assertAllowed(false, RuntimeBleCommandProfile::RELEASE, "SET_ROUTE:old");
 }
 
 void test_service_profile_accepts_release_service_and_rejects_dev_hil() {
@@ -148,16 +148,16 @@ void test_service_profile_accepts_release_service_and_rejects_dev_hil() {
   assertAllowed(true, RuntimeBleCommandProfile::SERVICE, "SET_ANCHOR_PROFILE:quiet");
   assertAllowed(false, RuntimeBleCommandProfile::SERVICE, "SET_PHONE_GPS:59,30");
   assertAllowed(false, RuntimeBleCommandProfile::SERVICE, "SIM_STATUS");
-  assertAllowed(true, RuntimeBleCommandProfile::SERVICE, "SET_ROUTE:old");
+  assertAllowed(false, RuntimeBleCommandProfile::SERVICE, "SET_ROUTE:old");
 }
 
-void test_acceptance_profile_accepts_all_known_command_scopes() {
+void test_acceptance_profile_accepts_all_known_command_scopes_and_rejects_unknown() {
   assertAllowed(true, RuntimeBleCommandProfile::ACCEPTANCE, "ANCHOR_ON");
   assertAllowed(true, RuntimeBleCommandProfile::ACCEPTANCE, "OTA_BEGIN:bad");
   assertAllowed(true, RuntimeBleCommandProfile::ACCEPTANCE, "SET_ANCHOR_PROFILE:quiet");
   assertAllowed(true, RuntimeBleCommandProfile::ACCEPTANCE, "SET_PHONE_GPS:59,30");
   assertAllowed(true, RuntimeBleCommandProfile::ACCEPTANCE, "SIM_STATUS");
-  assertAllowed(true, RuntimeBleCommandProfile::ACCEPTANCE, "SET_ROUTE:old");
+  assertAllowed(false, RuntimeBleCommandProfile::ACCEPTANCE, "SET_ROUTE:old");
 }
 
 int main() {
@@ -174,6 +174,6 @@ int main() {
   RUN_TEST(test_default_active_profile_is_release_compatible);
   RUN_TEST(test_release_profile_rejects_service_and_dev_hil_commands);
   RUN_TEST(test_service_profile_accepts_release_service_and_rejects_dev_hil);
-  RUN_TEST(test_acceptance_profile_accepts_all_known_command_scopes);
+  RUN_TEST(test_acceptance_profile_accepts_all_known_command_scopes_and_rejects_unknown);
   return UNITY_END();
 }

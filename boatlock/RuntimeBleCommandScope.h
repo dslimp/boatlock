@@ -107,7 +107,7 @@ inline bool runtimeBleCommandScopeAllowedInProfile(
       return profile == RuntimeBleCommandProfile::ACCEPTANCE;
     case RuntimeBleCommandScope::UNKNOWN:
     default:
-      return true;
+      return false;
   }
 }
 

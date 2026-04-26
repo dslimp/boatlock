@@ -183,7 +183,7 @@ Profile rules:
 
 - `release`: normal water image. It accepts only `release` commands plus the security envelope around allowed payloads. It rejects `service` and `dev/HIL` commands before they can mutate settings, start OTA, inject sensor data, start simulation, or actuate outputs.
 - `service`: maintenance image. It accepts `release` plus `service` commands, including BLE OTA, calibration, tuning, and installer flows. It rejects `dev/HIL`, including `SET_PHONE_GPS` and all `SIM_*` commands.
-- `acceptance`: bench validation image. It accepts `release`, `service`, and `dev/HIL` commands so `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, and `SIM_ABORT` remain available to the on-device HIL and Android smoke wrappers.
+- `acceptance`: bench validation image. It accepts known `release`, `service`, and `dev/HIL` commands so `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, and `SIM_ABORT` remain available to the on-device HIL and Android smoke wrappers. Unknown commands remain rejected in every profile.
 
 `esp32s3_bno08x_sh2_uart` and `esp32s3_debug_wifi_ota` extend the service profile. Debug probe builds are not command-profile release artifacts.
 
@@ -191,7 +191,7 @@ Gate behavior expectations:
 
 - Scope is evaluated on the unwrapped command payload. `SEC_CMD` must not become a bypass; the effective scope is the wrapped payload scope.
 - Rejected commands fail closed: no setting write, no OTA session, no simulation state change, no injected GNSS update, no motor or stepper output, and no transition out of the current safe runtime mode.
-- Rejections are observable in the log as `[BLE] command rejected reason=profile profile=<release|service|acceptance> scope=<service|dev_hil> command=<payload>` so wrappers can distinguish "command gated by profile" from "command parser bug" or "BLE link lost".
+- Rejections are observable in the log as `[BLE] command rejected reason=profile profile=<release|service|acceptance> scope=<service|dev_hil|unknown> command=<payload>` so wrappers can distinguish "command gated by profile" from "command parser bug" or "BLE link lost".
 - `OTA_BEGIN`, `OTA_FINISH`, and `OTA_ABORT` remain `service` commands. A release image that excludes service commands must document that BLE OTA is unavailable from that image, and the service update path must remain recoverable through USB seed flash.
 - `SIM_*` and `SET_PHONE_GPS` remain `dev/HIL` commands. They must be absent from normal water firmware unless the explicit acceptance profile is flashed.
 - During active OTA, the existing OTA safety rule still applies inside any profile that allows OTA: firmware rejects runtime commands except `HEARTBEAT`, `OTA_FINISH`, and `OTA_ABORT`.
