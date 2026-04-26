@@ -14,7 +14,25 @@
   - `control_saturation_time_pct`
   - `num_thrust_direction_changes_per_min`
   - `invalid_thrust_count`
+  - `invalid_motor_count`
   - `invalid_distance_count`
+  - `min_battery_voltage_v`
+  - `max_motor_current_a`
+  - `max_motor_temp_c`
+  - `motor_current_limited_time_pct`
+  - `motor_thermal_derated_time_pct`
+  - `motor_driver_deadband_time_pct`
+
+## Actuator Model
+
+The simulator keeps the controller command (`thrust_pct`) separate from applied
+thrust. Applied thrust now passes through a brushed motor model with:
+
+- driver deadband
+- first-order motor response
+- battery voltage sag from internal resistance
+- current limiting
+- thermal accumulation, cooling, and derating
 
 ## Scenarios (minimum set)
 

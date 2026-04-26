@@ -20,6 +20,7 @@ class SoakTests(unittest.TestCase):
         self.assertGreater(agg["duration_s"], 0.0)
         self.assertGreaterEqual(agg["event_count"], 1.0)
         self.assertEqual(agg["invalid_thrust_count"], 0.0)
+        self.assertEqual(agg["invalid_motor_count"], 0.0)
         # Short run still should include comm + nan segments from scenario cycle.
         self.assertFalse(any("missing COMM_TIMEOUT" in v for v in violations))
         self.assertFalse(any("missing INTERNAL_ERROR_NAN" in v for v in violations))

@@ -5671,3 +5671,30 @@ Validation:
 
 Self-review:
 - This does not identify the actual steering driver. The checklist deliberately blocks powered steering if the hardware is not the current 28BYJ-48 + ULN2003 path until driver type, pinout, current/torque limits, gear ratio, and stop behavior are documented and tested.
+
+### 2026-04-26 Stage 186: Brushed motor simulation dynamics
+
+Scope:
+- Extend only the offline simulator with a first useful brushed motor model.
+- Keep firmware, Flutter, and hardware wrappers untouched.
+
+External baseline:
+- No new external source was needed; this is a model-capability extension from the already recorded powered-bench/simulation plan.
+
+Key outcomes:
+- Added `BrushedMotorModel` with driver deadband, first-order response, battery sag, current limit, thermal accumulation/cooling, and thermal derate.
+- Kept controller command `thrust_pct` separate from `applied_thrust_pct`, so future checks can distinguish requested output from motor-limited output.
+- Added motor metrics to scenario and soak reports: invalid motor count, min battery voltage, max current, max temperature, current-limited time, thermal-derated time, and deadband time.
+- Updated simulator tests and README; marked the brushed-motor simulation TODO item done.
+
+Validation:
+- `python3 tools/sim/test_sim_core.py` -> PASS (`11/11`).
+- `python3 tools/sim/run_sim.py --check --json-out /tmp/boatlock-sim-report.json` -> PASS.
+- `python3 tools/sim/run_sim.py --scenario-set russian --check --json-out /tmp/boatlock-russian-sim-report.json` -> PASS.
+- `python3 tools/sim/run_sim.py --scenario-set all --check --json-out /tmp/boatlock-all-sim-report.json` -> PASS.
+- `python3 tools/sim/test_soak.py` -> PASS (`2/2`).
+- `python3 tools/sim/run_soak.py --hours 6 --check --json-out /tmp/boatlock-soak-report.json` -> PASS, no violations.
+- `python3 -m py_compile tools/sim/anchor_sim.py tools/sim/run_sim.py tools/sim/run_soak.py tools/sim/test_sim_core.py tools/sim/test_soak.py` -> PASS.
+
+Self-review:
+- This is not calibrated from real motor current/voltage logs yet and does not model prop ventilation, battery capacity over time, hull windage, or production `RuntimeMotion/MotorControl/StepperControl` coupling.

@@ -5,6 +5,7 @@ import unittest
 
 from anchor_sim import (
     AnchorController,
+    BrushedMotorModel,
     EnvironmentProfile,
     GnssGate,
     GnssObservation,
@@ -77,6 +78,46 @@ class SimCoreTests(unittest.TestCase):
         result = simulate_scenario(cfg, scenario, seed=3)
         events = result["metrics"]["events"]
         self.assertTrue(any(e["failsafe_reason"] == "ENV_ABORT_EXPECTED" for e in events))
+
+    def test_motor_deadband_blocks_low_command(self) -> None:
+        cfg = SimConfig(motor_deadband_pct=10.0)
+        motor = BrushedMotorModel(cfg)
+        state = motor.update(5.0, 1.0)
+        self.assertFalse(state.driver_active)
+        self.assertEqual(state.applied_thrust_pct, 0.0)
+        self.assertEqual(state.current_a, 0.0)
+
+    def test_motor_current_limit_caps_output(self) -> None:
+        cfg = SimConfig(motor_current_limit_a=20.0)
+        motor = BrushedMotorModel(cfg)
+        state = motor.update(100.0, 1.0)
+        self.assertTrue(state.current_limited)
+        self.assertLessEqual(state.current_a, 20.0)
+        self.assertLess(state.applied_thrust_pct, 100.0)
+        self.assertLess(state.battery_voltage_v, cfg.motor_nominal_voltage_v)
+
+    def test_motor_thermal_derate_reduces_output(self) -> None:
+        cfg = SimConfig(
+            motor_current_limit_a=80.0,
+            motor_thermal_limit_c=28.0,
+            motor_thermal_shutdown_c=34.0,
+            motor_heat_c_per_a2_s=0.0004,
+            motor_cooling_per_s=0.0,
+        )
+        motor = BrushedMotorModel(cfg)
+        states = [motor.update(100.0, 1.0) for _ in range(8)]
+        self.assertTrue(any(s.thermal_derated for s in states))
+        self.assertLess(states[-1].applied_thrust_pct, states[1].applied_thrust_pct)
+
+    def test_simulation_reports_motor_metrics(self) -> None:
+        cfg = SimConfig()
+        scenario = next(s for s in russian_water_scenarios() if s.name == "river_oka_normal_55lb")
+        result = simulate_scenario(cfg, scenario, seed=4)
+        metrics = result["metrics"]
+        self.assertIn("max_motor_current_a", metrics)
+        self.assertGreater(metrics["max_motor_current_a"], 0.0)
+        self.assertLess(metrics["min_battery_voltage_v"], cfg.motor_nominal_voltage_v)
+        self.assertEqual(metrics["invalid_motor_count"], 0.0)
 
 
 if __name__ == "__main__":

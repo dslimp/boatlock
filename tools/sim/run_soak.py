@@ -33,6 +33,7 @@ def aggregate(results: List[Dict[str, object]]) -> Dict[str, float]:
             "max_control_saturation_time_pct": 0.0,
             "avg_direction_changes_per_min": 0.0,
             "invalid_thrust_count": 0.0,
+            "invalid_motor_count": 0.0,
             "invalid_distance_count": 0.0,
             "event_count": 0.0,
         }
@@ -44,6 +45,7 @@ def aggregate(results: List[Dict[str, object]]) -> Dict[str, float]:
     max_p95 = 0.0
     max_sat = 0.0
     invalid_thrust = 0.0
+    invalid_motor = 0.0
     invalid_distance = 0.0
     event_count = 0.0
 
@@ -57,6 +59,7 @@ def aggregate(results: List[Dict[str, object]]) -> Dict[str, float]:
         max_p95 = max(max_p95, float(m["p95_error_m"]))
         max_sat = max(max_sat, float(m["control_saturation_time_pct"]))
         invalid_thrust += float(m.get("invalid_thrust_count", 0.0))
+        invalid_motor += float(m.get("invalid_motor_count", 0.0))
         invalid_distance += float(m.get("invalid_distance_count", 0.0))
         event_count += float(len(m.get("events", [])))
 
@@ -69,6 +72,7 @@ def aggregate(results: List[Dict[str, object]]) -> Dict[str, float]:
         "max_control_saturation_time_pct": max_sat,
         "avg_direction_changes_per_min": sum_dir_changes / w,
         "invalid_thrust_count": invalid_thrust,
+        "invalid_motor_count": invalid_motor,
         "invalid_distance_count": invalid_distance,
         "event_count": event_count,
     }
@@ -78,6 +82,8 @@ def evaluate_failures(agg: Dict[str, float], results: List[Dict[str, object]]) -
     violations: List[str] = []
     if agg["invalid_thrust_count"] > 0.0:
         violations.append(f"invalid_thrust_count={agg['invalid_thrust_count']:.0f} > 0")
+    if agg["invalid_motor_count"] > 0.0:
+        violations.append(f"invalid_motor_count={agg['invalid_motor_count']:.0f} > 0")
     if agg["invalid_distance_count"] > 0.0:
         violations.append(f"invalid_distance_count={agg['invalid_distance_count']:.0f} > 0")
     if agg["max_error_m"] > 120.0:

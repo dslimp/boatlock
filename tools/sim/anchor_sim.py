@@ -67,6 +67,19 @@ class SimConfig:
     min_on_s: float = 1.2
     min_off_s: float = 0.9
     thrust_accel_mps2: float = 0.85
+    motor_response_per_s: float = 1.7
+    motor_deadband_pct: float = 8.0
+    motor_nominal_voltage_v: float = 12.6
+    motor_min_voltage_v: float = 9.5
+    motor_internal_resistance_ohm: float = 0.025
+    motor_no_load_current_a: float = 1.8
+    motor_stall_current_a: float = 55.0
+    motor_current_limit_a: float = 45.0
+    motor_ambient_temp_c: float = 25.0
+    motor_thermal_limit_c: float = 85.0
+    motor_thermal_shutdown_c: float = 105.0
+    motor_heat_c_per_a2_s: float = 0.00018
+    motor_cooling_per_s: float = 0.018
     drag_per_s: float = 0.18
     max_gps_age_ms: int = 2000
     min_sats: int = 6
@@ -117,10 +130,17 @@ class StepSample:
     bearing_to_anchor_deg: float
     heading_deg: float
     thrust_pct: float
+    applied_thrust_pct: float
     gnss_ok: bool
     gnss_reason: str
     failsafe_reason: str
     rocking_roll_deg: float = 0.0
+    battery_voltage_v: float = 12.6
+    motor_current_a: float = 0.0
+    motor_temp_c: float = 25.0
+    motor_current_limited: bool = False
+    motor_thermal_derated: bool = False
+    motor_driver_active: bool = False
 
 
 @dataclass
@@ -305,10 +325,97 @@ class AnchorController:
         return clamp(self.pwm_raw * 100.0 / 255.0, 0.0, 100.0)
 
 
+@dataclass
+class MotorState:
+    applied_thrust_pct: float
+    battery_voltage_v: float
+    current_a: float
+    temp_c: float
+    current_limited: bool
+    thermal_derated: bool
+    driver_active: bool
+
+
+class BrushedMotorModel:
+    def __init__(self, cfg: SimConfig) -> None:
+        self.cfg = cfg
+        self.drive_pct = 0.0
+        self.temp_c = cfg.motor_ambient_temp_c
+
+    def update(self, command_pct: float, dt_s: float) -> MotorState:
+        command = clamp(command_pct if math.isfinite(command_pct) else 0.0, 0.0, 100.0)
+        driver_active = command >= self.cfg.motor_deadband_pct
+        target = command if driver_active else 0.0
+        dt = max(0.0, dt_s)
+        response = clamp(self.cfg.motor_response_per_s * dt, 0.0, 1.0)
+        self.drive_pct += (target - self.drive_pct) * response
+        if not driver_active and self.drive_pct < 0.01:
+            self.drive_pct = 0.0
+
+        demand_ratio = clamp(self.drive_pct / 100.0, 0.0, 1.0)
+        if demand_ratio <= 0.0:
+            current_a = 0.0
+        else:
+            current_a = self.cfg.motor_no_load_current_a + (
+                self.cfg.motor_stall_current_a * math.pow(demand_ratio, 1.15)
+            )
+
+        current_limited = current_a > self.cfg.motor_current_limit_a
+        current_scale = 1.0
+        if current_limited and current_a > self.cfg.motor_no_load_current_a:
+            usable_limit = max(0.0, self.cfg.motor_current_limit_a - self.cfg.motor_no_load_current_a)
+            usable_demand = max(0.01, current_a - self.cfg.motor_no_load_current_a)
+            current_scale = clamp(usable_limit / usable_demand, 0.0, 1.0)
+            current_a = self.cfg.motor_current_limit_a
+
+        thermal_derated = self.temp_c >= self.cfg.motor_thermal_limit_c
+        if thermal_derated:
+            thermal_span = max(0.1, self.cfg.motor_thermal_shutdown_c - self.cfg.motor_thermal_limit_c)
+            thermal_scale = clamp(
+                (self.cfg.motor_thermal_shutdown_c - self.temp_c) / thermal_span,
+                0.0,
+                1.0,
+            )
+        else:
+            thermal_scale = 1.0
+
+        current_a = self.cfg.motor_no_load_current_a + (
+            max(0.0, current_a - self.cfg.motor_no_load_current_a) * thermal_scale
+        ) if demand_ratio > 0.0 else 0.0
+        battery_voltage = self.cfg.motor_nominal_voltage_v - (
+            current_a * self.cfg.motor_internal_resistance_ohm
+        )
+        battery_voltage = clamp(battery_voltage, self.cfg.motor_min_voltage_v, self.cfg.motor_nominal_voltage_v)
+        voltage_span = max(0.1, self.cfg.motor_nominal_voltage_v - self.cfg.motor_min_voltage_v)
+        voltage_scale = clamp(
+            (battery_voltage - self.cfg.motor_min_voltage_v) / voltage_span,
+            0.0,
+            1.0,
+        )
+
+        heat = current_a * current_a * self.cfg.motor_heat_c_per_a2_s
+        cooling = max(0.0, self.temp_c - self.cfg.motor_ambient_temp_c) * self.cfg.motor_cooling_per_s
+        self.temp_c += (heat - cooling) * dt
+        self.temp_c = max(self.cfg.motor_ambient_temp_c, self.temp_c)
+        thermal_derated = thermal_derated or self.temp_c >= self.cfg.motor_thermal_limit_c
+
+        applied = self.drive_pct * current_scale * voltage_scale * thermal_scale
+        return MotorState(
+            applied_thrust_pct=clamp(applied, 0.0, 100.0),
+            battery_voltage_v=battery_voltage,
+            current_a=clamp(current_a, 0.0, self.cfg.motor_current_limit_a),
+            temp_c=self.temp_c,
+            current_limited=current_limited,
+            thermal_derated=thermal_derated,
+            driver_active=driver_active,
+        )
+
+
 def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict[str, object]:
     rnd = random.Random(seed)
     gate = GnssGate(cfg)
     ctrl = AnchorController(cfg)
+    motor = BrushedMotorModel(cfg)
 
     anchor_lat = ANCHOR_LAT
     anchor_lon = ANCHOR_LON
@@ -325,6 +432,7 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
     thrust_dirs: List[float] = []
     invalid_thrust_count = 0
     invalid_distance_count = 0
+    invalid_motor_count = 0
 
     for t in range(0, scenario.duration_s):
         obs = scenario.obs_fn(t, x_m, y_m, rnd)
@@ -370,7 +478,16 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
         if thrust_pct > 0.5:
             thrust_dirs.append(heading)
 
-        thrust_acc = (thrust_pct / 100.0) * cfg.thrust_accel_mps2
+        motor_state = motor.update(thrust_pct, cfg.dt_s)
+        if (
+            not math.isfinite(motor_state.applied_thrust_pct)
+            or not math.isfinite(motor_state.battery_voltage_v)
+            or not math.isfinite(motor_state.current_a)
+            or not math.isfinite(motor_state.temp_c)
+        ):
+            invalid_motor_count += 1
+
+        thrust_acc = (motor_state.applied_thrust_pct / 100.0) * cfg.thrust_accel_mps2
         hx = math.sin(math.radians(heading))
         hy = math.cos(math.radians(heading))
         ax_env, ay_env = scenario.env_accel_fn(t)
@@ -397,10 +514,17 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
                 bearing_to_anchor_deg=brg_to_anchor,
                 heading_deg=heading,
                 thrust_pct=thrust_pct,
+                applied_thrust_pct=motor_state.applied_thrust_pct,
                 gnss_ok=gnss_ok,
                 gnss_reason=gnss_reason,
                 failsafe_reason=failsafe_reason,
                 rocking_roll_deg=rocking_roll,
+                battery_voltage_v=motor_state.battery_voltage_v,
+                motor_current_a=motor_state.current_a,
+                motor_temp_c=motor_state.temp_c,
+                motor_current_limited=motor_state.current_limited,
+                motor_thermal_derated=motor_state.thermal_derated,
+                motor_driver_active=motor_state.driver_active,
             )
         )
 
@@ -420,6 +544,13 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
     p95 = sorted_dists[idx95]
     rocking_abs = sorted(abs(s.rocking_roll_deg) for s in samples)
     idx95_rock = int(0.95 * (len(rocking_abs) - 1)) if rocking_abs else 0
+    applied = [s.applied_thrust_pct for s in samples]
+    voltages = [s.battery_voltage_v for s in samples]
+    currents = [s.motor_current_a for s in samples]
+    temps = [s.motor_temp_c for s in samples]
+    current_limited_hits = sum(1 for s in samples if s.motor_current_limited)
+    thermal_derated_hits = sum(1 for s in samples if s.motor_thermal_derated)
+    driver_inactive_hits = sum(1 for s in samples if s.thrust_pct > 0.0 and not s.motor_driver_active)
 
     metrics = {
         "time_in_deadband_pct": (deadband_hits * 100.0) / max(1, len(samples)),
@@ -429,8 +560,17 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
         "num_thrust_direction_changes_per_min": dir_changes * 60.0 / max(1, scenario.duration_s),
         "invalid_thrust_count": float(invalid_thrust_count),
         "invalid_distance_count": float(invalid_distance_count),
+        "invalid_motor_count": float(invalid_motor_count),
         "p95_rocking_roll_deg": rocking_abs[idx95_rock] if rocking_abs else 0.0,
         "max_rocking_roll_deg": max(rocking_abs) if rocking_abs else 0.0,
+        "avg_applied_thrust_pct": sum(applied) / max(1, len(applied)),
+        "max_applied_thrust_pct": max(applied) if applied else 0.0,
+        "min_battery_voltage_v": min(voltages) if voltages else cfg.motor_nominal_voltage_v,
+        "max_motor_current_a": max(currents) if currents else 0.0,
+        "max_motor_temp_c": max(temps) if temps else cfg.motor_ambient_temp_c,
+        "motor_current_limited_time_pct": (current_limited_hits * 100.0) / max(1, len(samples)),
+        "motor_thermal_derated_time_pct": (thermal_derated_hits * 100.0) / max(1, len(samples)),
+        "motor_driver_deadband_time_pct": (driver_inactive_hits * 100.0) / max(1, len(samples)),
         "environment_abort_expected": 1.0 if scenario.profile is not None and scenario.profile.abort_expected else 0.0,
         "events": events,
     }

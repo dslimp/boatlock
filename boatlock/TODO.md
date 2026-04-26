@@ -34,9 +34,9 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 
 - [ ] Normalize `tools/sim/research/environment_inputs.*` into simulator scenario data.
 - [ ] Add windage, waves/rocking, wakes, and current direction changes to simulation.
-- [ ] Add brushed motor, battery sag/current limit, thermal derate, and driver deadband to simulation.
+- [x] Add brushed motor, battery sag/current limit, thermal derate, and driver deadband to simulation.
 - [ ] Add steering backlash/jam/wrong-zero scenarios.
-- [ ] Add RF/Russian water-body scenarios: Oka normal, Volga spring flow, Rybinsk fetch, Ladoga storm abort, Baltic/Gulf drift.
+- [x] Add RF/Russian water-body scenarios: Oka normal, Volga spring flow, Rybinsk fetch, Ladoga storm abort, Baltic/Gulf drift.
 - [ ] Add production-path tests or simulation around `RuntimeMotion/MotorControl/StepperControl`.
 - [ ] Add heading-hold as a separate operator flow after safe anchor hold is proven.
 - [ ] Design explicit multi-client control ownership before accepting a future BLE remote as a second controller.
