@@ -516,35 +516,30 @@ class BleBoatLock with WidgetsBindingObserver {
     }
   }
 
-  Future<void> setAnchor() async {
-    if (_cmdChar == null) return;
+  Future<bool> setAnchor() async {
+    if (_cmdChar == null) return false;
     final cmd = buildSetAnchorCommand(_lastData);
-    if (cmd == null) return;
-    await _writeCommand(cmd);
-    await _writeCommand('ANCHOR_ON');
+    if (cmd == null) return false;
+    return _writeCommand(cmd);
   }
 
-  Future<void> setAnchorAt(double lat, double lon) async {
-    if (_cmdChar == null) return;
+  Future<bool> setAnchorAt(double lat, double lon) async {
+    if (_cmdChar == null) return false;
     final cmd = buildSetAnchorCommandFromCoords(lat, lon);
-    if (cmd == null) return;
-    await _writeCommand(cmd);
-    await _writeCommand('ANCHOR_ON');
+    if (cmd == null) return false;
+    return _writeCommand(cmd);
   }
 
-  Future<void> anchorOn() async {
-    if (_cmdChar == null) return;
-    await _writeCommand('ANCHOR_ON');
+  Future<bool> anchorOn() async {
+    return _writeCommand('ANCHOR_ON');
   }
 
-  Future<void> anchorOff() async {
-    if (_cmdChar == null) return;
-    await _writeCommand('ANCHOR_OFF');
+  Future<bool> anchorOff() async {
+    return _writeCommand('ANCHOR_OFF');
   }
 
-  Future<void> stopAll() async {
-    if (_cmdChar == null) return;
-    await _writeCommand('STOP');
+  Future<bool> stopAll() async {
+    return _writeCommand('STOP');
   }
 
   Future<void> nudgeDir(String direction) async {
@@ -947,7 +942,7 @@ class BleBoatLock with WidgetsBindingObserver {
       hasOtaChar: false,
       clearLastDataAt: true,
     );
-    _lastData = null;
+    _clearLastData();
     _secAuth = false;
     _secPairWindowOpen = false;
     _secCounter = 0;
@@ -964,6 +959,15 @@ class BleBoatLock with WidgetsBindingObserver {
     _otaFinishAck = null;
     _otaFinishRequested = false;
     _rssiThrottle.reset();
+  }
+
+  void _clearLastData() {
+    final hadData = _lastData != null;
+    _lastData = null;
+    _lastDataLogAt = null;
+    if (hadData && !_isDisposed) {
+      onData(null);
+    }
   }
 
   void _log(String msg) {

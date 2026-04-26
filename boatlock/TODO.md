@@ -5,12 +5,12 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 
 ## P0 — Before Powered Bench
 
-- [ ] Clear stale app telemetry on BLE disconnect and disable map controls from stale `boatData`.
-- [ ] Split app anchor flow into explicit save-anchor and enable-anchor actions.
+- [x] Clear stale app telemetry on BLE disconnect and disable map controls from stale `boatData`.
+- [x] Split app anchor flow into explicit save-anchor and enable-anchor actions.
 - [ ] Add anchor enable preflight checklist: link, auth, saved anchor, hardware GNSS, fresh heading, safety latch, motor readiness, STOP.
-- [ ] Add a normal `ANCHOR_OFF` UI action separate from emergency STOP.
-- [ ] Surface command/auth failures from map anchor actions.
-- [ ] Fix manual sheet wording: red `STOP` must either send real emergency `STOP` or be renamed to manual off.
+- [x] Add a normal `ANCHOR_OFF` UI action separate from emergency STOP.
+- [x] Surface command/auth failures from map anchor actions.
+- [x] Fix manual sheet wording: red `STOP` must either send real emergency `STOP` or be renamed to manual off.
 - [ ] Verify/fix that phone GPS fallback cannot update GPS-to-compass correction used by control heading.
 - [ ] Classify BLE commands into release/service/dev surfaces and gate service/dev paths from normal water UI.
 - [ ] Identify the exact steering stepper driver/mechanics and update firmware/docs if it is not the current 28BYJ-48 + ULN2003 path.

@@ -151,12 +151,12 @@ class _ManualControlSheetState extends State<ManualControlSheet> {
                   padding: const EdgeInsets.all(10),
                   child: FilledButton(
                     style: FilledButton.styleFrom(
-                      backgroundColor: Colors.red,
+                      backgroundColor: Colors.orange.shade700,
                       foregroundColor: Colors.white,
                       minimumSize: const Size(86, 56),
                     ),
                     onPressed: enabled ? _sendManualOff : null,
-                    child: const Text('STOP'),
+                    child: const FittedBox(child: Text('MANUAL OFF')),
                   ),
                 ),
                 _ManualPadButton(

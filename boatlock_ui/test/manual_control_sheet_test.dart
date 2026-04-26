@@ -73,4 +73,42 @@ void main() {
     expect(sent, isEmpty);
     expect(find.text('Нет BLE-связи'), findsOneWidget);
   });
+
+  testWidgets('manual off button is not labeled as emergency stop', (
+    tester,
+  ) async {
+    final sent = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ManualControlSheet(
+            enabled: true,
+            mode: 'MANUAL',
+            onManualControl:
+                ({
+                  required int steer,
+                  required int throttlePct,
+                  int ttlMs = 500,
+                }) async {
+                  sent.add('set');
+                  return true;
+                },
+            onManualOff: () async {
+              sent.add('off');
+              return true;
+            },
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('STOP'), findsNothing);
+    expect(find.text('MANUAL OFF'), findsOneWidget);
+
+    await tester.tap(find.text('MANUAL OFF'));
+    await tester.pump();
+
+    expect(sent, ['off']);
+    expect(find.text('MANUAL_OFF отправлен'), findsOneWidget);
+  });
 }

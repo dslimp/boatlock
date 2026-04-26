@@ -53,12 +53,36 @@ class _MapPageState extends State<MapPage> {
     );
 
     if (ok == true) {
-      await ble.stopAll();
+      final sent = await ble.stopAll();
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('STOP отправлен')));
+      _showCommandSnack(sent ? 'STOP отправлен' : 'STOP не отправлен');
     }
+  }
+
+  void _showCommandSnack(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _commandFailedText(String command) {
+    final reject = ble.secReject;
+    if (reject.isNotEmpty && reject != 'NONE') {
+      return '$command отклонена: $reject';
+    }
+    return '$command не отправлена';
+  }
+
+  Future<bool> _sendMapCommand({
+    required String command,
+    required String success,
+    required Future<bool> Function() send,
+  }) async {
+    if (boatData == null) return false;
+    final ok = await send();
+    if (!mounted) return ok;
+    _showCommandSnack(ok ? success : _commandFailedText(command));
+    return ok;
   }
 
   void _centerOnCurrent() {
@@ -413,20 +437,28 @@ class _MapPageState extends State<MapPage> {
               child: Center(
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.check),
-                  label: const Text('Установить якорь здесь'),
+                  label: const Text('Сохранить якорь здесь'),
                   onPressed: boatData == null
                       ? null
                       : () async {
-                          await ble.setAnchorAt(
-                            selectedAnchorPos!.latitude,
-                            selectedAnchorPos!.longitude,
+                          final point = selectedAnchorPos;
+                          if (point == null) return;
+                          final ok = await _sendMapCommand(
+                            command: 'SET_ANCHOR',
+                            success: 'Точка якоря сохранена',
+                            send: () => ble.setAnchorAt(
+                              point.latitude,
+                              point.longitude,
+                            ),
                           );
-                          setState(() {
-                            selectedAnchorPos = null;
-                          });
+                          if (ok && mounted) {
+                            setState(() {
+                              selectedAnchorPos = null;
+                            });
+                          }
                         },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
+                    backgroundColor: Colors.deepOrange,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -438,8 +470,10 @@ class _MapPageState extends State<MapPage> {
             ),
         ],
       ),
-      floatingActionButton: Row(
-        mainAxisSize: MainAxisSize.min,
+      floatingActionButton: Wrap(
+        alignment: WrapAlignment.end,
+        spacing: 12,
+        runSpacing: 12,
         children: [
           FloatingActionButton(
             heroTag: 'stop_all',
@@ -449,20 +483,51 @@ class _MapPageState extends State<MapPage> {
             foregroundColor: Colors.white,
             child: const Icon(Icons.stop),
           ),
-          const SizedBox(width: 12),
           FloatingActionButton(
             heroTag: 'refresh',
             tooltip: "Обновить данные",
             onPressed: () => ble.requestSnapshot(),
             child: const Icon(Icons.refresh),
           ),
-          const SizedBox(width: 12),
           FloatingActionButton(
             heroTag: 'set_anchor',
-            tooltip: "Установить якорь",
-            onPressed: boatData == null ? null : () => ble.setAnchor(),
-            backgroundColor: boatData == null ? Colors.grey : Colors.red[400],
+            tooltip: "Сохранить якорь",
+            onPressed: boatData == null
+                ? null
+                : () => _sendMapCommand(
+                    command: 'SET_ANCHOR',
+                    success: 'Точка якоря сохранена',
+                    send: ble.setAnchor,
+                  ),
+            backgroundColor: boatData == null ? Colors.grey : Colors.deepOrange,
             child: const Icon(Icons.anchor),
+          ),
+          FloatingActionButton(
+            heroTag: 'anchor_on',
+            tooltip: "Включить якорь",
+            onPressed: boatData == null
+                ? null
+                : () => _sendMapCommand(
+                    command: 'ANCHOR_ON',
+                    success: 'Якорь включен',
+                    send: ble.anchorOn,
+                  ),
+            backgroundColor: boatData == null ? Colors.grey : Colors.green,
+            child: const Icon(Icons.play_arrow),
+          ),
+          FloatingActionButton(
+            heroTag: 'anchor_off',
+            tooltip: "Выключить якорь",
+            onPressed: boatData == null
+                ? null
+                : () => _sendMapCommand(
+                    command: 'ANCHOR_OFF',
+                    success: 'Якорь выключен',
+                    send: ble.anchorOff,
+                  ),
+            backgroundColor: boatData == null ? Colors.grey : Colors.amber[800],
+            foregroundColor: Colors.white,
+            child: const Icon(Icons.power_settings_new),
           ),
         ],
       ),

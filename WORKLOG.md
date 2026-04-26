@@ -5494,3 +5494,30 @@ Validation:
 Self-review:
 - No runtime code was changed in this stage.
 - The main unresolved architecture gap is validation coverage: on-device HIL exercises `AnchorControlLoop`, while real actuation for water uses `RuntimeMotion`, `StepperControl`, and `MotorControl`. Powered bench acceptance must prove that production path directly.
+
+### 2026-04-26 Stage 180: App anchor and disconnect safety cut
+
+Scope:
+- Close the independently actionable P0 app gaps from the product-readiness plan.
+- Keep the firmware protocol unchanged and make the Flutter UI match `SET_ANCHOR` versus `ANCHOR_ON` semantics.
+
+External baseline:
+- Reused the Stage 179 commercial GPS-anchor baseline: operator-facing products expose explicit anchor lock/unlock, visible mode feedback, and non-emergency disable paths.
+- `docs/BLE_PROTOCOL.md` is the internal source of truth: `SET_ANCHOR` saves the point and does not enable Anchor mode; `ANCHOR_OFF` is normal anchor disable; `STOP` remains emergency stop.
+
+Key outcomes:
+- `BleBoatLock` now reports `onData(null)` when it clears a stale link/data path, so `MapPage` disables controls instead of keeping stale `boatData`.
+- Flutter anchor save no longer sends `ANCHOR_ON` as a side effect. The map now has separate save-anchor, enable-anchor, and anchor-off controls.
+- Map anchor actions now show command success or rejection feedback instead of silently ignoring failed writes/auth failures.
+- The manual-control sheet no longer labels `MANUAL_OFF` as emergency `STOP`.
+- Updated the active TODO checklist for the closed P0 app items.
+
+Validation:
+- `cd boatlock_ui && dart format lib/ble/ble_boatlock.dart lib/pages/map_page.dart lib/widgets/manual_control_sheet.dart test/manual_control_sheet_test.dart` -> PASS.
+- `cd boatlock_ui && flutter test test/manual_control_sheet_test.dart` -> PASS (`3/3`).
+- `cd boatlock_ui && flutter analyze && flutter test` -> PASS, no analyzer issues, tests `67/67`.
+
+Self-review:
+- This cut does not add the full anchor preflight panel yet; `ANCHOR_ON` is still available as an explicit user action and remains firmware-gated.
+- `MapPage` still needs widget coverage with an injectable BLE facade before the stale-disconnect and command-failure UI can be tested directly.
+- Hardware and Android BLE smokes were not run for this UI-only cut; they should run before any powered bench session.
