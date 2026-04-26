@@ -21,6 +21,7 @@ import 'ble_reconnect_policy.dart';
 import 'ble_rssi_throttle.dart';
 import 'ble_scan_config.dart';
 import 'ble_security_codec.dart';
+import 'ble_security_policy.dart';
 
 typedef BoatDataCallback = void Function(BoatData? data);
 typedef LogCallback = void Function(String line);
@@ -359,7 +360,10 @@ class BleBoatLock with WidgetsBindingObserver {
     _heartbeatTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
       if (_cmdChar == null) return;
       try {
-        await _writeControlPoint('HEARTBEAT', withoutResponse: true);
+        final ok = await _writeCommand('HEARTBEAT');
+        if (!ok) {
+          throw StateError('secure heartbeat rejected');
+        }
       } catch (e) {
         _log('heartbeat failed: $e');
         await _applyReconnectDecision(_reconnectPolicy.connectFailed());
@@ -938,16 +942,11 @@ class BleBoatLock with WidgetsBindingObserver {
   }
 
   bool _isPlainAllowed(String cmd) {
-    return cmd == 'STOP' ||
-        cmd == 'ANCHOR_OFF' ||
-        cmd == 'HEARTBEAT' ||
-        cmd == 'STREAM_START' ||
-        cmd == 'STREAM_STOP' ||
-        cmd == 'SNAPSHOT' ||
-        cmd.startsWith('AUTH_') ||
-        cmd.startsWith('PAIR_SET:') ||
-        (cmd == 'PAIR_CLEAR' && (!_secPaired || _secPairWindowOpen)) ||
-        cmd.startsWith('SEC_CMD:');
+    return boatLockAllowsPlainCommand(
+      command: cmd,
+      paired: _secPaired,
+      pairWindowOpen: _secPairWindowOpen,
+    );
   }
 
   void dispose() {

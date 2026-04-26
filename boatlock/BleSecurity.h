@@ -226,12 +226,11 @@ public:
     if (!paired_) {
       return false;
     }
-    if (cmd == "STOP" || cmd == "ANCHOR_OFF" || cmd == "HEARTBEAT" ||
-        cmd == "STREAM_START" || cmd == "STREAM_STOP" || cmd == "SNAPSHOT") {
+    if (cmd == "STREAM_START" || cmd == "STREAM_STOP" || cmd == "SNAPSHOT") {
       return false;
     }
-    if (cmd.rfind("AUTH_", 0) == 0 || cmd.rfind("PAIR_SET:", 0) == 0 ||
-        cmd.rfind("SEC_CMD:", 0) == 0) {
+    if (cmd == "AUTH_HELLO" || cmd.rfind("AUTH_PROVE:", 0) == 0 ||
+        cmd.rfind("PAIR_SET:", 0) == 0 || cmd.rfind("SEC_CMD:", 0) == 0) {
       return false;
     }
     if (cmd == "PAIR_CLEAR") {

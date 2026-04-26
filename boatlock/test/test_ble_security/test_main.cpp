@@ -118,6 +118,29 @@ void test_invalid_owner_secret_is_rejected() {
   TEST_ASSERT_FALSE(s.isPaired());
 }
 
+void test_paired_mode_requires_secure_control_and_safety_commands() {
+  BleSecurity s;
+  s.clearPairing();
+  s.openPairingWindow(0);
+  TEST_ASSERT_TRUE(s.setOwnerSecretHex(kOwnerSecret, 1));
+
+  TEST_ASSERT_FALSE(s.commandNeedsAuth("STREAM_START"));
+  TEST_ASSERT_FALSE(s.commandNeedsAuth("STREAM_STOP"));
+  TEST_ASSERT_FALSE(s.commandNeedsAuth("SNAPSHOT"));
+  TEST_ASSERT_FALSE(s.commandNeedsAuth("AUTH_HELLO"));
+  TEST_ASSERT_FALSE(s.commandNeedsAuth("AUTH_PROVE:abcd"));
+  TEST_ASSERT_FALSE(s.commandNeedsAuth("PAIR_SET:00112233445566778899AABBCCDDEEFF"));
+  TEST_ASSERT_FALSE(s.commandNeedsAuth("SEC_CMD:00000001:0000000000000000:HEARTBEAT"));
+
+  TEST_ASSERT_TRUE(s.commandNeedsAuth("AUTH_DEBUG"));
+  TEST_ASSERT_TRUE(s.commandNeedsAuth("AUTH_PROVE"));
+  TEST_ASSERT_TRUE(s.commandNeedsAuth("HEARTBEAT"));
+  TEST_ASSERT_TRUE(s.commandNeedsAuth("STOP"));
+  TEST_ASSERT_TRUE(s.commandNeedsAuth("ANCHOR_OFF"));
+  TEST_ASSERT_TRUE(s.commandNeedsAuth("ANCHOR_ON"));
+  TEST_ASSERT_TRUE(s.commandNeedsAuth("MANUAL_SET:0,0,500"));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_pairing_requires_open_window);
@@ -125,5 +148,6 @@ int main() {
   RUN_TEST(test_secure_command_replay_and_signature_checks);
   RUN_TEST(test_rate_limit_blocks_spam);
   RUN_TEST(test_invalid_owner_secret_is_rejected);
+  RUN_TEST(test_paired_mode_requires_secure_control_and_safety_commands);
   return UNITY_END();
 }

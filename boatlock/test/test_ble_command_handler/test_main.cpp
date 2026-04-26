@@ -501,6 +501,49 @@ void test_security_accepts_wrapped_command_with_increasing_counter() {
   TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
 }
 
+void test_security_rejects_raw_paired_safety_commands_before_side_effects() {
+  securityRequireWrapper = true;
+  securitySessionActive = true;
+  settings.set("AnchorEnabled", 1.0f);
+  manualControl.apply(ManualControlSource::BLE_PHONE, 1, 25, 500, 1000);
+
+  handleBleCommand("HEARTBEAT");
+  handleBleCommand("STOP");
+  handleBleCommand("ANCHOR_OFF");
+
+  TEST_ASSERT_EQUAL(0, controlActivityNotes);
+  TEST_ASSERT_EQUAL_FLOAT(1.0f, settings.get("AnchorEnabled"));
+  TEST_ASSERT_TRUE(manualControl.active());
+  TEST_ASSERT_FALSE(stopAllMotionCalled);
+  TEST_ASSERT_FALSE(stepperControl.cancelCalled);
+  TEST_ASSERT_FALSE(motor.stopCalled);
+  TEST_ASSERT_EQUAL(0, manualStopCalls);
+  TEST_ASSERT_EQUAL((int)FailsafeReason::NONE, (int)lastFailsafeReason);
+}
+
+void test_security_accepts_wrapped_paired_safety_commands() {
+  securityRequireWrapper = true;
+  securitySessionActive = true;
+  settings.set("AnchorEnabled", 1.0f);
+  manualControl.apply(ManualControlSource::BLE_PHONE, 1, 25, 500, 1000);
+
+  handleBleCommand("SEC_CMD:1:deadbeef:HEARTBEAT");
+  TEST_ASSERT_EQUAL(1, controlActivityNotes);
+  TEST_ASSERT_EQUAL_FLOAT(1.0f, settings.get("AnchorEnabled"));
+
+  handleBleCommand("SEC_CMD:2:deadbeef:ANCHOR_OFF");
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
+  TEST_ASSERT_FALSE(manualControl.active());
+  TEST_ASSERT_TRUE(stepperControl.cancelCalled);
+  TEST_ASSERT_TRUE(motor.stopCalled);
+  TEST_ASSERT_EQUAL(1, manualStopCalls);
+
+  stopAllMotionCalled = false;
+  handleBleCommand("SEC_CMD:3:deadbeef:STOP");
+  TEST_ASSERT_TRUE(stopAllMotionCalled);
+  TEST_ASSERT_EQUAL((int)FailsafeReason::STOP_CMD, (int)lastFailsafeReason);
+}
+
 void test_command_parser_fuzz_does_not_break_safe_state() {
   srand(42);
   settings.set("AnchorEnabled", 0.0f);
@@ -569,6 +612,8 @@ int main() {
   RUN_TEST(test_set_anchor_profile_rejects_invalid_payload);
   RUN_TEST(test_security_rejects_plain_control_command_when_wrapper_required);
   RUN_TEST(test_security_accepts_wrapped_command_with_increasing_counter);
+  RUN_TEST(test_security_rejects_raw_paired_safety_commands_before_side_effects);
+  RUN_TEST(test_security_accepts_wrapped_paired_safety_commands);
   RUN_TEST(test_command_parser_fuzz_does_not_break_safe_state);
   RUN_TEST(test_sim_command_is_forwarded_and_consumed);
   RUN_TEST(test_non_sim_command_still_runs_when_sim_handler_declines);

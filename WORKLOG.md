@@ -6291,3 +6291,30 @@ Validation:
 
 Self-review:
 - This makes release-vs-service/acceptance mismatch visible to operators and wrappers, but it does not replace the required `nh02` proof that the firmware profile gate logs match real BLE behavior.
+
+### 2026-04-26 Stage 215: Paired-mode safety command auth hardening
+
+Scope:
+- Require `SEC_CMD` for paired-mode raw safety/control commands that can refresh control activity or change actuation state.
+- Keep this as a focused firmware/Flutter security-policy change; multi-client ownership remains separate.
+
+External baseline:
+- OWASP session-management guidance frames authenticated state as request-scoped session handling, not a one-time login side channel: https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html.
+- OWASP least-privilege guidance supports narrowing raw command exceptions to only transport/auth setup commands: https://owasp.org/www-community/controls/Least_Privilege_Principle.
+
+Key outcomes:
+- Removed paired-mode raw `STOP`, `ANCHOR_OFF`, and `HEARTBEAT` from firmware's no-auth allowlist.
+- Added native tests proving raw paired safety commands do not refresh control activity or mutate motor/anchor/failsafe state, while wrapped commands still work.
+- Added a pure Flutter security-policy helper and routed heartbeat through `_writeCommand()` so paired heartbeat is wrapped by `SEC_CMD`.
+- Added Flutter policy tests so app-side plain-command exceptions stay aligned with firmware.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_ble_security -f test_ble_command_handler` -> PASS (`44/44`).
+- `cd boatlock_ui && flutter test test/ble_security_policy_test.dart test/ble_security_codec_test.dart` -> PASS (`7/7`).
+- `cd boatlock && platformio test -e native` -> PASS (`404/404`).
+- `cd boatlock_ui && flutter test` -> PASS (`98/98`).
+- `cd boatlock_ui && flutter analyze` -> PASS.
+- `git diff --check -- boatlock/BleSecurity.h boatlock/test/test_ble_command_handler/test_main.cpp boatlock/test/test_ble_security/test_main.cpp boatlock_ui/lib/ble/ble_boatlock.dart boatlock_ui/lib/ble/ble_security_policy.dart boatlock_ui/test/ble_security_policy_test.dart WORKLOG.md` -> PASS.
+
+Self-review:
+- This closes the immediate paired-mode auth bypass for safety/control commands. It does not solve per-client auth or control ownership; those still require a separate multi-client lease implementation before accepting a second controller.
