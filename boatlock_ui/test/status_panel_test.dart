@@ -11,6 +11,7 @@ BoatData _data({
   double anchorLon = 30.5678,
   double anchorHeading = 87.0,
   double distance = 12.3,
+  double anchorBearing = 271.4,
   String status = 'OK',
   String statusReasons = '',
   String mode = 'IDLE',
@@ -32,6 +33,7 @@ BoatData _data({
     anchorLon: anchorLon,
     anchorHeading: anchorHeading,
     distance: distance,
+    anchorBearing: anchorBearing,
     heading: 45,
     battery: 50,
     status: status,
@@ -100,7 +102,7 @@ void main() {
     expect(find.text('SAFE: OK'), findsOneWidget);
     expect(find.text('MODE: IDLE'), findsOneWidget);
     expect(find.text('DRV: stepper OK'), findsOneWidget);
-    expect(find.text('DST/BRG: 12.3 м / -'), findsOneWidget);
+    expect(find.text('DST/BRG: 12.3 м / 271°'), findsOneWidget);
   });
 
   testWidgets('surfaces blocked reasons from current telemetry', (
@@ -136,6 +138,22 @@ void main() {
     expect(find.text('SAFE: ALERT'), findsOneWidget);
     expect(find.text('MODE: MANUAL'), findsOneWidget);
     expect(find.text('DRV: cfg'), findsOneWidget);
+  });
+
+  testWidgets('does not show anchor range when current fix is absent', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatusPanel(
+          data: _data(lat: 0, lon: 0, gnssQ: 0),
+          diagnostics: _diagnostics(),
+        ),
+      ),
+    );
+
+    expect(find.text('ANCH: есть'), findsOneWidget);
+    expect(find.text('DST/BRG: нет / -'), findsOneWidget);
   });
 
   testWidgets('renders BLE and data readiness without telemetry', (

@@ -22,6 +22,7 @@ BoatData _data({
     anchorLon: 0,
     anchorHeading: 0,
     distance: 0,
+    anchorBearing: 0,
     heading: 0,
     battery: 0,
     status: status,

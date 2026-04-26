@@ -347,13 +347,20 @@ class StatusPanel extends StatelessWidget {
       );
     }
     final saved = data.anchorLat != 0.0 && data.anchorLon != 0.0;
-    final distance = saved ? '${data.distance.toStringAsFixed(1)} м' : 'нет';
+    final hasPosition = data.lat != 0.0 && data.lon != 0.0;
+    final hasRange = saved && hasPosition;
+    final distance = hasRange ? '${data.distance.toStringAsFixed(1)} м' : 'нет';
+    final bearing = hasRange
+        ? '${data.anchorBearing.toStringAsFixed(0)}°'
+        : '-';
     return _ReadinessItem(
       icon: Icons.social_distance,
       label: 'DST/BRG',
-      value: '$distance / -',
-      detail: saved
-          ? 'bearing is not in live telemetry; anchorHead ${data.anchorHeading.toStringAsFixed(1)}°'
+      value: '$distance / $bearing',
+      detail: hasRange
+          ? 'bearing to anchor ${data.anchorBearing.toStringAsFixed(1)}°, anchorHead ${data.anchorHeading.toStringAsFixed(1)}°'
+          : saved
+          ? 'нет текущей позиции для расчета'
           : 'нет anchor point',
       level: _ReadinessLevel.neutral,
     );

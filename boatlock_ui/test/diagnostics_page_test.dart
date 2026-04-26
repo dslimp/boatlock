@@ -23,6 +23,7 @@ BoatData _data() => BoatData(
   anchorLon: 0,
   anchorHeading: 0,
   distance: 0,
+  anchorBearing: 0,
   heading: 12,
   battery: 0,
   status: 'WARN',

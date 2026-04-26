@@ -26,6 +26,7 @@ void test_runtime_ble_live_frame_encodes_stable_header_and_scaled_fields() {
   telemetry.anchorLon = 37.560002;
   telemetry.anchorHeadingDeg = 12.3f;
   telemetry.distanceM = 42.25f;
+  telemetry.anchorBearingDeg = 271.4f;
   telemetry.headingDeg = 359.9f;
   telemetry.holdHeading = true;
   telemetry.secPaired = true;
@@ -35,7 +36,7 @@ void test_runtime_ble_live_frame_encodes_stable_header_and_scaled_fields() {
 
   TEST_ASSERT_EQUAL_UINT8('B', frame[0]);
   TEST_ASSERT_EQUAL_UINT8('L', frame[1]);
-  TEST_ASSERT_EQUAL_UINT8(2, frame[2]);
+  TEST_ASSERT_EQUAL_UINT8(3, frame[2]);
   TEST_ASSERT_EQUAL_UINT8(1, frame[3]);
   TEST_ASSERT_EQUAL_UINT16(7, readU16(frame, 4));
   TEST_ASSERT_EQUAL_UINT16(RUNTIME_BLE_FLAG_HOLD_HEADING | RUNTIME_BLE_FLAG_SEC_PAIRED,
@@ -44,7 +45,8 @@ void test_runtime_ble_live_frame_encodes_stable_header_and_scaled_fields() {
   TEST_ASSERT_EQUAL_UINT8(1, frame[9]);
   TEST_ASSERT_EQUAL_UINT16(123, readU16(frame, 26));
   TEST_ASSERT_EQUAL_UINT16(4225, readU16(frame, 28));
-  TEST_ASSERT_EQUAL_UINT16(3599, readU16(frame, 30));
+  TEST_ASSERT_EQUAL_UINT16(2714, readU16(frame, 30));
+  TEST_ASSERT_EQUAL_UINT16(3599, readU16(frame, 32));
   TEST_ASSERT_EQUAL_UINT32(kRuntimeBleLiveFrameSize, frame.size());
 }
 
@@ -56,9 +58,9 @@ void test_runtime_ble_live_frame_maps_reasons_and_reject_codes() {
   telemetry.secReject = "AUTH_REQUIRED";
 
   const std::vector<uint8_t> frame = runtimeBleEncodeLiveFrame(telemetry, 1);
-  const uint32_t reasons = readU32(frame, 57);
+  const uint32_t reasons = readU32(frame, 59);
 
-  TEST_ASSERT_EQUAL_UINT8(4, frame[56]);
+  TEST_ASSERT_EQUAL_UINT8(4, frame[58]);
   TEST_ASSERT_BITS_HIGH(RUNTIME_BLE_REASON_NO_GPS, reasons);
   TEST_ASSERT_BITS_HIGH(RUNTIME_BLE_REASON_DRIFT_FAIL, reasons);
   TEST_ASSERT_BITS_HIGH(RUNTIME_BLE_REASON_COMM_TIMEOUT, reasons);

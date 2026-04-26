@@ -38,7 +38,7 @@ List<int> _frame() {
   final out = BytesBuilder();
   _u8(out, 0x42);
   _u8(out, 0x4C);
-  _u8(out, 2);
+  _u8(out, 3);
   _u8(out, 1);
   _u16(out, 9);
   _u16(out, 0x000F);
@@ -50,6 +50,7 @@ List<int> _frame() {
   _i32(out, (37.560002 * 10000000).round());
   _u16(out, 123);
   _u16(out, 4225);
+  _u16(out, 2714);
   _u16(out, 3599);
   _u8(out, 81);
   _u16(out, 4096);
@@ -76,7 +77,7 @@ List<int> _frame() {
 }
 
 void main() {
-  test('decodeBoatLockLiveFrame decodes v2 live telemetry', () {
+  test('decodeBoatLockLiveFrame decodes v3 live telemetry', () {
     final decoded = decodeBoatLockLiveFrame(_frame(), rssi: -61);
 
     expect(decoded, isNotNull);
@@ -89,6 +90,7 @@ void main() {
     expect(decoded.data.lon, closeTo(37.560818, 0.000001));
     expect(decoded.data.anchorHeading, 12.3);
     expect(decoded.data.distance, 42.25);
+    expect(decoded.data.anchorBearing, 271.4);
     expect(decoded.data.heading, 359.9);
     expect(decoded.data.holdHeading, isTrue);
     expect(decoded.data.secPaired, isTrue);
@@ -103,10 +105,10 @@ void main() {
     expect(decoded.data.rssi, -61);
   });
 
-  test('decodeBoatLockLiveFrame rejects non-v2 payloads', () {
+  test('decodeBoatLockLiveFrame rejects non-v3 payloads', () {
     expect(decodeBoatLockLiveFrame(const []), isNull);
     final bad = _frame();
-    bad[2] = 1;
+    bad[2] = 2;
     expect(decodeBoatLockLiveFrame(bad), isNull);
   });
 
@@ -126,7 +128,7 @@ void main() {
     expect(decodeBoatLockLiveFrame(unknownStatus), isNull);
 
     final unknownReject = _frame();
-    unknownReject[56] = 99;
+    unknownReject[58] = 99;
     expect(decodeBoatLockLiveFrame(unknownReject), isNull);
   });
 }

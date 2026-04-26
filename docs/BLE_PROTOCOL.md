@@ -3,7 +3,7 @@
 BoatLock uses one custom GATT service for the app and bench tooling:
 
 - Service UUID `12ab`
-- Live state characteristic `34cd`: notify/read, compact binary v2 frame
+- Live state characteristic `34cd`: notify/read, compact binary v3 frame
 - Control point characteristic `56ef`: write/write-no-response, printable ASCII commands
 - Device log characteristic `78ab`: notify, text log lines
 - Firmware OTA characteristic `9abc`: binary write/write-no-response; accepts firmware chunks only after `OTA_BEGIN`
@@ -97,24 +97,26 @@ The current phone bridge intentionally uses acknowledged BLE writes for the firs
 
 ## Live State Frame
 
-`34cd` notifications carry exactly one 70-byte little-endian binary frame. Receivers reject shorter or longer payloads, wrong magic/version/type, and unknown enum codes rather than treating the live path as a padded or forward-compatible stream:
+`34cd` notifications carry exactly one 72-byte little-endian binary frame. Receivers reject shorter or longer payloads, wrong magic/version/type, and unknown enum codes rather than treating the live path as a padded or forward-compatible stream:
 
 - bytes `0..1`: magic `BL`
-- byte `2`: protocol version, currently `2`
+- byte `2`: protocol version, currently `3`
 - byte `3`: frame type, `1` for live telemetry
 - bytes `4..5`: sequence `uint16`
 - bytes `6..7`: flags `uint16`
 - byte `8`: mode code (`0=IDLE`, `1=HOLD`, `2=ANCHOR`, `3=MANUAL`, `4=SIM`)
 - byte `9`: status code (`0=OK`, `1=WARN`, `2=ALERT`)
 - bytes `10..25`: `lat`, `lon`, `anchorLat`, `anchorLon` as signed `deg * 1e7`
-- bytes `26..31`: `anchorHead`, `distance`, `heading` scaled as `deg*10`, `cm`, `deg*10`
-- byte `32`: battery percent
-- bytes `33..38`: `stepSpr`, `stepMaxSpd`, `stepAccel`
-- bytes `39..55`: compass heading/raw/offset/quality/motion fields
-- byte `56`: security reject code
-- bytes `57..60`: status reason bitmask
-- bytes `61..68`: security nonce `uint64`
-- byte `69`: GNSS quality (`0` none, `1` weak, `2` good)
+- bytes `26..33`: `anchorHead`, `distance`, `anchorBearing`, `heading` scaled as `deg*10`, `cm`, `deg*10`, `deg*10`
+- byte `34`: battery percent
+- bytes `35..40`: `stepSpr`, `stepMaxSpd`, `stepAccel`
+- bytes `41..57`: compass heading/raw/offset/quality/motion fields
+- byte `58`: security reject code
+- bytes `59..62`: status reason bitmask
+- bytes `63..70`: security nonce `uint64`
+- byte `71`: GNSS quality (`0` none, `1` weak, `2` good)
+
+`distance` and `anchorBearing` are display telemetry from the currently published position to the saved anchor point. They can be populated from the same UI-visible fix as `lat/lon`; they are not proof that the hardware GNSS quality gate is satisfied for anchor control.
 
 Flag bits:
 
@@ -167,4 +169,4 @@ Firmware `mode` is currently one of:
 - `MANUAL`
 - `SIM`
 
-Telemetry outside the 70-byte live frame should be added as an explicit new frame type or event, not as ad-hoc JSON on the live characteristic.
+Telemetry outside the 72-byte live frame should be added as an explicit new frame type or event, not as ad-hoc JSON on the live characteristic.

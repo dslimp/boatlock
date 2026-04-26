@@ -23,7 +23,7 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 
 - [x] Add a first-class readiness panel in the app with link age, GNSS/heading freshness, auth, anchor gate, failsafe, manual lease, and motor readiness.
 - [x] Add fixed 1.5 m anchor jog controls to the normal app UI.
-- [ ] Show distance and bearing to anchor as primary telemetry.
+- [x] Show distance and bearing to anchor as primary telemetry.
 - [ ] Add battery/power/current visibility or a required external measurement step in water-test logs.
 - [ ] Add track/history around anchor events for post-run review.
 - [x] Add `MapPage` tests for disconnect, preflight, auth reject, STOP, and manual-off behavior.
@@ -37,6 +37,6 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 - [x] Add brushed motor, battery sag/current limit, thermal derate, and driver deadband to simulation.
 - [x] Add steering backlash/jam/wrong-zero scenarios.
 - [x] Add RF/Russian water-body scenarios: Oka normal, Volga spring flow, Rybinsk fetch, Ladoga storm abort, Baltic/Gulf drift.
-- [ ] Add production-path tests or simulation around `RuntimeMotion/MotorControl/StepperControl`.
+- [x] Add production-path tests or simulation around `RuntimeMotion/MotorControl/StepperControl`.
 - [ ] Add heading-hold as a separate operator flow after safe anchor hold is proven.
 - [ ] Design explicit multi-client control ownership before accepting a future BLE remote as a second controller.

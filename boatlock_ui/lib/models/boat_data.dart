@@ -5,6 +5,7 @@ class BoatData {
   final double anchorLon;
   final double anchorHeading;
   final double distance;
+  final double anchorBearing;
   final double heading;
   final int battery;
   final String status;
@@ -38,6 +39,7 @@ class BoatData {
     required this.anchorLon,
     required this.anchorHeading,
     required this.distance,
+    required this.anchorBearing,
     required this.heading,
     required this.battery,
     required this.status,

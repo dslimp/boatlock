@@ -27,7 +27,7 @@
 - Device name: `BoatLock`
 - Service UUID: `12ab`
 - Characteristics:
-  - `34cd`: live state notify/read, 70-byte little-endian binary v2 frame
+  - `34cd`: live state notify/read, 72-byte little-endian binary v3 frame
   - `56ef`: control point write/write-no-response
   - `78ab`: log notify
   - `9abc`: firmware OTA binary write/write-no-response, armed only by `OTA_BEGIN`
@@ -37,7 +37,7 @@
 - A connected GATT service is usable only when data `34cd`, command `56ef`, and log `78ab` characteristics are all found. Partial discovery must clear the link and retry instead of leaving the app half-connected.
 - BLE OTA is optional for basic connection but required for app-driven firmware update. The app must discover `9abc` before allowing an OTA upload.
 - Live notify payload length must be validated before `setValue()`; producer-side packets whose length is not exactly the live-frame size are dropped rather than padded, truncated, or read past the packet buffer.
-- Flutter must reject live-frame payloads whose length is not exactly 70 bytes; accepting padded frames hides characteristic-value bugs and can mask protocol drift.
+- Flutter must reject live-frame payloads whose length is not exactly 72 bytes; accepting padded frames hides characteristic-value bugs and can mask protocol drift.
 - Flutter live-frame decoding must reject unknown mode/status/security-reject enum codes while the frame version is unchanged; `UNKNOWN` display fallbacks hide firmware/app schema drift.
 - Flutter `BoatData` is populated from the binary live-frame decoder only; do not keep a parallel JSON telemetry parser unless a real shipped protocol path is restored end-to-end.
 - Log characteristic values are byte strings with explicit length. Firmware must set the exact text length, and Flutter must ignore trailing NUL padding defensively.
@@ -141,15 +141,16 @@
 
 ## Telemetry Coupling
 
-- Live telemetry is a fixed binary v2 frame, not JSON and not a parameter-read tunnel.
+- Live telemetry is a fixed binary v3 frame, not JSON and not a parameter-read tunnel.
 - Firmware builds one typed `RuntimeBleLiveTelemetry` snapshot and encodes it through `RuntimeBleLiveFrame.h`.
 - Telemetry snapshot builders must validate coordinate pairs as pairs; if an anchor position is invalid/default, publish the whole anchor position and heading as neutral `0`.
 - Snapshot builders should sample volatile readiness predicates once per frame so related fields come from one consistent readiness state.
 - Flutter decodes `34cd` notifications through `ble_live_frame.dart`; `BoatData.fromJson()` remains only for model-level unit tests and non-BLE helpers.
+- `distance` and `anchorBearing` are display telemetry from the published position to the saved anchor point; they must not be treated as proof that the hardware-only anchor-control GNSS gate is ready.
 - Flutter `BoatData` currently receives these fields from the live frame:
   - `lat`, `lon`
   - `anchorLat`, `anchorLon`, `anchorHead`
-  - `distance`, `heading`
+  - `distance`, `anchorBearing`, `heading`
   - `battery`, `status`, `statusReasons`, `mode`, `rssi`
   - `holdHeading`
   - `stepSpr`, `stepMaxSpd`, `stepAccel`

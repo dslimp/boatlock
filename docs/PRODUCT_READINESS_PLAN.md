@@ -72,13 +72,16 @@ What matches the target:
 - STOP/failsafes latch quiet `HOLD` instead of auto-entering manual control.
 - On-device HIL `S0..S19` and offline `tools/sim` are real validation assets and
   should stay in `main`.
+- Native production-path tests now cover the shared
+  `RuntimeMotion -> StepperControl -> MotorControl` quiet-output cases for STOP,
+  Manual-to-HOLD, Anchor-to-HOLD, and DriftFail.
 
 Important mismatch:
 
 - On-device HIL exercises `AnchorControlLoop` through virtual sensor/actuator
-  interfaces, while production actuation goes through
-  `RuntimeMotion -> StepperControl -> MotorControl`. HIL pass is useful, but it
-  does not prove the exact production stepper/motor path.
+  interfaces, while production actuation goes through the real runtime motion and
+  driver classes. HIL pass is useful, but it does not prove powered steering
+  direction, torque/current limits, end stops, or water-loaded motor behavior.
 
 ## Priority Gaps
 
@@ -123,8 +126,8 @@ Important mismatch:
   current mode, failsafe latch, manual lease state, and motor/stepper configured.
 - Add user-visible anchor controls expected from commercial systems:
   current-position save, map-point save, enable/disable, fixed 1.5 m jog controls,
-  distance/bearing to anchor, and clear blocked reasons. Fixed jog controls are
-  now present in the app; distance/bearing-to-anchor telemetry is still pending.
+  distance/bearing to anchor, and clear blocked reasons. Fixed jog controls and
+  distance/bearing-to-anchor telemetry are now present in the app.
 - Add conservative anchor profiles for water trials: `quiet`, `normal`, `current`,
   with `quiet` as the default for first powered tests.
 - Add track/history around anchor events so drift, correction, and failsafe exits
@@ -173,9 +176,9 @@ Next simulation work:
 - Calibrate the Russian water-body scenarios now present in the simulator:
   `river_oka_normal_55lb`, `volga_spring_flow_80lb`,
   `rybinsk_fetch_55lb`, `ladoga_storm_abort`, `baltic_gulf_drift`.
-- Add a production-path actuator simulation or native tests around
-  `RuntimeMotion/MotorControl/StepperControl`, because current HIL does not prove
-  those classes together.
+- Extend the current production-path actuator tests with hardware-calibrated
+  steering ratio, torque/current limits, end-stop, and jam behavior after the
+  real steering driver is identified.
 
 ## Bench Plan
 

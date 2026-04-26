@@ -5791,3 +5791,36 @@ Validation:
 
 Self-review:
 - This is still an offline model, not proof of the production `RuntimeMotion -> StepperControl -> MotorControl` path. Real steering driver identity, gear ratio, torque/current limits, end stops, and jam detection remain hardware-dependent blockers.
+
+### 2026-04-26 Stage 191: Anchor range live telemetry and production actuator tests
+
+Scope:
+- Promote distance and bearing-to-anchor into the fixed BLE live frame and app readiness panel.
+- Add native production-path coverage around `RuntimeMotion -> StepperControl -> MotorControl` quiet-output behavior.
+- Fold four parallel agent outputs into the current plan: v3 live-frame schema review, actuator test implementation, firmware command-gate integration plan, and simulator scenario-data normalization plan.
+
+External baseline:
+- Reused the commercial anchor-control baseline already recorded in the readiness plan: primary operator UI should show explicit anchor state, small jog, and distance/bearing feedback.
+- No new external source was needed for the actuator tests; the baseline is the repo safety invariant that STOP, HOLD, DriftFail, and failsafe transitions must quiet outputs.
+
+Key outcomes:
+- Bumped the live telemetry frame from binary v2/70 bytes to v3/72 bytes and added `anchorBearing`.
+- Firmware now publishes display-only range telemetry from the current UI-visible fix to the saved anchor; docs explicitly state this is not proof of the hardware-only GNSS control gate.
+- Flutter decodes v3 only, exposes `BoatData.anchorBearing`, and shows `DST/BRG` only when both anchor and current position are present.
+- Added native tests for anchor range telemetry and expanded `RuntimeMotion` tests for STOP, Manual-to-HOLD, Anchor-to-HOLD, and DriftFail output quieting.
+- Updated BLE docs, BLE/UI reference, product readiness plan, and TODO completion state.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_live_frame` -> PASS (`4/4`).
+- `cd boatlock && platformio test -e native -f test_runtime_ble_params` -> PASS (`7/7`) after keeping distance saturation at the encoder boundary.
+- `cd boatlock && platformio test -e native -f test_runtime_motion` -> PASS (`12/12`).
+- `cd boatlock && platformio test -e native` -> PASS (`383/383`).
+- `cd boatlock && pio run -e esp32s3` -> PASS.
+- `cd boatlock_ui && flutter analyze` -> PASS, no issues.
+- `cd boatlock_ui && flutter test` -> PASS (`86/86`).
+- `git diff --check` -> PASS.
+
+Self-review:
+- This is a BLE protocol break by design; both firmware and Flutter now require v3/72-byte frames together.
+- Distance in the BLE frame still saturates at the existing `uint16` centimeter field limit, so long-range anchor display is not high precision. That is acceptable for current anchor-hold UX and can be widened only with another protocol bump.
+- The actuator tests prove quiet-output state transitions in native code, not the real steering driver, current limits, end stops, or powered water behavior.
