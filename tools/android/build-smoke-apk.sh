@@ -39,4 +39,9 @@ boatlock_validate_smoke_mode "${SMOKE_MODE}"
     --target lib/main_smoke.dart
 )
 
+if [[ ! -f "${BOATLOCK_ANDROID_APK}" ]]; then
+  echo "Android smoke APK was not produced at ${BOATLOCK_ANDROID_APK}" >&2
+  exit 1
+fi
+
 printf '%s\n' "${BOATLOCK_ANDROID_APK}"

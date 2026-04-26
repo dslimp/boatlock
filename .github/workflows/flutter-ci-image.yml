@@ -16,7 +16,7 @@ permissions:
 
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository }}/flutter-android-ci
-  IMAGE_TAG: 3.32.4-android33-ndk27.0
+  IMAGE_TAG: 3.41.7-android36-ndk28.2
 
 jobs:
   build:

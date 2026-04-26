@@ -230,7 +230,10 @@ class BleBoatLock with WidgetsBindingObserver {
     _isConnecting = true;
 
     try {
-      await _device!.connect(timeout: const Duration(seconds: 20));
+      await _device!.connect(
+        license: License.free,
+        timeout: const Duration(seconds: 20),
+      );
       _log('Connected to device');
       _setDiagnostics(
         connectionState: 'connected',

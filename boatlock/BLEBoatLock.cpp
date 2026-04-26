@@ -195,7 +195,6 @@ void BLEBoatLock::begin() {
     );
     pOtaChar->setCallbacks(new OtaCallbacks());
 
-    pService->start();
     NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(pService->getUUID());
     pAdvertising->setName("BoatLock");

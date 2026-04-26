@@ -242,7 +242,7 @@ class _MapPageState extends State<MapPage> {
               initialCenter: center,
               initialZoom: _zoom,
               onPositionChanged: (pos, hasGesture) {
-                if (pos.zoom != null) _zoom = pos.zoom!;
+                _zoom = pos.zoom;
                 if (hasGesture) _autoCenter = false;
               },
               onLongPress: (_, point) {

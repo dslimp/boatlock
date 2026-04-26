@@ -5430,6 +5430,44 @@ Validation:
 Self-review:
 - This deliberately lands the image publisher before switching CI consumers, so `main` does not point at a non-existent container image.
 
+### 2026-04-26 Stage 178: Stable toolchain and dependency refresh
+
+Scope:
+- Refresh Flutter, Android, firmware, and CI toolchain pins to current stable versions where compatible, and validate the updated stack end to end.
+
+External baseline:
+- Flutter stable is `3.41.7` with Dart `3.11.5`.
+- Gradle stable is `9.4.1`, Android Gradle Plugin stable is `9.2.0`, and Kotlin stable is `2.3.21`.
+- Flutter's AGP 9 migration guidance says Flutter apps with plugins should not upgrade to AGP 9 yet because AGP 9 uses built-in Kotlin instead of the `kotlin-android` plugin model.
+- Flutter's current generated Android template uses AGP 8, so BoatLock uses the latest compatible AGP 8 line rather than forcing AGP 9.
+
+Key outcomes:
+- Upgraded local Flutter SDK to stable `3.41.7` and Dart `3.11.5`.
+- Upgraded Android project pins to AGP `8.13.2`, Gradle `8.14.4`, Kotlin `2.3.21`, NDK `28.2.13676358`, Android platform `36`, and added the Flutter-required build tools `35.0.0`.
+- Installed Android cmdline tools `20.0`, platform `android-36`, build tools `36.0.0`/`35.0.0`, NDK `28.2.13676358`, CMake `4.1.2`, and accepted Android SDK licenses.
+- Installed Homebrew CocoaPods `1.16.2`; the old rbenv `pod` path is broken by an x86_64/arm64 GMP mismatch, so validation used `/opt/homebrew/bin` first in `PATH`.
+- Upgraded Flutter dependencies to newest resolvable versions and adjusted API changes in BLE connect licensing and `flutter_map` position zoom.
+- Upgraded PlatformIO ESP32 platform to `espressif32@6.13.0` and NimBLE to `2.5.0`; kept GFX at `1.5.9` because `1.6.x` requires newer Arduino-ESP32 APIs than official PlatformIO `espressif32@6.13.0` provides.
+- Removed the deprecated NimBLE `pService->start()` call, which is a no-op in NimBLE 2.x.
+- Fixed Android e2e build wrappers to reuse a stable Gradle cache instead of forcing `/tmp/boatlock-gradle`, and to fail if `app-debug.apk` is not actually produced.
+- Updated GitHub Actions and the experimental Flutter Android CI image pins to the refreshed toolchain versions.
+
+Validation:
+- `cd boatlock && pio run -e esp32s3` -> PASS; firmware size `714497` bytes.
+- `cd boatlock && platformio test -e native` -> PASS (`376/376`).
+- `python3 tools/sim/test_sim_core.py`, `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json`, `python3 tools/sim/test_soak.py`, and `python3 tools/sim/run_soak.py --hours 6 --check --json-out tools/sim/soak_report.json` -> PASS.
+- `cd boatlock_ui && flutter analyze && flutter test` -> PASS (`66/66`).
+- `cd boatlock_ui && flutter build apk --release`, `flutter build web --release`, and `flutter build macos --release` -> PASS.
+- `tools/hw/nh02/flash.sh` -> PASS on ESP32-S3 `98:88:e0:03:ba:5c`; `tools/hw/nh02/acceptance.sh` -> PASS.
+- `tools/hw/nh02/android-run-app-e2e.sh --esp-reset --wait-secs 130 --serial 68b657f0` -> PASS after canonical retry from `INSTALL_FAILED_USER_RESTRICTED`; result `app_telemetry_after_reconnect`.
+- `pytest -q tools/ci/test_*.py`, `python3 tools/ci/check_firmware_version.py`, `python3 tools/ci/check_config_schema_version.py`, `bash tools/ci/check_firmware_werror.sh`, `bash tools/ci/check_firmware_cppcheck.sh`, and `git diff --check` -> PASS.
+
+Self-review:
+- AGP 9 was intentionally not kept: the build fails on Flutter's existing Kotlin plugin path, and official Flutter guidance says plugin apps are not ready for AGP 9 migration yet.
+- `flutter_blue_plus` 2.x requires an explicit license enum; the app currently passes `License.free`, which must be revisited before any commercial/for-profit distribution.
+- `flutter pub outdated` reports all direct dependencies at newest resolvable versions except `latlong2 0.9.1`, where `0.10.0` is not resolvable with the current dependency graph.
+- `flutter doctor` still reports Xcode cannot list installed Simulator runtimes, but Android, Chrome, CocoaPods, and network resources are healthy and macOS release build succeeds.
+
 ### 2026-04-26 Stage 179: product readiness audit and water-test plan
 
 Scope:

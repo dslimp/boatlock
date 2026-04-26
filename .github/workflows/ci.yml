@@ -149,7 +149,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.32.4"
+          flutter-version: "3.41.7"
           channel: stable
           cache: true
 
@@ -185,7 +185,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.32.4"
+          flutter-version: "3.41.7"
           channel: stable
           cache: true
 
@@ -196,10 +196,12 @@ jobs:
         uses: actions/cache@v5
         with:
           path: |
-            /usr/local/lib/android/sdk/ndk/27.0.12077973
-            /usr/local/lib/android/sdk/platforms/android-33
-            /usr/local/lib/android/sdk/cmake/3.22.1
-          key: android-sdk-${{ runner.os }}-ndk-27.0.12077973-platform-33-cmake-3.22.1
+            /usr/local/lib/android/sdk/ndk/28.2.13676358
+            /usr/local/lib/android/sdk/platforms/android-36
+            /usr/local/lib/android/sdk/build-tools/35.0.0
+            /usr/local/lib/android/sdk/build-tools/36.0.0
+            /usr/local/lib/android/sdk/cmake/4.1.2
+          key: android-sdk-${{ runner.os }}-ndk-28.2.13676358-platform-36-build-tools-35.0.0-36.0.0-cmake-4.1.2
 
       - name: Install dependencies
         working-directory: boatlock_ui
@@ -228,7 +230,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.32.4"
+          flutter-version: "3.41.7"
           channel: stable
           cache: true
 
@@ -263,7 +265,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.32.4"
+          flutter-version: "3.41.7"
           channel: stable
           cache: true
 

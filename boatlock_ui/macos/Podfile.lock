@@ -26,11 +26,11 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/package_info_plus/macos
 
 SPEC CHECKSUMS:
-  flutter_blue_plus_darwin: 904ed52825285a15f60e9d90312337a09f11a785
+  flutter_blue_plus_darwin: 20a08bfeaa0f7804d524858d3d8744bcc1b6dbc3
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
-  geolocator_apple: 66b711889fd333205763b83c9dcf0a57a28c7afd
-  package_info_plus: 12f1c5c2cfe8727ca46cbd0b26677728972d9a5b
+  geolocator_apple: ab36aa0e8b7d7a2d7639b3b4e48308394e8cef5e
+  package_info_plus: f0052d280d17aa382b932f399edf32507174e870
 
-PODFILE CHECKSUM: 54d867c82ac51cbd61b565781b9fada492027009
+PODFILE CHECKSUM: 180da7a1dbc1d932db021ebc8007656e7c46dd99
 
-COCOAPODS: 1.11.2
+COCOAPODS: 1.16.2

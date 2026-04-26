@@ -51,6 +51,19 @@ def test_android_app_e2e_build_targets_main_app() -> None:
     assert "--target lib/main.dart" in text
     assert "BOATLOCK_APP_E2E_MODE=" in text
     assert "main_smoke.dart" not in text
+    assert '[[ ! -f "${BOATLOCK_ANDROID_APK}" ]]' in text
+
+
+def test_android_smoke_build_checks_apk_output() -> None:
+    text = _read("tools/android/build-smoke-apk.sh")
+    assert "--target lib/main_smoke.dart" in text
+    assert '[[ ! -f "${BOATLOCK_ANDROID_APK}" ]]' in text
+
+
+def test_android_build_cache_reuses_stable_gradle_home() -> None:
+    text = _read("tools/android/common.sh")
+    assert "BOATLOCK_ANDROID_GRADLE_USER_HOME" in text
+    assert "GRADLE_USER_HOME=/tmp/boatlock-gradle" not in text
 
 
 def test_android_app_e2e_wrappers_reuse_canonical_runner() -> None:

@@ -47,9 +47,11 @@ def test_android_build_uses_ci_caches():
     assert "Trust Flutter SDK" not in workflow
     assert "uses: gradle/actions/setup-gradle@v6" in workflow
     assert "Cache Android SDK packages" in workflow
-    assert "/usr/local/lib/android/sdk/ndk/27.0.12077973" in workflow
-    assert "/usr/local/lib/android/sdk/platforms/android-33" in workflow
-    assert "/usr/local/lib/android/sdk/cmake/3.22.1" in workflow
+    assert "/usr/local/lib/android/sdk/ndk/28.2.13676358" in workflow
+    assert "/usr/local/lib/android/sdk/platforms/android-36" in workflow
+    assert "/usr/local/lib/android/sdk/build-tools/35.0.0" in workflow
+    assert "/usr/local/lib/android/sdk/build-tools/36.0.0" in workflow
+    assert "/usr/local/lib/android/sdk/cmake/4.1.2" in workflow
     assert "uses: actions/setup-java@v5" in workflow
     assert "uses: subosito/flutter-action@v2" in workflow
     assert "GRADLE_OPTS: -Dorg.gradle.vfs.watch=false" in workflow
@@ -64,7 +66,7 @@ def test_flutter_ci_image_workflow_publishes_pinned_ghcr_image():
 
     assert "packages: write" in workflow
     assert "ghcr.io/${{ github.repository }}/flutter-android-ci" in workflow
-    assert "IMAGE_TAG: 3.32.4-android33-ndk27.0" in workflow
+    assert "IMAGE_TAG: 3.41.7-android36-ndk28.2" in workflow
     assert '- ".dockerignore"' in workflow
     assert "uses: docker/login-action@v4" in workflow
     assert "uses: docker/setup-buildx-action@v4" in workflow
@@ -72,10 +74,13 @@ def test_flutter_ci_image_workflow_publishes_pinned_ghcr_image():
     assert "platforms: linux/amd64" in workflow
     assert "provenance: false" in workflow
     assert "cache-to: type=gha" not in workflow
-    assert "ARG FLUTTER_VERSION=3.32.4" in dockerfile
-    assert "ARG ANDROID_PLATFORM_LEGACY=android-33" in dockerfile
-    assert "ARG ANDROID_NDK_VERSION=27.0.12077973" in dockerfile
-    assert "ARG ANDROID_CMAKE_VERSION=3.22.1" in dockerfile
+    assert "ARG FLUTTER_VERSION=3.41.7" in dockerfile
+    assert "ARG ANDROID_PLATFORM_CURRENT=android-36" in dockerfile
+    assert "ARG ANDROID_PLATFORM_LEGACY" not in dockerfile
+    assert "ARG ANDROID_BUILD_TOOLS_VERSION=36.0.0" in dockerfile
+    assert "ARG ANDROID_BUILD_TOOLS_FLUTTER_VERSION=35.0.0" in dockerfile
+    assert "ARG ANDROID_NDK_VERSION=28.2.13676358" in dockerfile
+    assert "ARG ANDROID_CMAKE_VERSION=4.1.2" in dockerfile
     assert "set +o pipefail" in dockerfile
     assert "git config --system --add safe.directory" in dockerfile
     assert "flutter precache --android --web" in dockerfile
