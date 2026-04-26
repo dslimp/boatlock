@@ -90,7 +90,7 @@ void main() {
     final releaseUrl =
         'https://api.github.com/repos/dslimp/boatlock/releases/latest';
     final manifestUrl =
-        'https://github.com/dslimp/boatlock/releases/download/v0.2.0/manifest.json';
+        'https://api.github.com/repos/dslimp/boatlock/releases/assets/manifest.json';
     final source = GitHubReleaseFirmwareSource(
       repository: 'dslimp/boatlock',
       token: 'token-123',
@@ -115,6 +115,7 @@ void main() {
 
     expect(headersByUrl[releaseUrl]?['Authorization'], 'Bearer token-123');
     expect(headersByUrl[manifestUrl]?['Authorization'], 'Bearer token-123');
+    expect(headersByUrl[manifestUrl]?['Accept'], 'application/octet-stream');
   });
 
   test(
@@ -155,6 +156,63 @@ void main() {
       expect(manifest.commandProfile, 'service');
       expect(manifest.size, 711776);
       expect(manifest.sha256, _sha);
+    },
+  );
+
+  test(
+    'uses asset API URLs for private fallback release assets when token is set',
+    () async {
+      final requested = <String>[];
+      final source = GitHubReleaseFirmwareSource(
+        repository: 'dslimp/boatlock',
+        token: 'token-123',
+        textFetcher: (uri, {headers = const {}}) async {
+          requested.add(uri.toString());
+          expect(headers['Authorization'], 'Bearer token-123');
+          expect(headers['Accept'], 'application/octet-stream');
+          if (uri.toString().endsWith('/BUILD_INFO.txt')) {
+            return [
+              'firmware_version=0.2.0',
+              'firmware_sha256=$_sha',
+              'artifact_name=firmware-esp32s3-service',
+              'platformio_env=esp32s3_service',
+              'command_profile=service',
+              'github_ref=refs/heads/main',
+              'github_sha=$_gitSha',
+            ].join('\n');
+          }
+          if (uri.toString().endsWith('/SHA256SUMS')) {
+            return '$_sha  firmware.bin\n';
+          }
+          throw StateError('unexpected fetch $uri');
+        },
+      );
+      final release = GitHubFirmwareRelease.fromJson(
+        _releaseJson([
+          _asset('firmware.bin', size: 711776, digest: 'sha256:$_sha'),
+          _asset('BUILD_INFO.txt'),
+          _asset('SHA256SUMS'),
+        ]),
+      );
+
+      final manifest = await source.resolveManifest(release);
+
+      expect(
+        requested,
+        contains(
+          'https://api.github.com/repos/dslimp/boatlock/releases/assets/BUILD_INFO.txt',
+        ),
+      );
+      expect(
+        requested,
+        contains(
+          'https://api.github.com/repos/dslimp/boatlock/releases/assets/SHA256SUMS',
+        ),
+      );
+      expect(
+        manifest.binaryUrl.toString(),
+        'https://api.github.com/repos/dslimp/boatlock/releases/assets/firmware.bin',
+      );
     },
   );
 
@@ -200,6 +258,46 @@ void main() {
         githubRepository: 'dslimp/boatlock',
       ).configured,
       isTrue,
+    );
+  });
+
+  test('client rejects unsafe manifest URLs', () async {
+    expect(
+      isBoatLockFirmwareUpdateUrlAllowed(Uri.parse('https://x.test/m')),
+      isTrue,
+    );
+    expect(
+      isBoatLockFirmwareUpdateUrlAllowed(Uri.parse('http://127.0.0.1:8080/m')),
+      isTrue,
+    );
+    expect(
+      isBoatLockFirmwareUpdateUrlAllowed(Uri.parse('http://example.com/m')),
+      isFalse,
+    );
+    await expectLater(
+      const FirmwareUpdateClient(
+        manifestUrl: 'http://example.com/manifest.json',
+      ).fetchLatestManifest(),
+      throwsFormatException,
+    );
+  });
+
+  test('client adds GitHub token only to GitHub firmware downloads', () {
+    final githubHeaders = boatLockFirmwareUpdateDownloadHeaders(
+      Uri.parse(
+        'https://api.github.com/repos/dslimp/boatlock/releases/assets/1',
+      ),
+      githubToken: 'token-123',
+    );
+
+    expect(githubHeaders, containsPair('Authorization', 'Bearer token-123'));
+    expect(githubHeaders, containsPair('Accept', 'application/octet-stream'));
+    expect(
+      boatLockFirmwareUpdateDownloadHeaders(
+        Uri.parse('https://example.com/firmware.bin'),
+        githubToken: 'token-123',
+      ),
+      isEmpty,
     );
   });
 }

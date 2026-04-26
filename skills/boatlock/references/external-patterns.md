@@ -329,6 +329,17 @@ Implication for BoatLock:
 - Keep USB flashing through `tools/hw/nh02/flash.sh` as the recovery path for failed OTA, bad hashes, or partition/bootloader changes.
 - For Android, prove Wi-Fi ADB by installing/running a smoke or e2e APK through `--serial <ip>:5555`; `adb devices` alone is only discovery proof.
 
+## What Flutter And GitHub Release Delivery Guidance Gets Right
+
+- Flutter's CLI is the canonical build entry point for platform artifacts; use `flutter build apk` and `flutter build macos` with explicit `--dart-define` values for service-only variants.
+- Flutter macOS release builds run inside the macOS App Sandbox by default. A service app that downloads firmware must keep the network-client entitlement in release builds.
+- GitHub release assets have a public browser download URL and an API asset URL. For token-backed/private validation, request the API asset URL with `Accept: application/octet-stream` and handle the normal binary/redirect response path.
+
+Implication for BoatLock:
+- Keep normal app artifacts separate from service artifacts so water builds do not expose OTA/tuning controls.
+- Publish service firmware assets with a manifest that the app validator accepts (`esp32s3_service`, `service`, SHA-256, size, main channel).
+- Do not rely on unauthenticated browser release URLs as proof that private release-asset validation works.
+
 ## Best-Practice Decisions For BoatLock
 
 These are the durable takeaways that should influence future changes:

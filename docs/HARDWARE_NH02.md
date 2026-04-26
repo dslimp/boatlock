@@ -161,11 +161,20 @@ Do not merge the firmware gate until the rest of this wrapper contract is implem
   from the `esp32s3_service` CI build. Build service Android/macOS app variants
   with `--dart-define=BOATLOCK_SERVICE_UI=true` and
   `--dart-define=BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL=<manifest-url>` when this
-  operator path is needed.
+  operator path is needed. Local wrapper shortcuts:
+  `tools/android/build-app-apk.sh --latest-main-service` and
+  `tools/macos/build-app.sh --latest-main-service`.
+- CI publishes ready-to-install latest-main service variants as
+  `flutter-android-service-apk/boatlock-service-main.apk` and
+  `flutter-macos-service-app/boatlock-macos-service-main.zip` alongside the
+  normal app artifacts.
 - For release-asset validation, the same button can be built with
   `--dart-define=BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=dslimp/boatlock` instead;
   the app will resolve the latest release manifest or reconstruct it from
-  `firmware.bin`, `BUILD_INFO.txt`, and matching SHA-256 metadata.
+  the service-profile `firmware.bin`, `BUILD_INFO.txt`, and matching SHA-256
+  metadata. Tagged releases publish `firmware-esp32s3-service/manifest.json`
+  with the same `esp32s3_service` and `service` profile constraints as the
+  latest-main Pages channel.
 - `tools/hw/nh02/flash.sh` stages `boot_app0.bin` and flashes it at `0xe000`, so a USB seed flash after prior OTA boots the freshly flashed `ota_0` image instead of a stale OTA slot.
 - Keep the seed flash recoverable through USB. If a BLE OTA upload fails before `OTA_FINISH`, the current firmware remains active; if the app cannot reconnect, flash the release profile again through `tools/hw/nh02/flash.sh --profile release`.
 

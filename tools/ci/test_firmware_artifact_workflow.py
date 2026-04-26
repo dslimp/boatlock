@@ -8,12 +8,26 @@ def test_ci_uploads_firmware_artifact_with_hash_manifest():
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
 
     assert 'name: firmware-esp32s3' in workflow
+    assert 'name: firmware-esp32s3-service' in workflow
     assert 'path: dist/firmware-esp32s3/*' in workflow
+    assert 'path: dist/firmware-esp32s3-service/*' in workflow
     assert 'if-no-files-found: error' in workflow
     assert 'firmware_sha256="$(sha256sum "${artifact_dir}/firmware.bin"' in workflow
     assert 'echo "firmware_sha256=${firmware_sha256}"' in workflow
     assert 'echo "artifact_name=firmware-esp32s3"' in workflow
+    assert 'echo "artifact_name=firmware-esp32s3-service"' in workflow
+    assert "pio run -e esp32s3_service" in workflow
+    assert "command_profile=service" in workflow
     assert "sha256sum firmware.bin bootloader.bin partitions.bin firmware.elf > SHA256SUMS" in workflow
+
+
+def test_release_publishes_service_firmware_update_manifest():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+
+    assert "Add release firmware update manifest" in workflow
+    assert "artifacts/firmware-esp32s3-service/manifest.json" in workflow
+    assert "--base-url \"https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}\"" in workflow
+    assert "artifacts/firmware-esp32s3-service/*" in workflow
 
 
 def test_ci_publishes_latest_main_service_firmware_channel():
@@ -54,10 +68,37 @@ def test_ci_delivery_jobs_are_split_by_failure_domain():
         assert f"name: {job_name}" in workflow
 
     assert "name: flutter-android-apk" in workflow
+    assert "name: flutter-android-service-apk" in workflow
     assert "name: flutter-web" in workflow
     assert "name: flutter-macos-app" in workflow
+    assert "name: flutter-macos-service-app" in workflow
     assert "flutter build macos --release" in workflow
     assert "flutter-android-web" not in workflow
+
+
+def test_ci_builds_service_apps_with_latest_main_firmware_source():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+
+    assert "Build Android service APK (latest main)" in workflow
+    assert "boatlock-service-main.apk" in workflow
+    assert "Build macOS service app (latest main)" in workflow
+    assert "boatlock-macos-service-main.zip" in workflow
+    assert "--dart-define=BOATLOCK_SERVICE_UI=true" in workflow
+    assert "--dart-define=BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/firmware/main/manifest.json" in workflow
+    assert "artifacts/flutter-android-service-apk/*" in workflow
+    assert "artifacts/flutter-macos-service-app/*" in workflow
+
+
+def test_macos_build_wrapper_supports_latest_main_service_variant():
+    script = (ROOT / "tools/macos/build-app.sh").read_text()
+
+    assert "--latest-main-service" in script
+    assert "BOATLOCK_SERVICE_UI=true" in script
+    assert "BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL=" in script
+    assert "BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=" in script
+    assert "https://dslimp.github.io/boatlock/firmware/main/manifest.json" in script
+    assert "build macos" in script
+    assert "boatlock_ui.app" in script
 
 
 def test_android_build_uses_ci_caches():

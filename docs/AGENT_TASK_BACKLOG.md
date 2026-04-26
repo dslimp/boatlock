@@ -26,6 +26,12 @@ Status after the 2026-04-26 autonomous pass.
 - Offline Russian-water simulation now reports wave steepness, roll-rate, and
   GNSS/heading sensor-frame degradation metrics/events with thresholds for
   Rybinsk fetch and Ladoga storm scenarios.
+- Android and macOS CI now publish service app artifacts configured with the
+  latest-main firmware manifest, and local wrappers can build the same
+  one-button update variants.
+- GitHub Releases now receive a service-profile `firmware-esp32s3-service`
+  asset set plus `manifest.json`, and the app can use authenticated release
+  asset API URLs when a token-backed validation client is injected.
 
 ## Active Background Work
 
@@ -41,13 +47,11 @@ Status after the 2026-04-26 autonomous pass.
   The unauthenticated probe on 2026-04-26 returned `404` for the private repo,
   so the remaining gate is the Actions/Pages deployment result and visibility
   setting, not local app code.
-- Build service app variants with:
-  `--dart-define=BOATLOCK_SERVICE_UI=true` and
-  `--dart-define=BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL=https://dslimp.github.io/boatlock/firmware/main/manifest.json`.
-- Add production app e2e fast-fail for firmware profile rejections:
-  `SIM_RUN`, compass service commands, `OTA_BEGIN`, and `OTA_FINISH`.
 - Keep multi-client controller support deferred until per-client auth/session and
   a single control-owner lease are implemented.
+- Add a manifest-backed Android app e2e mode that serves `manifest.json` plus
+  `firmware.bin`, builds with `--latest-main-service`, triggers the same
+  Settings latest-main path, and verifies post-reboot telemetry.
 
 ## Hardware-Gated Tasks
 
@@ -74,14 +78,18 @@ Status after the 2026-04-26 autonomous pass.
 ## Agent Notes Captured
 
 - `Darwin`: paired auth bypass checklist; implemented and pushed.
-- `Carver` / `Russell`: app e2e and service rejection gaps; still open.
-- `Helmholtz`: simulator wake/chop/sensor-frame implementation plan; still open.
+- `Carver` / `Russell`: app e2e and service rejection gaps; implemented
+  through fast-fail e2e handling, settings rollback, detailed OTA rejections,
+  and structured smoke/e2e result fields.
+- `Helmholtz`: simulator wake/chop/sensor-frame implementation plan; wave
+  steepness and sensor-frame degradation are implemented, wake bursts remain
+  deferred until water-test inputs or powered logs exist.
 - `Hubble`: motor and steering driver intake gates; hardware-gated.
 - `Ohm`: keep-in-main vs defer plan; docs refreshed, unknown-command gate done,
   remaining multi-client and simulator work still open.
 - `Jason`: latest-main OTA should use a durable manifest/static channel, not raw
   expiring Actions artifacts; implemented through app manifest client and Pages
   publishing.
-- `Epicurus`: latest GitHub release source; implemented through pure release
-  parsing plus `FirmwareUpdateClient` fallback behind
-  `BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO`.
+- `Epicurus`: latest GitHub release source; implemented through release parsing,
+  service-profile release artifacts, release manifest publishing, and
+  token-backed asset API support behind `BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO`.

@@ -6559,3 +6559,34 @@ Validation:
 
 Self-review:
 - This gives the product plan measurable wave/chop sensor stress without pretending the offline model is hardware-calibrated. The next simulator step should wait for powered motor/steering logs or add explicit scenario inputs for wake timing if we need non-periodic wake bursts before water tests.
+
+### 2026-04-26 Stage 226: Latest-main service app artifacts
+
+Scope:
+- Close the autonomous latest-firmware app delivery gaps from the background-agent audit.
+- Make Android and macOS service app builds carry the latest-main manifest source while keeping normal water app artifacts separate.
+- Align GitHub Release firmware assets with the app manifest validator.
+
+External baseline:
+- Flutter documents `flutter build` as the canonical target-specific build entry point, including `flutter build macos`.
+- Flutter macOS builds run inside the App Sandbox and need the network-client entitlement for outbound firmware downloads.
+- GitHub release assets can be downloaded through the asset API URL with `Accept: application/octet-stream`; token-backed private validation should use that path instead of relying only on browser download URLs.
+
+Key outcomes:
+- Added Android wrapper flags for `--service-ui`, `--latest-main-service`, `--firmware-manifest-url`, and `--firmware-github-repo`.
+- Added `tools/macos/build-app.sh` with the same latest-main/service switches.
+- CI now publishes normal and service Android/macOS artifacts separately. Service artifacts are built with `BOATLOCK_SERVICE_UI=true` and the latest-main Pages manifest define.
+- CI release publishing now includes a service-profile `firmware-esp32s3-service` asset set and generates a release `manifest.json` for the app to prefer.
+- GitHub release fallback now uses API asset URLs for token-backed/private asset reads and firmware downloads, and manifest URLs now reject unsafe non-local HTTP.
+- Backlog/docs now keep the real remaining gate explicit: live Pages/Release proof and a manifest-backed Android e2e mode.
+
+Validation:
+- `tools/android/build-app-apk.sh --latest-main-service` -> PASS, produced `boatlock_ui/build/app/outputs/flutter-apk/app-debug.apk`.
+- `tools/macos/build-app.sh --latest-main-service` -> PASS, produced `boatlock_ui/build/macos/Build/Products/Release/boatlock_ui.app`.
+- `cd boatlock_ui && flutter test test/github_release_firmware_source_test.dart test/firmware_update_manifest_test.dart test/settings_page_service_ui_test.dart` -> PASS (`13/13`).
+- `cd boatlock_ui && flutter analyze` -> PASS.
+- `python3 -m pytest tools/ci/test_android_smoke_modes.py tools/ci/test_ble_ota_workflow.py tools/ci/test_firmware_artifact_workflow.py` -> PASS (`19/19`).
+- `bash -n tools/android/build-app-apk.sh tools/android/build-smoke-apk.sh tools/macos/build-app.sh tools/hw/nh02/android-run-app-e2e.sh` -> PASS.
+
+Self-review:
+- The app artifacts are now buildable with one-button latest-main OTA enabled on Android and macOS. This still does not prove the public Pages endpoint or a real GitHub Release asset; those require the next `main`/tag workflow run and device e2e.

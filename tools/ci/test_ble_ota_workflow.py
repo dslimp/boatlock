@@ -49,6 +49,9 @@ def test_flutter_ble_ota_protocol_is_wired():
     assert "Обновить по BLE" in settings
     assert "Обновить до main" in settings
     assert "BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL" in client
+    assert "BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO" in client
+    assert "isBoatLockFirmwareUpdateUrlAllowed" in client
+    assert "boatLockFirmwareUpdateDownloadHeaders" in client
     assert "platformioEnv != 'esp32s3_service'" in manifest
     assert "commandProfile != 'service'" in manifest
     assert "binaryUrl must use HTTPS or localhost HTTP" in manifest
@@ -60,4 +63,5 @@ def test_ble_protocol_docs_include_ota_surface():
     assert "OTA_BEGIN:<size>,<sha256>" in protocol
     assert "During active OTA" in protocol
     assert "BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL" in protocol
+    assert "BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO" in protocol
     assert "esp32s3_service" in protocol

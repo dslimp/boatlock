@@ -61,7 +61,7 @@ class GitHubReleaseFirmwareSource {
     final manifestAsset = release.preferredManifestAsset;
     if (manifestAsset != null) {
       final manifestText = await textFetcher(
-        manifestAsset.downloadUri,
+        manifestAsset.downloadUri(authenticated: _authenticated),
         headers: _assetHeaders,
       );
       return FirmwareUpdateManifest.fromJsonText(manifestText);
@@ -79,14 +79,20 @@ class GitHubReleaseFirmwareSource {
       );
     }
     final buildInfo = _parseBuildInfo(
-      await textFetcher(buildInfoAsset.downloadUri, headers: _assetHeaders),
+      await textFetcher(
+        buildInfoAsset.downloadUri(authenticated: _authenticated),
+        headers: _assetHeaders,
+      ),
     );
 
     String? checksumSha;
     final checksumAsset = release.sha256SumsAsset;
     if (checksumAsset != null) {
       checksumSha = _shaForFirmwareBin(
-        await textFetcher(checksumAsset.downloadUri, headers: _assetHeaders),
+        await textFetcher(
+          checksumAsset.downloadUri(authenticated: _authenticated),
+          headers: _assetHeaders,
+        ),
       );
     }
 
@@ -125,7 +131,9 @@ class GitHubReleaseFirmwareSource {
       'platformioEnv': platformioEnv,
       'commandProfile': commandProfile,
       'artifactName': (buildInfo['artifact_name'] ?? firmwareAsset.name).trim(),
-      'binaryUrl': firmwareAsset.browserDownloadUrl.toString(),
+      'binaryUrl': firmwareAsset
+          .downloadUri(authenticated: _authenticated)
+          .toString(),
       'size': firmwareAsset.size,
       'sha256': sha256,
       'builtAt': release.publishedAt?.toUtc().toIso8601String(),
@@ -144,6 +152,8 @@ class GitHubReleaseFirmwareSource {
     }
     return headers;
   }
+
+  bool get _authenticated => token != null && token!.trim().isNotEmpty;
 
   Map<String, String> get _assetHeaders {
     final headers = <String, String>{
@@ -238,7 +248,10 @@ class GitHubFirmwareReleaseAsset {
 
   String get normalizedName => name.trim().toLowerCase();
 
-  Uri get downloadUri => browserDownloadUrl;
+  Uri downloadUri({required bool authenticated}) {
+    if (authenticated && apiUrl != null) return apiUrl!;
+    return browserDownloadUrl;
+  }
 
   String? get sha256Digest {
     final value = digest?.trim() ?? '';

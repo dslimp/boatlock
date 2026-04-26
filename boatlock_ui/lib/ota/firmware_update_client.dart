@@ -58,6 +58,10 @@ class FirmwareUpdateClient {
   }) async {
     final bytes = await _downloadBytes(
       manifest.binaryUrl,
+      headers: boatLockFirmwareUpdateDownloadHeaders(
+        manifest.binaryUrl,
+        githubToken: githubToken,
+      ),
       onProgress: (received, total) {
         onProgress?.call(received, total ?? manifest.size);
       },
@@ -86,8 +90,39 @@ class FirmwareUpdateClient {
     if (uri == null || !uri.hasScheme || !uri.hasAuthority) {
       throw const FormatException('firmware manifest URL is not configured');
     }
+    if (!isBoatLockFirmwareUpdateUrlAllowed(uri)) {
+      throw const FormatException(
+        'firmware manifest URL must use HTTPS or localhost HTTP',
+      );
+    }
     return uri;
   }
+}
+
+bool isBoatLockFirmwareUpdateUrlAllowed(Uri uri) {
+  if (uri.scheme == 'https') return true;
+  if (uri.scheme != 'http') return false;
+  final host = uri.host.toLowerCase();
+  return host == 'localhost' || host == '127.0.0.1' || host == '::1';
+}
+
+Map<String, String> boatLockFirmwareUpdateDownloadHeaders(
+  Uri uri, {
+  String? githubToken,
+}) {
+  final trimmedToken = githubToken?.trim();
+  if (trimmedToken == null || trimmedToken.isEmpty) return const {};
+  final host = uri.host.toLowerCase();
+  if (host != 'api.github.com' && host != 'github.com') return const {};
+  final headers = <String, String>{
+    'Authorization': 'Bearer $trimmedToken',
+    'User-Agent': 'BoatLock',
+  };
+  if (host == 'api.github.com') {
+    headers['Accept'] = 'application/octet-stream';
+    headers['X-GitHub-Api-Version'] = '2022-11-28';
+  }
+  return headers;
 }
 
 Future<String> _downloadText(Uri uri) async {
@@ -97,12 +132,14 @@ Future<String> _downloadText(Uri uri) async {
 
 Future<Uint8List> _downloadBytes(
   Uri uri, {
+  Map<String, String> headers = const {},
   void Function(int receivedBytes, int? totalBytes)? onProgress,
 }) async {
   final client = HttpClient();
   client.connectionTimeout = const Duration(seconds: 15);
   try {
     final request = await client.getUrl(uri);
+    headers.forEach(request.headers.set);
     final response = await request.close();
     if (response.statusCode != HttpStatus.ok) {
       throw HttpException('HTTP ${response.statusCode}', uri: uri);

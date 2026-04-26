@@ -54,6 +54,15 @@ def test_android_app_e2e_build_targets_main_app() -> None:
     assert '[[ ! -f "${BOATLOCK_ANDROID_APK}" ]]' in text
 
 
+def test_android_app_build_supports_latest_main_service_variant() -> None:
+    text = _read("tools/android/build-app-apk.sh")
+    assert "--latest-main-service" in text
+    assert "BOATLOCK_SERVICE_UI=true" in text
+    assert "BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL=" in text
+    assert "BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=" in text
+    assert "https://dslimp.github.io/boatlock/firmware/main/manifest.json" in text
+
+
 def test_android_smoke_build_checks_apk_output() -> None:
     text = _read("tools/android/build-smoke-apk.sh")
     assert "--target lib/main_smoke.dart" in text
