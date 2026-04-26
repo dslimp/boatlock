@@ -11,7 +11,8 @@ On boot:
 
 - missing keys keep current defaults and are persisted on the next boot writeback
 - removed keys are ignored
-- schema mismatch keeps existing values by key and writes the current schema marker
+- older schema versions keep existing values by current key, apply explicit migration rules, and write the current schema marker
+- future schema versions are loaded read-only: current known keys may be used in RAM, but boot does not downgrade the `schema` marker or write missing/default keys
 - invalid NVS values use defaults and are persisted on the next boot writeback
 - any loaded value outside allowed range is normalized and logged as `CONFIG_REJECTED`
 
@@ -22,7 +23,14 @@ Write policy:
 - setting a value equal to the current normalized value does not create a flash commit
 - non-finite runtime values are rejected instead of being persisted
 - failed NVS set/commit calls are logged as `CONFIG_SAVE_FAILED` and keep settings dirty for retry
-- migration, missing-key recovery, and boot-time normalization still force a commit
+- older-version migration, missing-key recovery, and boot-time normalization still force a commit
+- future-version rollback does not force a boot commit; operator-initiated setting changes can still be saved by the older firmware
+
+Migration rules:
+
+- versioned migrations live in `Settings::applyMigrations()`
+- key renames must be encoded as explicit legacy-key rules instead of relying on defaults
+- current legacy rule: schemas before `0x18` may migrate legacy `MaxThrust` into `MaxThrustA` when `MaxThrustA` is missing
 
 ## Groups
 

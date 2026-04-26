@@ -51,6 +51,7 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
    - use `tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130`, `--status`, `--anchor`, `--sim`, `--reconnect`, or `--esp-reset` for production-app command/recovery flows
    - use `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130` after compass BLE command changes; it sends safe DCD service commands and requires device-log acknowledgements
    - use `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180` after GNSS live-telemetry changes or field GPS checks; it requires valid non-zero coordinates and `gnssQ > 0`
+   - use `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin` after BLE OTA/app-delivery changes; it serves `firmware.bin` from `nh02`, installs the production app with OTA e2e defines, uploads over BLE from the phone, and requires post-reboot telemetry recovery
    - use `tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` after manual BLE protocol changes; this sends zero-throttle `MANUAL_SET`, verifies `MANUAL`, sends `MANUAL_OFF`, and verifies mode exit
    - use `tools/hw/nh02/android-run-smoke.sh --status --wait-secs 130` after phone-visible status/severity changes; this sends `STOP`, verifies `ALERT/STOP_CMD`, then clears through zero-throttle manual roundtrip
    - use `tools/hw/nh02/android-run-smoke.sh --sim --wait-secs 130` after `SIM_*` BLE/HIL changes; this starts realtime `S0`, verifies `SIM` mode, sends `SIM_ABORT`, then clears the safe hold through zero-throttle manual recovery
@@ -94,6 +95,7 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
 - ESP reset Android smoke proves exact APK install, first telemetry, ESP32 reset through the tracked reset helper, and telemetry recovery without app restart.
 - Compass Android smoke proves exact APK install, first telemetry, safe compass calibration command delivery, and device-log acknowledgement. On RVC wiring it proves routing only; it does not prove DCD success.
 - GPS Android smoke proves exact APK install, BLE scan/connect/telemetry, valid non-zero coordinates, and GNSS quality `>0`. It does not prove anchor-control GNSS gate readiness unless `gnssQ=2` and anchor-specific acceptance also passes.
+- OTA production-app e2e proves exact APK install, phone HTTP download via `adb reverse`, SHA-256 verification in the app, BLE OTA upload, ESP32 reboot, and telemetry recovery after the update. It does not prove bootloader or partition-table changes; those still need USB flash.
 - Android smoke does not prove auth behavior.
 - Full BNO08x DCD/tare acceptance requires the explicit `esp32s3_bno08x_sh2_uart` target plus SH2-UART wiring; do not count current RVC acceptance as DCD proof.
 - It does not prove real anchor hold quality on water.
@@ -120,6 +122,7 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
   - `tools/hw/nh02/android-run-app-e2e.sh --anchor --wait-secs 130`
   - `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130`
   - `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180`
+  - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin`
   - `tools/hw/nh02/android-run-app-e2e.sh --reconnect --wait-secs 130`
   - `tools/hw/nh02/android-run-app-e2e.sh --esp-reset --wait-secs 130`
   - `tools/hw/nh02/android-install.sh`

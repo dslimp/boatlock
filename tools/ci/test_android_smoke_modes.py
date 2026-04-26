@@ -20,15 +20,17 @@ def _dart_smoke_modes() -> list[str]:
     ]
 
 
-def _shell_smoke_modes() -> list[str]:
+def _shell_modes(var_name: str) -> list[str]:
     text = _read("tools/android/common.sh")
-    match = re.search(r"BOATLOCK_SMOKE_MODES=\(([^)]*)\)", text)
+    match = re.search(rf"{var_name}=\(([^)]*)\)", text)
     assert match is not None
     return match.group(1).split()
 
 
 def test_android_smoke_modes_match_flutter_parser() -> None:
-    assert _shell_smoke_modes() == _dart_smoke_modes()
+    dart_modes = _dart_smoke_modes()
+    assert _shell_modes("BOATLOCK_SMOKE_MODES") == [mode for mode in dart_modes if mode != "ota"]
+    assert _shell_modes("BOATLOCK_APP_E2E_MODES") == dart_modes
 
 
 def test_android_smoke_wrappers_use_common_validator() -> None:

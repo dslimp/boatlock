@@ -61,6 +61,7 @@ class BleBoatLock with WidgetsBindingObserver {
   DateTime? _lastDataLogAt;
   Completer<bool>? _otaBeginAck;
   Completer<bool>? _otaFinishAck;
+  bool _otaFinishRequested = false;
 
   BleBoatLock({required this.onData, this.onLog});
 
@@ -546,6 +547,7 @@ class BleBoatLock with WidgetsBindingObserver {
     var beginAccepted = false;
     var finishRequested = false;
     try {
+      _log('BLE OTA begin size=${firmware.length} sha=$sha');
       _otaBeginAck = Completer<bool>();
       _otaFinishAck = null;
       final beginSent = await _writeCommand(
@@ -560,16 +562,41 @@ class BleBoatLock with WidgetsBindingObserver {
 
       var sent = 0;
       onProgress?.call(0, firmware.length);
+      var lastLoggedBucket = -1;
+      var lastLoggedAt = DateTime.now();
       for (final chunk in boatLockOtaChunks(firmware)) {
         await _otaChar!.write(chunk, withoutResponse: false);
         sent += chunk.length;
         onProgress?.call(sent, firmware.length);
+        final bucket = (100 * sent) ~/ firmware.length;
+        final now = DateTime.now();
+        if (bucket ~/ 5 != lastLoggedBucket ~/ 5 ||
+            now.difference(lastLoggedAt) >= const Duration(seconds: 10) ||
+            sent == firmware.length) {
+          lastLoggedBucket = bucket;
+          lastLoggedAt = now;
+          _log(
+            'BLE OTA progress sent=$sent total=${firmware.length} pct=$bucket',
+          );
+        }
       }
 
       _otaFinishAck = Completer<bool>();
+      _otaFinishRequested = true;
+      _log('BLE OTA finish requested sent=$sent total=${firmware.length}');
       finishRequested = await _writeCommand('OTA_FINISH');
-      if (!finishRequested) return false;
-      return _waitForOtaAck(_otaFinishAck!, const Duration(seconds: 20));
+      if (!finishRequested) {
+        _log('BLE OTA finish write returned false, waiting for firmware ack');
+      }
+      final finishAccepted = await _waitForOtaAck(
+        _otaFinishAck!,
+        const Duration(seconds: 45),
+      );
+      if (finishAccepted) {
+        finishRequested = true;
+      }
+      _log('BLE OTA finish ack=$finishAccepted');
+      return finishAccepted;
     } catch (e) {
       _log('BLE OTA failed: $e');
       return false;
@@ -581,6 +608,7 @@ class BleBoatLock with WidgetsBindingObserver {
       }
       _otaBeginAck = null;
       _otaFinishAck = null;
+      _otaFinishRequested = false;
       if (!_isDisposed && _cmdChar != null) {
         _startHeartbeat();
       }
@@ -764,11 +792,14 @@ class BleBoatLock with WidgetsBindingObserver {
     if (_otaBeginAck != null && !_otaBeginAck!.isCompleted) {
       _otaBeginAck!.complete(false);
     }
-    if (_otaFinishAck != null && !_otaFinishAck!.isCompleted) {
+    if (_otaFinishAck != null &&
+        !_otaFinishAck!.isCompleted &&
+        !_otaFinishRequested) {
       _otaFinishAck!.complete(false);
     }
     _otaBeginAck = null;
     _otaFinishAck = null;
+    _otaFinishRequested = false;
     _rssiThrottle.reset();
   }
 

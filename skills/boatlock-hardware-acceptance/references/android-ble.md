@@ -17,6 +17,8 @@
 - Pass `--serial <ip>:5555` to Android smoke/e2e wrappers when proving install/logcat/debug over Wi-Fi instead of USB.
 - Use `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` to install/update the reconnect smoke APK, wait for first telemetry, cycle phone Bluetooth through ADB, and require telemetry recovery without restarting the app.
 - Use `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` to install/update the reconnect smoke APK, wait for first telemetry, reset the ESP32-S3 through the tracked reset helper, and require telemetry recovery without restarting the app.
+- Use `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin` to install/update the production app with OTA e2e defines, serve firmware through `nh02` + `adb reverse`, upload over BLE from the phone, and require post-update telemetry recovery.
+- Current BLE OTA uses acknowledged writes for reliability and is slow on the bench; expect about 15 minutes for a 700 KB image until throughput is tuned.
 - If `nh02` shows the phone only as `MTP` or a vendor USB device and not in `adb devices`, the cable path is alive but USB debugging is still off on the phone.
 
 ## Install / Update Semantics Seen On The Xiaomi Test Phone
@@ -41,6 +43,7 @@
 - Use the phone as the real BLE central against the BoatLock bench.
 - Prove BLE reconnect behavior on `nh02` with `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130`.
 - Prove recovery after ESP32 reboot on `nh02` with `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130`.
+- Prove phone-bridged BLE firmware upload on `nh02` with `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin`.
 - Read device logs with `adb logcat`.
 - Update an already-installed smoke APK over USB with `adb install -r` through the tracked smoke wrapper.
 - Drive assisted/manual smoke tests while watching:
@@ -83,4 +86,6 @@
   - `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130`
 - For ESP32 reboot recovery acceptance, run:
   - `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130`
+- For phone-bridged BLE OTA acceptance, build firmware first and run:
+  - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin`
 - After that, if stronger coverage is needed, add a narrow app-side flow for connect + auth + heartbeat + anchor-on deny/allow checks.

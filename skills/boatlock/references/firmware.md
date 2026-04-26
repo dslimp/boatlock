@@ -61,7 +61,9 @@
   - one raw `float` blob per setting key
 - Current schema version is `Settings::VERSION = 0x18`.
 - Missing NVS keys keep current defaults and are persisted on boot writeback; removed keys are ignored.
-- Schema mismatch keeps existing values by key and updates only the schema marker plus normalized/missing keys.
+- Older schemas keep existing values by current key, apply explicit versioned migration rules, and update the schema marker plus normalized/missing keys.
+- Future schemas are loaded read-only on boot: known current keys may be used in RAM, but firmware must not downgrade the schema marker or write missing/default keys just because an older image booted after OTA rollback.
+- Key renames belong in `Settings::applyMigrations()` as explicit legacy-key rules; current legacy rule migrates pre-`0x18` `MaxThrust` to `MaxThrustA` when the current key is missing.
 - `Settings` objects must be safe immediately after construction: RAM defaults and key map ready, with no flash write from the constructor.
 - `Settings::set()` rejects non-finite values, clamps finite values to each key's configured range, then normalizes by declared type.
 - `Settings::setStrict()` rejects non-finite or out-of-range values and logs `CONFIG_REJECTED`.
@@ -73,6 +75,7 @@
   - stored schema is missing or mismatched
   - persisted keys are missing or unreadable
   - persisted values need normalization
+- `Settings::load()` must not write back on boot when stored schema is newer than the firmware schema.
 - Current write paths include at least:
   - BLE config and mode commands in `boatlock/BleCommandHandler.h`
   - anchor persistence in `boatlock/AnchorControl.h`

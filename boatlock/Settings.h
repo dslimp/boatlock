@@ -242,29 +242,40 @@ public:
 
         uint8_t storedVersion = 0;
         err = nvs_get_u8(handle, NVS_SCHEMA_KEY, &storedVersion);
+        bool allowWriteback = true;
         if (err != ESP_OK) {
             schemaDirty_ = true;
             dirty_ = true;
             logMessage("[EVENT] CONFIG_MIGRATION from_ver=0 to_ver=%d reason=nvs_schema_missing\n",
                        VERSION);
-        } else if (storedVersion != VERSION) {
+        } else if (storedVersion < VERSION) {
             schemaDirty_ = true;
             dirty_ = true;
             logMessage("[EVENT] CONFIG_MIGRATION from_ver=%d to_ver=%d storage=nvs\n",
                        storedVersion,
                        VERSION);
+        } else if (storedVersion > VERSION) {
+            allowWriteback = false;
+            logMessage("[EVENT] CONFIG_MIGRATION_UNSUPPORTED stored_ver=%d fw_ver=%d action=read_only\n",
+                       storedVersion,
+                       VERSION);
         }
 
+        bool loadedKeys[count] = {};
         for (int i = 0; i < count; i++) {
             float raw = entries[i].defaultValue;
             size_t len = sizeof(raw);
             err = nvs_get_blob(handle, entries[i].key, &raw, &len);
             if (err == ESP_ERR_NVS_NOT_FOUND) {
-                markDirtyKey(i);
+                if (allowWriteback) {
+                    markDirtyKey(i);
+                }
                 continue;
             }
             if (err != ESP_OK || len != sizeof(raw)) {
-                markDirtyKey(i);
+                if (allowWriteback) {
+                    markDirtyKey(i);
+                }
                 logMessage("[EVENT] CONFIG_REJECTED key=%s reason=nvs_read err=0x%X len=%u\n",
                            entries[i].key,
                            static_cast<unsigned int>(err),
@@ -273,17 +284,24 @@ public:
             }
             const float normalized = sanitizeLoadedValue(entries[i], raw);
             if (normalized != raw) {
-                markDirtyKey(i);
+                if (allowWriteback) {
+                    markDirtyKey(i);
+                }
                 logMessage("[EVENT] CONFIG_REJECTED key=%s raw=%.5f normalized=%.5f\n",
                            entries[i].key,
                            raw,
                            normalized);
             }
             entries[i].value = normalized;
+            loadedKeys[i] = true;
+        }
+
+        if (allowWriteback && storedVersion < VERSION) {
+            applyMigrations(handle, storedVersion, loadedKeys);
         }
 
         nvs_close(handle);
-        if (dirty_) {
+        if (allowWriteback && dirty_) {
             save();
         }
 
@@ -368,6 +386,60 @@ private:
             value = entry.maxValue;
         }
         return value;
+    }
+
+    bool readLegacyFloat(nvs_handle_t handle, const char* key, float* out) const {
+        if (!key || !out) {
+            return false;
+        }
+        float raw = 0.0f;
+        size_t len = sizeof(raw);
+        const esp_err_t err = nvs_get_blob(handle, key, &raw, &len);
+        if (err != ESP_OK || len != sizeof(raw)) {
+            return false;
+        }
+        *out = raw;
+        return true;
+    }
+
+    bool migrateLegacyFloatKey(nvs_handle_t handle,
+                               uint8_t storedVersion,
+                               const bool loadedKeys[count],
+                               const char* legacyKey,
+                               const char* currentKey,
+                               uint8_t fromVersionInclusive,
+                               uint8_t toVersionExclusive) {
+        if (storedVersion < fromVersionInclusive || storedVersion >= toVersionExclusive) {
+            return false;
+        }
+        const int currentIdx = idxByKey(currentKey);
+        if (currentIdx < 0 || loadedKeys[currentIdx]) {
+            return false;
+        }
+        float raw = 0.0f;
+        if (!readLegacyFloat(handle, legacyKey, &raw)) {
+            return false;
+        }
+        const float normalized = sanitizeLoadedValue(entries[currentIdx], raw);
+        entries[currentIdx].value = normalized;
+        markDirtyKey(currentIdx);
+        logMessage("[EVENT] CONFIG_MIGRATION_KEY from_ver=%d legacy=%s key=%s raw=%.5f value=%.5f\n",
+                   storedVersion,
+                   legacyKey,
+                   currentKey,
+                   raw,
+                   normalized);
+        return true;
+    }
+
+    void applyMigrations(nvs_handle_t handle, uint8_t storedVersion, const bool loadedKeys[count]) {
+        migrateLegacyFloatKey(handle,
+                              storedVersion,
+                              loadedKeys,
+                              "MaxThrust",
+                              "MaxThrustA",
+                              0,
+                              0x18);
     }
 
 };

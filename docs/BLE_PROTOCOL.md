@@ -73,11 +73,13 @@ BLE OTA uses the phone as the bridge:
 1. The app downloads `firmware.bin` and verifies it against an operator-provided SHA-256.
 2. The app sends `OTA_BEGIN:<size>,<sha256>` over `56ef`. When `secPaired=1`, this command must be wrapped in `SEC_CMD`.
 3. Firmware disables Anchor, stops Manual and all outputs, latches `HOLD`, and logs `[OTA] begin ok ...`.
-4. The app writes firmware bytes sequentially to `9abc` with acknowledged BLE writes.
+4. The app writes firmware bytes sequentially to `9abc` with acknowledged BLE writes and emits `BOATLOCK_OTA_PROGRESS` logcat lines while updating the Settings progress view.
 5. The app sends `OTA_FINISH` over `56ef`. Firmware checks received byte count and SHA-256 before finalizing the OTA image.
 6. On success firmware logs `[OTA] finish ok ...`, waits briefly so the phone can receive the log ACK, and restarts.
 
 During active OTA, firmware rejects all runtime commands except `HEARTBEAT`, `OTA_FINISH`, and `OTA_ABORT`. Chunk writes before a successful `OTA_BEGIN` are ignored. If the BLE link disconnects during an active transfer, firmware aborts the update and keeps the current boot partition.
+
+The current phone bridge intentionally uses acknowledged BLE writes for the first reliable acceptance path. This is slow on the bench, roughly sub-1 KB/s, so a 700 KB firmware image can take around 15 minutes; throughput optimization should be a separate change that preserves abort/retry safety.
 
 ## Live State Frame
 

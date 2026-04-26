@@ -40,6 +40,12 @@ static float persistedFloat(const char* key) {
   return value;
 }
 
+static uint8_t persistedSchema() {
+  uint8_t value = 0;
+  TEST_ASSERT_TRUE(nvs_mock_get_blob(Settings::NVS_NAMESPACE, Settings::NVS_SCHEMA_KEY, &value, sizeof(value)));
+  return value;
+}
+
 void test_get_set() {
   Settings s;
   s.reset();
@@ -213,6 +219,72 @@ void test_load_schema_mismatch_preserves_keyed_values() {
   TEST_ASSERT_EQUAL_FLOAT(2.4f, s.get("MaxHdop"));
   TEST_ASSERT_EQUAL_FLOAT(8.0f, s.get("MinSats"));
   TEST_ASSERT_EQUAL_FLOAT(4000.0f, s.get("CommToutMs"));
+  TEST_ASSERT_EQUAL_UINT8(Settings::VERSION, persistedSchema());
+}
+
+void test_load_old_schema_migrates_legacy_key_when_current_key_missing() {
+  float values[count];
+  fillDefaultValues(values);
+  storeNvsValues(values, 0x17);
+  nvs_mock_state().namespaces[Settings::NVS_NAMESPACE].committed.erase("MaxThrustA");
+  const float oldMaxThrust = 72.4f;
+  nvs_mock_put_blob(Settings::NVS_NAMESPACE, "MaxThrust", &oldMaxThrust, sizeof(oldMaxThrust));
+
+  Settings s;
+  s.load();
+
+  TEST_ASSERT_EQUAL_INT(1, nvs_mock_commit_count());
+  TEST_ASSERT_EQUAL_FLOAT(72.0f, s.get("MaxThrustA"));
+  TEST_ASSERT_EQUAL_FLOAT(72.0f, persistedFloat("MaxThrustA"));
+  TEST_ASSERT_EQUAL_UINT8(Settings::VERSION, persistedSchema());
+}
+
+void test_load_missing_schema_migrates_legacy_key() {
+  nvs_mock_clear();
+  const float oldMaxThrust = 83.2f;
+  nvs_mock_put_blob(Settings::NVS_NAMESPACE, "MaxThrust", &oldMaxThrust, sizeof(oldMaxThrust));
+
+  Settings s;
+  s.load();
+
+  TEST_ASSERT_EQUAL_INT(1, nvs_mock_commit_count());
+  TEST_ASSERT_EQUAL_FLOAT(83.0f, s.get("MaxThrustA"));
+  TEST_ASSERT_EQUAL_FLOAT(83.0f, persistedFloat("MaxThrustA"));
+  TEST_ASSERT_EQUAL_UINT8(Settings::VERSION, persistedSchema());
+}
+
+void test_load_old_schema_keeps_current_key_over_legacy_key() {
+  float values[count];
+  fillDefaultValues(values);
+  values[defaultIdxByKey("MaxThrustA")] = 64.0f;
+  storeNvsValues(values, 0x17);
+  const float oldMaxThrust = 72.0f;
+  nvs_mock_put_blob(Settings::NVS_NAMESPACE, "MaxThrust", &oldMaxThrust, sizeof(oldMaxThrust));
+
+  Settings s;
+  s.load();
+
+  TEST_ASSERT_EQUAL_INT(1, nvs_mock_commit_count());
+  TEST_ASSERT_EQUAL_FLOAT(64.0f, s.get("MaxThrustA"));
+  TEST_ASSERT_EQUAL_FLOAT(64.0f, persistedFloat("MaxThrustA"));
+  TEST_ASSERT_EQUAL_UINT8(Settings::VERSION, persistedSchema());
+}
+
+void test_load_future_schema_does_not_downgrade_or_write_defaults() {
+  float values[count];
+  fillDefaultValues(values);
+  values[defaultIdxByKey("HoldRadius")] = 4.4f;
+  storeNvsValues(values, 0x7F);
+  nvs_mock_state().namespaces[Settings::NVS_NAMESPACE].committed.erase("DeadbandM");
+
+  Settings s;
+  s.load();
+
+  TEST_ASSERT_EQUAL_INT(0, nvs_mock_commit_count());
+  TEST_ASSERT_EQUAL_FLOAT(4.4f, s.get("HoldRadius"));
+  TEST_ASSERT_EQUAL_FLOAT(1.5f, s.get("DeadbandM"));
+  TEST_ASSERT_FALSE(nvs_mock_get_blob(Settings::NVS_NAMESPACE, "DeadbandM", &values[0], sizeof(float)));
+  TEST_ASSERT_EQUAL_UINT8(0x7F, persistedSchema());
 }
 
 void test_load_missing_nvs_key_uses_default_and_persists_it() {
@@ -314,6 +386,10 @@ int main(int argc, char **argv) {
   RUN_TEST(test_set_strict_rounds_integer_values);
   RUN_TEST(test_set_normalizes_integer_values);
   RUN_TEST(test_load_schema_mismatch_preserves_keyed_values);
+  RUN_TEST(test_load_old_schema_migrates_legacy_key_when_current_key_missing);
+  RUN_TEST(test_load_missing_schema_migrates_legacy_key);
+  RUN_TEST(test_load_old_schema_keeps_current_key_over_legacy_key);
+  RUN_TEST(test_load_future_schema_does_not_downgrade_or_write_defaults);
   RUN_TEST(test_load_missing_nvs_key_uses_default_and_persists_it);
   RUN_TEST(test_load_sanitizes_nan_and_out_of_range_values);
   RUN_TEST(test_save_uses_one_commit_for_multiple_dirty_keys);

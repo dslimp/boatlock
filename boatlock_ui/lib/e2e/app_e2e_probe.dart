@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import '../ble/ble_boatlock.dart';
+import '../ble/ble_ota_payload.dart';
 import '../models/boat_data.dart';
 import '../smoke/ble_smoke_logic.dart';
 import '../smoke/ble_smoke_mode.dart';
@@ -12,6 +14,16 @@ import '../smoke/ble_smoke_mode.dart';
 const kBoatLockAppE2eModeDefine = 'BOATLOCK_APP_E2E_MODE';
 const kBoatLockAppE2eModeName = String.fromEnvironment(
   kBoatLockAppE2eModeDefine,
+  defaultValue: '',
+);
+const kBoatLockAppE2eOtaUrlDefine = 'BOATLOCK_APP_E2E_OTA_URL';
+const kBoatLockAppE2eOtaSha256Define = 'BOATLOCK_APP_E2E_OTA_SHA256';
+const kBoatLockAppE2eOtaUrl = String.fromEnvironment(
+  kBoatLockAppE2eOtaUrlDefine,
+  defaultValue: '',
+);
+const kBoatLockAppE2eOtaSha256 = String.fromEnvironment(
+  kBoatLockAppE2eOtaSha256Define,
   defaultValue: '',
 );
 
@@ -23,14 +35,19 @@ class BoatLockAppE2eProbe {
     final timeout = switch (_mode) {
       BleSmokeMode.reconnect => const Duration(seconds: 150),
       BleSmokeMode.gps => const Duration(seconds: 180),
+      BleSmokeMode.ota => const Duration(minutes: 25),
       _ => const Duration(seconds: 75),
     };
     _timeoutTimer = Timer(timeout, () {
       _finish(false, 'app_${_mode.name}_timeout');
     });
-    if (_mode == BleSmokeMode.reconnect) {
+    if (_mode == BleSmokeMode.reconnect || _mode == BleSmokeMode.ota) {
       _gapTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-        _checkReconnectGap();
+        if (_mode == BleSmokeMode.ota) {
+          _checkOtaReconnectGap();
+        } else {
+          _checkReconnectGap();
+        }
       });
     }
   }
@@ -69,6 +86,10 @@ class BoatLockAppE2eProbe {
   bool _compassAutosaveLogSeen = false;
   bool _compassDcdSaveLogSeen = false;
   bool _gpsWaitingLogged = false;
+  bool _otaStarted = false;
+  bool _otaUploadDone = false;
+  bool _otaReconnectGapSeen = false;
+  int _otaProgressBucket = -1;
 
   static BoatLockAppE2eProbe? maybeCreate(BleBoatLock ble) {
     if (kBoatLockAppE2eModeName.isEmpty) {
@@ -114,6 +135,8 @@ class BoatLockAppE2eProbe {
         _handleCompassData();
       case BleSmokeMode.gps:
         _handleGpsData(data);
+      case BleSmokeMode.ota:
+        _handleOtaData();
     }
   }
 
@@ -297,6 +320,70 @@ class BoatLockAppE2eProbe {
     }
   }
 
+  void _handleOtaData() {
+    if (!_otaStarted) {
+      _otaStarted = true;
+      _stage('ota_upload_start');
+      unawaited(_runOtaUpload());
+      return;
+    }
+    if (_otaUploadDone && _otaReconnectGapSeen) {
+      _finish(true, 'app_ota_reconnect_after_update');
+    }
+  }
+
+  Future<void> _runOtaUpload() async {
+    final uri = Uri.tryParse(kBoatLockAppE2eOtaUrl);
+    final expectedSha = normalizeBoatLockSha256Hex(kBoatLockAppE2eOtaSha256);
+    if (uri == null || !uri.hasScheme || expectedSha == null) {
+      _finish(false, 'app_ota_missing_firmware_define');
+      return;
+    }
+
+    try {
+      final response = await http
+          .get(uri)
+          .timeout(const Duration(seconds: 120));
+      if (response.statusCode != 200) {
+        _log('ota_download status=${response.statusCode}');
+        _finish(false, 'app_ota_download_failed');
+        return;
+      }
+      final firmware = response.bodyBytes;
+      final actualSha = boatLockSha256Hex(firmware);
+      if (actualSha != expectedSha) {
+        _log('ota_sha_mismatch actual=$actualSha expected=$expectedSha');
+        _finish(false, 'app_ota_sha_mismatch');
+        return;
+      }
+      _stage('ota_download_verified');
+      final ok = await _ble.uploadFirmwareOtaBytes(
+        firmware: firmware,
+        sha256Hex: expectedSha,
+        onProgress: (sent, total) {
+          if (total <= 0) {
+            return;
+          }
+          final bucket = (100 * sent / total).floor();
+          if (bucket ~/ 10 != _otaProgressBucket ~/ 10 || sent == total) {
+            _otaProgressBucket = bucket;
+            _log('ota_progress sent=$sent total=$total pct=$bucket');
+          }
+        },
+      );
+      if (!ok) {
+        _finish(false, 'app_ota_upload_failed');
+        return;
+      }
+      _otaUploadDone = true;
+      _lastDataAt = DateTime.now();
+      _stage('ota_upload_done_wait_reconnect');
+    } catch (e) {
+      _log('ota_error $e');
+      _finish(false, 'app_ota_exception');
+    }
+  }
+
   Future<void> _sendManualSet() async {
     final ok = await _ble.sendManualControl(
       steer: 0,
@@ -436,6 +523,21 @@ class BoatLockAppE2eProbe {
     }
     _reconnectGapSeen = true;
     _stage('telemetry_gap');
+  }
+
+  void _checkOtaReconnectGap() {
+    if (_completed ||
+        !_otaUploadDone ||
+        _otaReconnectGapSeen ||
+        _lastDataAt == null) {
+      return;
+    }
+    final gap = DateTime.now().difference(_lastDataAt!);
+    if (gap < const Duration(seconds: 4)) {
+      return;
+    }
+    _otaReconnectGapSeen = true;
+    _stage('ota_reconnect_gap');
   }
 
   void _stage(String stage) {

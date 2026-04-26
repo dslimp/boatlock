@@ -32,6 +32,7 @@
   - build `boatlock/.pio/build/esp32s3/firmware.bin`
   - publish/serve the binary from a trusted URL and copy its SHA-256
   - in the app Settings screen, use Firmware OTA URL + SHA-256 to upload over BLE
+  - bench automation: `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin`
 - Full native tests:
   - `cd boatlock && platformio test -e native`
 - Do not run multiple `platformio test -e native ...` commands in parallel against the same checkout/build directory. PlatformIO shares `.pio/build/native`, and parallel suites can kill or corrupt each other; run suites sequentially or use isolated worktrees/build dirs.
@@ -68,6 +69,7 @@
   - `tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130`
   - `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130`
   - `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180`
+  - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin`
   - `tools/hw/nh02/android-run-app-e2e.sh --reconnect --wait-secs 130`
   - `tools/hw/nh02/android-run-app-e2e.sh --esp-reset --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130`

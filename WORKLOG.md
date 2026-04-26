@@ -5239,3 +5239,41 @@ Self-review:
 - This was a real local/CI parity gap caused by macOS case-insensitive filesystem behavior.
 - CI is now more verbose by design; duplicated setup time is acceptable because failures are easier to identify and build/test jobs can run independently.
 - Remaining proof is the next GitHub Actions run on the new commit.
+
+### 2026-04-26 Stage 172: settings migrations and phone-bridged BLE OTA proof
+
+Scope:
+- Add forward settings migration mechanics on top of the NVS settings store.
+- Prove ESP32 firmware update through the phone app over BLE, using the `nh02` Android/ESP32 bench path.
+- Make OTA progress visible both on the phone Settings screen and in wrapper/logcat output.
+
+External baseline:
+- Rechecked Espressif NVS guidance: settings remain stable key/value entries, writes require explicit commit, and writeback should be limited to real migrations/recovery. Future-schema rollback must not downgrade the stored schema marker.
+
+Key outcomes:
+- `Settings::load()` now distinguishes missing/older/current/future schemas.
+- Older schemas run explicit `Settings::applyMigrations()` rules and write the current schema marker.
+- Future schemas load known keys in RAM but do not write missing defaults or downgrade `schema`.
+- Added the first explicit legacy-key migration: pre-`0x18` `MaxThrust` -> `MaxThrustA` when the current key is absent.
+- Added production-app `ota` e2e mode. The app downloads `firmware.bin`, verifies SHA-256, uploads via BLE, and waits for a telemetry gap/reconnect after ESP reboot.
+- `nh02` app-e2e wrapper now serves `firmware.bin` over local HTTP, exposes it to the phone via `adb reverse`, picks a free OTA port, and prints OTA progress lines while waiting.
+- Settings page now shows OTA percent, byte counts, and approximate speed; app logcat emits `BOATLOCK_OTA_PROGRESS`.
+- BLE client treats firmware `[OTA] finish ok` as the authoritative finish acknowledgement even if the ESP32 reboot causes a disconnect race immediately after `OTA_FINISH`.
+
+Validation:
+- `bash -n tools/android/common.sh tools/android/build-app-apk.sh tools/android/run-app-e2e.sh tools/hw/nh02/android-run-app-e2e.sh tools/hw/nh02/android-run-smoke.sh tools/hw/nh02/remote/boatlock-run-android-smoke.sh` -> PASS.
+- `python3 tools/ci/check_config_schema_version.py && pytest -q tools/ci/test_android_smoke_modes.py` -> PASS (`4/4`, schema `0x18`).
+- `python3 -m pytest -q tools/ci/test_*.py` -> PASS (`18/18`).
+- `cd boatlock && platformio test -e native -f test_settings` -> PASS (`24/24`).
+- `cd boatlock_ui && flutter analyze` -> PASS.
+- `cd boatlock_ui && flutter test test/settings_page_test.dart test/ble_smoke_mode_test.dart test/ble_ota_payload_test.dart` -> PASS (`8/8`).
+- `cd boatlock && pio run -e esp32s3` -> PASS; `firmware.bin` SHA-256 `520d13acb5cd1e7a9f718b02cff8e408b981d9d66aac3d260ab31d565daa07be`, size `711664`.
+- `tools/hw/nh02/android-status.sh` -> PASS; phone visible over USB `68b657f0` and Wi-Fi ADB `192.168.88.33:5555`.
+- `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --serial 192.168.88.33:5555` -> PASS, reason `app_ota_reconnect_after_update`, last device log `[OTA] finish ok size=711664 reboot_ms=900`.
+- `tools/hw/nh02/acceptance.sh --no-reset --seconds 20` after OTA -> PASS; boot path shows `[NVS] settings loaded (ver=24)`, BLE advertising, OTA characteristic, BNO08x heading events, and GPS UART activity.
+- `git diff --check` -> PASS.
+
+Self-review:
+- Current OTA speed is not the BLE maximum path. ESP32 has MTU 247/data length 251, but the app does not request MTU/connection priority and OTA uses 180-byte acknowledged writes over a 30..60 ms connection interval.
+- Bench throughput is about 1 KB/s; this is acceptable for first reliable acceptance but should be optimized separately with OTA-only fast conn params, Android MTU/priority request, MTU-sized chunks, and write-without-response plus backpressure.
+- BLE OTA updates the app partition only; bootloader/partition-table changes still require USB flashing.

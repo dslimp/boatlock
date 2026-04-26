@@ -291,7 +291,9 @@ Implication for BoatLock:
 - Treat flash commits as fallible. A failed commit must not be logged as saved or clear dirty state.
 - Runtime objects backed by persisted settings should restore previous RAM values when a commit fails instead of exposing uncommitted state as the active operating point.
 - Store settings by stable key rather than array index so adding, removing, or reordering settings does not need a custom migration table.
-- Boot migration, missing-key recovery, and value normalization are the only expected boot-time settings writes.
+- Boot migration from older schemas, missing-key recovery, and value normalization are the only expected boot-time settings writes.
+- Do not automatically downgrade a newer stored schema when an older firmware boots after OTA rollback; load known keys defensively in RAM and leave the newer schema marker untouched unless the operator changes a setting.
+- Key renames still need explicit migration rules even with key/value storage; defaults alone silently discard the operator's old value.
 - Non-finite config values must fail closed before reaching persisted storage.
 
 ## What BNO08x SH2 Integration Gets Right

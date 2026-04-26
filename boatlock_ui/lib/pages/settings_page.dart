@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -76,6 +77,10 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _otaBusy = false;
   double? _otaProgress;
   String _otaStatus = '';
+  String _otaProgressLabel = '';
+  DateTime? _otaStartedAt;
+  DateTime? _otaLastLogAt;
+  int _otaLastLogBucket = -1;
 
   @override
   void initState() {
@@ -322,7 +327,10 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Future<Uint8List> _downloadFirmware(Uri uri) async {
+  Future<Uint8List> _downloadFirmware(
+    Uri uri, {
+    void Function(int receivedBytes, int? totalBytes)? onProgress,
+  }) async {
     final client = HttpClient();
     client.connectionTimeout = const Duration(seconds: 15);
     try {
@@ -332,13 +340,72 @@ class _SettingsPageState extends State<SettingsPage> {
         throw HttpException('HTTP ${response.statusCode}', uri: uri);
       }
       final builder = BytesBuilder(copy: false);
+      final total = response.contentLength > 0 ? response.contentLength : null;
+      var received = 0;
       await for (final chunk in response) {
         builder.add(chunk);
+        received += chunk.length;
+        onProgress?.call(received, total);
       }
       return builder.takeBytes();
     } finally {
       client.close(force: true);
     }
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes >= 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
+    }
+    if (bytes >= 1024) {
+      return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    }
+    return '$bytes B';
+  }
+
+  String _formatOtaProgress(String phase, int sent, int? total) {
+    final elapsed = _otaStartedAt == null
+        ? Duration.zero
+        : DateTime.now().difference(_otaStartedAt!);
+    final seconds = elapsed.inMilliseconds / 1000.0;
+    final speed = seconds > 0 ? sent / seconds : 0.0;
+    final speedText = '${_formatBytes(speed.round())}/s';
+    if (total != null && total > 0) {
+      final percent = (100.0 * sent / total).clamp(0.0, 100.0);
+      return '$phase ${percent.toStringAsFixed(1)}% '
+          '(${_formatBytes(sent)} / ${_formatBytes(total)}, $speedText)';
+    }
+    return '$phase ${_formatBytes(sent)} ($speedText)';
+  }
+
+  void _logOta(String event, {int? sent, int? total, String? detail}) {
+    final parts = <String>['BOATLOCK_OTA_PROGRESS event=$event'];
+    if (sent != null) parts.add('sent=$sent');
+    if (total != null) parts.add('total=$total');
+    if (detail != null && detail.isNotEmpty) parts.add('detail=$detail');
+    final line = parts.join(' ');
+    debugPrint(line);
+    developer.log(line, name: 'BoatLockOTA');
+  }
+
+  void _logOtaProgress(
+    String event,
+    int sent,
+    int? total, {
+    bool force = false,
+  }) {
+    final now = DateTime.now();
+    final bucket = total != null && total > 0 ? ((100 * sent) ~/ total) : -1;
+    final logByBucket = bucket >= 0 && bucket ~/ 5 != _otaLastLogBucket ~/ 5;
+    final logByTime =
+        _otaLastLogAt == null ||
+        now.difference(_otaLastLogAt!) >= const Duration(seconds: 10);
+    if (!force && !logByBucket && !logByTime) {
+      return;
+    }
+    _otaLastLogAt = now;
+    _otaLastLogBucket = bucket;
+    _logOta(event, sent: sent, total: total);
   }
 
   Future<void> _runBleOta() async {
@@ -357,10 +424,28 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() {
       _otaBusy = true;
       _otaProgress = null;
+      _otaProgressLabel = '';
       _otaStatus = 'Скачивание';
+      _otaStartedAt = DateTime.now();
+      _otaLastLogAt = null;
+      _otaLastLogBucket = -1;
     });
+    _logOta('download_start', detail: uri.toString());
     try {
-      final firmware = await _downloadFirmware(uri);
+      final firmware = await _downloadFirmware(
+        uri,
+        onProgress: (received, total) {
+          if (!mounted) return;
+          final progress = total != null && total > 0 ? received / total : null;
+          final label = _formatOtaProgress('Скачивание', received, total);
+          setState(() {
+            _otaProgress = progress;
+            _otaProgressLabel = label;
+            _otaStatus = label;
+          });
+          _logOtaProgress('download', received, total);
+        },
+      );
       if (!mounted) return;
       final actualSha = boatLockSha256Hex(firmware);
       if (actualSha != expectedSha) {
@@ -369,22 +454,35 @@ class _SettingsPageState extends State<SettingsPage> {
           _otaStatus = 'SHA не совпал';
         });
         _showMessage('SHA не совпал');
+        _logOta('sha_mismatch', sent: firmware.length, total: firmware.length);
         return;
       }
 
       setState(() {
         _otaProgress = 0;
-        _otaStatus = 'Передача по BLE';
+        _otaProgressLabel = 'Передача по BLE 0.0%';
+        _otaStatus = _otaProgressLabel;
+        _otaStartedAt = DateTime.now();
+        _otaLastLogAt = null;
+        _otaLastLogBucket = -1;
       });
+      _logOta(
+        'download_verified',
+        sent: firmware.length,
+        total: firmware.length,
+      );
       final ok = await widget.ble.uploadFirmwareOtaBytes(
         firmware: firmware,
         sha256Hex: actualSha,
         onProgress: (sent, total) {
           if (!mounted || total <= 0) return;
+          final label = _formatOtaProgress('Передача по BLE', sent, total);
           setState(() {
             _otaProgress = sent / total;
-            _otaStatus = 'Передано $sent / $total байт';
+            _otaProgressLabel = label;
+            _otaStatus = label;
           });
+          _logOtaProgress('upload', sent, total);
         },
       );
       if (!mounted) return;
@@ -392,7 +490,9 @@ class _SettingsPageState extends State<SettingsPage> {
         _otaBusy = false;
         _otaProgress = ok ? 1 : _otaProgress;
         _otaStatus = ok ? 'Готово, ESP перезагружается' : 'OTA отклонено';
+        _otaProgressLabel = ok ? '100.0%' : _otaProgressLabel;
       });
+      _logOta(ok ? 'upload_done' : 'upload_rejected');
       _showMessage(ok ? 'OTA завершено' : 'OTA не прошла');
     } catch (e) {
       if (!mounted) return;
@@ -400,6 +500,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _otaBusy = false;
         _otaStatus = 'Ошибка OTA';
       });
+      _logOta('error', detail: e.toString());
       _showMessage('Ошибка OTA: $e');
     }
   }
@@ -553,7 +654,19 @@ class _SettingsPageState extends State<SettingsPage> {
           if (_otaProgress != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: LinearProgressIndicator(value: _otaProgress),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  LinearProgressIndicator(value: _otaProgress),
+                  if (_otaProgressLabel.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      _otaProgressLabel,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ],
+              ),
             ),
           const Divider(),
           ListTile(

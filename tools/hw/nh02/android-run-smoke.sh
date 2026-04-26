@@ -13,6 +13,8 @@ ANDROID_SERIAL=""
 SMOKE_MODE="basic"
 CYCLE_BLUETOOTH=0
 RESET_ESP32=0
+OTA_FIRMWARE=""
+OTA_PORT=18080
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -49,6 +51,14 @@ while [[ $# -gt 0 ]]; do
       SMOKE_MODE="reconnect"
       RESET_ESP32=1
       shift
+      ;;
+    --ota-firmware)
+      OTA_FIRMWARE="${2:?missing OTA firmware path}"
+      shift 2
+      ;;
+    --ota-port)
+      OTA_PORT="${2:?missing OTA port}"
+      shift 2
       ;;
     --no-build)
       BUILD_FIRST=0
@@ -96,6 +106,17 @@ if [[ "${INSTALL_APP}" -eq 1 ]]; then
   "${RSYNC_BASE[@]}" "${BOATLOCK_ANDROID_APK}" "${BOATLOCK_NH02_SSH_TARGET}:${remote_apk_path}"
 fi
 
+remote_ota_path=""
+if [[ -n "${OTA_FIRMWARE}" ]]; then
+  if [[ ! -f "${OTA_FIRMWARE}" ]]; then
+    echo "OTA firmware not found: ${OTA_FIRMWARE}" >&2
+    exit 1
+  fi
+  remote_shell "mkdir -p '${BOATLOCK_NH02_REMOTE_ANDROID_STAGE}'"
+  remote_ota_path="${BOATLOCK_NH02_REMOTE_ANDROID_STAGE}/firmware.bin"
+  "${RSYNC_BASE[@]}" "${OTA_FIRMWARE}" "${BOATLOCK_NH02_SSH_TARGET}:${remote_ota_path}"
+fi
+
 serial_arg=""
 if [[ -n "${ANDROID_SERIAL}" ]]; then
   serial_arg="--serial '${ANDROID_SERIAL}'"
@@ -121,6 +142,11 @@ if [[ "${RESET_ESP32}" -eq 1 ]]; then
   reset_arg="--reset-esp32 --esp32-reset-bin '${BOATLOCK_NH02_REMOTE_RESET_BIN}'"
 fi
 
+ota_arg=""
+if [[ -n "${remote_ota_path}" ]]; then
+  ota_arg="--ota-firmware '${remote_ota_path}' --ota-port '${OTA_PORT}'"
+fi
+
 remote_shell "'${BOATLOCK_NH02_REMOTE_ANDROID_SMOKE_BIN}' \
   --package '${BOATLOCK_ANDROID_PACKAGE}' \
   --activity '${BOATLOCK_ANDROID_ACTIVITY}' \
@@ -128,6 +154,7 @@ remote_shell "'${BOATLOCK_NH02_REMOTE_ANDROID_SMOKE_BIN}' \
   ${install_arg} \
   ${cycle_arg} \
   ${reset_arg} \
+  ${ota_arg} \
   ${serial_arg} \
   ${perm_args} \
   ${remote_apk_path:+--apk '${remote_apk_path}'}"

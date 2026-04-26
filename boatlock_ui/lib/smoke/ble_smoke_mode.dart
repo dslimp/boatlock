@@ -7,6 +7,7 @@ enum BleSmokeMode {
   anchor,
   compass,
   gps,
+  ota,
 }
 
 const kBoatLockSmokeModeDefine = 'BOATLOCK_SMOKE_MODE';
@@ -28,6 +29,8 @@ BleSmokeMode boatLockSmokeModeFromString(String value) {
       return BleSmokeMode.compass;
     case 'gps':
       return BleSmokeMode.gps;
+    case 'ota':
+      return BleSmokeMode.ota;
     case 'basic':
     default:
       return BleSmokeMode.basic;

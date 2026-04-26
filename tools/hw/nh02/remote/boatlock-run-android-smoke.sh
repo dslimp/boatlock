@@ -11,6 +11,9 @@ INSTALL_APP=1
 CYCLE_BLUETOOTH=0
 RESET_ESP32=0
 ESP32_RESET_BIN="${BOATLOCK_ESP32_RESET_BIN:-/opt/boatlock-hw/bin/boatlock-reset-esp32s3.sh}"
+OTA_FIRMWARE=""
+OTA_PORT=18080
+OTA_SERVER_PID=""
 PERMISSIONS=()
 
 while [[ $# -gt 0 ]]; do
@@ -33,6 +36,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --esp32-reset-bin)
       ESP32_RESET_BIN="${2:?missing ESP32 reset helper path}"
+      shift 2
+      ;;
+    --ota-firmware)
+      OTA_FIRMWARE="${2:?missing OTA firmware path}"
+      shift 2
+      ;;
+    --ota-port)
+      OTA_PORT="${2:?missing OTA port}"
       shift 2
       ;;
     --package)
@@ -87,6 +98,22 @@ if [[ "${RESET_ESP32}" -eq 1 && ! -x "${ESP32_RESET_BIN}" ]]; then
   echo "ESP32 reset helper is missing or not executable: ${ESP32_RESET_BIN}" >&2
   exit 1
 fi
+
+if [[ -n "${OTA_FIRMWARE}" && ! -f "${OTA_FIRMWARE}" ]]; then
+  echo "OTA firmware not found: ${OTA_FIRMWARE}" >&2
+  exit 1
+fi
+
+cleanup() {
+  if [[ -n "${OTA_SERVER_PID}" ]]; then
+    kill "${OTA_SERVER_PID}" >/dev/null 2>&1 || true
+    wait "${OTA_SERVER_PID}" >/dev/null 2>&1 || true
+  fi
+  if [[ -n "${OTA_FIRMWARE}" ]]; then
+    "${ADB[@]}" reverse --remove "tcp:${OTA_PORT}" >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
 
 ADB=(adb)
 if [[ -n "${SERIAL}" ]]; then
@@ -143,6 +170,29 @@ for perm in "${PERMISSIONS[@]}"; do
   "${ADB[@]}" shell pm grant "${PACKAGE}" "${perm}" >/dev/null 2>&1 || true
 done
 
+if [[ -n "${OTA_FIRMWARE}" ]]; then
+  ota_dir="$(dirname "${OTA_FIRMWARE}")"
+  ota_name="$(basename "${OTA_FIRMWARE}")"
+  if [[ "${ota_name}" != "firmware.bin" ]]; then
+    echo "OTA firmware remote path must be named firmware.bin: ${OTA_FIRMWARE}" >&2
+    exit 1
+  fi
+  "${ADB[@]}" reverse --remove "tcp:${OTA_PORT}" >/dev/null 2>&1 || true
+  "${ADB[@]}" reverse "tcp:${OTA_PORT}" "tcp:${OTA_PORT}"
+  (
+    cd "${ota_dir}"
+    python3 -m http.server "${OTA_PORT}" --bind 127.0.0.1
+  ) >/tmp/boatlock-ota-http.log 2>&1 &
+  OTA_SERVER_PID="$!"
+  sleep 1
+  if ! kill -0 "${OTA_SERVER_PID}" >/dev/null 2>&1; then
+    echo "OTA HTTP server failed to start" >&2
+    cat /tmp/boatlock-ota-http.log >&2 || true
+    exit 1
+  fi
+  printf 'ota_server=127.0.0.1:%s firmware=%s\n' "${OTA_PORT}" "${OTA_FIRMWARE}"
+fi
+
 "${ADB[@]}" logcat -c || true
 "${ADB[@]}" shell am force-stop "${PACKAGE}" >/dev/null 2>&1 || true
 "${ADB[@]}" shell am start -W -n "${ACTIVITY}" >/dev/null
@@ -173,6 +223,8 @@ fi
 
 deadline=$(( $(date +%s) + WAIT_SECS ))
 result_line=""
+progress_line=""
+last_progress_line=""
 
 while [[ $(date +%s) -lt ${deadline} ]]; do
   dump="$("${ADB[@]}" logcat -d 2>/dev/null || true)"
@@ -180,13 +232,18 @@ while [[ $(date +%s) -lt ${deadline} ]]; do
   if [[ -n "${result_line}" ]]; then
     break
   fi
+  progress_line="$(printf '%s\n' "${dump}" | grep -E 'BOATLOCK_OTA_PROGRESS|BoatLockAppE2E.*ota_progress|\\[OTA\\] progress|BLE OTA progress' | tail -n 1 || true)"
+  if [[ -n "${progress_line}" && "${progress_line}" != "${last_progress_line}" ]]; then
+    printf '%s\n' "${progress_line}"
+    last_progress_line="${progress_line}"
+  fi
   sleep 2
 done
 
 if [[ -z "${result_line}" ]]; then
   printf 'no BOATLOCK_SMOKE_RESULT found in logcat within %ss\n' "${WAIT_SECS}" >&2
   printf 'recent relevant logcat:\n' >&2
-  "${ADB[@]}" logcat -d 2>/dev/null | grep -E 'BoatLockSmoke|BOATLOCK_SMOKE_RESULT|FlutterBluePlus|flutter' | tail -n 120 >&2 || true
+  "${ADB[@]}" logcat -d 2>/dev/null | grep -E 'BoatLockSmoke|BoatLockAppE2E|BOATLOCK_SMOKE_RESULT|BOATLOCK_OTA_PROGRESS|FlutterBluePlus|flutter|\\[OTA\\]' | tail -n 160 >&2 || true
   exit 1
 fi
 
