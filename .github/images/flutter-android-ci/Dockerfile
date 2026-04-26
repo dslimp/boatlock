@@ -56,14 +56,12 @@ RUN curl -fsSL "https://storage.googleapis.com/flutter_infra_release/releases/st
 
 WORKDIR /opt/boatlock_ui_warmup
 
-COPY boatlock_ui/pubspec.yaml boatlock_ui/pubspec.lock ./
-COPY boatlock_ui/android/gradle ./android/gradle
-COPY boatlock_ui/android/gradlew boatlock_ui/android/settings.gradle.kts boatlock_ui/android/build.gradle.kts ./android/
-COPY boatlock_ui/android/app/build.gradle.kts ./android/app/build.gradle.kts
+COPY boatlock_ui ./
 
-RUN chmod +x android/gradlew \
+RUN rm -f android/local.properties \
     && flutter pub get \
     && printf 'sdk.dir=%s\nflutter.sdk=%s\n' "${ANDROID_HOME}" "${FLUTTER_HOME}" > android/local.properties \
-    && (cd android && ./gradlew --no-daemon --build-cache help)
+    && flutter build apk --debug --no-pub \
+    && rm -rf build .dart_tool android/.gradle
 
 WORKDIR /workspace

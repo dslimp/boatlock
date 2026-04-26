@@ -6,14 +6,13 @@ on:
     branches:
       - main
     paths:
+      - ".dockerignore"
       - ".github/images/flutter-android-ci/**"
       - ".github/workflows/flutter-ci-image.yml"
       - "boatlock_ui/pubspec.yaml"
       - "boatlock_ui/pubspec.lock"
-      - "boatlock_ui/android/gradle/wrapper/gradle-wrapper.properties"
-      - "boatlock_ui/android/settings.gradle.kts"
-      - "boatlock_ui/android/build.gradle.kts"
-      - "boatlock_ui/android/app/build.gradle.kts"
+      - "boatlock_ui/android/**"
+      - "boatlock_ui/lib/**"
 
 permissions:
   contents: read

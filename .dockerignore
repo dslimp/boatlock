@@ -1,0 +1,8 @@
+.git
+.github/**/*.dockerbuild
+**/.dart_tool
+**/.gradle
+**/build
+**/local.properties
+boatlock/.pio
+boatlock_ui/.pub-cache
