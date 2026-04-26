@@ -1,6 +1,7 @@
 #pragma once
-#include <EEPROM.h>
 #include <math.h>
+#include <nvs.h>
+#include <stddef.h>
 #include <string.h>
 #include <stdint.h>
 #include "Logger.h"
@@ -82,7 +83,10 @@ const char* imuTypeNames[] = { "BNO055", "MPU9250", "BNO085", "LSM9DS1", "None" 
 
 class Settings {
 public:
-    static constexpr uint8_t VERSION = 0x17;
+    static constexpr uint8_t VERSION = 0x18;
+    static constexpr const char* NVS_NAMESPACE = "boatlock_cfg";
+    static constexpr const char* NVS_SCHEMA_KEY = "schema";
+    // Keeps the existing BleSecurity EEPROM offset stable while settings live in NVS.
     static const int EEPROM_ADDR = 256;
     static constexpr int VALUES_BYTES = sizeof(float) * count;
     static constexpr int VALUES_ADDR = EEPROM_ADDR + sizeof(uint8_t);
@@ -97,7 +101,7 @@ public:
     Settings() {
         loadDefaults();
         buildKeyMap();
-        dirty_ = false;
+        clearDirty();
     }
 
     int idxByKey(const char* key) {
@@ -152,7 +156,8 @@ public:
     void reset() {
         loadDefaults();
         buildKeyMap();
-        dirty_ = true;
+        markAllDirty();
+        clearBeforeSave_ = true;
         save();
     }
 
@@ -160,76 +165,136 @@ public:
         if (!dirty_) {
             return true;
         }
-        EEPROM.put(EEPROM_ADDR, VERSION);
-        float values[count];
-        for (int i = 0; i < count; i++)
-            values[i] = entries[i].value;
-        EEPROM.put(VALUES_ADDR, values);
-        const uint32_t crc = calcCrc32(reinterpret_cast<const uint8_t*>(values), VALUES_BYTES);
-        EEPROM.put(CRC_ADDR, crc);
-        if (!EEPROM.commit()) {
-            logMessage("[EVENT] CONFIG_SAVE_FAILED ver=%d crc=0x%08lX\n",
-                       VERSION,
-                       static_cast<unsigned long>(crc));
+
+        nvs_handle_t handle = 0;
+        esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
+        if (err != ESP_OK) {
+            logSaveFailed("open", err);
             return false;
         }
-        logMessage("[EEPROM] settings saved ver=%d crc=0x%08lX\n",
-                   VERSION,
-                   static_cast<unsigned long>(crc));
-        dirty_ = false;
+
+        bool ok = true;
+        if (clearBeforeSave_) {
+            err = nvs_erase_all(handle);
+            if (err != ESP_OK) {
+                logSaveFailed("erase", err);
+                ok = false;
+            }
+        }
+
+        int written = 0;
+        if (ok) {
+            for (int i = 0; i < count; i++) {
+                if (!clearBeforeSave_ && !dirtyKeys_[i]) {
+                    continue;
+                }
+                const float value = entries[i].value;
+                err = nvs_set_blob(handle, entries[i].key, &value, sizeof(value));
+                if (err != ESP_OK) {
+                    logMessage("[EVENT] CONFIG_SAVE_FAILED stage=set key=%s err=0x%X\n",
+                               entries[i].key,
+                               static_cast<unsigned int>(err));
+                    ok = false;
+                    break;
+                }
+                ++written;
+            }
+        }
+
+        if (ok && (schemaDirty_ || clearBeforeSave_)) {
+            err = nvs_set_u8(handle, NVS_SCHEMA_KEY, VERSION);
+            if (err != ESP_OK) {
+                logSaveFailed("schema", err);
+                ok = false;
+            }
+        }
+
+        if (ok) {
+            err = nvs_commit(handle);
+            if (err != ESP_OK) {
+                logSaveFailed("commit", err);
+                ok = false;
+            }
+        }
+
+        nvs_close(handle);
+        if (!ok) {
+            return false;
+        }
+
+        logMessage("[NVS] settings saved ver=%d keys=%d\n", VERSION, written);
+        clearDirty();
         return true;
     }
 
     void load() {
         loadDefaults();
         buildKeyMap();
+        clearDirty();
 
-        uint8_t v = 0;
-        bool shouldSave = false;
-        EEPROM.get(EEPROM_ADDR, v);
-        if (v == VERSION) {
-            float values[count];
-            uint32_t storedCrc = 0;
-            EEPROM.get(VALUES_ADDR, values);
-            EEPROM.get(CRC_ADDR, storedCrc);
-            const uint32_t calcCrc =
-                calcCrc32(reinterpret_cast<const uint8_t*>(values), VALUES_BYTES);
-            if (storedCrc == calcCrc) {
-                for (int i = 0; i < count; i++) {
-                    float normalized = sanitizeLoadedValue(entries[i], values[i]);
-                    if (normalized != values[i]) {
-                        shouldSave = true;
-                        logMessage("[EVENT] CONFIG_REJECTED key=%s raw=%.5f normalized=%.5f\n",
-                                   entries[i].key,
-                                   values[i],
-                                   normalized);
-                    }
-                    entries[i].value = normalized;
-                }
-            } else {
-                shouldSave = true;
-                logMessage("[EVENT] CONFIG_CRC_FAIL stored=0x%08lX calc=0x%08lX\n",
-                           static_cast<unsigned long>(storedCrc),
-                           static_cast<unsigned long>(calcCrc));
-            }
-        } else {
-            shouldSave = true;
-            logMessage("[EVENT] CONFIG_MIGRATION from_ver=%d to_ver=%d\n", v, VERSION);
+        nvs_handle_t handle = 0;
+        esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
+        if (err != ESP_OK) {
+            logMessage("[EVENT] CONFIG_LOAD_FAILED stage=open err=0x%X\n",
+                       static_cast<unsigned int>(err));
+            return;
         }
 
-        if (shouldSave) {
+        uint8_t storedVersion = 0;
+        err = nvs_get_u8(handle, NVS_SCHEMA_KEY, &storedVersion);
+        if (err != ESP_OK) {
+            schemaDirty_ = true;
             dirty_ = true;
-            save();
-        } else {
-            dirty_ = false;
+            logMessage("[EVENT] CONFIG_MIGRATION from_ver=0 to_ver=%d reason=nvs_schema_missing\n",
+                       VERSION);
+        } else if (storedVersion != VERSION) {
+            schemaDirty_ = true;
+            dirty_ = true;
+            logMessage("[EVENT] CONFIG_MIGRATION from_ver=%d to_ver=%d storage=nvs\n",
+                       storedVersion,
+                       VERSION);
         }
 
-        logMessage("[EEPROM] settings loaded (ver=%d)\n", v);
+        for (int i = 0; i < count; i++) {
+            float raw = entries[i].defaultValue;
+            size_t len = sizeof(raw);
+            err = nvs_get_blob(handle, entries[i].key, &raw, &len);
+            if (err == ESP_ERR_NVS_NOT_FOUND) {
+                markDirtyKey(i);
+                continue;
+            }
+            if (err != ESP_OK || len != sizeof(raw)) {
+                markDirtyKey(i);
+                logMessage("[EVENT] CONFIG_REJECTED key=%s reason=nvs_read err=0x%X len=%u\n",
+                           entries[i].key,
+                           static_cast<unsigned int>(err),
+                           static_cast<unsigned int>(len));
+                continue;
+            }
+            const float normalized = sanitizeLoadedValue(entries[i], raw);
+            if (normalized != raw) {
+                markDirtyKey(i);
+                logMessage("[EVENT] CONFIG_REJECTED key=%s raw=%.5f normalized=%.5f\n",
+                           entries[i].key,
+                           raw,
+                           normalized);
+            }
+            entries[i].value = normalized;
+        }
 
+        nvs_close(handle);
+        if (dirty_) {
+            save();
+        }
+
+        logMessage("[NVS] settings loaded (ver=%d)\n", storedVersion);
     }
 
 private:
     bool dirty_ = false;
+    bool schemaDirty_ = false;
+    bool clearBeforeSave_ = false;
+    bool dirtyKeys_[count] = {};
 
     void loadDefaults() {
         for (int i = 0; i < count; i++) {
@@ -242,19 +307,38 @@ private:
             return;
         }
         entries[idx].value = value;
+        markDirtyKey(idx);
+    }
+
+    void markDirtyKey(int idx) {
+        if (idx < 0 || idx >= count) {
+            return;
+        }
+        dirtyKeys_[idx] = true;
         dirty_ = true;
     }
 
-    static uint32_t calcCrc32(const uint8_t* data, size_t len) {
-        uint32_t crc = 0xFFFFFFFFu;
-        for (size_t i = 0; i < len; ++i) {
-            crc ^= data[i];
-            for (int bit = 0; bit < 8; ++bit) {
-                const uint32_t mask = static_cast<uint32_t>(-(static_cast<int>(crc & 1u)));
-                crc = (crc >> 1) ^ (0xEDB88320u & mask);
-            }
+    void markAllDirty() {
+        for (int i = 0; i < count; i++) {
+            dirtyKeys_[i] = true;
         }
-        return ~crc;
+        schemaDirty_ = true;
+        dirty_ = true;
+    }
+
+    void clearDirty() {
+        for (int i = 0; i < count; i++) {
+            dirtyKeys_[i] = false;
+        }
+        schemaDirty_ = false;
+        clearBeforeSave_ = false;
+        dirty_ = false;
+    }
+
+    static void logSaveFailed(const char* stage, esp_err_t err) {
+        logMessage("[EVENT] CONFIG_SAVE_FAILED stage=%s err=0x%X\n",
+                   stage,
+                   static_cast<unsigned int>(err));
     }
 
     static float normalizeForType(const SettingEntry& entry, float value) {
@@ -285,6 +369,7 @@ private:
         }
         return value;
     }
+
 };
 
 extern Settings settings;

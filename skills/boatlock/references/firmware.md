@@ -56,20 +56,22 @@
 
 ## Settings And Persistence
 
-- Settings are stored in EEPROM as:
-  - format version
-  - raw float value array
-  - CRC32 over the values array
-- Current schema version is `Settings::VERSION = 0x17`.
+- Settings are stored in ESP32 NVS namespace `boatlock_cfg` as:
+  - `schema` marker
+  - one raw `float` blob per setting key
+- Current schema version is `Settings::VERSION = 0x18`.
+- Missing NVS keys keep current defaults and are persisted on boot writeback; removed keys are ignored.
+- Schema mismatch keeps existing values by key and updates only the schema marker plus normalized/missing keys.
 - `Settings` objects must be safe immediately after construction: RAM defaults and key map ready, with no flash write from the constructor.
 - `Settings::set()` rejects non-finite values, clamps finite values to each key's configured range, then normalizes by declared type.
 - `Settings::setStrict()` rejects non-finite or out-of-range values and logs `CONFIG_REJECTED`.
 - `Settings::save()` is dirty-state guarded. Calling it after no-op `set()` calls must not write flash.
 - A clean settings object must never commit flash on `save()`.
-- `Settings::save()` must check the EEPROM commit result. Failed commits log `CONFIG_SAVE_FAILED` and keep dirty state for a later retry.
+- `Settings::save()` stages dirty keys and uses one `nvs_commit()` per save.
+- `Settings::save()` must check NVS set/commit results. Failed writes log `CONFIG_SAVE_FAILED` and keep dirty state for a later retry.
 - `Settings::load()` may write back on boot if:
-  - stored version mismatches
-  - CRC mismatches
+  - stored schema is missing or mismatched
+  - persisted keys are missing or unreadable
   - persisted values need normalization
 - Current write paths include at least:
   - BLE config and mode commands in `boatlock/BleCommandHandler.h`
@@ -88,7 +90,8 @@
 - `MaxGpsAgeMs` is configurable. Default is `1500 ms`; range is `300..20000`.
 - Hardware GPS path:
   - applies moving-average filter window `GpsFWin` (`1..20`)
-  - rejects jumps above `MaxPosJumpM`
+  - rejects the first jump above `MaxPosJumpM`
+  - accepts a repeated stable jump candidate as the new baseline to avoid permanent lockout after real relocation or cold-start drift
   - updates speed, HDOP, accel, and sentence counters
 - GNSS quality gate must fail closed on invalid/non-finite config or sample values; a bad threshold or `NaN` motion sample must not silently pass anchor pre-enable.
 - Phone GPS fallback must never seed hardware GNSS filter, jump baseline, speed baseline, or acceleration baseline.
@@ -206,7 +209,8 @@
 
 - Boat nose is fixed at the top of the screen.
 - Compass card rotation uses `worldDeg + heading`.
-- Anchor arrow uses `anchorBearing + heading`.
+- Anchor arrow uses `anchorBearing - heading`.
+- Historical regression note: the anchor arrow was `anchorBearing - heading` before `2a4fa3d0`; do not change it back to `+ heading` unless a real hardware sign test proves the BNO/screen frame changed.
 - If you touch sign math here, verify on real hardware.
 
 ## Debug And Build Boundary
@@ -215,6 +219,10 @@
 - `boatlock/debug/` files are manual-only sketches and should never silently take over production logic.
 - USB CDC is enabled in `boatlock/platformio.ini`.
 - Only one process can own `/dev/cu.usbmodem2101`; close the serial monitor before flashing or opening another reader.
+- BLE OTA is the preferred no-USB firmware update path after the first seed flash.
+- BLE OTA command flow is `OTA_BEGIN:<size>,<sha256>` on `56ef`, sequential binary chunks on `9abc`, then `OTA_FINISH` on `56ef`.
+- `OTA_BEGIN` must put runtime outputs in a stopped safe state before accepting chunks. During active OTA, reject normal runtime commands and abort on BLE disconnect.
+- The phone app must verify the downloaded `firmware.bin` against an expected SHA-256 before transfer. Firmware validates byte count and SHA-256 before finalizing the OTA partition and rebooting.
 
 ## Historical Notes To Ignore By Default
 

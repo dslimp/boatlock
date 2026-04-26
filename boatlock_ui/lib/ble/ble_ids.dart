@@ -4,6 +4,7 @@ const String boatLockServiceUuid = '12ab';
 const String boatLockDataCharacteristicUuid = '34cd';
 const String boatLockCommandCharacteristicUuid = '56ef';
 const String boatLockLogCharacteristicUuid = '78ab';
+const String boatLockOtaCharacteristicUuid = '9abc';
 const String boatLockBluetoothBaseUuidSuffix = '-0000-1000-8000-00805f9b34fb';
 
 String boatLockFullUuid(String shortUuid) {

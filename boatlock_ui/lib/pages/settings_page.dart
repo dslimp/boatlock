@@ -1,5 +1,9 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import '../ble/ble_boatlock.dart';
+import '../ble/ble_ota_payload.dart';
 import '../ble/ble_security_codec.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -67,6 +71,11 @@ class _SettingsPageState extends State<SettingsPage> {
   late bool secPairWindowOpen;
   late String secReject;
   late final TextEditingController _ownerSecretCtrl;
+  late final TextEditingController _otaUrlCtrl;
+  late final TextEditingController _otaShaCtrl;
+  bool _otaBusy = false;
+  double? _otaProgress;
+  String _otaStatus = '';
 
   @override
   void initState() {
@@ -91,12 +100,16 @@ class _SettingsPageState extends State<SettingsPage> {
     _ownerSecretCtrl = TextEditingController(
       text: widget.ble.ownerSecret ?? '',
     );
+    _otaUrlCtrl = TextEditingController();
+    _otaShaCtrl = TextEditingController();
     widget.ble.setOwnerSecret(_ownerSecretCtrl.text);
   }
 
   @override
   void dispose() {
     _ownerSecretCtrl.dispose();
+    _otaUrlCtrl.dispose();
+    _otaShaCtrl.dispose();
     super.dispose();
   }
 
@@ -309,6 +322,88 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  Future<Uint8List> _downloadFirmware(Uri uri) async {
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 15);
+    try {
+      final request = await client.getUrl(uri);
+      final response = await request.close();
+      if (response.statusCode != HttpStatus.ok) {
+        throw HttpException('HTTP ${response.statusCode}', uri: uri);
+      }
+      final builder = BytesBuilder(copy: false);
+      await for (final chunk in response) {
+        builder.add(chunk);
+      }
+      return builder.takeBytes();
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<void> _runBleOta() async {
+    if (!isConnected || _otaBusy) return;
+    final uri = Uri.tryParse(_otaUrlCtrl.text.trim());
+    if (uri == null || !uri.hasScheme || !uri.hasAuthority) {
+      _showMessage('Нужен URL firmware.bin');
+      return;
+    }
+    final expectedSha = normalizeBoatLockSha256Hex(_otaShaCtrl.text);
+    if (expectedSha == null) {
+      _showMessage('Нужен SHA-256 из 64 hex-символов');
+      return;
+    }
+
+    setState(() {
+      _otaBusy = true;
+      _otaProgress = null;
+      _otaStatus = 'Скачивание';
+    });
+    try {
+      final firmware = await _downloadFirmware(uri);
+      if (!mounted) return;
+      final actualSha = boatLockSha256Hex(firmware);
+      if (actualSha != expectedSha) {
+        setState(() {
+          _otaBusy = false;
+          _otaStatus = 'SHA не совпал';
+        });
+        _showMessage('SHA не совпал');
+        return;
+      }
+
+      setState(() {
+        _otaProgress = 0;
+        _otaStatus = 'Передача по BLE';
+      });
+      final ok = await widget.ble.uploadFirmwareOtaBytes(
+        firmware: firmware,
+        sha256Hex: actualSha,
+        onProgress: (sent, total) {
+          if (!mounted || total <= 0) return;
+          setState(() {
+            _otaProgress = sent / total;
+            _otaStatus = 'Передано $sent / $total байт';
+          });
+        },
+      );
+      if (!mounted) return;
+      setState(() {
+        _otaBusy = false;
+        _otaProgress = ok ? 1 : _otaProgress;
+        _otaStatus = ok ? 'Готово, ESP перезагружается' : 'OTA отклонено';
+      });
+      _showMessage(ok ? 'OTA завершено' : 'OTA не прошла');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _otaBusy = false;
+        _otaStatus = 'Ошибка OTA';
+      });
+      _showMessage('Ошибка OTA: $e');
+    }
+  }
+
   Widget _securityTile(String label, String value) {
     return ListTile(dense: true, title: Text(label), trailing: Text(value));
   }
@@ -406,6 +501,60 @@ class _SettingsPageState extends State<SettingsPage> {
           _securityTile('Auth', secAuth ? 'YES' : 'NO'),
           _securityTile('Pair window', secPairWindowOpen ? 'OPEN' : 'CLOSED'),
           _securityTile('Last reject', secReject),
+          const Divider(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Text(
+              'Firmware OTA',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: _otaUrlCtrl,
+              enabled: isConnected && !_otaBusy,
+              autocorrect: false,
+              enableSuggestions: false,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(
+                labelText: 'Firmware URL',
+                hintText: 'https://.../firmware.bin',
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: TextField(
+              controller: _otaShaCtrl,
+              enabled: isConnected && !_otaBusy,
+              autocorrect: false,
+              enableSuggestions: false,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                labelText: 'SHA-256',
+                hintText: '64 HEX символа',
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Row(
+              children: [
+                FilledButton(
+                  onPressed: isConnected && !_otaBusy ? _runBleOta : null,
+                  child: const Text('Обновить по BLE'),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Text(_otaStatus)),
+              ],
+            ),
+          ),
+          if (_otaProgress != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: LinearProgressIndicator(value: _otaProgress),
+            ),
           const Divider(),
           ListTile(
             title: const Text('BNO08x quality'),

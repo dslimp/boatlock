@@ -10,7 +10,7 @@ GOOD_LOG = [
     "[COMPASS] ready=1 source=BNO08x-RVC rx=12 baud=115200",
     "[COMPASS] heading events ready age=0",
     "[DISPLAY] ready=1",
-    "[EEPROM] settings loaded (ver=21)",
+    "[NVS] settings loaded (ver=24)",
     "[SEC] paired=0",
     "[BLE] init name=BoatLock service=12ab data=34cd cmd=56ef log=78ab",
     "[BLE] advertising started",
@@ -46,7 +46,7 @@ def test_acceptance_fails_on_missing_ble_and_error_log():
         [
             "[COMPASS] ready=0 source=BNO08x-RVC rx=12 baud=115200",
             "[DISPLAY] ready=1",
-            "[EEPROM] settings loaded (ver=21)",
+            "[NVS] settings loaded (ver=24)",
             "[SEC] paired=1",
             "[BLE] advertising failed",
             "[STEP] cfg maxSpd=700 accel=250 spr=4096",

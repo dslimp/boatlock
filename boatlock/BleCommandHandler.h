@@ -8,12 +8,15 @@
 #include "AnchorReasons.h"
 #include "Logger.h"
 #include "BNO08xCompass.h"
+#include "BleOtaUpdate.h"
+#include "RuntimeBleOtaCommand.h"
 
 extern AnchorControl anchor;
 extern StepperControl stepperControl;
 extern MotorControl motor;
 extern Settings settings;
 extern BNO08xCompass compass;
+extern BleOtaUpdate bleOta;
 void setPhoneGpsFix(float lat, float lon, float speedKmh, int satellites);
 void captureStepperBowZero();
 bool canEnableAnchorNow();
@@ -44,6 +47,41 @@ inline void handleBleCommand(const std::string& cmd) {
     noteControlActivityNow();
 
     if (command == "HEARTBEAT") {
+        return;
+    }
+
+    RuntimeBleOtaBeginCommand otaBegin;
+    if (runtimeBleParseOtaBeginCommand(command, &otaBegin)) {
+        setLastFailsafeReason(FailsafeReason::STOP_CMD);
+        settings.set("AnchorEnabled", 0);
+        settings.save();
+        stopManualControlFromBle();
+        stepperControl.cancelMove();
+        motor.stop();
+        stopAllMotionNow();
+        logMessage("[EVENT] OTA_BEGIN source=BLE size=%lu\n",
+                   static_cast<unsigned long>(otaBegin.imageSize));
+        bleOta.begin(otaBegin.imageSize, otaBegin.sha256Hex);
+        return;
+    }
+
+    if (command.rfind("OTA_BEGIN:", 0) == 0) {
+        logMessage("[OTA] begin rejected reason=bad_payload\n");
+        return;
+    }
+
+    if (command == "OTA_FINISH") {
+        bleOta.finish();
+        return;
+    }
+
+    if (command == "OTA_ABORT") {
+        bleOta.abort("ble_command");
+        return;
+    }
+
+    if (bleOta.active()) {
+        logMessage("[BLE] command rejected reason=ota_active command=%s\n", command.c_str());
         return;
     }
 

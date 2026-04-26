@@ -8,7 +8,7 @@ USB_DEV="${BOATLOCK_USB_DEV:-/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_deb
 ESPTOOL_BIN="${BOATLOCK_ESPTOOL_BIN:-/opt/boatlock-hw/.venv/bin/esptool}"
 BAUD_RATE="${BOATLOCK_FLASH_BAUD:-460800}"
 
-for file in bootloader.bin partitions.bin firmware.bin; do
+for file in bootloader.bin partitions.bin boot_app0.bin firmware.bin; do
   if [[ ! -f "${ARTIFACT_DIR}/${file}" ]]; then
     echo "missing artifact: ${ARTIFACT_DIR}/${file}" >&2
     exit 1
@@ -37,4 +37,5 @@ trap cleanup EXIT
   write-flash \
   0x0 "${ARTIFACT_DIR}/bootloader.bin" \
   0x8000 "${ARTIFACT_DIR}/partitions.bin" \
+  0xe000 "${ARTIFACT_DIR}/boot_app0.bin" \
   0x10000 "${ARTIFACT_DIR}/firmware.bin"

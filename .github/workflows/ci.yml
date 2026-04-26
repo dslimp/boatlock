@@ -68,8 +68,11 @@ jobs:
           cp "${build_dir}/firmware.elf" "${artifact_dir}/firmware.elf"
 
           firmware_version="$(python3 tools/ci/check_firmware_version.py --print-only)"
+          firmware_sha256="$(sha256sum "${artifact_dir}/firmware.bin" | awk '{print $1}')"
           {
             echo "firmware_version=${firmware_version}"
+            echo "firmware_sha256=${firmware_sha256}"
+            echo "artifact_name=firmware-esp32s3"
             echo "platformio_env=esp32s3"
             echo "github_ref=${GITHUB_REF}"
             echo "github_sha=${GITHUB_SHA}"

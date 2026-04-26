@@ -25,6 +25,7 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
 2. Flash current firmware when needed:
    - `tools/hw/nh02/flash.sh`
    - or `tools/hw/nh02/flash.sh --no-build`
+   - or, after a BLE OTA seed, publish `firmware.bin` plus SHA-256 and upload from the phone app Settings screen
 3. Run hardware acceptance:
    - `tools/hw/nh02/acceptance.sh`
 4. If acceptance fails, inspect:
@@ -35,11 +36,15 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
 
 1. Check USB device visibility:
    - `tools/android/status.sh`
-2. Build the dedicated smoke APK:
+   - or `tools/hw/nh02/android-status.sh` when the phone is attached to `nh02`
+2. Optionally switch the phone to ADB Wi-Fi after USB proof:
+   - `tools/hw/nh02/android-wifi-debug.sh`
+   - then pass `--serial <ip>:5555` to the Android smoke/e2e wrappers to prove debug/install/logcat over Wi-Fi
+3. Build the dedicated smoke APK:
   - `tools/android/build-smoke-apk.sh`
   - or build the production app with e2e hook:
     `tools/android/build-app-apk.sh --e2e-mode basic`
-3. Install and run the phone smoke flow:
+4. Install and run the phone smoke flow:
    - `tools/android/run-smoke.sh`
    - or `tools/hw/nh02/android-run-smoke.sh` when the phone is attached to `nh02`
    - use `tools/hw/nh02/android-run-app-e2e.sh --wait-secs 130` when the acceptance target is the real `lib/main.dart` application rather than the dedicated smoke entrypoint
@@ -53,7 +58,7 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
    - use `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` when reconnect behavior is the acceptance target
    - use `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` when ESP32 reboot recovery is the acceptance target
    - do not use `--no-install` as acceptance unless the user explicitly waives exact APK installation proof for that run
-4. If it fails, inspect:
+5. If it fails, inspect:
   - device logcat around `BOATLOCK_SMOKE_RESULT`
   - `tools/hw/nh02/monitor.sh`
   - `tools/hw/nh02/status.sh`
@@ -67,7 +72,7 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
   - live BNO08x UART-RVC heading frames
   - BNO08x reset pin `13` pulse on boot/retry
   - display ready
-  - EEPROM load
+  - NVS settings load
   - BLE init + advertising
   - stepper config
   - STOP button init
@@ -119,6 +124,7 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
   - `tools/hw/nh02/android-run-app-e2e.sh --esp-reset --wait-secs 130`
   - `tools/hw/nh02/android-install.sh`
   - `tools/hw/nh02/android-status.sh`
+  - `tools/hw/nh02/android-wifi-debug.sh`
   - `tools/hw/nh02/android-run-smoke.sh`
   - `tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --status --wait-secs 130`
@@ -141,6 +147,7 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
 - When acceptance is due, run it right after flashing so the boot path stays part of the same validation slice.
 - Preserve the documented order `install -> flash -> acceptance -> monitor/debug`; do not skip to a later step just because an earlier prerequisite is broken.
 - For phones attached to `nh02`, use the tracked `android-install.sh` and `android-status.sh` path before falling back to local `adb` assumptions.
+- For Wi-Fi ADB acceptance, seed it from the tracked USB-visible phone with `android-wifi-debug.sh`, then run the same smoke wrapper with `--serial <ip>:5555`; `adb devices` alone is not enough.
 - Record whether failure is in first install policy, later `adb install -r` update, app launch, or BLE runtime; do not collapse those into one generic "Android smoke failed" verdict.
 - Treat `android-run-smoke.sh --no-install` as BLE-runtime proof only; it does not prove that the exact just-built APK was installed on the phone.
 - If full smoke fails with `INSTALL_FAILED_USER_RESTRICTED`, stop on that blocker. Required phone-side fixes are `Install via USB`, Xiaomi/MIUI security install confirmation, and any account or policy prompts that gate ADB installs.

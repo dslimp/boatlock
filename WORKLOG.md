@@ -21,6 +21,40 @@ This file records the actual execution stages for BoatLock work so the repo keep
 
 ## Stages
 
+### 2026-04-26 Stage BLE OTA phone bridge
+
+Scope:
+- Add a phone-driven BLE firmware update path for ESP32-S3 so debug firmware can be loaded without keeping USB attached after the first seed flash.
+
+External baseline:
+- Espressif OTA API writes sequential chunks to an OTA app partition, validates/finalizes the image at the end, and only then selects it for boot.
+- Espressif BLE OTA examples use explicit start/stop command packets, firmware chunks, ACK/error reporting, and integrity checks.
+
+Key outcomes:
+- Added BLE OTA characteristic `9abc` for binary chunks.
+- Added `OTA_BEGIN:<size>,<sha256>`, `OTA_FINISH`, and `OTA_ABORT` on the existing command characteristic.
+- `OTA_BEGIN` enters a stopped safe state: Anchor off, Manual stopped, motor/stepper stopped, failsafe HOLD latched.
+- Chunks are ignored until a valid command arms OTA; active OTA rejects other runtime commands; disconnect aborts the update.
+- Flutter can download a firmware URL, verify an operator-provided SHA-256, and upload over BLE with progress.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_ble_ota_command -f test_ble_command_handler -f test_ble_security` -> PASS (`43/43`).
+- `cd boatlock && pio run -e esp32s3` -> PASS, RAM `11.7%`, flash `21.2%`, firmware `710448` bytes, SHA-256 `7fd929225493d73010ea039c4d2d9429e6f6e9d3753a024ef9f33e4db369a527`.
+- `cd boatlock_ui && flutter test test/ble_ota_payload_test.dart test/ble_discovery_check_test.dart test/ble_ids_test.dart test/settings_page_test.dart` -> PASS (`9/9`).
+- `cd boatlock_ui && flutter analyze` -> PASS.
+- `pytest -q tools/ci/test_*.py` -> PASS (`16/16`).
+- `tools/hw/nh02/flash.sh --no-build` -> PASS, ESP32-S3 `98:88:e0:03:ba:5c` flashed and verified over USB.
+- `tools/hw/nh02/acceptance.sh` -> PASS; boot log includes `[BLE] init ... ota=9abc`, BLE advertising, display, GPS UART, and fresh BNO08x heading events.
+- `tools/hw/nh02/android-run-app-e2e.sh --gps --serial 68b657f0 --wait-secs 180` -> FAIL only on `app_gps_timeout`; app received `174` BLE telemetry events at RSSI `-48`, but bench GNSS reported `NO_GPS`, `lat=0`, `gnssQ=0`.
+- `tools/hw/nh02/android-run-app-e2e.sh --reconnect --serial 68b657f0 --wait-secs 130` -> PASS, reason `app_telemetry_after_reconnect`.
+- Normal debug APK rebuilt and reinstalled on phone `68b657f0` after e2e build; required Android permissions are granted.
+
+Self-review:
+- This is deliberately a debug/service path, not a production update system.
+- Remaining weakness: SHA-256 protects integrity only if the expected hash comes from a trusted source; production should add signed images/secure boot before exposing OTA broadly.
+- Full live BLE OTA of a second firmware image from the phone was not run yet; current hardware proof covers the seed firmware, GATT surface/boot log, app BLE reconnect, and local protocol tests.
+- Promote to skill/reference: BLE OTA belongs behind auth and should fail closed without changing the boot partition on partial transfer.
+
 ### 2026-04-23 Stage 1: Full review baseline
 
 Scope:
@@ -4998,3 +5032,185 @@ Validation:
 Self-review:
 - This is pipeline-only and does not change firmware, BLE, Flutter, or hardware behavior.
 - Remaining risk is only GitHub runner behavior for artifact upload/download shape; the paths are explicit and `if-no-files-found: error` keeps missing binaries from passing silently.
+
+### 2026-04-25 Stage 164: Display bearing frame and GNSS jump lockout
+
+Scope:
+- Fix the field-observed compass screen behavior where the red GPS-anchor arrow rotated with the physical display/compass instead of compensating heading.
+- Fix the field-observed GNSS behavior where a good outdoor fix could remain stuck behind `GPS_JUMP_REJECTED` after cold-start drift or real relocation.
+
+External baseline:
+- OpenCPN documents heading/course-up display modes as a rotated world where the own ship/bow is up, so world targets on that display must be transformed into the heading frame: <https://mail.opencpn.org/wiki/dokuwiki/doku.php?id=opencpn:manual_basic:chart_panel:chart_panel_options:navigation_mode> and <https://opencpn-manuals.github.io/main/rotationctrl/index.html>.
+- ArduPilot GPS glitch protection compares new GPS positions against prior/predicted motion and allows later samples to recover from a glitch rather than permanently locking to stale GPS evidence: <https://ardupilot.org/copter/docs/gps-failsafe-glitch-protection.html>.
+
+Key outcomes:
+- Restored the historical BoatLock anchor-arrow formula from `anchorBearing + heading` back to `anchorBearing - heading`.
+- Added `DisplayMath.h` so display frame transforms are directly unit-tested instead of hidden inside `display.cpp`.
+- Kept the existing BNO compass-card sign (`worldDeg + heading`) isolated from the GPS-anchor arrow sign.
+- Runtime GNSS now rejects the first position jump above `MaxPosJumpM`, stores it as a pending candidate, and accepts a repeated stable candidate as the new baseline. This prevents endless `GPS_JUMP_REJECTED` after moving the bench outside or after cold-start fix drift while still refusing a single spike.
+- Promoted the corrected display convention and GNSS jump recovery rule into `AGENTS.md`, `firmware.md`, and `external-patterns.md`.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_display_math -f test_runtime_gnss` -> PASS (`16/16`).
+- `cd boatlock && platformio test -e native` -> PASS (`363/363`).
+- `cd boatlock && pio run -e esp32s3` -> PASS, RAM `11.5%`, flash `21.0%`.
+- `tools/hw/nh02/status.sh` -> RFC2217 service active, but ESP32 serial device missing from `/dev/serial/by-id/...`; firmware flash and serial acceptance are blocked while the board is off `nh02` USB.
+- `tools/hw/nh02/android-status.sh` -> PASS, Android ADB target `68b657f0` present.
+
+Self-review:
+- This does not weaken `ANCHOR_ON`: the first jump still marks GNSS quality bad and keeps the previous control position.
+- A repeated stable jump can rebase GNSS before hardware e2e has been rerun; next required proof is flash plus outdoor app GPS e2e/serial log capture once ESP32 USB is back on `nh02`.
+
+### 2026-04-25 Stage 165: nh02 target probe before flash
+
+Scope:
+- Re-check live `nh02` USB targets after the user reported both Android phone and ESP32 were connected.
+
+Validation:
+- `tools/hw/nh02/android-status.sh` -> PASS, ADB target `68b657f0`, Xiaomi `220333QNY`.
+- `tools/hw/nh02/status.sh` -> RFC2217 service enabled/active, but expected ESP32 serial path missing.
+- Remote `lsusb`, `/dev/serial/by-id`, `/dev/ttyACM*`, and `/dev/ttyUSB*` probe over 60 seconds -> phone present, no Espressif/serial USB device enumerated.
+
+Self-review:
+- Flash and serial acceptance are still blocked at target discovery. Do not run Android BLE/GPS e2e as acceptance for this firmware until the ESP32 is visible on `nh02` and flashed through `tools/hw/nh02/flash.sh`.
+
+### 2026-04-25 Stage 166: ESP32 USB replug scan
+
+Scope:
+- Re-scan `nh02` after ESP32 was physically replugged.
+
+Validation:
+- `tools/hw/nh02/status.sh` -> RFC2217 active, expected serial path still missing.
+- Remote `/dev/serial/by-id`, `/dev/ttyACM*`, and `/dev/ttyUSB*` -> absent.
+- Remote `dmesg` after replug -> `usb 1-3.2.3: device descriptor read/64, error -110`, `device not accepting address ... error -62`, and `unable to enumerate USB device`.
+- `tools/hw/nh02/android-status.sh` -> PASS, Android target still visible as `68b657f0`.
+
+Self-review:
+- This is a physical USB enumeration failure before Linux creates a serial device. Flash/acceptance remain blocked until the ESP32 appears in `lsusb`/`/dev/ttyACM*`/`/dev/serial/by-id`.
+
+### 2026-04-25 Stage 167: Flash after hub replug and GPS UART blocker
+
+Scope:
+- Flash the current display/GNSS-jump firmware after the hub replug fixed ESP32 USB enumeration.
+- Run canonical post-flash hardware acceptance.
+
+Validation:
+- `tools/hw/nh02/status.sh` -> PASS for target discovery: ESP32 `303a:1001`, `/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_98:88:E0:03:BA:5C-if00 -> ../../ttyACM0`.
+- `tools/hw/nh02/android-status.sh` -> PASS, Android target `68b657f0`.
+- `tools/hw/nh02/flash.sh` -> PASS. Remote `esptool v5.2.0` connected to ESP32-S3 `98:88:e0:03:ba:5c`, wrote bootloader, partitions, and firmware, verified hashes, and hard-reset the board.
+- `tools/hw/nh02/acceptance.sh` -> FAIL only on missing `gps_uart`. Matched compass ready, compass heading events, display ready, EEPROM loaded, security state, BLE init/advertising, stepper config, and STOP button.
+- `tools/hw/nh02/monitor.sh --seconds 45` -> firmware log contains `[GPS] no UART bytes on RX=17 (check wiring/baud/power)` and no later GPS UART data marker.
+
+Self-review:
+- The new firmware is on the ESP32 and core boot/peripheral checks pass except GNSS UART.
+- Android GPS e2e was not run because the canonical hardware acceptance path is blocked by real GPS UART silence. Running the phone GPS smoke now would only confirm the known missing hardware GNSS input.
+- Next fix is physical/electrical: GPS module power, common ground, GPS TX to ESP32 `GPIO17`, ESP32 `GPIO18` to GPS RX if used, and GPS baud `9600`.
+
+### 2026-04-25 Stage 168: GitHub-signaled pull OTA and Android Wi-Fi debug
+
+Scope:
+- Replace the wireless firmware debug path with a GitHub-signal style pull OTA: the bench host receives the CI artifact and sends a small authenticated signal, then ESP32 downloads the firmware itself and verifies SHA-256.
+- Seed the ESP32-S3 once over USB, then prove ESP32 firmware update and Android app debug over the shared home network.
+
+External baseline:
+- Android ADB supports TCP/IP debugging after initial USB discovery with `adb tcpip 5555` and `adb connect <ip>:5555`.
+- Espressif OTA is an app-partition update mechanism; keep USB flashing as the recovery path for bootloader/partition/credential failures.
+- GitHub self-hosted runners keep an outbound HTTPS connection to GitHub, which fits the home-network constraint better than exposing ESP32 or `nh02` inbound to the internet.
+- GitHub workflow artifacts can be downloaded by a workflow job using `GITHUB_TOKEN`; keep that token on `nh02` and give ESP32 only a local firmware URL plus expected SHA-256.
+
+Key outcomes:
+- Added `esp32s3_debug_wifi_ota`, `DebugWifiOta`, and `POST /pull-update`.
+- Debug firmware opens authenticated OTA endpoints for the first 45 seconds after boot/reset. The canonical path is `/pull-update`: ESP32 receives `url` and `sha256`, downloads `firmware.bin`, verifies the digest, writes OTA, and reboots.
+- Added `.github/workflows/nh02-deploy.yml`, which runs on `[self-hosted, nh02, boatlock]`, downloads the `firmware-esp32s3` CI artifact, and calls `tools/hw/nh02/github-signal-ota.sh`.
+- Added `tools/hw/nh02/github-signal-ota.sh` and `tools/firmware/signal-pull-ota.sh`. The bench script temporarily serves `firmware.bin`, resets ESP32 to open the debug OTA window, and sends the pull-update signal.
+- Added Android Wi-Fi ADB wrapper `tools/hw/nh02/android-wifi-debug.sh` plus remote helper installation.
+- Fixed `tools/hw/nh02/flash.sh` to stage `boot_app0.bin` and flash it at `0xe000`; after prior OTA, USB seed flashing now boots the freshly flashed `ota_0` image instead of a stale OTA slot.
+- Updated hardware docs and BoatLock skill references with the GitHub-signaled OTA path, Android Wi-Fi serial flow, and BLE/Wi-Fi time-slicing rule.
+
+Validation:
+- `BOATLOCK_WIFI_SSID=... BOATLOCK_WIFI_PASS=... BOATLOCK_OTA_PASS=... tools/hw/nh02/flash.sh --env esp32s3_debug_wifi_ota` -> PASS; remote `esptool v5.2.0` wrote bootloader, partitions, `boot_app0.bin` at `0xe000`, and firmware, verified hashes, then hard-reset.
+- `tools/hw/nh02/acceptance.sh --seconds 75` -> PASS; log showed `[NET] wifi connected ... ip=192.168.88.75`, `[NET] http ota ready ... port=8080 auth=1 path=/update`, `[NET] wifi off ble_start=1`, `[BLE] init`, and `[BLE] advertising started`, with no panic/abort/BLE malloc errors.
+- `BOATLOCK_OTA_PASS=... BOATLOCK_OTA_RESET_CMD='...' tools/hw/nh02/github-signal-ota.sh --artifact-dir boatlock/.pio/build/esp32s3_debug_wifi_ota --esp-host 192.168.88.75 --serve-host 192.168.88.40` -> PASS, signal response `OK`; ESP32 pulled `firmware.bin` from the temporary HTTP server and verified SHA-256 `e68ee5fe8f3e37fdde450081aea02b6e7b7d8d474899a2ddd1635c4282bfa730`.
+- `tools/hw/nh02/acceptance.sh --seconds 75` after pull-update -> PASS; log showed `[NET] wifi off ble_start=1`, `[BLE] init`, and `[BLE] advertising started`.
+- `tools/hw/nh02/android-wifi-debug.sh` -> PASS, Android USB serial `68b657f0`, Wi-Fi serial `192.168.88.33:5555`.
+- `tools/hw/nh02/android-run-smoke.sh --serial 192.168.88.33:5555 --wait-secs 180` -> PASS, reason `telemetry_received`.
+- `tools/hw/nh02/android-run-smoke.sh --manual --serial 192.168.88.33:5555 --wait-secs 180` -> PASS, reason `manual_roundtrip`.
+- `tools/hw/nh02/android-run-smoke.sh --status --serial 192.168.88.33:5555 --wait-secs 180` -> PASS, reason `status_stop_alert_roundtrip`.
+- `tools/hw/nh02/android-run-smoke.sh --reconnect --serial 192.168.88.33:5555 --wait-secs 220` -> PASS, reason `telemetry_after_reconnect`.
+- `bash -n ...` for touched shell wrappers -> PASS.
+- `python3 -m py_compile tools/pio/boatlock_debug_wifi_flags.py tools/ci/test_debug_wireless_workflow.py` -> PASS.
+- `pytest -q tools/ci/test_debug_wireless_workflow.py tools/ci/test_android_smoke_modes.py` -> PASS (`8 passed`).
+- `git diff --check` -> PASS.
+- `cd boatlock && pio run -e esp32s3` -> PASS, RAM `11.5%`, flash `21.0%`.
+- `cd boatlock && platformio test -e native` -> PASS (`363/363`).
+
+Self-review:
+- Production `esp32s3` remains Wi-Fi-free; OTA support is debug-env only.
+- Direct `/update` remains as a low-level debug fallback, but the documented and tested deploy path is now `/pull-update` via GitHub-style signal.
+- Debug OTA deliberately uses a boot/reset window instead of keeping Wi-Fi alive next to BLE, because live acceptance showed BLE allocation errors when Wi-Fi remained active.
+- This still needs USB as the recovery path for bad credentials, failed OTA, bootloader/partition changes, or a firmware that cannot reach the home AP.
+
+### 2026-04-26 Stage 169: Settings NVS backend and firmware artifact availability
+
+Scope:
+- Decide whether settings should stay on the custom EEPROM blob or move to ESP32 NVS before release.
+- Implement the better option only if it is simpler and safer for future schema changes.
+- Build the production firmware and verify GitHub artifact availability.
+
+External baseline:
+- Espressif's Arduino-ESP32 docs call `Preferences`/NVS the replacement for Arduino EEPROM and describe NVS as retained storage for small key/value data.
+- ESP-IDF NVS docs define a 15-character key limit, small key/value storage, explicit `nvs_commit()`, and built-in wear levelling.
+- Espressif's NVS FAQ states NVS has wear levelling and is designed to resist accidental power loss during writes.
+- The local Arduino-ESP32 `Preferences.cpp` commits inside each `putX()` call, so direct ESP-IDF NVS API is a better fit for BoatLock's dirty-key batching.
+- GitHub Actions artifacts are queryable via the official Actions Artifacts API and downloadable as archives after upload.
+
+Decision:
+- Move `Settings` from the index-coupled EEPROM float array to direct ESP-IDF NVS.
+- Store settings in namespace `boatlock_cfg` as `schema` plus one raw float blob per setting key.
+- Keep values by stable key across schema version changes; missing keys use current defaults, removed keys are ignored, and invalid values are normalized/defaulted.
+- Use one `nvs_commit()` per `Settings::save()` so multi-key anchor updates do not become a per-key commit sequence.
+- Keep the old `Settings` EEPROM span constants only to preserve the existing `BleSecurity` EEPROM offset until that storage is migrated separately.
+
+Key outcomes:
+- Bumped `Settings::VERSION` and `docs/CONFIG_SCHEMA.md` to `0x18`.
+- Added a native NVS mock and tests for schema mismatch, missing keys, invalid blobs, NVS key length limits, dirty-key batching, failed commit retry, and no partial publish after failed commit.
+- Updated anchor-control tests to assert save-failure rollback through the NVS path.
+- Updated nh02 acceptance matching from `[EEPROM] settings loaded` to `[NVS] settings loaded`.
+- Added firmware artifact metadata to CI: `firmware_sha256` and `artifact_name=firmware-esp32s3` in `BUILD_INFO.txt`.
+- Added a CI helper test that protects the firmware artifact bundle shape.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_settings -f test_anchor_control` -> PASS (`25/25`).
+- `python3 tools/ci/check_config_schema_version.py && python3 tools/ci/check_firmware_version.py && python3 -m pytest -q tools/ci/test_*.py tools/hw/nh02/test_acceptance.py` -> PASS (`22 passed`, schema `0x18`, firmware `0.2.0`).
+- `cd boatlock && platformio test -e native` -> PASS (`371/371`).
+- `cd boatlock && pio run -e esp32s3` -> PASS, RAM `11.7%`, flash `21.3%`, `firmware.bin` built.
+- Local CI packaging contract produced `BUILD_INFO.txt`, `SHA256SUMS`, `bootloader.bin`, `firmware.bin`, `firmware.elf`, and `partitions.bin`; `sha256sum -c SHA256SUMS` -> PASS. Local `firmware_sha256=27c15e8e99236e8b17902cb033611427d08cf55e405d42e2a9098d72f906380f`.
+- GitHub Actions Artifacts API for `dslimp/boatlock` -> latest non-expired `firmware-esp32s3` artifact available, id `6639319067`, created `2026-04-25T10:31:02Z`.
+- Downloaded that GitHub artifact archive and verified required entries: `BUILD_INFO.txt`, `SHA256SUMS`, `bootloader.bin`, `firmware.bin`, `firmware.elf`, `partitions.bin`.
+- `git diff --check` -> PASS.
+
+Self-review:
+- This intentionally does not import old EEPROM settings into NVS because the product is not released and the user explicitly confirmed legacy compatibility is not required yet.
+- NVS key names are now part of the settings schema contract; future keys must stay within the 15-character NVS limit or add an explicit short storage key.
+- BLE security still uses its existing EEPROM/CRC record; moving it to NVS should be a separate security-focused change.
+- The exact local firmware build is not in GitHub until these changes are pushed and CI runs; current GitHub availability proof is for the latest already uploaded `firmware-esp32s3` artifact and the workflow contract for the next artifact.
+
+### 2026-04-26 Stage 170: Flutter delivery blocker and full local CI mirror
+
+Scope:
+- Fix the Flutter CI failure that blocked the delivery pipeline before release artifacts were produced.
+- Re-run the local equivalent of the GitHub firmware and Flutter jobs before pushing `main`.
+
+Key outcomes:
+- Fixed the Flutter formatting drift in `boatlock_ui/lib/main.dart` and `boatlock_ui/lib/widgets/status_panel.dart`.
+- Reworked `boatlock_ui/lib/ble/ble_security_codec.dart` SipHash math from Dart `int` 64-bit literals to masked `BigInt` operations so `dart2js` can compile the web release build.
+- Added exact Flutter security codec golden tests for `AUTH_PROVE` and `SEC_CMD` output to keep the BigInt implementation aligned with the firmware protocol.
+
+Validation:
+- `cd boatlock_ui && flutter pub get && dart format --output=none --set-exit-if-changed lib test && flutter analyze && flutter test && flutter build apk --release && flutter build web --release` -> PASS; Flutter tests `60/60`, APK built, web built.
+- `python3 -m pytest tools/ci/test_*.py && python3 tools/ci/check_config_schema_version.py && python3 tools/ci/check_firmware_version.py && bash tools/ci/check_firmware_werror.sh && bash tools/ci/check_firmware_cppcheck.sh && (cd boatlock && platformio test -e native) && python3 tools/sim/test_sim_core.py && python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json && python3 tools/sim/test_soak.py && python3 tools/sim/run_soak.py --hours 6 --check --json-out tools/sim/soak_report.json && (cd boatlock && pio run -e esp32s3)` -> PASS; CI helper tests `17/17`, native tests `371/371`, simulations PASS, ESP32-S3 firmware build PASS.
+
+Self-review:
+- The web build failure was real and would have kept the Flutter artifact from being uploaded in Actions.
+- The BigInt change only touches the low-frequency security proof/signature path and keeps exact protocol outputs covered by tests.
+- Remaining delivery proof is GitHub Actions after pushing this commit to `main`, including uploaded firmware and Flutter artifacts.

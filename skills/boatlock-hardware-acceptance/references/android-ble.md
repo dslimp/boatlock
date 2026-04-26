@@ -12,7 +12,9 @@
 - `nh02` can also act as the Android USB host, not only as the ESP32-S3 host.
 - Use `tools/hw/nh02/android-install.sh` to ensure `adb` exists on `nh02`.
 - Use `tools/hw/nh02/android-status.sh` to check USB enumeration and `adb devices -l` on `nh02`.
+- Use `tools/hw/nh02/android-wifi-debug.sh` after USB proof to switch the phone to ADB TCP/IP and print the Wi-Fi serial as `<ip>:5555`.
 - Use `tools/hw/nh02/android-run-smoke.sh` to copy the smoke APK to `nh02`, install or update it on the attached phone, launch it, and wait for `BOATLOCK_SMOKE_RESULT`.
+- Pass `--serial <ip>:5555` to Android smoke/e2e wrappers when proving install/logcat/debug over Wi-Fi instead of USB.
 - Use `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` to install/update the reconnect smoke APK, wait for first telemetry, cycle phone Bluetooth through ADB, and require telemetry recovery without restarting the app.
 - Use `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` to install/update the reconnect smoke APK, wait for first telemetry, reset the ESP32-S3 through the tracked reset helper, and require telemetry recovery without restarting the app.
 - If `nh02` shows the phone only as `MTP` or a vendor USB device and not in `adb devices`, the cable path is alive but USB debugging is still off on the phone.
@@ -33,6 +35,7 @@
 
 - Detect a USB-connected Android phone with `adb devices -l`.
 - Detect a USB-connected Android phone on `nh02` with `tools/hw/nh02/android-status.sh`.
+- Enable and verify ADB Wi-Fi on the same phone with `tools/hw/nh02/android-wifi-debug.sh`.
 - Build the dedicated smoke APK with `tools/android/build-smoke-apk.sh`.
 - Install and run the smoke app with `tools/android/run-smoke.sh`.
 - Use the phone as the real BLE central against the BoatLock bench.

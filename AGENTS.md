@@ -98,7 +98,7 @@
   3. otherwise no fix
 - Control GNSS is hardware-only. Phone GPS fallback may populate UI/telemetry but must not pass anchor quality gate, save BOOT anchor points, or expose old hardware HDOP/sentence metrics as current control quality.
 - `MaxGpsAgeMs` is a setting, not a hard-coded constant. Default is `1500 ms`; allowed range is `300..20000`.
-- Hardware GPS path applies moving-average filtering via `GpsFWin` (`1..20`) and rejects jumps above `MaxPosJumpM`.
+- Hardware GPS path applies moving-average filtering via `GpsFWin` (`1..20`), rejects the first jump above `MaxPosJumpM`, and accepts a repeated stable jump candidate as the new baseline to avoid permanent lockout after real relocation or cold-start drift.
 - Heading comes from onboard BNO08x UART-RVC frames only. `headingAvailable()` is true only when BNO08x is initialized and fresh heading frames are arriving; stale/missing frames must fail closed as no heading.
 - BNO08x reset GPIO logs such as `pulse=1` are not recovery proof unless fresh heading frames arrive afterward and the long acceptance capture remains clean.
 - Commands such as `SET_HEADING`, `EMU_COMPASS`, and `CALIB_COMPASS` are removed/no-op territory in the current product surface.
@@ -130,7 +130,7 @@
 - Display convention:
   - boat nose is fixed at the top of the screen
   - compass card rotation uses `worldDeg + heading`
-  - anchor arrow uses `anchorBearing + heading`
+  - anchor arrow uses `anchorBearing - heading`
 - BLE identity is fixed:
   - device name `BoatLock`
   - service `12ab`

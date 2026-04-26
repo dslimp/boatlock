@@ -15,7 +15,7 @@
 - Settings/schema change:
   - update `docs/CONFIG_SCHEMA.md`
   - keep `Settings::VERSION` and CI schema checks aligned
-- EEPROM/write-policy change:
+- NVS/EEPROM write-policy change:
   - audit all `settings.save()` call sites, not only the file currently being changed
   - remember that `Settings::load()` can persist on boot during migration/CRC/normalization flows
   - cover both `test_settings` and the command/runtime tests that exercise the changed write paths
@@ -26,6 +26,12 @@
 
 - Firmware build:
   - `cd boatlock && pio run -e esp32s3`
+- Debug Wi-Fi/OTA firmware build:
+  - `cd boatlock && BOATLOCK_WIFI_SSID=... BOATLOCK_WIFI_PASS=... BOATLOCK_OTA_PASS=... pio run -e esp32s3_debug_wifi_ota`
+- BLE OTA phone bridge after a USB seed flash:
+  - build `boatlock/.pio/build/esp32s3/firmware.bin`
+  - publish/serve the binary from a trusted URL and copy its SHA-256
+  - in the app Settings screen, use Firmware OTA URL + SHA-256 to upload over BLE
 - Full native tests:
   - `cd boatlock && platformio test -e native`
 - Do not run multiple `platformio test -e native ...` commands in parallel against the same checkout/build directory. PlatformIO shares `.pio/build/native`, and parallel suites can kill or corrupt each other; run suites sequentially or use isolated worktrees/build dirs.
@@ -51,6 +57,7 @@
   - `tools/hw/nh02/status.sh`
   - `tools/hw/nh02/android-install.sh`
   - `tools/hw/nh02/android-status.sh`
+  - `tools/hw/nh02/android-wifi-debug.sh`
   - rerun `install.sh` after changing the tracked service unit or remote flash helper
 - Android USB + BLE smoke:
   - `tools/android/status.sh`
@@ -101,7 +108,7 @@
 
 - If you change commands, telemetry fields, status reasons, or security behavior, update `docs/BLE_PROTOCOL.md`.
 - If you change settings defaults, ranges, or schema version, update `docs/CONFIG_SCHEMA.md`.
-- If you change EEPROM write policy or persistence semantics, update the skill references and any operator docs that mention save behavior.
+- If you change NVS/EEPROM write policy or persistence semantics, update the skill references and any operator docs that mention save behavior.
 - If you change user-visible firmware behavior, update `CHANGELOG.md` and the relevant release note when appropriate.
 - When prose docs disagree with code, fix the docs in the same change instead of preserving the mismatch.
 

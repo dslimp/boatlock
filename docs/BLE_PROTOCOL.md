@@ -6,6 +6,7 @@ BoatLock uses one custom GATT service for the app and bench tooling:
 - Live state characteristic `34cd`: notify/read, compact binary v2 frame
 - Control point characteristic `56ef`: write/write-no-response, printable ASCII commands
 - Device log characteristic `78ab`: notify, text log lines
+- Firmware OTA characteristic `9abc`: binary write/write-no-response; accepts firmware chunks only after `OTA_BEGIN`
 
 The live path is not a serial/JSON tunnel. The app subscribes to `34cd`, sends `STREAM_START`, and receives fixed-size binary live frames. Large snapshots and legacy parameter reads are not part of the protocol.
 
@@ -47,6 +48,9 @@ Control point payloads are application-level command byte strings, not a text st
 | `SET_STEP_MAXSPD:<float>` | float | Maximum stepper speed (steps/s) |
 | `SET_STEP_ACCEL:<float>` | float | Stepper acceleration (steps/s²) |
 | `SET_STEPPER_BOW` | none | Save current stepper position as boat-bow zero for anchor pointing |
+| `OTA_BEGIN:<size>,<sha256>` | firmware size in bytes and 64-hex SHA-256 | Enter safe stopped state, start writing a new firmware image to the inactive OTA partition, and arm binary chunk writes on `9abc` |
+| `OTA_FINISH` | none | Validate byte count and SHA-256, finalize the OTA image, then reboot into the new partition |
+| `OTA_ABORT` | none | Abort an active BLE OTA transfer and keep the current firmware active |
 | `SIM_LIST` | none | List built-in on-device HIL scenarios (`S0..S19`) |
 | `SIM_RUN:<scenario_id>[,<speedup>]` | id + speed mode (`0` fastest, `1` realtime) | Start deterministic closed-loop simulation on device |
 | `SIM_STATUS` | none | Return current simulation progress JSON |
@@ -61,6 +65,19 @@ Current built-in HIL groups:
 These commands correspond to the implementation in [`boatlock/BleCommandHandler.h`](../boatlock/BleCommandHandler.h) and are used by the mobile application.
 
 Manual control is intentionally a single atomic command instead of separate mode/direction/speed writes. Each accepted `MANUAL_SET` refreshes the deadman TTL for the current controller source; a different source cannot take over until the lease expires or `MANUAL_OFF`/`STOP` clears it. If updates stop, firmware exits Manual mode and the normal quiet-output path stops motion. `MANUAL_SET` is a control command and must be wrapped in `SEC_CMD` when pairing/auth is enabled.
+
+## BLE Firmware OTA
+
+BLE OTA uses the phone as the bridge:
+
+1. The app downloads `firmware.bin` and verifies it against an operator-provided SHA-256.
+2. The app sends `OTA_BEGIN:<size>,<sha256>` over `56ef`. When `secPaired=1`, this command must be wrapped in `SEC_CMD`.
+3. Firmware disables Anchor, stops Manual and all outputs, latches `HOLD`, and logs `[OTA] begin ok ...`.
+4. The app writes firmware bytes sequentially to `9abc` with acknowledged BLE writes.
+5. The app sends `OTA_FINISH` over `56ef`. Firmware checks received byte count and SHA-256 before finalizing the OTA image.
+6. On success firmware logs `[OTA] finish ok ...`, waits briefly so the phone can receive the log ACK, and restarts.
+
+During active OTA, firmware rejects all runtime commands except `HEARTBEAT`, `OTA_FINISH`, and `OTA_ABORT`. Chunk writes before a successful `OTA_BEGIN` are ignored. If the BLE link disconnects during an active transfer, firmware aborts the update and keeps the current boot partition.
 
 ## Live State Frame
 

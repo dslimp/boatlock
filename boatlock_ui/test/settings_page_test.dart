@@ -87,7 +87,7 @@ void main() {
 
     expect(find.text('Owner secret'), findsOneWidget);
     await tester.enterText(
-      find.byType(TextField).last,
+      find.byType(TextField).first,
       '00112233445566778899aabbccddeeff',
     );
     await tester.tap(find.text('Привязать'));

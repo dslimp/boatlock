@@ -65,6 +65,9 @@ public:
     currentGpsAgeMs_ = 999999;
     currentPosJumpM_ = 0.0f;
     currentPosJumpRejected_ = false;
+    pendingJumpLat_ = 0.0f;
+    pendingJumpLon_ = 0.0f;
+    pendingJumpValid_ = false;
     currentSpeedMps_ = 0.0f;
     currentAccelMps2_ = 0.0f;
     currentAccelValid_ = false;
@@ -119,14 +122,22 @@ public:
     }
 
     const float maxPosJumpM = constrain(settings.get("MaxPosJumpM"), 1.0f, 200.0f);
+    bool acceptedPendingJump = false;
     if (gpsFilter_.count > 0) {
       const float jumpM =
           TinyGPSPlus::distanceBetween(lastLat_, lastLon_, input.lat, input.lon);
       currentPosJumpM_ = isfinite(jumpM) ? jumpM : 0.0f;
       if (isfinite(jumpM) && jumpM > maxPosJumpM) {
-        currentPosJumpRejected_ = true;
-        currentGpsAgeMs_ = input.ageMs;
-        return ApplyResult::JUMP_REJECTED;
+        if (!pendingJumpMatches(input.lat, input.lon, maxPosJumpM)) {
+          pendingJumpLat_ = input.lat;
+          pendingJumpLon_ = input.lon;
+          pendingJumpValid_ = true;
+          currentPosJumpRejected_ = true;
+          currentGpsAgeMs_ = input.ageMs;
+          return ApplyResult::JUMP_REJECTED;
+        }
+        gpsFilter_.reset(requestedWindow);
+        acceptedPendingJump = true;
       }
     }
 
@@ -153,7 +164,9 @@ public:
     currentSatellites_ = max(0, input.satellites);
     currentGpsHdop_ = input.hdop;
     currentGpsAgeMs_ = input.ageMs;
+    currentPosJumpM_ = acceptedPendingJump ? 0.0f : currentPosJumpM_;
     currentPosJumpRejected_ = false;
+    pendingJumpValid_ = false;
     ++hwFixSamplesCount_;
     gpsSourcePhone_ = false;
     gpsFix_ = true;
@@ -182,6 +195,7 @@ public:
     currentGpsAgeMs_ = nowMs - phoneGpsUpdatedMs_;
     currentPosJumpRejected_ = false;
     currentPosJumpM_ = 0.0f;
+    pendingJumpValid_ = false;
     gpsSourcePhone_ = true;
     gpsFix_ = true;
     maybeUpdateHeadingCorrection(
@@ -201,6 +215,7 @@ public:
     currentGpsAgeMs_ = 999999;
     currentPosJumpRejected_ = false;
     currentPosJumpM_ = 0.0f;
+    pendingJumpValid_ = false;
     gpsSourcePhone_ = false;
     gpsFix_ = false;
     gpsCorrRefValid_ = false;
@@ -491,6 +506,15 @@ private:
     hasHardwareSpeedSample_ = false;
   }
 
+  bool pendingJumpMatches(float lat, float lon, float maxPosJumpM) const {
+    if (!pendingJumpValid_) {
+      return false;
+    }
+    const float pendingDeltaM =
+        TinyGPSPlus::distanceBetween(pendingJumpLat_, pendingJumpLon_, lat, lon);
+    return isfinite(pendingDeltaM) && pendingDeltaM <= maxPosJumpM;
+  }
+
   GpsFilterState gpsFilter_;
   float lastLat_ = 0.0f;
   float lastLon_ = 0.0f;
@@ -519,6 +543,9 @@ private:
   unsigned long currentGpsAgeMs_ = 999999;
   float currentPosJumpM_ = 0.0f;
   bool currentPosJumpRejected_ = false;
+  float pendingJumpLat_ = 0.0f;
+  float pendingJumpLon_ = 0.0f;
+  bool pendingJumpValid_ = false;
   float currentSpeedMps_ = 0.0f;
   float currentAccelMps2_ = 0.0f;
   bool currentAccelValid_ = false;

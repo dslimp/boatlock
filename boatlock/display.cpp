@@ -1,5 +1,6 @@
 #include "display.h"
 #include "colors.h"
+#include "DisplayMath.h"
 #include <Arduino.h>
 #include <cstring>
 #include <math.h>
@@ -188,12 +189,7 @@ struct Layout {
 };
 
 static int normalize_deg(float deg) {
-  int value = static_cast<int>(roundf(deg));
-  value %= 360;
-  if (value < 0) {
-    value += 360;
-  }
-  return value;
+  return displayNormalize360Int(deg);
 }
 
 static float sanitize_non_negative(float value) {
@@ -358,7 +354,7 @@ static void draw_rotating_compass_card(float headingDeg,
   int majorStep = layout.compact ? 45 : 30;
   for (int worldDeg = 0; worldDeg < 360; worldDeg += tickStep) {
     // Match BNO heading sign used by the validated north-arrow test sketch.
-    float screenDeg = worldDeg + headingDeg;
+    float screenDeg = displayCompassCardScreenDeg(worldDeg, headingDeg);
     float rad = (screenDeg - 90.0f) * DEG_TO_RAD;
     int outer = (worldDeg % majorStep == 0) ? layout.compassR + 1 : layout.compassR - 3;
     int inner = (worldDeg % majorStep == 0) ? layout.compassR - 9 : layout.compassR - 6;
@@ -375,7 +371,7 @@ static void draw_rotating_compass_card(float headingDeg,
   gfx->setTextSize(1);
   gfx->setTextColor(labelColor);
   for (int i = 0; i < 4; ++i) {
-    float screenDeg = kCardDeg[i] + headingDeg;
+    float screenDeg = displayCompassCardScreenDeg(kCardDeg[i], headingDeg);
     float rad = (screenDeg - 90.0f) * DEG_TO_RAD;
     int lx = layout.compassCx + static_cast<int>(labelRadius * cos(rad)) - 3;
     int ly = layout.compassCy + static_cast<int>(labelRadius * sin(rad)) - 3;
@@ -396,10 +392,8 @@ static void draw_compass_dynamic(float heading,
   float cardHeading = headingValid ? heading : 0.0f;
   draw_rotating_compass_card(cardHeading, layout, tickColor, labelColor);
   if (headingValid) {
-    // Red arrow points to anchor relative to bow with the same sign convention.
-    float rel = anchorBearing + heading;
-    while (rel < 0.0f) rel += 360.0f;
-    while (rel >= 360.0f) rel -= 360.0f;
+    // Red arrow points to the GPS anchor in the boat/screen frame.
+    float rel = displayAnchorArrowScreenDeg(anchorBearing, heading);
     draw_arrow(rel, layout.compassCx, layout.compassCy, dynR, anchorColor);
   }
 

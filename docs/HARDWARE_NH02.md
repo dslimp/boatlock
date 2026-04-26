@@ -31,6 +31,10 @@
   - `tools/hw/nh02/install.sh`
 - Build locally and flash through `nh02`:
   - `tools/hw/nh02/flash.sh`
+- Build a firmware binary for BLE OTA:
+  - `cd boatlock && pio run -e esp32s3 && shasum -a 256 .pio/build/esp32s3/firmware.bin`
+- Upload a later firmware without ESP32 USB:
+  - publish or serve `firmware.bin` from a trusted URL, then use the app Settings screen with Firmware OTA URL + SHA-256
 - Flash the current build without rebuilding:
   - `tools/hw/nh02/flash.sh --no-build`
 - Run post-flash hardware acceptance:
@@ -45,6 +49,8 @@
   - `tools/hw/nh02/android-install.sh`
 - Check Android USB and `adb` visibility on `nh02`:
   - `tools/hw/nh02/android-status.sh`
+- Enable Android ADB over Wi-Fi after initial USB discovery:
+  - `tools/hw/nh02/android-wifi-debug.sh`
 - Build, install/update, and run the Android BLE smoke app through `nh02`:
   - `tools/hw/nh02/android-run-smoke.sh`
 - Build, install/update, and run the Android BLE reconnect smoke app through `nh02`:
@@ -65,17 +71,28 @@
 3. Remote helper `/opt/boatlock-hw/bin/boatlock-flash-esp32s3.sh` temporarily stops the RFC2217 bridge, flashes the ESP32-S3 with remote `esptool`, then starts the bridge again.
 4. `acceptance.sh` optionally forces a clean reset, captures boot logs over RFC2217, checks required boot markers, and fails on fatal log patterns.
 
+## BLE OTA Phone Bridge
+
+1. Seed the ESP32 once over USB with firmware that contains BLE OTA support.
+2. Build the next firmware locally or in CI and keep `firmware.bin` plus its SHA-256.
+3. Make the binary reachable by the phone over a trusted URL.
+4. In the app Settings screen, paste Firmware OTA URL and SHA-256, then start `Обновить по BLE`.
+5. The app downloads the binary, verifies SHA-256 before transfer, sends authenticated `OTA_BEGIN`, writes chunks to BLE characteristic `9abc`, then sends `OTA_FINISH`.
+6. ESP32 validates byte count and SHA-256 before finalizing the OTA partition and rebooting. Disconnect or failed validation aborts without changing the active boot partition.
+
 ## Android USB Path
 
 1. Rerun `tools/hw/nh02/install.sh` after changing tracked Android helpers.
 2. `tools/hw/nh02/android-install.sh` ensures `adb` exists on `nh02`.
 3. `tools/hw/nh02/android-status.sh` checks whether the phone is visible over USB and whether `adb devices -l` sees it.
-4. `tools/hw/nh02/android-run-smoke.sh` copies the smoke APK to `nh02`, installs or updates it with remote `adb`, launches the app, and waits for the `BOATLOCK_SMOKE_RESULT` log line.
-5. `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` additionally waits for first telemetry, cycles phone Bluetooth through ADB, and requires telemetry recovery without restarting the app.
-6. `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` waits for first telemetry, resets the ESP32-S3 with the tracked remote reset helper, and requires telemetry recovery without restarting the app.
-7. `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130` sends safe compass-service commands (`COMPASS_CAL_START`, `COMPASS_DCD_AUTOSAVE_OFF`, `COMPASS_DCD_SAVE`) and requires device log acknowledgements.
-8. `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180` waits for production-app BLE telemetry with non-zero valid coordinates and GNSS quality `>0`; this can run while ESP32 is powered away from USB if BLE remains reachable.
-9. If the phone appears only as `MTP` or a vendor USB device and not in `adb devices`, the cable path is alive but USB debugging is still off on the phone.
+4. `tools/hw/nh02/android-wifi-debug.sh` can switch the same phone to ADB TCP/IP and prints `android_wifi_serial=<ip>:5555`.
+5. Any Android smoke wrapper can then use `--serial <ip>:5555` to prove install/logcat/debug control over Wi-Fi instead of USB.
+6. `tools/hw/nh02/android-run-smoke.sh` copies the smoke APK to `nh02`, installs or updates it with remote `adb`, launches the app, and waits for the `BOATLOCK_SMOKE_RESULT` log line.
+7. `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` additionally waits for first telemetry, cycles phone Bluetooth through ADB, and requires telemetry recovery without restarting the app.
+8. `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` waits for first telemetry, resets the ESP32-S3 with the tracked remote reset helper, and requires telemetry recovery without restarting the app.
+9. `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130` sends safe compass-service commands (`COMPASS_CAL_START`, `COMPASS_DCD_AUTOSAVE_OFF`, `COMPASS_DCD_SAVE`) and requires device log acknowledgements.
+10. `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180` waits for production-app BLE telemetry with non-zero valid coordinates and GNSS quality `>0`; this can run while ESP32 is powered away from USB if BLE remains reachable.
+11. If the phone appears only as `MTP` or a vendor USB device and not in `adb devices`, the cable path is alive but USB debugging is still off on the phone.
 
 ## Xiaomi Install Note
 
@@ -88,6 +105,10 @@
 - Runtime logs go through the persistent RFC2217 bridge on `nh02`.
 - `monitor.sh` uses local `pyserial-miniterm` against the RFC2217 endpoint.
 - If the monitor path fails, inspect `status.sh` before touching the USB device manually.
+- BLE OTA is the preferred no-USB firmware update path after the first seed flash.
+- Keep the expected SHA-256 from the build output or CI artifact metadata; do not let the phone trust an arbitrary downloaded binary without comparing the expected hash first.
+- `tools/hw/nh02/flash.sh` stages `boot_app0.bin` and flashes it at `0xe000`, so a USB seed flash after prior OTA boots the freshly flashed `ota_0` image instead of a stale OTA slot.
+- Keep the seed flash recoverable through USB. If a BLE OTA upload fails before `OTA_FINISH`, the current firmware remains active; if the app cannot reconnect, flash production `esp32s3` again through `tools/hw/nh02/flash.sh`.
 
 ## Compass Wiring
 

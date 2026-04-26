@@ -43,9 +43,11 @@
 #include "RuntimeTelemetryCadence.h"
 #include "RuntimeUiSnapshot.h"
 #include "BleSecurity.h"
+#include "BleOtaUpdate.h"
 #include "HilSimRunner.h"
 #include "BleCommandHandler.h"
 #include "BLEBoatLock.h"
+#include "DebugWifiOta.h"
 
 Settings settings;
 constexpr size_t EEPROM_SIZE =
@@ -55,6 +57,8 @@ constexpr size_t EEPROM_SIZE =
         : (BleSecurity::EEPROM_ADDR + BleSecurity::STORED_BYTES);
 
 BLEBoatLock bleBoatLock;
+BleOtaUpdate bleOta;
+bool bleStarted = false;
 
 namespace cfg {
 constexpr char kFirmwareVersion[] = "0.2.0";
@@ -301,6 +305,20 @@ void registerBleParams() {
       []() { return fixTypeSourceString(fixTypeSource); },
   };
   registerRuntimeBleParams(context);
+}
+
+void startBleRuntime() {
+  if (bleStarted) {
+    return;
+  }
+  bleBoatLock.begin();
+  bleStarted = true;
+}
+
+void serviceBleRuntime() {
+  if (bleStarted) {
+    bleBoatLock.loop();
+  }
 }
 
 void updateGpsFromSerial() {
@@ -806,7 +824,11 @@ void setup() {
   anchor.loadAnchor();
 
   registerBleParams();
-  bleBoatLock.begin();
+#if BOATLOCK_DEBUG_WIFI_OTA
+  DebugWifiOta::begin([]() { stopAllMotionNow(); });
+#else
+  startBleRuntime();
+#endif
 
   motor.setupPWM(cfg::kMotorPwmPin, cfg::kPwmChannel, cfg::kPwmFreq, cfg::kPwmResolution);
   motor.setDirPins(cfg::kMotorDirPin1, cfg::kMotorDirPin2);
@@ -830,7 +852,14 @@ void loop() {
       (simLastWallMs == 0 || wallNowMs < simLastWallMs) ? 0 : (wallNowMs - simLastWallMs);
   simLastWallMs = wallNowMs;
   hilSim.loop(wallDtMs);
-  bleBoatLock.loop();
+#if BOATLOCK_DEBUG_WIFI_OTA
+  DebugWifiOta::loop();
+  if (DebugWifiOta::bleMayStart()) {
+    startBleRuntime();
+  }
+#endif
+  serviceBleRuntime();
+  bleOta.loop();
 
   updateGpsFromSerial();
   handleBootButton();
@@ -954,5 +983,5 @@ void loop() {
   publishBleAndUi(
       now, controlState.hasHeading, controlState.hasBearing, controlState.headingDeg, controlState.diffDeg, stickyBadge);
 
-  bleBoatLock.loop();
+  serviceBleRuntime();
 }

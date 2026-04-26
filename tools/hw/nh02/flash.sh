@@ -26,6 +26,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 BUILD_DIR="${FIRMWARE_DIR}/.pio/build/${PIO_ENV}"
+BOOT_APP0_BIN="${BOATLOCK_BOOT_APP0_BIN:-${HOME}/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin}"
 
 if [[ "${NO_BUILD}" -eq 0 ]]; then
   (
@@ -41,11 +42,17 @@ for image in bootloader.bin partitions.bin firmware.bin; do
   fi
 done
 
+if [[ ! -f "${BOOT_APP0_BIN}" ]]; then
+  echo "missing boot_app0.bin: ${BOOT_APP0_BIN}" >&2
+  exit 1
+fi
+
 remote_shell "mkdir -p '${BOATLOCK_NH02_REMOTE_STAGE}'"
 
 "${RSYNC_BASE[@]}" \
   "${BUILD_DIR}/bootloader.bin" \
   "${BUILD_DIR}/partitions.bin" \
+  "${BOOT_APP0_BIN}" \
   "${BUILD_DIR}/firmware.bin" \
   "${BOATLOCK_NH02_SSH_TARGET}:${BOATLOCK_NH02_REMOTE_STAGE}/"
 

@@ -98,6 +98,41 @@ void test_jump_rejection_keeps_previous_fix() {
   TEST_ASSERT_TRUE(gnss.currentPosJumpRejected());
 }
 
+void test_repeated_jump_rebases_after_confirmation() {
+  Settings settings;
+  settings.reset();
+  settings.set("MaxPosJumpM", 5.0f);
+
+  RuntimeGnss gnss;
+  RuntimeGnss::HardwareFixInput first;
+  first.lat = 59.9386f;
+  first.lon = 30.3141f;
+  first.speedKmh = 0.0f;
+  first.satellites = 12;
+  first.hdop = 1.0f;
+  first.ageMs = 100;
+  TEST_ASSERT_EQUAL((int)RuntimeGnss::ApplyResult::APPLIED,
+                    (int)gnss.applyHardwareFix(first, settings, false, 0.0f, 1000));
+
+  const float prevLat = gnss.lastLat();
+  RuntimeGnss::HardwareFixInput jump = first;
+  jump.lat = 59.9486f;
+  jump.ageMs = 120;
+  TEST_ASSERT_EQUAL((int)RuntimeGnss::ApplyResult::JUMP_REJECTED,
+                    (int)gnss.applyHardwareFix(jump, settings, false, 0.0f, 1500));
+  TEST_ASSERT_FLOAT_WITHIN(0.000001f, prevLat, gnss.lastLat());
+  TEST_ASSERT_TRUE(gnss.currentPosJumpRejected());
+
+  jump.lat = 59.94861f;
+  jump.ageMs = 100;
+  TEST_ASSERT_EQUAL((int)RuntimeGnss::ApplyResult::APPLIED,
+                    (int)gnss.applyHardwareFix(jump, settings, false, 0.0f, 2000));
+  TEST_ASSERT_FLOAT_WITHIN(0.00002f, jump.lat, gnss.lastLat());
+  TEST_ASSERT_FALSE(gnss.currentPosJumpRejected());
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, gnss.currentPosJumpM());
+  TEST_ASSERT_TRUE(gnss.gpsQualityGoodForAnchorOn(settings));
+}
+
 void test_invalid_hardware_fix_clears_control_fix() {
   Settings settings;
   settings.reset();
@@ -274,6 +309,7 @@ int main() {
   RUN_TEST(test_invalid_phone_fix_is_not_kept_as_fallback);
   RUN_TEST(test_cached_anchor_bearing_survives_brief_gps_loss);
   RUN_TEST(test_jump_rejection_keeps_previous_fix);
+  RUN_TEST(test_repeated_jump_rebases_after_confirmation);
   RUN_TEST(test_invalid_hardware_fix_clears_control_fix);
   RUN_TEST(test_gnss_quality_level_reevaluates_current_sample);
   RUN_TEST(test_phone_fallback_quality_sample_does_not_reuse_hardware_metrics);

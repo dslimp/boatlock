@@ -1,5 +1,6 @@
 #include "BLEBoatLock.h"
 #include "BleAdvertisingWatchdog.h"
+#include "BleOtaUpdate.h"
 #include "Logger.h"
 #include "RuntimeBleCommandLog.h"
 #include "RuntimeBleCommandQueue.h"
@@ -8,6 +9,8 @@
 #include "RuntimeBleImmediateCommand.h"
 #include "RuntimeBleLogText.h"
 #include <cstring>
+
+extern BleOtaUpdate bleOta;
 
 // --- Server callbacks ---
 class BLEBoatLock::ServerCallbacks : public NimBLEServerCallbacks {
@@ -64,6 +67,9 @@ public:
         if (parent) {
             parent->bleStatus = stillConnected ? CONNECTED : ADVERTISING;
             if (!stillConnected) {
+                if (bleOta.active()) {
+                    bleOta.abort("disconnect");
+                }
                 parent->clearQueuedData();
                 parent->dataNotifyEnabled = false;
                 parent->logNotifyEnabled = false;
@@ -102,6 +108,17 @@ public:
     }
 };
 
+class BLEBoatLock::OtaCallbacks : public NimBLECharacteristicCallbacks {
+public:
+    void onWrite(NimBLECharacteristic* pCharacteristic, NimBLEConnInfo&) override {
+        const std::string value = pCharacteristic->getValue();
+        if (value.empty()) {
+            return;
+        }
+        bleOta.writeChunk(reinterpret_cast<const uint8_t*>(value.data()), value.size());
+    }
+};
+
 // --- Track CCCD subscription state for notify characteristics ---
 class BLEBoatLock::NotifyCallbacks : public NimBLECharacteristicCallbacks {
     BLEBoatLock* parent;
@@ -126,7 +143,7 @@ BLEBoatLock::BLEBoatLock() {}
 void BLEBoatLock::begin() {
     NimBLEDevice::init("BoatLock");
     NimBLEDevice::setSecurityAuth(true, true, true);
-    logMessage("[BLE] init name=BoatLock service=12ab data=34cd cmd=56ef log=78ab\n");
+    logMessage("[BLE] init name=BoatLock service=12ab data=34cd cmd=56ef log=78ab ota=9abc\n");
     // Large MTU (512) was unstable with CoreBluetooth under high traffic.
     NimBLEDevice::setMTU(247);
     NimBLEDevice::setPower(9);
@@ -151,6 +168,11 @@ void BLEBoatLock::begin() {
         "78ab", NIMBLE_PROPERTY::NOTIFY
     );
     pLogChar->setCallbacks(new NotifyCallbacks(this, true));
+
+    pOtaChar = pService->createCharacteristic(
+        "9abc", NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR
+    );
+    pOtaChar->setCallbacks(new OtaCallbacks());
 
     pService->start();
     NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();

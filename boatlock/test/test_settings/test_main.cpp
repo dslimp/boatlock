@@ -5,20 +5,11 @@
 
 void logMessage(const char *, ...) {}
 
-void setUp() {}
-void tearDown() {}
-
-static uint32_t crc32(const uint8_t* data, size_t len) {
-  uint32_t crc = 0xFFFFFFFFu;
-  for (size_t i = 0; i < len; ++i) {
-    crc ^= data[i];
-    for (int bit = 0; bit < 8; ++bit) {
-      const uint32_t mask = static_cast<uint32_t>(-(static_cast<int>(crc & 1u)));
-      crc = (crc >> 1) ^ (0xEDB88320u & mask);
-    }
-  }
-  return ~crc;
+void setUp() {
+  nvs_mock_clear();
 }
+
+void tearDown() {}
 
 static int defaultIdxByKey(const char* key) {
   for (int i = 0; i < count; ++i) {
@@ -35,11 +26,18 @@ static void fillDefaultValues(float values[count]) {
   }
 }
 
-static void storeValidValues(const float values[count]) {
-  EEPROM.put(Settings::EEPROM_ADDR, Settings::VERSION);
-  std::memcpy(EEPROM.data + Settings::VALUES_ADDR, values, Settings::VALUES_BYTES);
-  const uint32_t crc = crc32(reinterpret_cast<const uint8_t*>(values), Settings::VALUES_BYTES);
-  EEPROM.put(Settings::CRC_ADDR, crc);
+static void storeNvsValues(const float values[count], uint8_t schema = Settings::VERSION) {
+  nvs_mock_clear();
+  nvs_mock_put_u8(Settings::NVS_NAMESPACE, Settings::NVS_SCHEMA_KEY, schema);
+  for (int i = 0; i < count; ++i) {
+    nvs_mock_put_blob(Settings::NVS_NAMESPACE, defaultEntries[i].key, &values[i], sizeof(float));
+  }
+}
+
+static float persistedFloat(const char* key) {
+  float value = NAN;
+  TEST_ASSERT_TRUE(nvs_mock_get_blob(Settings::NVS_NAMESPACE, key, &value, sizeof(value)));
+  return value;
 }
 
 void test_get_set() {
@@ -55,7 +53,6 @@ void test_get_set() {
 }
 
 void test_constructor_provides_safe_defaults_without_load_or_reset() {
-  EEPROM.clear();
   Settings s;
 
   TEST_ASSERT_EQUAL_FLOAT(2.5f, s.get("HoldRadius"));
@@ -65,11 +62,18 @@ void test_constructor_provides_safe_defaults_without_load_or_reset() {
 }
 
 void test_default_constructor_save_is_noop() {
-  EEPROM.clear();
   Settings s;
 
   TEST_ASSERT_TRUE(s.save());
-  TEST_ASSERT_EQUAL_INT(0, EEPROM.commitCount);
+  TEST_ASSERT_EQUAL_INT(0, nvs_mock_commit_count());
+}
+
+void test_nvs_names_fit_platform_limits() {
+  TEST_ASSERT_TRUE(std::strlen(Settings::NVS_NAMESPACE) <= 15);
+  TEST_ASSERT_TRUE(std::strlen(Settings::NVS_SCHEMA_KEY) <= 15);
+  for (int i = 0; i < count; ++i) {
+    TEST_ASSERT_TRUE_MESSAGE(std::strlen(defaultEntries[i].key) <= 15, defaultEntries[i].key);
+  }
 }
 
 void test_save_load() {
@@ -83,65 +87,78 @@ void test_save_load() {
 }
 
 void test_save_skips_clean_state() {
-  EEPROM.clear();
   Settings s;
   s.reset();
-  const int resetCommits = EEPROM.commitCount;
+  const int resetCommits = nvs_mock_commit_count();
 
   s.save();
-  TEST_ASSERT_EQUAL_INT(resetCommits, EEPROM.commitCount);
+  TEST_ASSERT_EQUAL_INT(resetCommits, nvs_mock_commit_count());
 
   TEST_ASSERT_TRUE(s.set("HoldRadius", s.get("HoldRadius")));
   s.save();
-  TEST_ASSERT_EQUAL_INT(resetCommits, EEPROM.commitCount);
+  TEST_ASSERT_EQUAL_INT(resetCommits, nvs_mock_commit_count());
 
   TEST_ASSERT_TRUE(s.set("HoldRadius", 4.1f));
   s.save();
-  TEST_ASSERT_EQUAL_INT(resetCommits + 1, EEPROM.commitCount);
+  TEST_ASSERT_EQUAL_INT(resetCommits + 1, nvs_mock_commit_count());
 }
 
 void test_save_failure_keeps_dirty_for_retry() {
-  EEPROM.clear();
   Settings s;
   s.reset();
-  EEPROM.commitCount = 0;
-  EEPROM.commitResult = false;
+  nvs_mock_clear();
+  s.reset();
+  nvs_mock_set_commit_result(0x1200);
 
   TEST_ASSERT_TRUE(s.set("HoldRadius", 4.1f));
   TEST_ASSERT_FALSE(s.save());
-  TEST_ASSERT_EQUAL_INT(1, EEPROM.commitCount);
+  TEST_ASSERT_EQUAL_INT(2, nvs_mock_commit_count());
 
-  EEPROM.commitResult = true;
+  nvs_mock_set_commit_result(ESP_OK);
   TEST_ASSERT_TRUE(s.save());
-  TEST_ASSERT_EQUAL_INT(2, EEPROM.commitCount);
+  TEST_ASSERT_EQUAL_INT(3, nvs_mock_commit_count());
+  TEST_ASSERT_EQUAL_FLOAT(4.1f, persistedFloat("HoldRadius"));
 }
 
 void test_load_valid_image_stays_clean() {
-  EEPROM.clear();
   float values[count];
   fillDefaultValues(values);
   values[defaultIdxByKey("HoldRadius")] = 3.3f;
-  storeValidValues(values);
+  storeNvsValues(values);
 
   Settings s;
   s.load();
-  TEST_ASSERT_EQUAL_INT(0, EEPROM.commitCount);
+  TEST_ASSERT_EQUAL_INT(0, nvs_mock_commit_count());
   TEST_ASSERT_EQUAL_FLOAT(3.3f, s.get("HoldRadius"));
 
   s.save();
-  TEST_ASSERT_EQUAL_INT(0, EEPROM.commitCount);
+  TEST_ASSERT_EQUAL_INT(0, nvs_mock_commit_count());
+}
+
+void test_load_bad_nvs_value_restores_default() {
+  float values[count];
+  fillDefaultValues(values);
+  storeNvsValues(values);
+
+  uint16_t bad = 0xBEEF;
+  nvs_mock_put_blob(Settings::NVS_NAMESPACE, "HoldRadius", &bad, sizeof(bad));
+
+  Settings s;
+  s.load();
+  TEST_ASSERT_EQUAL_INT(1, nvs_mock_commit_count());
+  TEST_ASSERT_EQUAL_FLOAT(2.5f, s.get("HoldRadius"));
+  TEST_ASSERT_EQUAL_FLOAT(2.5f, persistedFloat("HoldRadius"));
 }
 
 void test_set_rejects_nonfinite_without_dirtying() {
-  EEPROM.clear();
   Settings s;
   s.reset();
-  EEPROM.commitCount = 0;
+  const int resetCommits = nvs_mock_commit_count();
 
   TEST_ASSERT_FALSE(s.set("HoldRadius", NAN));
   TEST_ASSERT_EQUAL_FLOAT(2.5f, s.get("HoldRadius"));
   s.save();
-  TEST_ASSERT_EQUAL_INT(0, EEPROM.commitCount);
+  TEST_ASSERT_EQUAL_INT(resetCommits, nvs_mock_commit_count());
 }
 
 void test_set_strict_rejects_out_of_range() {
@@ -151,20 +168,6 @@ void test_set_strict_rejects_out_of_range() {
   TEST_ASSERT_EQUAL_FLOAT(2.5f, s.get("HoldRadius"));
   TEST_ASSERT_TRUE(s.setStrict("HoldRadius", 4.0f));
   TEST_ASSERT_EQUAL_FLOAT(4.0f, s.get("HoldRadius"));
-}
-
-void test_crc_mismatch_restores_defaults() {
-  Settings s;
-  s.reset();
-  s.set("HoldRadius", 4.0f);
-  s.save();
-
-  uint32_t badCrc = 0xDEADBEEF;
-  EEPROM.put(Settings::CRC_ADDR, badCrc);
-
-  s.set("HoldRadius", 10.0f);
-  s.load();
-  TEST_ASSERT_EQUAL_FLOAT(2.5f, s.get("HoldRadius"));
 }
 
 void test_anchor_profile_setting_bounds() {
@@ -194,46 +197,88 @@ void test_set_normalizes_integer_values() {
   TEST_ASSERT_EQUAL_FLOAT(1.0f, s.get("HoldHeading"));
 }
 
-void test_load_migrates_when_version_mismatch() {
+void test_load_schema_mismatch_preserves_keyed_values() {
+  float values[count];
+  fillDefaultValues(values);
+  values[defaultIdxByKey("HoldRadius")] = 4.2f;
+  values[defaultIdxByKey("MaxHdop")] = 2.4f;
+  values[defaultIdxByKey("MinSats")] = 7.6f;
+  values[defaultIdxByKey("CommToutMs")] = 1200.0f;
+  storeNvsValues(values, 0x01);
+
   Settings s;
-  s.reset();
-  s.set("HoldRadius", 4.2f);
-  s.save();
-
-  uint8_t oldVersion = 0x01;
-  EEPROM.put(Settings::EEPROM_ADDR, oldVersion);
-
-  s.set("HoldRadius", 5.0f);
   s.load();
-  TEST_ASSERT_EQUAL_FLOAT(2.5f, s.get("HoldRadius"));
+  TEST_ASSERT_EQUAL_INT(1, nvs_mock_commit_count());
+  TEST_ASSERT_EQUAL_FLOAT(4.2f, s.get("HoldRadius"));
+  TEST_ASSERT_EQUAL_FLOAT(2.4f, s.get("MaxHdop"));
+  TEST_ASSERT_EQUAL_FLOAT(8.0f, s.get("MinSats"));
+  TEST_ASSERT_EQUAL_FLOAT(4000.0f, s.get("CommToutMs"));
+}
 
-  uint8_t loadedVersion = 0;
-  EEPROM.get(Settings::EEPROM_ADDR, loadedVersion);
-  TEST_ASSERT_EQUAL_UINT8(Settings::VERSION, loadedVersion);
+void test_load_missing_nvs_key_uses_default_and_persists_it() {
+  float values[count];
+  fillDefaultValues(values);
+  values[defaultIdxByKey("HoldRadius")] = 3.3f;
+  storeNvsValues(values);
+  nvs_mock_state().namespaces[Settings::NVS_NAMESPACE].committed.erase("DeadbandM");
+
+  Settings s;
+  s.load();
+  TEST_ASSERT_EQUAL_INT(1, nvs_mock_commit_count());
+  TEST_ASSERT_EQUAL_FLOAT(3.3f, s.get("HoldRadius"));
+  TEST_ASSERT_EQUAL_FLOAT(1.5f, s.get("DeadbandM"));
+  TEST_ASSERT_EQUAL_FLOAT(1.5f, persistedFloat("DeadbandM"));
 }
 
 void test_load_sanitizes_nan_and_out_of_range_values() {
-  Settings s;
-  s.reset();
-
   float values[count];
   fillDefaultValues(values);
 
-  values[s.idxByKey("MaxHdop")] = NAN;
-  values[s.idxByKey("AnchorProf")] = 9.0f;
-  values[s.idxByKey("MinSats")] = 7.6f;
+  values[defaultIdxByKey("MaxHdop")] = NAN;
+  values[defaultIdxByKey("AnchorProf")] = 9.0f;
+  values[defaultIdxByKey("MinSats")] = 7.6f;
+  storeNvsValues(values);
 
-  EEPROM.put(Settings::EEPROM_ADDR, Settings::VERSION);
-  EEPROM.put(Settings::VALUES_ADDR, values);
-  const uint32_t crc = crc32(reinterpret_cast<const uint8_t*>(values), Settings::VALUES_BYTES);
-  EEPROM.put(Settings::CRC_ADDR, crc);
-
-  EEPROM.commitCount = 0;
+  Settings s;
   s.load();
-  TEST_ASSERT_EQUAL_INT(1, EEPROM.commitCount);
+  TEST_ASSERT_EQUAL_INT(1, nvs_mock_commit_count());
   TEST_ASSERT_EQUAL_FLOAT(1.8f, s.get("MaxHdop"));
   TEST_ASSERT_EQUAL_FLOAT(1.0f, s.get("AnchorProf"));
   TEST_ASSERT_EQUAL_FLOAT(8.0f, s.get("MinSats"));
+}
+
+void test_save_uses_one_commit_for_multiple_dirty_keys() {
+  Settings s;
+  s.reset();
+  nvs_mock_state().commitCount = 0;
+
+  TEST_ASSERT_TRUE(s.set("HoldRadius", 4.1f));
+  TEST_ASSERT_TRUE(s.set("MaxHdop", 2.2f));
+  TEST_ASSERT_TRUE(s.save());
+
+  TEST_ASSERT_EQUAL_INT(1, nvs_mock_commit_count());
+  TEST_ASSERT_EQUAL_FLOAT(4.1f, persistedFloat("HoldRadius"));
+  TEST_ASSERT_EQUAL_FLOAT(2.2f, persistedFloat("MaxHdop"));
+}
+
+void test_failed_save_does_not_publish_partial_values() {
+  Settings s;
+  s.reset();
+  nvs_mock_state().commitCount = 0;
+  nvs_mock_set_commit_result(0x1200);
+
+  TEST_ASSERT_TRUE(s.set("HoldRadius", 4.1f));
+  TEST_ASSERT_TRUE(s.set("MaxHdop", 2.2f));
+  TEST_ASSERT_FALSE(s.save());
+  TEST_ASSERT_EQUAL_INT(1, nvs_mock_commit_count());
+  TEST_ASSERT_EQUAL_FLOAT(2.5f, persistedFloat("HoldRadius"));
+  TEST_ASSERT_EQUAL_FLOAT(1.8f, persistedFloat("MaxHdop"));
+
+  nvs_mock_set_commit_result(ESP_OK);
+  TEST_ASSERT_TRUE(s.save());
+  TEST_ASSERT_EQUAL_INT(2, nvs_mock_commit_count());
+  TEST_ASSERT_EQUAL_FLOAT(4.1f, persistedFloat("HoldRadius"));
+  TEST_ASSERT_EQUAL_FLOAT(2.2f, persistedFloat("MaxHdop"));
 }
 
 void test_comm_timeout_floor_is_safe() {
@@ -245,12 +290,8 @@ void test_comm_timeout_floor_is_safe() {
 
   float values[count];
   fillDefaultValues(values);
-  values[s.idxByKey("CommToutMs")] = 1200.0f;
-
-  EEPROM.put(Settings::EEPROM_ADDR, Settings::VERSION);
-  EEPROM.put(Settings::VALUES_ADDR, values);
-  const uint32_t crc = crc32(reinterpret_cast<const uint8_t*>(values), Settings::VALUES_BYTES);
-  EEPROM.put(Settings::CRC_ADDR, crc);
+  values[defaultIdxByKey("CommToutMs")] = 1200.0f;
+  storeNvsValues(values);
 
   s.load();
   TEST_ASSERT_TRUE(s.get("CommToutMs") >= 3000.0f);
@@ -261,18 +302,22 @@ int main(int argc, char **argv) {
   RUN_TEST(test_get_set);
   RUN_TEST(test_constructor_provides_safe_defaults_without_load_or_reset);
   RUN_TEST(test_default_constructor_save_is_noop);
+  RUN_TEST(test_nvs_names_fit_platform_limits);
   RUN_TEST(test_save_load);
   RUN_TEST(test_save_skips_clean_state);
   RUN_TEST(test_save_failure_keeps_dirty_for_retry);
   RUN_TEST(test_load_valid_image_stays_clean);
+  RUN_TEST(test_load_bad_nvs_value_restores_default);
   RUN_TEST(test_set_rejects_nonfinite_without_dirtying);
   RUN_TEST(test_set_strict_rejects_out_of_range);
-  RUN_TEST(test_crc_mismatch_restores_defaults);
   RUN_TEST(test_anchor_profile_setting_bounds);
   RUN_TEST(test_set_strict_rounds_integer_values);
   RUN_TEST(test_set_normalizes_integer_values);
-  RUN_TEST(test_load_migrates_when_version_mismatch);
+  RUN_TEST(test_load_schema_mismatch_preserves_keyed_values);
+  RUN_TEST(test_load_missing_nvs_key_uses_default_and_persists_it);
   RUN_TEST(test_load_sanitizes_nan_and_out_of_range_values);
+  RUN_TEST(test_save_uses_one_commit_for_multiple_dirty_keys);
+  RUN_TEST(test_failed_save_does_not_publish_partial_values);
   RUN_TEST(test_comm_timeout_floor_is_safe);
   return UNITY_END();
 }

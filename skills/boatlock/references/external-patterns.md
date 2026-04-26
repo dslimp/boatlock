@@ -15,11 +15,14 @@ Use this file for:
 
 - OpenCPN Anchor Watch: <https://opencpn.org/wiki/dokuwiki/doku.php?id=opencpn:manual_advanced:features:auto_anchor>
 - OpenCPN Auto Anchor Mark: <https://opencpn.org/wiki/dokuwiki/doku.php?id=opencpn:manual_advanced:features:anchor_auto>
+- OpenCPN Navigation Mode / chart orientation: <https://mail.opencpn.org/wiki/dokuwiki/doku.php?id=opencpn:manual_basic:chart_panel:chart_panel_options:navigation_mode>
+- OpenCPN Rotation Control: <https://opencpn-manuals.github.io/main/rotationctrl/index.html>
 - ArduPilot Rover Loiter Mode: <https://ardupilot.org/rover/docs/loiter-mode.html>
 - ArduPilot Rover Hold Mode: <https://ardupilot.org/rover/docs/hold-mode.html>
 - ArduPilot Pre-Arm Safety Checks: <https://ardupilot.org/rover/docs/common-prearm-safety-checks.html>
 - ArduPilot Rover Failsafes: <https://ardupilot.org/rover/docs/rover-failsafes.html>
 - ArduPilot Rover GPS glitch diagnostics: <https://ardupilot.org/rover/docs/common-diagnosing-problems-using-logs.html>
+- ArduPilot GPS failsafe and glitch protection: <https://ardupilot.org/copter/docs/gps-failsafe-glitch-protection.html>
 - ArduPilot Rover Motor and Servo Configuration: <https://ardupilot.org/rover/docs/rover-motor-and-servo-configuration.html>
 - ArduPilot Rover Manual Mode: <https://ardupilot.org/rover/docs/manual-mode.html>
 - ArduPilot Rover Tuning Speed and Throttle: <https://ardupilot.org/rover/docs/rover-tuning-throttle-and-speed.html>
@@ -58,6 +61,8 @@ Use this file for:
 - Adafruit BNO085 UART-RVC guide: <https://learn.adafruit.com/adafruit-9-dof-orientation-imu-fusion-breakout-bno085/uart-rvc-for-arduino>
 - Adafruit BNO085 pinout/mode-select guide: <https://learn.adafruit.com/adafruit-9-dof-orientation-imu-fusion-breakout-bno085/pinouts>
 - Arduino Blink Without Delay example: <https://docs.arduino.cc/built-in-examples/digital/BlinkWithoutDelay/>
+- Espressif OTA API: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/ota.html>
+- Espressif BLE OTA component: <https://components.espressif.com/components/espressif/ble_ota>
 
 ## What OpenCPN Gets Right
 
@@ -142,6 +147,7 @@ Implication for BoatLock:
 - Stepper/servo outputs should have explicit neutral/idle behavior. Release or reduce holding current when idle if holding torque is not required, and make re-enable behavior deliberate.
 - Stepper idle-release timers should track active state separately from timestamp values; `0` is a valid `millis()` sample and must not prevent coil release.
 - GNSS quality checks should require fresh quality evidence and fail closed when evidence disappears.
+- GPS glitch handling should avoid permanent lockout against a stale baseline. Compare new samples against prior/predicted motion, reject the first outlier, then allow a repeated stable candidate to become the new baseline while keeping pre-enable quality gates fail-closed.
 - Phone or app-provided positions are not equivalent to onboard GNSS for control. Keep fallback/display source state isolated from hardware-source filters, speed baselines, and jump baselines.
 - Runtime GNSS source handlers should validate coordinate values before updating live fix state; raw parser/app "valid" flags are not enough at the control boundary.
 - GNSS source transitions should reset stale hardware baselines rather than comparing a new hardware fix against old phone/no-fix state.
@@ -168,6 +174,7 @@ Implication for BoatLock:
 - Do not auto-enter manual control from failsafe. After a fault clears, operator control must be an explicit new action.
 - Treat non-finite sensor/control values like unavailable inputs at module boundaries, not as values to normalize later inside actuator code.
 - In auto/position-control modes, invalid distance/position evidence should disable the control input rather than masquerade as a zero-error measurement.
+- In heading-up/course-up displays, the top of the display is the bow/heading frame. World bearings shown on that display must subtract heading (`bearing - heading`) so the visual target stays tied to the real-world direction as the device turns.
 - Treat physical button input as an unsafe raw signal. Debounce it before edges, and reserve state-changing actions such as anchor save or pairing for stable long-press paths.
 - For BLE/manual control, keep GATT as a small transport and put safety in the app protocol:
   - use acknowledged writes for control commands where the client needs a write result
@@ -203,6 +210,8 @@ Implication for BoatLock:
 - For manual UI, avoid making actuation look like a primary one-tap FAB action. Use an explicit control surface such as a toolbar entry plus sheet/pad, and keep movement tied to press-and-hold/deadman semantics.
 - Compile-time test-app modes should use one typed allowlist parser and a small unit test, then a real APK build for the entrypoint that consumes the define. This keeps device smoke wrappers from silently drifting away from Flutter code.
 - Shell wrappers that share protocol/test vocabulary should source one common helper and have a cheap CI drift test against the app-side enum/parser. Duplicated case lists make acceptance scripts fail silently when new modes are added.
+- OTA should write sequentially to an inactive OTA app partition, validate the completed image before selecting it for boot, and abort without changing boot selection on transfer failure.
+- BLE OTA should have an explicit start/finish command path, bounded chunks, progress/error acknowledgement, and an integrity check. For BoatLock, authenticated `OTA_BEGIN` plus full-image SHA-256 is the minimum debug-safe baseline; signed images or secure boot remain the production hardening step.
 
 ## What Commercial GPS Anchors Get Right
 
@@ -272,6 +281,7 @@ Implication for BoatLock:
 - Arduino-ESP32 documents `Preferences`/NVS as the ESP32 replacement for the Arduino EEPROM library for retained small values.
 - ESP-IDF NVS is append-oriented and includes flash wear levelling, but changes are only guaranteed persistent after an explicit commit.
 - Espressif's NVS FAQ treats flash writes as bounded-lifetime operations and notes that flash writes have runtime constraints.
+- Arduino `Preferences` commits each `putX()` call in the current ESP32 framework; BoatLock settings use the ESP-IDF NVS API directly so one logical `Settings::save()` can stage dirty keys and commit once.
 
 Implication for BoatLock:
 - Avoid write amplification in settings paths even when the backend has wear levelling.
@@ -280,7 +290,8 @@ Implication for BoatLock:
 - Normalize values by declared type before dirtying/persisting so integer and bool-like settings cannot remain fractional in RAM or storage.
 - Treat flash commits as fallible. A failed commit must not be logged as saved or clear dirty state.
 - Runtime objects backed by persisted settings should restore previous RAM values when a commit fails instead of exposing uncommitted state as the active operating point.
-- Boot migration, CRC recovery, and value normalization are the only expected boot-time settings writes.
+- Store settings by stable key rather than array index so adding, removing, or reordering settings does not need a custom migration table.
+- Boot migration, missing-key recovery, and value normalization are the only expected boot-time settings writes.
 - Non-finite config values must fail closed before reaching persisted storage.
 
 ## What BNO08x SH2 Integration Gets Right
@@ -295,6 +306,19 @@ Implication for BoatLock:
 - Treat RVC compass smokes as routing proof only (`ok=0` is expected for SH2-only commands).
 - Require SH2-UART wiring plus the explicit `esp32s3_bno08x_sh2_uart` target before accepting DCD/tare success.
 - Keep compass command smokes safe by avoiding tare unless the test's purpose is explicitly tare acceptance.
+
+## What Wireless Debug Deploy Guidance Gets Right
+
+- Android's official ADB flow supports Wi-Fi debugging after an initial USB connection with `adb tcpip 5555`, then `adb connect <ip>:5555`; if discovery is unreliable, an explicit `adb connect ip:port` is the documented fallback.
+- Android's ADB docs warn that the host and phone must share a suitable access point and that some networks block the required traffic.
+- Espressif treats OTA as an app-partition update mechanism, not as a serial flashing replacement for bootloader/partition recovery.
+- BLE OTA on ESP32 still uses the same OTA partition/finalization rules as Wi-Fi/HTTP OTA; BLE is only the transport.
+
+Implication for BoatLock:
+- Use USB once to seed BLE OTA capability, then let the phone bridge the firmware binary to ESP32 over the existing BLE link.
+- Require an authenticated `OTA_BEGIN` when the device is paired, and require an expected SHA-256 before the phone starts transfer.
+- Keep USB flashing through `tools/hw/nh02/flash.sh` as the recovery path for failed OTA, bad hashes, or partition/bootloader changes.
+- For Android, prove Wi-Fi ADB by installing/running a smoke or e2e APK through `--serial <ip>:5555`; `adb devices` alone is only discovery proof.
 
 ## Best-Practice Decisions For BoatLock
 

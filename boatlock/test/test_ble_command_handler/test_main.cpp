@@ -9,6 +9,7 @@ StepperControl stepperControl;
 MotorControl motor;
 Settings settings;
 BNO08xCompass compass;
+BleOtaUpdate bleOta;
 bool headingAvailableStub = false;
 ManualControl manualControl;
 bool phoneGpsFixSet = false;
@@ -170,6 +171,7 @@ void setUp() {
   simHandlerConsumes = false;
   simHandlerCalls = 0;
   simLastCommand.clear();
+  bleOta.reset();
 }
 
 void tearDown() {}
@@ -177,6 +179,33 @@ void tearDown() {}
 void test_set_hold_heading() {
   handleBleCommand("SET_HOLD_HEADING:1");
   TEST_ASSERT_EQUAL_FLOAT(1.0f, settings.get("HoldHeading"));
+}
+
+void test_ota_begin_enters_safe_state_and_starts_update() {
+  settings.set("AnchorEnabled", 1.0f);
+  manualControl.apply(ManualControlSource::BLE_PHONE, 1, 50, 500, 1000);
+
+  handleBleCommand("OTA_BEGIN:4096,00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff");
+
+  TEST_ASSERT_TRUE(lastFailsafeReason == FailsafeReason::STOP_CMD);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
+  TEST_ASSERT_EQUAL(1, manualStopCalls);
+  TEST_ASSERT_TRUE(stepperControl.cancelCalled);
+  TEST_ASSERT_TRUE(motor.stopCalled);
+  TEST_ASSERT_TRUE(stopAllMotionCalled);
+  TEST_ASSERT_EQUAL(1, bleOta.beginCalls);
+  TEST_ASSERT_EQUAL_UINT32(4096, bleOta.lastImageSize);
+  TEST_ASSERT_EQUAL_STRING("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+                           bleOta.lastSha256Hex);
+}
+
+void test_ota_active_blocks_runtime_commands_until_finish_or_abort() {
+  bleOta.setActive(true);
+  handleBleCommand("MANUAL_SET:1,40,500");
+  TEST_ASSERT_FALSE(manualControl.active());
+
+  handleBleCommand("OTA_FINISH");
+  TEST_ASSERT_EQUAL(1, bleOta.finishCalls);
 }
 
 void test_manual_set_is_atomic_and_enters_manual_mode() {
@@ -508,6 +537,8 @@ void test_non_sim_command_still_runs_when_sim_handler_declines() {
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_set_hold_heading);
+  RUN_TEST(test_ota_begin_enters_safe_state_and_starts_update);
+  RUN_TEST(test_ota_active_blocks_runtime_commands_until_finish_or_abort);
   RUN_TEST(test_manual_set_is_atomic_and_enters_manual_mode);
   RUN_TEST(test_manual_set_disarms_anchor_without_reenable_path);
   RUN_TEST(test_manual_off_stops_manual_outputs);

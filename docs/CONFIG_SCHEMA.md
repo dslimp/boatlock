@@ -1,26 +1,28 @@
 # Config Schema
 
-Schema version: `0x17` (`Settings::VERSION`).
+Schema version: `0x18` (`Settings::VERSION`).
 
-Settings are stored in EEPROM as:
+Settings are stored in ESP32 NVS namespace `boatlock_cfg` as:
 
-1. `version` (`uint8_t`)
-2. `values[count]` (`float[count]`)
-3. `crc32` (`uint32_t`, over raw `values` bytes)
+1. `schema` (`uint8_t`)
+2. one raw `float` blob per setting key
 
 On boot:
 
-- if version mismatches, defaults are loaded and persisted (migration path)
-- if CRC mismatches, defaults are loaded and persisted
+- missing keys keep current defaults and are persisted on the next boot writeback
+- removed keys are ignored
+- schema mismatch keeps existing values by key and writes the current schema marker
+- invalid NVS values use defaults and are persisted on the next boot writeback
 - any loaded value outside allowed range is normalized and logged as `CONFIG_REJECTED`
 
 Write policy:
 
-- runtime `save()` writes EEPROM only when settings are dirty
+- runtime `save()` writes NVS only when settings are dirty
+- dirty setting keys are staged and committed with one `nvs_commit()`
 - setting a value equal to the current normalized value does not create a flash commit
 - non-finite runtime values are rejected instead of being persisted
-- failed EEPROM commits are logged as `CONFIG_SAVE_FAILED` and keep settings dirty for retry
-- migration, CRC recovery, and boot-time normalization still force a commit
+- failed NVS set/commit calls are logged as `CONFIG_SAVE_FAILED` and keep settings dirty for retry
+- migration, missing-key recovery, and boot-time normalization still force a commit
 
 ## Groups
 

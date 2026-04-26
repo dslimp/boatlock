@@ -12,6 +12,7 @@ void main() {
 
   test('isBoatLockUuid accepts exact short and Bluetooth base UUID forms', () {
     expect(isBoatLockUuid('12ab', boatLockServiceUuid), isTrue);
+    expect(isBoatLockUuid('9abc', boatLockOtaCharacteristicUuid), isTrue);
     expect(
       isBoatLockUuid(
         '000012ab-0000-1000-8000-00805f9b34fb',

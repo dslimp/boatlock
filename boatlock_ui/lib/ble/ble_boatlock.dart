@@ -12,6 +12,7 @@ import 'ble_discovery_check.dart';
 import 'ble_ids.dart';
 import 'ble_live_frame.dart';
 import 'ble_log_line.dart';
+import 'ble_ota_payload.dart';
 import 'ble_reconnect_policy.dart';
 import 'ble_rssi_throttle.dart';
 import 'ble_scan_config.dart';
@@ -19,12 +20,14 @@ import 'ble_security_codec.dart';
 
 typedef BoatDataCallback = void Function(BoatData? data);
 typedef LogCallback = void Function(String line);
+typedef OtaProgressCallback = void Function(int sentBytes, int totalBytes);
 
 class BleBoatLock with WidgetsBindingObserver {
   BluetoothDevice? _device;
   BluetoothCharacteristic? _dataChar;
   BluetoothCharacteristic? _cmdChar;
   BluetoothCharacteristic? _logChar;
+  BluetoothCharacteristic? _otaChar;
   final BoatDataCallback onData;
   final LogCallback? onLog;
   BoatData? _lastData;
@@ -56,6 +59,8 @@ class BleBoatLock with WidgetsBindingObserver {
   bool _isConnecting = false;
   bool _isDisposed = false;
   DateTime? _lastDataLogAt;
+  Completer<bool>? _otaBeginAck;
+  Completer<bool>? _otaFinishAck;
 
   BleBoatLock({required this.onData, this.onLog});
 
@@ -206,6 +211,7 @@ class BleBoatLock with WidgetsBindingObserver {
       var dataFound = false;
       var commandFound = false;
       var logFound = false;
+      var otaFound = false;
       for (var s in services) {
         if (!isBoatLockUuid(s.uuid.toString(), boatLockServiceUuid)) {
           continue;
@@ -230,6 +236,10 @@ class BleBoatLock with WidgetsBindingObserver {
             _logSub?.cancel();
             _logSub = _logChar!.lastValueStream.listen(_onLogNotify);
           }
+          if (isBoatLockUuid(uuid, boatLockOtaCharacteristicUuid)) {
+            _otaChar = c;
+            otaFound = true;
+          }
         }
       }
       if (!boatLockDiscoveryComplete(
@@ -242,6 +252,11 @@ class BleBoatLock with WidgetsBindingObserver {
         );
         await _applyReconnectDecision(_reconnectPolicy.connectFailed());
         return;
+      }
+      if (!otaFound) {
+        _log(
+          'BoatLock OTA characteristic missing ota:$boatLockOtaCharacteristicUuid',
+        );
       }
       await _setStreamEnabled(true);
       await requestSnapshot();
@@ -401,7 +416,32 @@ class BleBoatLock with WidgetsBindingObserver {
   void _onLogNotify(List<int> value) {
     final line = decodeBoatLockLogLine(value);
     if (line.trim().isEmpty) return;
+    _handleOtaLogLine(line);
     onLog?.call(line);
+  }
+
+  Future<bool> _waitForOtaAck(
+    Completer<bool> completer,
+    Duration timeout,
+  ) async {
+    return completer.future.timeout(timeout, onTimeout: () => false);
+  }
+
+  void _handleOtaLogLine(String line) {
+    if (_otaBeginAck != null && !_otaBeginAck!.isCompleted) {
+      if (line.contains('[OTA] begin ok')) {
+        _otaBeginAck!.complete(true);
+      } else if (line.contains('[OTA] begin rejected')) {
+        _otaBeginAck!.complete(false);
+      }
+    }
+    if (_otaFinishAck != null && !_otaFinishAck!.isCompleted) {
+      if (line.contains('[OTA] finish ok')) {
+        _otaFinishAck!.complete(true);
+      } else if (line.contains('[OTA] finish rejected')) {
+        _otaFinishAck!.complete(false);
+      }
+    }
   }
 
   Future<void> setAnchor() async {
@@ -491,6 +531,60 @@ class BleBoatLock with WidgetsBindingObserver {
 
   Future<bool> resetCompassOffset() async {
     return _writeCommand('RESET_COMPASS_OFFSET');
+  }
+
+  Future<bool> uploadFirmwareOtaBytes({
+    required List<int> firmware,
+    required String sha256Hex,
+    OtaProgressCallback? onProgress,
+  }) async {
+    final sha = normalizeBoatLockSha256Hex(sha256Hex);
+    if (_cmdChar == null || _otaChar == null || sha == null) return false;
+    if (!isBoatLockOtaImageSizeValid(firmware.length)) return false;
+
+    _heartbeatTimer?.cancel();
+    var beginAccepted = false;
+    var finishRequested = false;
+    try {
+      _otaBeginAck = Completer<bool>();
+      _otaFinishAck = null;
+      final beginSent = await _writeCommand(
+        'OTA_BEGIN:${firmware.length},$sha',
+      );
+      if (!beginSent) return false;
+      beginAccepted = await _waitForOtaAck(
+        _otaBeginAck!,
+        const Duration(seconds: 20),
+      );
+      if (!beginAccepted) return false;
+
+      var sent = 0;
+      onProgress?.call(0, firmware.length);
+      for (final chunk in boatLockOtaChunks(firmware)) {
+        await _otaChar!.write(chunk, withoutResponse: false);
+        sent += chunk.length;
+        onProgress?.call(sent, firmware.length);
+      }
+
+      _otaFinishAck = Completer<bool>();
+      finishRequested = await _writeCommand('OTA_FINISH');
+      if (!finishRequested) return false;
+      return _waitForOtaAck(_otaFinishAck!, const Duration(seconds: 20));
+    } catch (e) {
+      _log('BLE OTA failed: $e');
+      return false;
+    } finally {
+      if (beginAccepted && !finishRequested && _cmdChar != null) {
+        try {
+          await _writeCommand('OTA_ABORT');
+        } catch (_) {}
+      }
+      _otaBeginAck = null;
+      _otaFinishAck = null;
+      if (!_isDisposed && _cmdChar != null) {
+        _startHeartbeat();
+      }
+    }
   }
 
   Future<bool> setStepMaxSpeed(double value) async {
@@ -661,11 +755,20 @@ class BleBoatLock with WidgetsBindingObserver {
     _dataChar = null;
     _cmdChar = null;
     _logChar = null;
+    _otaChar = null;
     _lastData = null;
     _secAuth = false;
     _secPairWindowOpen = false;
     _secCounter = 0;
     _secNonceHex = '0000000000000000';
+    if (_otaBeginAck != null && !_otaBeginAck!.isCompleted) {
+      _otaBeginAck!.complete(false);
+    }
+    if (_otaFinishAck != null && !_otaFinishAck!.isCompleted) {
+      _otaFinishAck!.complete(false);
+    }
+    _otaBeginAck = null;
+    _otaFinishAck = null;
     _rssiThrottle.reset();
   }
 

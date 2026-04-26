@@ -17,7 +17,7 @@ REQUIRED_CHECKS = (
     ),
     ("compass_heading_events", re.compile(r"^\[COMPASS\] heading events ready\b")),
     ("display_ready", re.compile(r"^\[DISPLAY\] ready=1\b")),
-    ("eeprom_loaded", re.compile(r"^\[EEPROM\] settings loaded\b")),
+    ("settings_loaded", re.compile(r"^\[NVS\] settings loaded\b")),
     ("security_state", re.compile(r"^\[SEC\] paired=[01]\b")),
     ("ble_init", re.compile(r"^\[BLE\] init name=BoatLock service=12ab data=34cd cmd=56ef log=78ab\b")),
     ("ble_advertising", re.compile(r"^\[BLE\] advertising started\b")),

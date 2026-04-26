@@ -37,10 +37,7 @@ class StatusPanel extends StatelessWidget {
             Icons.explore,
             "Q ${data!.compassQ}/3 M${data!.magQ} G${data!.gyroQ}",
           ),
-          _iconText(
-            Icons.speed,
-            "rv ${data!.rvAcc.toStringAsFixed(1)}°",
-          ),
+          _iconText(Icons.speed, "rv ${data!.rvAcc.toStringAsFixed(1)}°"),
           _iconText(
             Icons.waves,
             "B ${data!.magNorm.toStringAsFixed(1)}uT w ${data!.gyroNorm.toStringAsFixed(1)}",

@@ -1,6 +1,12 @@
 import 'dart:convert';
 import 'dart:math';
 
+final BigInt _mask64 = (BigInt.one << 64) - BigInt.one;
+final BigInt _sipConst0 = BigInt.parse('736f6d6570736575', radix: 16);
+final BigInt _sipConst1 = BigInt.parse('646f72616e646f6d', radix: 16);
+final BigInt _sipConst2 = BigInt.parse('6c7967656e657261', radix: 16);
+final BigInt _sipConst3 = BigInt.parse('7465646279746573', radix: 16);
+
 String generateOwnerSecretHex() {
   final random = Random.secure();
   final bytes = List<int>.generate(16, (_) => random.nextInt(256));
@@ -60,40 +66,42 @@ String _hex32(int value) {
   return v.toRadixString(16).toUpperCase().padLeft(8, '0');
 }
 
-String _hex64(int value) {
-  final v = value & 0xFFFFFFFFFFFFFFFF;
+String _hex64(BigInt value) {
+  final v = _u64(value);
   return v.toRadixString(16).toUpperCase().padLeft(16, '0');
 }
 
-int _rotl64(int value, int shift) {
-  final v = value & 0xFFFFFFFFFFFFFFFF;
-  return ((v << shift) | (v >> (64 - shift))) & 0xFFFFFFFFFFFFFFFF;
+BigInt _u64(BigInt value) => value & _mask64;
+
+BigInt _rotl64(BigInt value, int shift) {
+  final v = _u64(value);
+  return _u64((v << shift) | (v >> (64 - shift)));
 }
 
-int _sipHash64(List<int> keyBytes, List<int> data) {
+BigInt _sipHash64(List<int> keyBytes, List<int> data) {
   if (keyBytes.length != 16) {
-    return 0;
+    return BigInt.zero;
   }
-  int read64(List<int> bytes, int offset) {
-    var out = 0;
+  BigInt read64(List<int> bytes, int offset) {
+    var out = BigInt.zero;
     for (var i = 0; i < 8; ++i) {
-      out |= (bytes[offset + i] & 0xFF) << (i * 8);
+      out |= BigInt.from(bytes[offset + i] & 0xFF) << (i * 8);
     }
-    return out & 0xFFFFFFFFFFFFFFFF;
+    return _u64(out);
   }
 
-  void sipRound(List<int> state) {
-    state[0] = (state[0] + state[1]) & 0xFFFFFFFFFFFFFFFF;
+  void sipRound(List<BigInt> state) {
+    state[0] = _u64(state[0] + state[1]);
     state[1] = _rotl64(state[1], 13);
     state[1] ^= state[0];
     state[0] = _rotl64(state[0], 32);
-    state[2] = (state[2] + state[3]) & 0xFFFFFFFFFFFFFFFF;
+    state[2] = _u64(state[2] + state[3]);
     state[3] = _rotl64(state[3], 16);
     state[3] ^= state[2];
-    state[0] = (state[0] + state[3]) & 0xFFFFFFFFFFFFFFFF;
+    state[0] = _u64(state[0] + state[3]);
     state[3] = _rotl64(state[3], 21);
     state[3] ^= state[0];
-    state[2] = (state[2] + state[1]) & 0xFFFFFFFFFFFFFFFF;
+    state[2] = _u64(state[2] + state[1]);
     state[1] = _rotl64(state[1], 17);
     state[1] ^= state[2];
     state[2] = _rotl64(state[2], 32);
@@ -101,11 +109,11 @@ int _sipHash64(List<int> keyBytes, List<int> data) {
 
   final k0 = read64(keyBytes, 0);
   final k1 = read64(keyBytes, 8);
-  final state = <int>[
-    0x736f6d6570736575 ^ k0,
-    0x646f72616e646f6d ^ k1,
-    0x6c7967656e657261 ^ k0,
-    0x7465646279746573 ^ k1,
+  final state = <BigInt>[
+    _sipConst0 ^ k0,
+    _sipConst1 ^ k1,
+    _sipConst2 ^ k0,
+    _sipConst3 ^ k1,
   ];
 
   final blocks = data.length ~/ 8;
@@ -117,20 +125,20 @@ int _sipHash64(List<int> keyBytes, List<int> data) {
     state[0] ^= m;
   }
 
-  var b = (data.length & 0xFF) << 56;
+  var b = BigInt.from(data.length & 0xFF) << 56;
   final tailOffset = blocks * 8;
   for (var i = data.length - tailOffset; i > 0; --i) {
-    b |= (data[tailOffset + i - 1] & 0xFF) << ((i - 1) * 8);
+    b |= BigInt.from(data[tailOffset + i - 1] & 0xFF) << ((i - 1) * 8);
   }
 
   state[3] ^= b;
   sipRound(state);
   sipRound(state);
   state[0] ^= b;
-  state[2] ^= 0xFF;
+  state[2] ^= BigInt.from(0xFF);
   sipRound(state);
   sipRound(state);
   sipRound(state);
   sipRound(state);
-  return (state[0] ^ state[1] ^ state[2] ^ state[3]) & 0xFFFFFFFFFFFFFFFF;
+  return _u64(state[0] ^ state[1] ^ state[2] ^ state[3]);
 }

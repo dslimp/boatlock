@@ -19,7 +19,7 @@ void main() {
       '00112233445566778899AABBCCDDEEFF',
       '0123456789ABCDEF',
     );
-    expect(proof.length, 16);
+    expect(proof, 'A1E92CF17AF2C08F');
 
     final secure = buildSecureCommand(
       ownerSecret: '00112233445566778899AABBCCDDEEFF',
@@ -27,8 +27,7 @@ void main() {
       payload: 'ANCHOR_ON',
       counter: 1,
     );
-    expect(secure.startsWith('SEC_CMD:00000001:'), isTrue);
-    expect(secure.endsWith(':ANCHOR_ON'), isTrue);
+    expect(secure, 'SEC_CMD:00000001:64B4704B1AB96763:ANCHOR_ON');
   });
 
   test('generateOwnerSecretHex produces normalized random owner secret', () {

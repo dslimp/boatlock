@@ -52,6 +52,7 @@ private:
     NimBLECharacteristic* pDataChar = nullptr;
     NimBLECharacteristic* pCmdChar = nullptr;
     NimBLECharacteristic* pLogChar = nullptr;
+    NimBLECharacteristic* pOtaChar = nullptr;
 
     unsigned long lastDataNotifyMs = 0;
     unsigned long lastLogNotifyMs = 0;
@@ -72,9 +73,11 @@ private:
     // Колбэки BLE
     class ServerCallbacks;
     class CmdCallbacks;
+    class OtaCallbacks;
     class NotifyCallbacks;
     friend class ServerCallbacks;
     friend class CmdCallbacks;
+    friend class OtaCallbacks;
     friend class NotifyCallbacks;
 
     void handleControlPoint(const std::string& command);

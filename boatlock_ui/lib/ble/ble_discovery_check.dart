@@ -4,14 +4,16 @@ bool boatLockDiscoveryComplete({
   required bool dataFound,
   required bool commandFound,
   required bool logFound,
+  bool otaFound = true,
 }) {
-  return dataFound && commandFound && logFound;
+  return dataFound && commandFound && logFound && otaFound;
 }
 
 String describeMissingBoatLockCharacteristics({
   required bool dataFound,
   required bool commandFound,
   required bool logFound,
+  bool otaFound = true,
 }) {
   final missing = <String>[];
   if (!dataFound) {
@@ -22,6 +24,9 @@ String describeMissingBoatLockCharacteristics({
   }
   if (!logFound) {
     missing.add('log:$boatLockLogCharacteristicUuid');
+  }
+  if (!otaFound) {
+    missing.add('ota:$boatLockOtaCharacteristicUuid');
   }
   return missing.isEmpty ? 'none' : missing.join(',');
 }

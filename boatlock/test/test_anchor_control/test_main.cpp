@@ -5,7 +5,7 @@
 void logMessage(const char *, ...) {}
 
 void test_save_and_load() {
-  EEPROM.clear();
+  nvs_mock_clear();
   Settings s;
   s.reset();
   AnchorControl ac;
@@ -23,7 +23,7 @@ void test_save_and_load() {
 }
 
 void test_save_anchor_point_without_enabling_anchor() {
-  EEPROM.clear();
+  nvs_mock_clear();
   Settings s;
   s.reset();
   AnchorControl ac;
@@ -38,13 +38,13 @@ void test_save_anchor_point_without_enabling_anchor() {
 }
 
 void test_rejects_invalid_anchor_without_persisting_or_clamping() {
-  EEPROM.clear();
+  nvs_mock_clear();
   Settings s;
   s.reset();
   AnchorControl ac;
   ac.attachSettings(&s);
   TEST_ASSERT_TRUE(ac.saveAnchor(10.0f, 20.0f, 30.0f, false));
-  EEPROM.commitCount = 0;
+  nvs_mock_state().commitCount = 0;
 
   TEST_ASSERT_FALSE(ac.saveAnchor(91.0f, 20.0f, 40.0f, false));
   TEST_ASSERT_FALSE(ac.saveAnchor(0.0f, 0.0f, 40.0f, false));
@@ -56,18 +56,18 @@ void test_rejects_invalid_anchor_without_persisting_or_clamping() {
   TEST_ASSERT_EQUAL_FLOAT(10.0f, s.get("AnchorLat"));
   TEST_ASSERT_EQUAL_FLOAT(20.0f, s.get("AnchorLon"));
   TEST_ASSERT_EQUAL_FLOAT(30.0f, s.get("AnchorHead"));
-  TEST_ASSERT_EQUAL_INT(0, EEPROM.commitCount);
+  TEST_ASSERT_EQUAL_INT(0, nvs_mock_commit_count());
 }
 
 void test_save_failure_does_not_replace_live_anchor() {
-  EEPROM.clear();
+  nvs_mock_clear();
   Settings s;
   s.reset();
   AnchorControl ac;
   ac.attachSettings(&s);
   TEST_ASSERT_TRUE(ac.saveAnchor(10.0f, 20.0f, 30.0f, false));
-  EEPROM.commitCount = 0;
-  EEPROM.commitResult = false;
+  nvs_mock_state().commitCount = 0;
+  nvs_mock_set_commit_result(0x1200);
 
   TEST_ASSERT_FALSE(ac.saveAnchor(11.0f, 21.0f, 40.0f, true));
 
@@ -78,15 +78,15 @@ void test_save_failure_does_not_replace_live_anchor() {
   TEST_ASSERT_EQUAL_FLOAT(20.0f, s.get("AnchorLon"));
   TEST_ASSERT_EQUAL_FLOAT(30.0f, s.get("AnchorHead"));
   TEST_ASSERT_EQUAL_FLOAT(0.0f, s.get("AnchorEnabled"));
-  TEST_ASSERT_EQUAL_INT(1, EEPROM.commitCount);
+  TEST_ASSERT_EQUAL_INT(1, nvs_mock_commit_count());
 
-  EEPROM.commitResult = true;
+  nvs_mock_set_commit_result(ESP_OK);
   TEST_ASSERT_TRUE(s.save());
-  TEST_ASSERT_EQUAL_INT(2, EEPROM.commitCount);
+  TEST_ASSERT_EQUAL_INT(2, nvs_mock_commit_count());
 }
 
 void test_load_anchor_normalizes_or_clears_persisted_values() {
-  EEPROM.clear();
+  nvs_mock_clear();
   Settings s;
   s.reset();
   AnchorControl ac;

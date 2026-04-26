@@ -8,6 +8,7 @@ void main() {
         dataFound: true,
         commandFound: true,
         logFound: true,
+        otaFound: true,
       ),
       isTrue,
     );
@@ -16,6 +17,16 @@ void main() {
         dataFound: true,
         commandFound: true,
         logFound: false,
+        otaFound: true,
+      ),
+      isFalse,
+    );
+    expect(
+      boatLockDiscoveryComplete(
+        dataFound: true,
+        commandFound: true,
+        logFound: true,
+        otaFound: false,
       ),
       isFalse,
     );
@@ -27,6 +38,7 @@ void main() {
         dataFound: true,
         commandFound: true,
         logFound: true,
+        otaFound: true,
       ),
       'none',
     );
@@ -35,8 +47,9 @@ void main() {
         dataFound: false,
         commandFound: true,
         logFound: false,
+        otaFound: false,
       ),
-      'data:34cd,log:78ab',
+      'data:34cd,log:78ab,ota:9abc',
     );
   });
 }
