@@ -9,7 +9,7 @@ MODE="basic"
 PASS_ARGS=()
 OTA_URL=""
 OTA_SHA256=""
-OTA_LATEST_MAIN=0
+OTA_LATEST_RELEASE=0
 FIRMWARE_MANIFEST_URL=""
 WAIT_SET=0
 
@@ -35,6 +35,10 @@ while [[ $# -gt 0 ]]; do
       PASS_ARGS+=("$1")
       shift
       ;;
+    --sim-suite)
+      MODE="sim_suite"
+      shift
+      ;;
     --anchor)
       MODE="anchor"
       PASS_ARGS+=("$1")
@@ -54,9 +58,9 @@ while [[ $# -gt 0 ]]; do
       MODE="ota"
       shift
       ;;
-    --ota-latest-main)
+    --ota-latest-release)
       MODE="ota"
-      OTA_LATEST_MAIN=1
+      OTA_LATEST_RELEASE=1
       shift
       ;;
     --ota-url)
@@ -69,7 +73,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --firmware-manifest-url)
       FIRMWARE_MANIFEST_URL="${2:?missing firmware manifest URL}"
-      OTA_LATEST_MAIN=1
+      OTA_LATEST_RELEASE=1
       shift 2
       ;;
     --no-build)
@@ -95,7 +99,7 @@ done
 
 if [[ "${MODE}" == "ota" ]]; then
   if [[ "${BUILD_FIRST}" -eq 1 &&
-    "${OTA_LATEST_MAIN}" -eq 0 &&
+    "${OTA_LATEST_RELEASE}" -eq 0 &&
     ( -z "${OTA_URL}" || -z "${OTA_SHA256}" ) ]]; then
     echo "--ota-url and --ota-sha256 are required for --ota" >&2
     exit 1
@@ -105,11 +109,15 @@ if [[ "${MODE}" == "ota" ]]; then
   fi
 fi
 
+if [[ "${MODE}" == "sim_suite" && "${WAIT_SET}" -eq 0 ]]; then
+  PASS_ARGS+=(--wait-secs 1800)
+fi
+
 if [[ "${BUILD_FIRST}" -eq 1 ]]; then
   build_args=(--e2e-mode "${MODE}")
   if [[ "${MODE}" == "ota" ]]; then
-    if [[ "${OTA_LATEST_MAIN}" -eq 1 ]]; then
-      build_args+=(--e2e-ota-latest-main)
+    if [[ "${OTA_LATEST_RELEASE}" -eq 1 ]]; then
+      build_args+=(--e2e-ota-latest-release)
       if [[ -n "${FIRMWARE_MANIFEST_URL}" ]]; then
         build_args+=(--firmware-manifest-url "${FIRMWARE_MANIFEST_URL}")
       fi

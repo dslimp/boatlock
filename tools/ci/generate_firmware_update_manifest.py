@@ -37,7 +37,7 @@ def build_manifest(args: argparse.Namespace) -> dict:
         "platformioEnv": args.platformio_env,
         "commandProfile": args.command_profile,
         "artifactName": args.artifact_name,
-        "binaryUrl": f"{base_url}/firmware.bin",
+        "binaryUrl": f"{base_url}/{args.binary_filename}",
         "size": firmware.stat().st_size,
         "sha256": sha256_hex(firmware),
         "builtAt": built_at,
@@ -49,6 +49,7 @@ def main() -> None:
     ap.add_argument("--firmware", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--base-url", required=True)
+    ap.add_argument("--binary-filename", default="firmware.bin")
     ap.add_argument("--repo", default="dslimp/boatlock")
     ap.add_argument("--branch", default="main")
     ap.add_argument("--channel", default="main")

@@ -70,26 +70,28 @@ class FirmwareUpdateManifest {
     if (schema != 1) {
       throw FormatException('unsupported manifest schema $schema');
     }
-    if (channel != 'main') {
+    if (channel != 'main' && channel != 'release') {
       throw FormatException('unsupported firmware channel $channel');
     }
     if (repo != 'dslimp/boatlock') {
       throw FormatException('unexpected firmware repo $repo');
     }
-    if (branch != 'main') {
-      throw FormatException('unexpected firmware branch $branch');
+    if (!_branchMatchesChannel(channel, branch, firmwareVersion)) {
+      throw FormatException(
+        'unexpected firmware branch $branch for channel $channel',
+      );
     }
     if (!_isHexSha(gitSha)) {
       throw const FormatException('gitSha must be hex');
     }
     if (platformioEnv != 'esp32s3_service') {
       throw FormatException(
-        'OTA main channel must use esp32s3_service, got $platformioEnv',
+        'OTA firmware must use esp32s3_service, got $platformioEnv',
       );
     }
     if (commandProfile != 'service') {
       throw FormatException(
-        'OTA main channel must use service profile, got $commandProfile',
+        'OTA firmware must use service profile, got $commandProfile',
       );
     }
     if (binaryUrl == null || !binaryUrl.hasScheme || !binaryUrl.hasAuthority) {
@@ -132,6 +134,25 @@ bool _isAllowedBinaryUrl(Uri uri) {
   if (uri.scheme != 'http') return false;
   final host = uri.host.toLowerCase();
   return host == 'localhost' || host == '127.0.0.1' || host == '::1';
+}
+
+bool _branchMatchesChannel(
+  String channel,
+  String branch,
+  String firmwareVersion,
+) {
+  if (channel == 'main') return branch == 'main';
+  if (channel != 'release') return false;
+  final version = RegExp(
+    r'^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$',
+  ).firstMatch(firmwareVersion);
+  if (version == null) return false;
+  final releaseBranch = RegExp(
+    r'^release/v(0|[1-9]\d*)\.(0|[1-9]\d*)\.x$',
+  ).firstMatch(branch);
+  if (releaseBranch == null) return false;
+  return version.group(1) == releaseBranch.group(1) &&
+      version.group(2) == releaseBranch.group(2);
 }
 
 bool _isHexSha(String value) {

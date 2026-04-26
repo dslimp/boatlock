@@ -7,11 +7,11 @@ void main() {
   test('app e2e define is explicit and disabled by default', () {
     expect(kBoatLockAppE2eModeDefine, 'BOATLOCK_APP_E2E_MODE');
     expect(
-      kBoatLockAppE2eOtaLatestMainDefine,
-      'BOATLOCK_APP_E2E_OTA_LATEST_MAIN',
+      kBoatLockAppE2eOtaLatestReleaseDefine,
+      'BOATLOCK_APP_E2E_OTA_LATEST_RELEASE',
     );
     expect(kBoatLockAppE2eModeName, isEmpty);
-    expect(kBoatLockAppE2eOtaLatestMain, isFalse);
+    expect(kBoatLockAppE2eOtaLatestRelease, isFalse);
   });
 
   test('maps firmware profile rejections to app e2e stages and reasons', () {
@@ -49,6 +49,10 @@ void main() {
       'app_sim_rejected_by_profile_release',
     );
     expect(
+      appE2eProfileRejectionReason(BleSmokeMode.sim_suite, simRejection),
+      'app_sim_suite_rejected_by_profile_release',
+    );
+    expect(
       appE2eProfileRejectionReason(BleSmokeMode.compass, compassRejection),
       'app_compass_rejected_by_profile_release',
     );
@@ -64,5 +68,27 @@ void main() {
       appE2eProfileRejectionReason(BleSmokeMode.anchor, simRejection),
       isNull,
     );
+  });
+
+  test('parses on-device SIM suite logs', () {
+    expect(parseAppE2eSimListLog('[SIM] LIST S0_hold_still_good,S1_current'), [
+      'S0_hold_still_good',
+      'S1_current',
+    ]);
+    expect(parseAppE2eSimListLog('[SIM] STATUS {}'), isEmpty);
+
+    expect(
+      parseAppE2eSimJsonLog(
+        '[SIM] STATUS {"id":"S0","state":"DONE"}',
+        '[SIM] STATUS ',
+      ),
+      {'id': 'S0', 'state': 'DONE'},
+    );
+    expect(
+      parseAppE2eSimJsonLog('[SIM] STATUS not-json', '[SIM] STATUS '),
+      isNull,
+    );
+    expect(appE2eSimReportChunk('[SIM] REPORT {"id":"S0"'), '{"id":"S0"');
+    expect(appE2eSimReportChunk('[SIM] REPORT unavailable'), isNull);
   });
 }

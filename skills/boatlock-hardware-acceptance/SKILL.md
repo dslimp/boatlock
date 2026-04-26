@@ -49,6 +49,8 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
    - or `tools/hw/nh02/android-run-smoke.sh` when the phone is attached to `nh02`
    - use `tools/hw/nh02/android-run-app-e2e.sh --wait-secs 130` when the acceptance target is the real `lib/main.dart` application rather than the dedicated smoke entrypoint
    - use `tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130`, `--status`, `--anchor`, `--sim`, `--reconnect`, or `--esp-reset` for production-app command/recovery flows
+   - use `tools/hw/nh02/android-run-app-e2e.sh --sim-suite --wait-secs 1800` to run all listed on-device HIL scenarios through the production app on an already-flashed acceptance profile
+   - use `tools/hw/nh02/run-sim-suite.sh` for the standard full bench gate; it installs helpers, proves targets, flashes acceptance, runs boot acceptance and `sim_suite`, then restores release
    - use `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130` after compass BLE command changes; it sends safe DCD service commands and requires device-log acknowledgements
    - use `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180` after GNSS live-telemetry changes or field GPS checks; it requires valid non-zero coordinates and `gnssQ > 0`
    - use `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin` after BLE OTA/app-delivery changes; it serves `firmware.bin` from `nh02`, installs the production app with OTA e2e defines, uploads over BLE from the phone, and requires post-reboot telemetry recovery
@@ -119,6 +121,7 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
   - `tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130`
   - `tools/hw/nh02/android-run-app-e2e.sh --status --wait-secs 130`
   - `tools/hw/nh02/android-run-app-e2e.sh --sim --wait-secs 130`
+  - `tools/hw/nh02/android-run-app-e2e.sh --sim-suite --wait-secs 1800`
   - `tools/hw/nh02/android-run-app-e2e.sh --anchor --wait-secs 130`
   - `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130`
   - `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180`
@@ -138,6 +141,7 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
   - `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --no-install`
+  - `tools/hw/nh02/run-sim-suite.sh`
   - `tools/android/status.sh`
   - `tools/android/build-smoke-apk.sh`
   - `tools/android/run-smoke.sh`

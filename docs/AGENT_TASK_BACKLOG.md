@@ -10,13 +10,13 @@ Status after the 2026-04-26 autonomous pass.
   profile.
 - Product readiness docs were refreshed around current app, simulator, and
   hardware blockers.
-- Flutter service OTA can consume a validated latest-main firmware manifest and
-  expose `Обновить до main`.
-- CI now generates and deploys an OTA-capable `esp32s3_service` latest-main
-  firmware channel under GitHub Pages.
-- The app can also resolve the latest GitHub release as a firmware source,
-  preferring a release manifest asset and falling back to release assets with
-  matching SHA-256 metadata.
+- Flutter service OTA can consume a validated release firmware manifest and
+  expose `Обновить до релиза`.
+- CI now treats `release/**` branches as stabilization branches and publishes
+  release artifacts only from `v*` tags through GitHub Releases.
+- The app resolves the latest GitHub release as the firmware source, preferring a
+  release manifest asset and falling back to unambiguous service release assets
+  with matching SHA-256 metadata.
 - Flutter service settings now roll back optimistic values when firmware
   accepts the BLE write but then rejects the command by profile in diagnostics.
 - OTA upload failures in service UI now show the rejected command, active
@@ -27,12 +27,12 @@ Status after the 2026-04-26 autonomous pass.
   GNSS/heading sensor-frame degradation metrics/events with thresholds for
   Rybinsk fetch and Ladoga storm scenarios.
 - Android and macOS CI now publish service app artifacts configured with the
-  latest-main firmware manifest, and local wrappers can build the same
+  latest GitHub Release source, and local wrappers can build the same
   one-button update variants.
 - GitHub Releases now receive a service-profile `firmware-esp32s3-service`
   asset set plus `manifest.json`, and the app can use authenticated release
   asset API URLs when a token-backed validation client is injected.
-- Android app e2e now has a manifest-backed latest-main OTA mode that serves
+- Android app e2e now has a manifest-backed latest-release OTA mode that serves
   `manifest.json` plus `firmware.bin` and uses the app firmware-update client
   before the normal BLE OTA/reconnect verdict.
 - Manifest-backed Android OTA e2e has been proven on `nh02` against the
@@ -50,9 +50,8 @@ Status after the 2026-04-26 autonomous pass.
 - macOS service app acceptance now has a local wrapper that builds or unpacks
   the service artifact, validates the bundle/signature/entitlements, and can
   run a no-BLE launch smoke or manual update checklist.
-- Latest-main Pages deployment now has a CI verifier that downloads
-  `manifest.json`, `firmware.bin`, `SHA256SUMS`, and `BUILD_INFO.txt` after
-  deploy and validates metadata plus SHA-256 consistency.
+- GitHub Pages was removed from the release path; release tags now produce
+  unique flat GitHub Release asset names plus `manifest.json`.
 - Offline simulator yaw inertia and explicit wake/chop events are implemented
   with thresholds and reports for core and Russian water scenarios.
 - A pure firmware BLE control-owner lease policy helper is implemented and
@@ -65,13 +64,9 @@ Status after the 2026-04-26 autonomous pass.
 
 ## Next Autonomous Tasks
 
-- Prove the new latest-main Pages channel through an authenticated CI/Pages
-  check on the first real `main` run:
-  confirm `https://dslimp.github.io/boatlock/firmware/main/manifest.json`,
-  `firmware.bin`, `SHA256SUMS`, and `BUILD_INFO.txt` are public and match.
-  The unauthenticated probe on 2026-04-26 returned `404` for the private repo,
-  so the remaining gate is the Actions/Pages deployment result and visibility
-  setting. The workflow now has an in-CI verifier for this.
+- Cut the next release from `release/v0.2.x` only after the release branch CI is
+  green, then verify that `manifest.json` resolves
+  `firmware-esp32s3-service.bin` from the published GitHub Release.
 - Wire the pure multi-client control lease helper into the live BLE command path
   only after per-client security/session metadata is available.
 - Decide whether Android/macOS service builds should intentionally replace the
@@ -88,8 +83,9 @@ Status after the 2026-04-26 autonomous pass.
 - Do not change firmware motor/steering profiles for the real boat until those
   facts are captured. The current firmware assumes PWM plus two direction pins
   for the brushed motor and 28BYJ-48 plus ULN2003-style `HALF4WIRE` steering.
-- After the CI Pages channel is live, run a service-app OTA proof against the
-  public Pages URL instead of the local wrapper-served manifest.
+- After the next GitHub Release is published, run a service-app OTA proof
+  against the public release manifest instead of the local wrapper-served
+  manifest.
 
 ## Defer Or Move Out Of Main
 
@@ -111,22 +107,21 @@ Status after the 2026-04-26 autonomous pass.
 - `Hubble`: motor and steering driver intake gates; hardware-gated.
 - `Ohm`: keep-in-main vs defer plan; docs refreshed, unknown-command gate done,
   remaining multi-client and simulator work still open.
-- `Jason`: latest-main OTA should use a durable manifest/static channel, not raw
-  expiring Actions artifacts; implemented through app manifest client and Pages
-  publishing.
+- `Jason`: one-button OTA should use durable release metadata, not raw expiring
+  Actions artifacts; implemented through app manifest client and GitHub Release
+  assets.
 - `Epicurus`: latest GitHub release source; implemented through release parsing,
   service-profile release artifacts, release manifest publishing, and
   token-backed asset API support behind `BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO`.
 - `Bacon`: OTA commands must be written through the service-scoped app command
   path; implemented and covered.
-- `Leibniz`: one-button latest-main mostly existed, but service UI CI, stale
-  OTA throughput docs, and real Pages/macOS proof gaps were identified. CI/docs
-  fixes are implemented; Pages/macOS proof remains open.
+- `Leibniz`: one-button release OTA mostly existed, but service UI CI, stale
+  OTA throughput docs, and real release/macOS proof gaps were identified. CI/docs
+  fixes are implemented; release/macOS proof remains open.
 - `Hume`: Android OTA failure triage pointed at missing OTA characteristic
   detail, service-profile artifact consistency, and stale remote-helper risks.
   The OTA diagnostics/artifact guidance was fixed and `install.sh` was rerun
   before hardware proof.
 - `Faraday`: prioritized the remaining autonomous/gated tasks; `nh02`
   manifest-backed OTA and release return-to-bench proof are now complete, while
-  Pages, powered hardware intake, and control-owner lease remain
-  open.
+  powered hardware intake and control-owner lease remain open.

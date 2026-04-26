@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class FirmwareUpdateManifestTests(unittest.TestCase):
-    def test_generates_latest_main_service_manifest(self) -> None:
+    def test_generates_release_service_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp = Path(td)
             firmware = tmp / "firmware.bin"
@@ -27,7 +27,13 @@ class FirmwareUpdateManifestTests(unittest.TestCase):
                     "--out",
                     str(out),
                     "--base-url",
-                    "https://dslimp.github.io/boatlock/firmware/main",
+                    "https://github.com/dslimp/boatlock/releases/download/v1.2.3",
+                    "--binary-filename",
+                    "firmware-esp32s3-service.bin",
+                    "--channel",
+                    "release",
+                    "--branch",
+                    "release/v1.2.x",
                     "--git-sha",
                     "abc1234def5678",
                     "--workflow-run-id",
@@ -43,9 +49,9 @@ class FirmwareUpdateManifestTests(unittest.TestCase):
 
             manifest = json.loads(out.read_text())
             self.assertEqual(manifest["schema"], 1)
-            self.assertEqual(manifest["channel"], "main")
+            self.assertEqual(manifest["channel"], "release")
             self.assertEqual(manifest["repo"], "dslimp/boatlock")
-            self.assertEqual(manifest["branch"], "main")
+            self.assertEqual(manifest["branch"], "release/v1.2.x")
             self.assertEqual(manifest["gitSha"], "abc1234def5678")
             self.assertEqual(manifest["workflowRunId"], 42)
             self.assertEqual(manifest["firmwareVersion"], "1.2.3")
@@ -54,11 +60,27 @@ class FirmwareUpdateManifestTests(unittest.TestCase):
             self.assertEqual(manifest["artifactName"], "firmware-esp32s3-service")
             self.assertEqual(
                 manifest["binaryUrl"],
-                "https://dslimp.github.io/boatlock/firmware/main/firmware.bin",
+                "https://github.com/dslimp/boatlock/releases/download/v1.2.3/firmware-esp32s3-service.bin",
             )
             self.assertEqual(manifest["size"], len(b"boatlock-firmware"))
             self.assertRegex(manifest["sha256"], r"^[0-9a-f]{64}$")
             self.assertEqual(manifest["builtAt"], "2026-04-26T12:00:00Z")
+
+    def test_release_ref_prints_expected_branch(self) -> None:
+        result = subprocess.run(
+            [
+                "python3",
+                "tools/ci/check_release_ref.py",
+                "--tag",
+                "v1.2.3",
+                "--print-branch",
+            ],
+            cwd=ROOT,
+            check=True,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        self.assertEqual(result.stdout.strip(), "release/v1.2.x")
 
     def test_verifies_published_channel_files(self) -> None:
         with tempfile.TemporaryDirectory() as td:

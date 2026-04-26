@@ -20,7 +20,8 @@ const kBoatLockAppE2eModeName = String.fromEnvironment(
 );
 const kBoatLockAppE2eOtaUrlDefine = 'BOATLOCK_APP_E2E_OTA_URL';
 const kBoatLockAppE2eOtaSha256Define = 'BOATLOCK_APP_E2E_OTA_SHA256';
-const kBoatLockAppE2eOtaLatestMainDefine = 'BOATLOCK_APP_E2E_OTA_LATEST_MAIN';
+const kBoatLockAppE2eOtaLatestReleaseDefine =
+    'BOATLOCK_APP_E2E_OTA_LATEST_RELEASE';
 const kBoatLockAppE2eOtaUrl = String.fromEnvironment(
   kBoatLockAppE2eOtaUrlDefine,
   defaultValue: '',
@@ -29,9 +30,45 @@ const kBoatLockAppE2eOtaSha256 = String.fromEnvironment(
   kBoatLockAppE2eOtaSha256Define,
   defaultValue: '',
 );
-const kBoatLockAppE2eOtaLatestMain = bool.fromEnvironment(
-  kBoatLockAppE2eOtaLatestMainDefine,
+const kBoatLockAppE2eOtaLatestRelease = bool.fromEnvironment(
+  kBoatLockAppE2eOtaLatestReleaseDefine,
 );
+
+enum _SimSuitePhase { idle, listing, starting, running, reporting, cleanup }
+
+List<String> parseAppE2eSimListLog(String line) {
+  const prefix = '[SIM] LIST ';
+  if (!line.startsWith(prefix)) {
+    return const <String>[];
+  }
+  return line
+      .substring(prefix.length)
+      .split(',')
+      .map((value) => value.trim())
+      .where((value) => value.isNotEmpty)
+      .toList(growable: false);
+}
+
+Map<String, dynamic>? parseAppE2eSimJsonLog(String line, String prefix) {
+  if (!line.startsWith(prefix)) {
+    return null;
+  }
+  try {
+    final decoded = jsonDecode(line.substring(prefix.length));
+    if (decoded is Map<String, dynamic>) {
+      return decoded;
+    }
+  } catch (_) {}
+  return null;
+}
+
+String? appE2eSimReportChunk(String line) {
+  const prefix = '[SIM] REPORT ';
+  if (!line.startsWith(prefix) || line == '[SIM] REPORT unavailable') {
+    return null;
+  }
+  return line.substring(prefix.length);
+}
 
 String? appE2eProfileRejectionStage(BleCommandRejection? rejection) {
   if (rejection == null) return null;
@@ -46,9 +83,15 @@ String? appE2eProfileRejectionReason(
   final profile = rejection.profile;
   switch (mode) {
     case BleSmokeMode.sim:
+    case BleSmokeMode.sim_suite:
       if (rejection.matchesCommandPrefix('SIM_RUN') ||
-          rejection.matchesCommandPrefix('SIM_ABORT')) {
-        return 'app_sim_rejected_by_profile_$profile';
+          rejection.matchesCommandPrefix('SIM_ABORT') ||
+          rejection.matchesCommandPrefix('SIM_LIST') ||
+          rejection.matchesCommandPrefix('SIM_STATUS') ||
+          rejection.matchesCommandPrefix('SIM_REPORT')) {
+        return mode == BleSmokeMode.sim_suite
+            ? 'app_sim_suite_rejected_by_profile_$profile'
+            : 'app_sim_rejected_by_profile_$profile';
       }
     case BleSmokeMode.compass:
       if (rejection.matchesCommandPrefix('COMPASS_CAL_START') ||
@@ -82,6 +125,7 @@ class BoatLockAppE2eProbe {
     final timeout = switch (_mode) {
       BleSmokeMode.reconnect => const Duration(seconds: 150),
       BleSmokeMode.gps => const Duration(seconds: 180),
+      BleSmokeMode.sim_suite => const Duration(minutes: 25),
       BleSmokeMode.ota => const Duration(minutes: 25),
       _ => const Duration(seconds: 75),
     };
@@ -103,6 +147,7 @@ class BoatLockAppE2eProbe {
   final BleSmokeMode _mode;
   Timer? _timeoutTimer;
   Timer? _gapTimer;
+  Timer? _simSuitePollTimer;
   BoatData? _lastData;
   DateTime? _lastDataAt;
   String? _lastDeviceLog;
@@ -126,6 +171,14 @@ class BoatLockAppE2eProbe {
   bool _simManualSetSent = false;
   bool _simManualModeSeen = false;
   bool _simManualOffSent = false;
+  _SimSuitePhase _simSuitePhase = _SimSuitePhase.idle;
+  List<String> _simSuiteScenarioIds = const <String>[];
+  int _simSuiteIndex = -1;
+  int _simSuitePassCount = 0;
+  String _simSuiteReportBuffer = '';
+  String? _simSuiteCurrentScenario;
+  bool _simSuiteRunStarted = false;
+  bool _simSuiteReportRequested = false;
   bool _anchorOnSent = false;
   bool _anchorDeniedSeen = false;
   bool _anchorOffSent = false;
@@ -177,6 +230,8 @@ class BoatLockAppE2eProbe {
         _handleStatusData(data);
       case BleSmokeMode.sim:
         _handleSimData(data);
+      case BleSmokeMode.sim_suite:
+        _handleSimSuiteData(data);
       case BleSmokeMode.anchor:
         _handleAnchorData(data);
       case BleSmokeMode.compass:
@@ -213,6 +268,9 @@ class BoatLockAppE2eProbe {
       _anchorDeniedSeen = true;
       _stage('anchor_denied_seen');
     }
+    if (_mode == BleSmokeMode.sim_suite) {
+      _handleSimSuiteDeviceLog(_lastDeviceLog!);
+    }
     if (_mode == BleSmokeMode.compass) {
       if (smokeCompassCalStartLogSeen(_lastDeviceLog)) {
         _compassCalLogSeen = true;
@@ -233,6 +291,7 @@ class BoatLockAppE2eProbe {
   void dispose() {
     _timeoutTimer?.cancel();
     _gapTimer?.cancel();
+    _simSuitePollTimer?.cancel();
   }
 
   void _handleReconnectData() {
@@ -338,6 +397,179 @@ class BoatLockAppE2eProbe {
     _finish(true, 'app_sim_run_abort_roundtrip');
   }
 
+  void _handleSimSuiteData(BoatData data) {
+    if (_simSuitePhase == _SimSuitePhase.idle) {
+      _simSuitePhase = _SimSuitePhase.listing;
+      _stage('sim_suite_list');
+      unawaited(_sendSimSuiteList());
+      return;
+    }
+    if (_simSuitePhase == _SimSuitePhase.running &&
+        _simSuiteRunStarted &&
+        !_simSuiteReportRequested &&
+        data.mode != 'SIM') {
+      _stage('sim_suite_mode_exit_${_simSuiteIndex + 1}');
+      unawaited(_requestSimSuiteReport());
+      return;
+    }
+    if (_simSuitePhase != _SimSuitePhase.cleanup) {
+      return;
+    }
+    if (!_simManualSetSent) {
+      _stage('sim_suite_manual_recovery');
+      unawaited(_sendSimManualSet());
+      return;
+    }
+    if (!_simManualModeSeen) {
+      if (data.mode != 'MANUAL') {
+        return;
+      }
+      _simManualModeSeen = true;
+      _stage('sim_suite_manual_mode_seen');
+      unawaited(_sendSimManualOff());
+      return;
+    }
+    if (!_simManualOffSent || !smokeStatusRecoveredAfterStop(data)) {
+      return;
+    }
+    _finish(true, 'app_sim_suite_all_passed');
+  }
+
+  void _handleSimSuiteDeviceLog(String line) {
+    if (_simSuitePhase == _SimSuitePhase.listing) {
+      final ids = parseAppE2eSimListLog(line);
+      if (ids.isNotEmpty) {
+        _simSuiteScenarioIds = ids;
+        _stage('sim_suite_list_received_${ids.length}');
+        unawaited(_startNextSimSuiteScenario());
+        return;
+      }
+    }
+
+    if (line.startsWith('[SIM] RUN failed') ||
+        line.startsWith('[SIM] RUN rejected')) {
+      _finish(false, 'app_sim_suite_run_rejected');
+      return;
+    }
+    if (line.startsWith('[SIM] RUN started')) {
+      _simSuiteRunStarted = true;
+      _stage('sim_suite_run_started_${_simSuiteIndex + 1}');
+      _startSimSuitePolling();
+      return;
+    }
+
+    final status = parseAppE2eSimJsonLog(line, '[SIM] STATUS ');
+    if (status != null) {
+      _handleSimSuiteStatus(status);
+      return;
+    }
+
+    if (line == '[SIM] REPORT unavailable') {
+      _finish(false, 'app_sim_suite_report_unavailable');
+      return;
+    }
+    final chunk = appE2eSimReportChunk(line);
+    if (chunk != null) {
+      _handleSimSuiteReportChunk(chunk);
+    }
+  }
+
+  void _handleSimSuiteStatus(Map<String, dynamic> status) {
+    if (_simSuitePhase != _SimSuitePhase.running || _simSuiteReportRequested) {
+      return;
+    }
+    final current = _simSuiteCurrentScenario;
+    if (current == null || status['id'] != current) {
+      return;
+    }
+    final state = status['state'];
+    if (state == 'DONE' || state == 'ABORTED') {
+      _stage(
+        'sim_suite_status_${state.toString().toLowerCase()}_${_simSuiteIndex + 1}',
+      );
+      unawaited(_requestSimSuiteReport());
+    }
+  }
+
+  void _handleSimSuiteReportChunk(String chunk) {
+    if (_simSuitePhase != _SimSuitePhase.reporting) {
+      return;
+    }
+    _simSuiteReportBuffer += chunk;
+    Map<String, dynamic> report;
+    try {
+      final decoded = jsonDecode(_simSuiteReportBuffer);
+      if (decoded is! Map<String, dynamic>) {
+        return;
+      }
+      report = decoded;
+    } catch (_) {
+      return;
+    }
+    _handleSimSuiteReport(report);
+  }
+
+  void _handleSimSuiteReport(Map<String, dynamic> report) {
+    final current = _simSuiteCurrentScenario;
+    if (current == null || report['id'] != current) {
+      _finish(false, 'app_sim_suite_report_id_mismatch');
+      return;
+    }
+    final metrics = report['metrics'];
+    final pass = report['pass'] == true;
+    final state = report['state']?.toString() ?? '';
+    final reason = report['reason']?.toString() ?? '';
+    var metricSummary = '';
+    if (metrics is Map<String, dynamic>) {
+      metricSummary =
+          ' p95=${metrics['p95_error_m']} max=${metrics['max_error_m']} '
+          'deadband=${metrics['time_in_deadband_pct']} '
+          'sat=${metrics['time_saturated_pct']}';
+    }
+    _log(
+      'sim_suite_report ${_simSuiteIndex + 1}/${_simSuiteScenarioIds.length} '
+      'id=$current pass=$pass state=$state reason=$reason$metricSummary',
+    );
+    if (!pass || state != 'DONE') {
+      _finish(false, 'app_sim_suite_scenario_failed');
+      return;
+    }
+    _simSuitePassCount += 1;
+    _stage('sim_suite_report_pass_${_simSuiteIndex + 1}');
+    unawaited(_startNextSimSuiteScenario());
+  }
+
+  Future<void> _startNextSimSuiteScenario() async {
+    if (_completed) {
+      return;
+    }
+    _simSuiteIndex += 1;
+    if (_simSuiteIndex >= _simSuiteScenarioIds.length) {
+      _stopSimSuitePolling();
+      _simSuitePhase = _SimSuitePhase.cleanup;
+      _stage('sim_suite_reports_passed_$_simSuitePassCount');
+      return;
+    }
+    final scenarioId = _simSuiteScenarioIds[_simSuiteIndex];
+    _simSuiteCurrentScenario = scenarioId;
+    _simSuiteRunStarted = false;
+    _simSuiteReportRequested = false;
+    _simSuiteReportBuffer = '';
+    _simSuitePhase = _SimSuitePhase.starting;
+    _stage('sim_suite_run_${_simSuiteIndex + 1}');
+    final ok = await _ble.sendCustomCommand(
+      'SIM_RUN:$scenarioId,0',
+      allowDevHil: true,
+    );
+    _log('sim_suite_run id=$scenarioId ok=$ok');
+    if (!ok) {
+      _finish(false, 'app_sim_suite_run_write_failed');
+      return;
+    }
+    _simSuitePhase = _SimSuitePhase.running;
+    _startSimSuitePolling();
+  }
+
   void _handleAnchorData(BoatData data) {
     if (!_anchorOnSent) {
       _anchorOnSent = true;
@@ -394,8 +626,8 @@ class BoatLockAppE2eProbe {
   }
 
   Future<void> _runOtaUpload() async {
-    if (kBoatLockAppE2eOtaLatestMain) {
-      await _runLatestMainOtaUpload();
+    if (kBoatLockAppE2eOtaLatestRelease) {
+      await _runLatestReleaseOtaUpload();
       return;
     }
     final uri = Uri.tryParse(kBoatLockAppE2eOtaUrl);
@@ -429,9 +661,9 @@ class BoatLockAppE2eProbe {
     }
   }
 
-  Future<void> _runLatestMainOtaUpload() async {
+  Future<void> _runLatestReleaseOtaUpload() async {
     try {
-      _stage('ota_latest_main_manifest_fetch');
+      _stage('ota_latest_release_manifest_fetch');
       final bundle = await const FirmwareUpdateClient().fetchLatestFirmware(
         onProgress: (received, total) {
           if (total <= 0) {
@@ -441,17 +673,17 @@ class BoatLockAppE2eProbe {
           if (bucket ~/ 10 != _otaProgressBucket ~/ 10 || received == total) {
             _otaProgressBucket = bucket;
             _log(
-              'ota_latest_main_download received=$received total=$total pct=$bucket',
+              'ota_latest_release_download received=$received total=$total pct=$bucket',
             );
           }
         },
       );
-      _stage('ota_latest_main_download_verified');
+      _stage('ota_latest_release_download_verified');
       _otaProgressBucket = -1;
       await _uploadVerifiedOta(bundle.firmware, bundle.manifest.sha256);
     } catch (e) {
-      _log('ota_latest_main_error $e');
-      _finish(false, 'app_ota_latest_main_exception');
+      _log('ota_latest_release_error $e');
+      _finish(false, 'app_ota_latest_release_exception');
     }
   }
 
@@ -544,6 +776,55 @@ class BoatLockAppE2eProbe {
     _log('sim_abort ok=$ok');
     if (!ok) {
       _finish(false, 'app_sim_abort_failed');
+    }
+  }
+
+  Future<void> _sendSimSuiteList() async {
+    final ok = await _ble.sendCustomCommand('SIM_LIST', allowDevHil: true);
+    _log('sim_suite_list ok=$ok');
+    if (!ok) {
+      _finish(false, 'app_sim_suite_list_failed');
+    }
+  }
+
+  void _startSimSuitePolling() {
+    if (_simSuitePollTimer != null) {
+      return;
+    }
+    _simSuitePollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (_completed ||
+          _simSuitePhase != _SimSuitePhase.running ||
+          _simSuiteReportRequested) {
+        return;
+      }
+      unawaited(_sendSimSuiteStatus());
+    });
+  }
+
+  void _stopSimSuitePolling() {
+    _simSuitePollTimer?.cancel();
+    _simSuitePollTimer = null;
+  }
+
+  Future<void> _sendSimSuiteStatus() async {
+    final ok = await _ble.sendCustomCommand('SIM_STATUS', allowDevHil: true);
+    if (!ok) {
+      _finish(false, 'app_sim_suite_status_failed');
+    }
+  }
+
+  Future<void> _requestSimSuiteReport() async {
+    if (_completed || _simSuiteReportRequested) {
+      return;
+    }
+    _simSuiteReportRequested = true;
+    _simSuitePhase = _SimSuitePhase.reporting;
+    _simSuiteReportBuffer = '';
+    _stopSimSuitePolling();
+    final ok = await _ble.sendCustomCommand('SIM_REPORT', allowDevHil: true);
+    _log('sim_suite_report_request ok=$ok');
+    if (!ok) {
+      _finish(false, 'app_sim_suite_report_failed');
     }
   }
 
@@ -656,6 +937,7 @@ class BoatLockAppE2eProbe {
     _completed = true;
     _timeoutTimer?.cancel();
     _gapTimer?.cancel();
+    _simSuitePollTimer?.cancel();
     final payload = buildSmokeResultPayload(
       pass: pass,
       reason: reason,

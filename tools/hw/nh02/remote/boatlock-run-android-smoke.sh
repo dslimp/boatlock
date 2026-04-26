@@ -232,7 +232,7 @@ while [[ $(date +%s) -lt ${deadline} ]]; do
   if [[ -n "${result_line}" ]]; then
     break
   fi
-  progress_line="$(printf '%s\n' "${dump}" | grep -E 'BOATLOCK_OTA_PROGRESS|BoatLockAppE2E.*ota_progress|\\[OTA\\] progress|BLE OTA progress' | tail -n 1 || true)"
+  progress_line="$(printf '%s\n' "${dump}" | grep -E 'BOATLOCK_OTA_PROGRESS|BoatLockAppE2E.*ota_progress|\\[OTA\\] progress|BLE OTA progress|BoatLockAppE2E.*sim_suite_report|BOATLOCK_SMOKE_STAGE .*sim_suite_' | tail -n 1 || true)"
   if [[ -n "${progress_line}" && "${progress_line}" != "${last_progress_line}" ]]; then
     printf '%s\n' "${progress_line}"
     last_progress_line="${progress_line}"
@@ -243,7 +243,7 @@ done
 if [[ -z "${result_line}" ]]; then
   printf 'no BOATLOCK_SMOKE_RESULT found in logcat within %ss\n' "${WAIT_SECS}" >&2
   printf 'recent relevant logcat:\n' >&2
-  "${ADB[@]}" logcat -d 2>/dev/null | grep -E 'BoatLockSmoke|BoatLockAppE2E|BOATLOCK_SMOKE_RESULT|BOATLOCK_OTA_PROGRESS|FlutterBluePlus|flutter|\\[OTA\\]' | tail -n 160 >&2 || true
+  "${ADB[@]}" logcat -d 2>/dev/null | grep -E 'BoatLockSmoke|BoatLockAppE2E|BOATLOCK_SMOKE_RESULT|BOATLOCK_OTA_PROGRESS|FlutterBluePlus|flutter|\\[OTA\\]|\\[SIM\\]' | tail -n 160 >&2 || true
   exit 1
 fi
 

@@ -89,7 +89,7 @@ Use this skill for any code, review, debugging, test, or docs task in the BoatLo
 - Anchor point saving must be explicit and validated; never add default arguments or helper paths that arm Anchor as a side effect of storing coordinates.
 - BLE identity and UUIDs are fixed: `BoatLock`, `12ab`, `34cd`, `56ef`, `78ab`.
 - When `secPaired=1`, control and write commands must go through `SEC_CMD`; pairing opens only from the hardware STOP long-press flow.
-- On-device HIL scenarios `S0..S19` are part of the regression surface.
+- On-device HIL scenarios `S0..S19` plus RF water scenarios `RF0..RF4` are part of the regression surface.
 
 ## Working Pattern
 

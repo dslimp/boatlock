@@ -8,6 +8,7 @@ void main() {
     expect(boatLockSmokeModeFromString('manual'), BleSmokeMode.manual);
     expect(boatLockSmokeModeFromString('status'), BleSmokeMode.status);
     expect(boatLockSmokeModeFromString('sim'), BleSmokeMode.sim);
+    expect(boatLockSmokeModeFromString('sim_suite'), BleSmokeMode.sim_suite);
     expect(boatLockSmokeModeFromString('anchor'), BleSmokeMode.anchor);
     expect(boatLockSmokeModeFromString('compass'), BleSmokeMode.compass);
     expect(boatLockSmokeModeFromString('gps'), BleSmokeMode.gps);

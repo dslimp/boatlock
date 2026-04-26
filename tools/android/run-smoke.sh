@@ -116,6 +116,8 @@ fi
 
 deadline=$(( $(date +%s) + WAIT_SECS ))
 result_line=""
+progress_line=""
+last_progress_line=""
 
 while [[ $(date +%s) -lt ${deadline} ]]; do
   dump="$("${BOATLOCK_ANDROID_ADB_BIN}" logcat -d 2>/dev/null || true)"
@@ -123,11 +125,18 @@ while [[ $(date +%s) -lt ${deadline} ]]; do
   if [[ -n "${result_line}" ]]; then
     break
   fi
+  progress_line="$(printf '%s\n' "${dump}" | rg 'BOATLOCK_OTA_PROGRESS|BoatLockAppE2E.*ota_progress|\\[OTA\\] progress|BLE OTA progress|BoatLockAppE2E.*sim_suite_report|BOATLOCK_SMOKE_STAGE .*sim_suite_' | tail -n 1 || true)"
+  if [[ -n "${progress_line}" && "${progress_line}" != "${last_progress_line}" ]]; then
+    printf '%s\n' "${progress_line}"
+    last_progress_line="${progress_line}"
+  fi
   sleep 2
 done
 
 if [[ -z "${result_line}" ]]; then
   echo "no BOATLOCK_SMOKE_RESULT found in logcat within ${WAIT_SECS}s" >&2
+  echo "recent relevant logcat:" >&2
+  "${BOATLOCK_ANDROID_ADB_BIN}" logcat -d 2>/dev/null | rg 'BoatLockSmoke|BoatLockAppE2E|BOATLOCK_SMOKE_RESULT|BOATLOCK_OTA_PROGRESS|FlutterBluePlus|flutter|\\[OTA\\]|\\[SIM\\]' | tail -n 160 >&2 || true
   exit 1
 fi
 

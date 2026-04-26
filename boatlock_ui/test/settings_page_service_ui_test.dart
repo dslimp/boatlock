@@ -173,9 +173,9 @@ void main() {
     final sha = boatLockSha256Hex(firmware);
     final manifest = FirmwareUpdateManifest(
       schema: 1,
-      channel: 'main',
+      channel: 'release',
       repo: 'dslimp/boatlock',
-      branch: 'main',
+      branch: 'release/v0.2.x',
       gitSha: '14c43a5',
       workflowRunId: 123,
       firmwareVersion: '0.2.0',
@@ -202,7 +202,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Обновить до main'));
+    await tester.tap(find.text('Обновить до релиза'));
     await tester.pump(const Duration(milliseconds: 50));
     await tester.pump(const Duration(milliseconds: 700));
 

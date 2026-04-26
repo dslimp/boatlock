@@ -28,6 +28,21 @@ struct TimedCurrent {
   unsigned long atMs = 0;
   unsigned long durationMs = 0;
   Vec2 currentMps;
+  std::string eventCode;
+};
+
+enum class WaveWakeKind : uint8_t {
+  WAKE = 0,
+  CHOP = 1,
+};
+
+struct TimedWaveWakePacket {
+  WaveWakeKind kind = WaveWakeKind::WAKE;
+  unsigned long atMs = 0;
+  unsigned long durationMs = 0;
+  float heightM = 0.0f;
+  float periodS = 1.0f;
+  float directionDeg = 0.0f;
 };
 
 struct TimedLoopStall {
@@ -55,6 +70,7 @@ struct TimedActuatorDerate {
 struct EnvironmentConfig {
   Vec2 baseCurrentMps;
   std::vector<TimedCurrent> gusts;
+  std::vector<TimedWaveWakePacket> waveWakePackets;
 };
 
 struct SimScenario {
@@ -144,6 +160,8 @@ public:
 
     errorHist_.clear();
     eventLog_.clear();
+    currentEventActive_.assign(scenario_.env.gusts.size(), false);
+    waveWakePacketActive_.assign(scenario_.env.waveWakePackets.size(), false);
     compassLossActive_ = false;
     powerLossActive_ = false;
     displayLossActive_ = false;
@@ -277,7 +295,10 @@ public:
     }
 
     const Vec2 current = currentAtMs(simMs_);
+    updateCurrentEventLog(simMs_);
+    updateWaveWakePacketEventLog(simMs_);
     world_.step(dtS, cmd, current);
+    applyWaveWakeYawDisturbance(simMs_, dtS);
 
     const BoatWorldState& st = world_.state();
     const float errTrue = hypotf(st.xM - scenario_.anchorXM, st.yM - scenario_.anchorYM);
@@ -394,7 +415,77 @@ private:
         current = g.currentMps;
       }
     }
+    const Vec2 waveWake = waveWakeCurrentAtMs(nowMs);
+    current.x += waveWake.x;
+    current.y += waveWake.y;
     return current;
+  }
+
+  static const char* waveWakeEventCode(WaveWakeKind kind) {
+    switch (kind) {
+      case WaveWakeKind::CHOP:
+        return "CHOP_PACKET_EMU";
+      case WaveWakeKind::WAKE:
+      default:
+        return "WAKE_PACKET_EMU";
+    }
+  }
+
+  static float waveWakeEnvelope(const TimedWaveWakePacket& packet,
+                                unsigned long elapsedMs) {
+    if (packet.durationMs == 0) {
+      return 0.0f;
+    }
+    const float elapsedS = elapsedMs / 1000.0f;
+    const float durationS = packet.durationMs / 1000.0f;
+    const float rampS = std::max(0.5f, std::min(5.0f, durationS * 0.20f));
+    const float attack = clampf(elapsedS / rampS, 0.0f, 1.0f);
+    const float release = clampf((durationS - elapsedS) / rampS, 0.0f, 1.0f);
+    return std::min(attack, release);
+  }
+
+  Vec2 waveWakeCurrentAtMs(unsigned long nowMs) const {
+    Vec2 out;
+    for (const TimedWaveWakePacket& packet : scenario_.env.waveWakePackets) {
+      if (!simTimeWindowContains(nowMs, packet.atMs, packet.durationMs)) {
+        continue;
+      }
+      const unsigned long elapsedMs = nowMs - packet.atMs;
+      const float periodS = std::max(0.5f, packet.periodS);
+      const float phase = 6.283185307f * ((elapsedMs / 1000.0f) / periodS);
+      const float envelope = waveWakeEnvelope(packet, elapsedMs);
+      const float scale = (packet.kind == WaveWakeKind::CHOP) ? 0.22f : 0.16f;
+      const float speedMps = packet.heightM * scale * envelope * sinf(phase);
+      const float dirRad = packet.directionDeg * 0.0174532925f;
+      out.x += speedMps * sinf(dirRad);
+      out.y += speedMps * cosf(dirRad);
+    }
+    return out;
+  }
+
+  float waveWakeYawRateDegSAtMs(unsigned long nowMs) const {
+    float yawRate = 0.0f;
+    for (const TimedWaveWakePacket& packet : scenario_.env.waveWakePackets) {
+      if (!simTimeWindowContains(nowMs, packet.atMs, packet.durationMs)) {
+        continue;
+      }
+      const unsigned long elapsedMs = nowMs - packet.atMs;
+      const float periodS = std::max(0.5f, packet.periodS);
+      const float phase = 6.283185307f * ((elapsedMs / 1000.0f) / periodS);
+      const float envelope = waveWakeEnvelope(packet, elapsedMs);
+      const float scale = (packet.kind == WaveWakeKind::CHOP) ? 18.0f : 11.0f;
+      yawRate += (packet.heightM * scale / periodS) * envelope * sinf(phase);
+    }
+    return clampf(yawRate, -45.0f, 45.0f);
+  }
+
+  void applyWaveWakeYawDisturbance(unsigned long nowMs, float dtS) {
+    const float yawRate = waveWakeYawRateDegSAtMs(nowMs);
+    if (fabsf(yawRate) <= 0.001f) {
+      return;
+    }
+    BoatWorldState& st = world_.state();
+    st.psiDeg = simctl::wrap360f(st.psiDeg + yawRate * dtS);
   }
 
   bool inHeadingDropout(unsigned long nowMs) const {
@@ -441,6 +532,47 @@ private:
       }
     }
     return defaultDtMs;
+  }
+
+  void updateCurrentEventLog(unsigned long nowMs) {
+    if (currentEventActive_.size() != scenario_.env.gusts.size()) {
+      currentEventActive_.assign(scenario_.env.gusts.size(), false);
+    }
+    for (size_t i = 0; i < scenario_.env.gusts.size(); ++i) {
+      const TimedCurrent& current = scenario_.env.gusts[i];
+      if (current.eventCode.empty()) {
+        continue;
+      }
+      const bool active = simTimeWindowContains(nowMs, current.atMs, current.durationMs);
+      if (active == currentEventActive_[i]) {
+        continue;
+      }
+      currentEventActive_[i] = active;
+      if (active) {
+        onControlEvent(nowMs, current.eventCode.c_str(), "ACTIVE");
+      } else {
+        const std::string clearCode = current.eventCode + "_CLEAR";
+        onControlEvent(nowMs, clearCode.c_str(), "CLEAR");
+      }
+    }
+  }
+
+  void updateWaveWakePacketEventLog(unsigned long nowMs) {
+    if (waveWakePacketActive_.size() != scenario_.env.waveWakePackets.size()) {
+      waveWakePacketActive_.assign(scenario_.env.waveWakePackets.size(), false);
+    }
+    for (size_t i = 0; i < scenario_.env.waveWakePackets.size(); ++i) {
+      const TimedWaveWakePacket& packet = scenario_.env.waveWakePackets[i];
+      const bool active = simTimeWindowContains(nowMs, packet.atMs, packet.durationMs);
+      if (active == waveWakePacketActive_[i]) {
+        continue;
+      }
+      waveWakePacketActive_[i] = active;
+      const std::string code = active
+          ? waveWakeEventCode(packet.kind)
+          : std::string(waveWakeEventCode(packet.kind)) + "_CLEAR";
+      onControlEvent(nowMs, code.c_str(), active ? "ACTIVE" : "CLEAR");
+    }
   }
 
   void finalize() {
@@ -508,6 +640,8 @@ private:
   bool powerLossActive_ = false;
   bool displayLossActive_ = false;
   bool actuatorDerateActive_ = false;
+  std::vector<bool> currentEventActive_;
+  std::vector<bool> waveWakePacketActive_;
 
   uint32_t samples_ = 0;
   uint32_t deadbandCount_ = 0;
@@ -539,6 +673,175 @@ inline SimScenario makeBaseScenario(const char* id, float currentX, float posSig
   s.expect.type = ScenarioExpect::Type::HOLD;
   s.expect.maxBadGnssInAnchorMaxS = 1.5f;
   return s;
+}
+
+inline void appendRussianWaterScenarios(std::vector<SimScenario>* v) {
+  if (!v) return;
+
+  SimScenario rf0 = makeBaseScenario("RF0_oka_normal_55lb", 0.35f, 0.91f);
+  rf0.seed = 200001;
+  rf0.durationMs = 300000;
+  rf0.initialXM = 12.0f;
+  rf0.initialYM = -3.0f;
+  rf0.sensors.sats = 11;
+  rf0.sensors.hdop = 1.2f;
+  {
+    TimedCurrent wake;
+    wake.atMs = 110000;
+    wake.durationMs = 24000;
+    wake.currentMps.x = -0.10f;
+    wake.currentMps.y = -0.55f;
+    wake.eventCode = "WAKE_CURRENT_EMU";
+    rf0.env.gusts.push_back(wake);
+    TimedWaveWakePacket packet;
+    packet.kind = WaveWakeKind::WAKE;
+    packet.atMs = 110000;
+    packet.durationMs = 24000;
+    packet.heightM = 0.45f;
+    packet.periodS = 1.7f;
+    packet.directionDeg = 210.0f;
+    rf0.env.waveWakePackets.push_back(packet);
+  }
+  rf0.expect.requiredEvents = {"WAKE_PACKET_EMU"};
+  rf0.expect.p95ErrorMaxM = 34.0f;
+  rf0.expect.maxErrorMaxM = 70.0f;
+  rf0.expect.timeInDeadbandMinPct = 10.0f;
+  rf0.expect.dirChangesPerMinMax = 90.0f;
+  v->push_back(rf0);
+
+  SimScenario rf1 = makeBaseScenario("RF1_volga_spring_flow_80lb", 1.2f, 1.08f);
+  rf1.seed = 200002;
+  rf1.durationMs = 300000;
+  rf1.initialXM = 16.0f;
+  rf1.initialYM = -4.0f;
+  rf1.sensors.sats = 11;
+  rf1.sensors.hdop = 1.2f;
+  rf1.maxThrustOverride = 0.85f;
+  rf1.expect.p95ErrorMaxM = 135.0f;
+  rf1.expect.maxErrorMaxM = 155.0f;
+  rf1.expect.timeInDeadbandMinPct = -1.0f;
+  rf1.expect.timeSaturatedMaxPct = 100.0f;
+  v->push_back(rf1);
+
+  SimScenario rf2 = makeBaseScenario("RF2_rybinsk_fetch_55lb", 0.10f, 1.63f);
+  rf2.seed = 200003;
+  rf2.durationMs = 300000;
+  rf2.initialXM = 14.0f;
+  rf2.initialYM = 6.0f;
+  rf2.sensors.sats = 11;
+  rf2.sensors.hdop = 1.2f;
+  {
+    TimedCurrent chop1;
+    chop1.atMs = 72000;
+    chop1.durationMs = 38000;
+    chop1.currentMps.x = -0.70f;
+    chop1.currentMps.y = -0.25f;
+    chop1.eventCode = "CHOP_CURRENT_EMU";
+    rf2.env.gusts.push_back(chop1);
+    TimedCurrent chop2;
+    chop2.atMs = 184000;
+    chop2.durationMs = 42000;
+    chop2.currentMps.x = -0.80f;
+    chop2.currentMps.y = 0.20f;
+    chop2.eventCode = "CHOP_CURRENT_EMU";
+    rf2.env.gusts.push_back(chop2);
+    TimedWaveWakePacket packet1;
+    packet1.kind = WaveWakeKind::CHOP;
+    packet1.atMs = 72000;
+    packet1.durationMs = 38000;
+    packet1.heightM = 0.85f;
+    packet1.periodS = 1.45f;
+    packet1.directionDeg = 255.0f;
+    rf2.env.waveWakePackets.push_back(packet1);
+    TimedWaveWakePacket packet2;
+    packet2.kind = WaveWakeKind::CHOP;
+    packet2.atMs = 184000;
+    packet2.durationMs = 42000;
+    packet2.heightM = 0.95f;
+    packet2.periodS = 1.5f;
+    packet2.directionDeg = 270.0f;
+    rf2.env.waveWakePackets.push_back(packet2);
+  }
+  rf2.expect.requiredEvents = {"CHOP_PACKET_EMU"};
+  rf2.expect.p95ErrorMaxM = 110.0f;
+  rf2.expect.maxErrorMaxM = 190.0f;
+  rf2.expect.timeInDeadbandMinPct = -1.0f;
+  rf2.expect.dirChangesPerMinMax = 120.0f;
+  v->push_back(rf2);
+
+  SimScenario rf3 = makeBaseScenario("RF3_ladoga_storm_abort", 0.40f, 2.45f);
+  rf3.seed = 200004;
+  rf3.durationMs = 180000;
+  rf3.initialXM = 14.0f;
+  rf3.initialYM = 5.0f;
+  rf3.sensors.sats = 11;
+  rf3.sensors.hdop = 1.2f;
+  {
+    TimedCurrent storm;
+    storm.atMs = 25000;
+    storm.durationMs = 60000;
+    storm.currentMps.x = -1.0f;
+    storm.currentMps.y = -0.85f;
+    storm.eventCode = "STORM_CURRENT_EMU";
+    rf3.env.gusts.push_back(storm);
+    TimedWaveWakePacket packet;
+    packet.kind = WaveWakeKind::CHOP;
+    packet.atMs = 25000;
+    packet.durationMs = 60000;
+    packet.heightM = 3.0f;
+    packet.periodS = 3.5f;
+    packet.directionDeg = 210.0f;
+    rf3.env.waveWakePackets.push_back(packet);
+    TimedHdop h;
+    h.atMs = 45000;
+    h.durationMs = 45000;
+    h.hdop = 4.2f;
+    rf3.sensors.hdopChanges.push_back(h);
+  }
+  rf3.expect.type = ScenarioExpect::Type::FAILSAFE;
+  rf3.expect.requiredEvents = {"CHOP_PACKET_EMU", "GPS_HDOP_TOO_HIGH", "FAILSAFE_TRIGGERED"};
+  rf3.expect.p95ErrorMaxM = -1.0f;
+  rf3.expect.maxErrorMaxM = -1.0f;
+  rf3.expect.timeInDeadbandMinPct = -1.0f;
+  v->push_back(rf3);
+
+  SimScenario rf4 = makeBaseScenario("RF4_baltic_gulf_drift", 0.15f, 1.46f);
+  rf4.seed = 200005;
+  rf4.durationMs = 300000;
+  rf4.initialXM = 12.0f;
+  rf4.initialYM = 4.0f;
+  rf4.sensors.sats = 11;
+  rf4.sensors.hdop = 1.2f;
+  {
+    TimedCurrent drift1;
+    drift1.atMs = 70000;
+    drift1.durationMs = 50000;
+    drift1.currentMps.x = 0.45f;
+    drift1.currentMps.y = 0.20f;
+    drift1.eventCode = "WIND_DRIFT_EMU";
+    rf4.env.gusts.push_back(drift1);
+    TimedCurrent drift2;
+    drift2.atMs = 185000;
+    drift2.durationMs = 45000;
+    drift2.currentMps.x = -0.35f;
+    drift2.currentMps.y = 0.40f;
+    drift2.eventCode = "WIND_DRIFT_EMU";
+    rf4.env.gusts.push_back(drift2);
+    TimedWaveWakePacket packet;
+    packet.kind = WaveWakeKind::WAKE;
+    packet.atMs = 90000;
+    packet.durationMs = 30000;
+    packet.heightM = 1.2f;
+    packet.periodS = 3.5f;
+    packet.directionDeg = 80.0f;
+    rf4.env.waveWakePackets.push_back(packet);
+  }
+  rf4.expect.requiredEvents = {"WIND_DRIFT_EMU", "WAKE_PACKET_EMU"};
+  rf4.expect.p95ErrorMaxM = 95.0f;
+  rf4.expect.maxErrorMaxM = 170.0f;
+  rf4.expect.timeInDeadbandMinPct = -1.0f;
+  rf4.expect.dirChangesPerMinMax = 120.0f;
+  v->push_back(rf4);
 }
 
 inline std::vector<SimScenario> defaultScenarios() {
@@ -887,6 +1190,8 @@ inline std::vector<SimScenario> defaultScenarios() {
   s19.expect.maxErrorMaxM = -1.0f;
   s19.expect.timeInDeadbandMinPct = -1.0f;
   v.push_back(s19);
+
+  appendRussianWaterScenarios(&v);
 
   return v;
 }

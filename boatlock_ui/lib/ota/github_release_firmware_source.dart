@@ -88,11 +88,12 @@ class GitHubReleaseFirmwareSource {
     String? checksumSha;
     final checksumAsset = release.sha256SumsAsset;
     if (checksumAsset != null) {
-      checksumSha = _shaForFirmwareBin(
+      checksumSha = _shaForFirmwareAsset(
         await textFetcher(
           checksumAsset.downloadUri(authenticated: _authenticated),
           headers: _assetHeaders,
         ),
+        firmwareAsset.name,
       );
     }
 
@@ -120,7 +121,7 @@ class GitHubReleaseFirmwareSource {
 
     return FirmwareUpdateManifest.fromJson({
       'schema': 1,
-      'channel': 'main',
+      'channel': 'release',
       'repo': repository,
       'branch': branch,
       'gitSha': gitSha,
@@ -189,13 +190,18 @@ class GitHubFirmwareRelease {
       ]);
 
   GitHubFirmwareReleaseAsset? get firmwareAsset =>
-      _firstAssetNamed(const ['firmware.bin']);
+      _firstAssetNamed(const ['firmware-esp32s3-service.bin', 'firmware.bin']);
 
-  GitHubFirmwareReleaseAsset? get sha256SumsAsset =>
-      _firstAssetNamed(const ['sha256sums', 'sha256sums.txt']);
+  GitHubFirmwareReleaseAsset? get sha256SumsAsset => _firstAssetNamed(const [
+    'sha256sums-esp32s3-service.txt',
+    'sha256sums',
+    'sha256sums.txt',
+  ]);
 
-  GitHubFirmwareReleaseAsset? get buildInfoAsset =>
-      _firstAssetNamed(const ['build_info.txt']);
+  GitHubFirmwareReleaseAsset? get buildInfoAsset => _firstAssetNamed(const [
+    'build_info-esp32s3-service.txt',
+    'build_info.txt',
+  ]);
 
   factory GitHubFirmwareRelease.fromJsonText(String text) {
     final decoded = jsonDecode(text);
@@ -326,7 +332,8 @@ Map<String, String> _parseBuildInfo(String text) {
   return values;
 }
 
-String? _shaForFirmwareBin(String text) {
+String? _shaForFirmwareAsset(String text, String assetName) {
+  final expected = assetName.trim().toLowerCase();
   for (final rawLine in const LineSplitter().convert(text)) {
     final match = RegExp(
       r'^([0-9a-fA-F]{64})\s+\*?(.+)$',
@@ -334,7 +341,7 @@ String? _shaForFirmwareBin(String text) {
     if (match == null) continue;
     final path = match.group(2)!.trim().replaceAll('\\', '/');
     final name = path.split('/').last.toLowerCase();
-    if (name == 'firmware.bin') {
+    if (name == expected) {
       return normalizeBoatLockSha256Hex(match.group(1)!);
     }
   }
@@ -363,9 +370,17 @@ String _releaseBranch(
   Map<String, String> buildInfo,
 ) {
   final githubRef = (buildInfo['github_ref'] ?? '').trim();
+  final releaseBranch = (buildInfo['release_branch'] ?? '').trim();
+  if (releaseBranch.isNotEmpty) return releaseBranch;
   const headPrefix = 'refs/heads/';
   if (githubRef.startsWith(headPrefix)) {
     return githubRef.substring(headPrefix.length);
+  }
+  final tagMatch = RegExp(
+    r'^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$',
+  ).firstMatch(release.tagName.trim());
+  if (tagMatch != null) {
+    return 'release/v${tagMatch.group(1)}.${tagMatch.group(2)}.x';
   }
   return release.targetCommitish.trim();
 }

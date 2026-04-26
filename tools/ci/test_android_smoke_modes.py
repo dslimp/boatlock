@@ -29,7 +29,9 @@ def _shell_modes(var_name: str) -> list[str]:
 
 def test_android_smoke_modes_match_flutter_parser() -> None:
     dart_modes = _dart_smoke_modes()
-    assert _shell_modes("BOATLOCK_SMOKE_MODES") == [mode for mode in dart_modes if mode != "ota"]
+    assert _shell_modes("BOATLOCK_SMOKE_MODES") == [
+        mode for mode in dart_modes if mode not in ("ota", "sim_suite")
+    ]
     assert _shell_modes("BOATLOCK_APP_E2E_MODES") == dart_modes
 
 
@@ -50,18 +52,18 @@ def test_android_app_e2e_build_targets_main_app() -> None:
     text = _read("tools/android/build-app-apk.sh")
     assert "--target lib/main.dart" in text
     assert "BOATLOCK_APP_E2E_MODE=" in text
-    assert "BOATLOCK_APP_E2E_OTA_LATEST_MAIN=true" in text
+    assert "BOATLOCK_APP_E2E_OTA_LATEST_RELEASE=true" in text
     assert "main_smoke.dart" not in text
     assert '[[ ! -f "${BOATLOCK_ANDROID_APK}" ]]' in text
 
 
-def test_android_app_build_supports_latest_main_service_variant() -> None:
+def test_android_app_build_supports_latest_release_service_variant() -> None:
     text = _read("tools/android/build-app-apk.sh")
-    assert "--latest-main-service" in text
+    assert "--latest-release-service" in text
     assert "BOATLOCK_SERVICE_UI=true" in text
     assert "BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL=" in text
     assert "BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=" in text
-    assert "https://dslimp.github.io/boatlock/firmware/main/manifest.json" in text
+    assert "BOATLOCK_LATEST_RELEASE_GITHUB_REPO" in text
 
 
 def test_android_smoke_build_checks_apk_output() -> None:
@@ -94,11 +96,27 @@ def test_android_app_e2e_supports_manifest_backed_ota() -> None:
     nh02_smoke = _read("tools/hw/nh02/android-run-smoke.sh")
 
     assert "fetchLatestFirmware" in app_e2e
-    assert "BOATLOCK_APP_E2E_OTA_LATEST_MAIN" in app_e2e
-    assert "--ota-latest-main" in local_wrapper
-    assert "--e2e-ota-latest-main" in local_wrapper
+    assert "BOATLOCK_APP_E2E_OTA_LATEST_RELEASE" in app_e2e
+    assert "--ota-latest-release" in local_wrapper
+    assert "--e2e-ota-latest-release" in local_wrapper
     assert "--firmware-manifest-url" in local_wrapper
-    assert "--ota-latest-main" in nh02_wrapper
+    assert "--ota-latest-release" in nh02_wrapper
     assert "generate_firmware_update_manifest.py" in nh02_wrapper
     assert "http://127.0.0.1:${OTA_PORT}/manifest.json" in nh02_wrapper
     assert "--ota-manifest" in nh02_smoke
+
+
+def test_android_app_e2e_supports_full_sim_suite() -> None:
+    app_e2e = _read("boatlock_ui/lib/e2e/app_e2e_probe.dart")
+    local_wrapper = _read("tools/android/run-app-e2e.sh")
+    nh02_wrapper = _read("tools/hw/nh02/android-run-app-e2e.sh")
+    nh02_suite = _read("tools/hw/nh02/run-sim-suite.sh")
+
+    assert "SIM_LIST" in app_e2e
+    assert "SIM_REPORT" in app_e2e
+    assert "app_sim_suite_all_passed" in app_e2e
+    assert "--sim-suite" in local_wrapper
+    assert "--sim-suite" in nh02_wrapper
+    assert "flash.sh\" --profile acceptance" in nh02_suite
+    assert "android-run-app-e2e.sh\" \"${app_args[@]}\"" in nh02_suite
+    assert "flash.sh\" --profile release" in nh02_suite

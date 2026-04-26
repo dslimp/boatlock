@@ -24,34 +24,30 @@ def test_ci_uploads_firmware_artifact_with_hash_manifest():
 def test_release_publishes_service_firmware_update_manifest():
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
 
-    assert "Add release firmware update manifest" in workflow
-    assert "artifacts/firmware-esp32s3-service/manifest.json" in workflow
+    assert "Prepare GitHub Release assets" in workflow
+    assert '--out "${release_dir}/manifest.json"' in workflow
+    assert "firmware-esp32s3-service.bin" in workflow
     assert "--base-url \"https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}\"" in workflow
-    assert "artifacts/firmware-esp32s3-service/*" in workflow
+    assert "--binary-filename \"firmware-esp32s3-service.bin\"" in workflow
+    assert "--channel release" in workflow
+    assert "--branch \"${release_branch}\"" in workflow
+    assert "release-assets/*" in workflow
 
 
-def test_ci_publishes_latest_main_service_firmware_channel():
+def test_ci_uses_release_branches_and_no_pages_channel():
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
 
-    assert "firmware-main-channel" in workflow
-    assert "github.ref == 'refs/heads/main'" in workflow
-    assert "pio run -e esp32s3_service" in workflow
-    assert "dist/pages" in workflow
-    assert "firmware/main" in workflow
-    assert "generate_firmware_update_manifest.py" in workflow
-    assert "artifact_name=firmware-esp32s3-service" in workflow
-    assert "platformio_env=esp32s3_service" in workflow
-    assert "command_profile=service" in workflow
-    assert "manifest_url=${base_url}/manifest.json" in workflow
-    assert "uses: actions/configure-pages@v5" in workflow
-    assert "uses: actions/upload-pages-artifact@v4" in workflow
-    assert "uses: actions/deploy-pages@v4" in workflow
-    assert "Verify latest-main Pages channel" in workflow
-    assert "verify_firmware_update_channel.py" in workflow
-    assert "--expected-git-sha \"${GITHUB_SHA}\"" in workflow
-    assert "--expected-workflow-run-id \"${GITHUB_RUN_ID}\"" in workflow
-    assert "pages: write" in workflow
-    assert "id-token: write" in workflow
+    assert '- "release/**"' in workflow
+    assert "check_release_ref.py --tag" in workflow
+    assert "firmware-main-channel" not in workflow
+    assert "dist/pages" not in workflow
+    assert "firmware/main" not in workflow
+    assert "github.io" not in workflow
+    assert "actions/configure-pages" not in workflow
+    assert "actions/upload-pages-artifact" not in workflow
+    assert "actions/deploy-pages" not in workflow
+    assert "pages: write" not in workflow
+    assert "id-token: write" not in workflow
 
 
 def test_ci_delivery_jobs_are_split_by_failure_domain():
@@ -62,7 +58,6 @@ def test_ci_delivery_jobs_are_split_by_failure_domain():
         "firmware-test",
         "firmware-sim",
         "firmware-build",
-        "firmware-main-channel",
         "flutter-checks",
         "flutter-build-android",
         "flutter-build-web",
@@ -80,15 +75,15 @@ def test_ci_delivery_jobs_are_split_by_failure_domain():
     assert "flutter-android-web" not in workflow
 
 
-def test_ci_builds_service_apps_with_latest_main_firmware_source():
+def test_ci_builds_service_apps_with_latest_release_firmware_source():
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
 
-    assert "Build Android service APK (latest main)" in workflow
-    assert "boatlock-service-main.apk" in workflow
-    assert "Build macOS service app (latest main)" in workflow
-    assert "boatlock-macos-service-main.zip" in workflow
+    assert "Build Android service APK (latest release)" in workflow
+    assert "boatlock-service-release.apk" in workflow
+    assert "Build macOS service app (latest release)" in workflow
+    assert "boatlock-macos-service-release.zip" in workflow
     assert "--dart-define=BOATLOCK_SERVICE_UI=true" in workflow
-    assert "--dart-define=BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/firmware/main/manifest.json" in workflow
+    assert "--dart-define=BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=${{ github.repository }}" in workflow
     assert "artifacts/flutter-android-service-apk/*" in workflow
     assert "artifacts/flutter-macos-service-app/*" in workflow
 
@@ -103,14 +98,14 @@ def test_flutter_ci_runs_service_ui_tests():
     ) in workflow
 
 
-def test_macos_build_wrapper_supports_latest_main_service_variant():
+def test_macos_build_wrapper_supports_latest_release_service_variant():
     script = (ROOT / "tools/macos/build-app.sh").read_text()
 
-    assert "--latest-main-service" in script
+    assert "--latest-release-service" in script
     assert "BOATLOCK_SERVICE_UI=true" in script
     assert "BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL=" in script
     assert "BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=" in script
-    assert "https://dslimp.github.io/boatlock/firmware/main/manifest.json" in script
+    assert "BOATLOCK_LATEST_RELEASE_GITHUB_REPO" in script
     assert "build macos" in script
     assert "boatlock_ui.app" in script
 
@@ -118,11 +113,11 @@ def test_macos_build_wrapper_supports_latest_main_service_variant():
 def test_macos_acceptance_wrapper_covers_service_artifact_and_runtime_smoke():
     script = (ROOT / "tools/macos/acceptance.sh").read_text()
 
-    assert "--latest-main-service" in script
+    assert "--latest-release-service" in script
     assert "--firmware-manifest-url" in script
     assert "--firmware-github-repo" in script
     assert "--artifact-zip" in script
-    assert "boatlock-macos-service-main.zip" in script
+    assert "boatlock-macos-service-release.zip" in script
     assert "ditto -x -k" in script
     assert "plutil -lint -s" in script
     assert "codesign --verify --verbose" in script

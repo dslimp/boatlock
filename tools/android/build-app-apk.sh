@@ -9,11 +9,11 @@ RUN_PUB_GET=0
 E2E_MODE=""
 OTA_URL=""
 OTA_SHA256=""
-OTA_LATEST_MAIN=0
+OTA_LATEST_RELEASE=0
 SERVICE_UI=0
 FIRMWARE_MANIFEST_URL=""
 FIRMWARE_GITHUB_REPO=""
-LATEST_MAIN_MANIFEST_URL="${BOATLOCK_LATEST_MAIN_MANIFEST_URL:-https://dslimp.github.io/boatlock/firmware/main/manifest.json}"
+LATEST_RELEASE_GITHUB_REPO="${BOATLOCK_LATEST_RELEASE_GITHUB_REPO:-dslimp/boatlock}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -33,11 +33,11 @@ while [[ $# -gt 0 ]]; do
       OTA_SHA256="${2:?missing OTA SHA-256}"
       shift 2
       ;;
-    --e2e-ota-latest-main)
-      OTA_LATEST_MAIN=1
+    --e2e-ota-latest-release)
+      OTA_LATEST_RELEASE=1
       SERVICE_UI=1
-      if [[ -z "${FIRMWARE_MANIFEST_URL}" ]]; then
-        FIRMWARE_MANIFEST_URL="${LATEST_MAIN_MANIFEST_URL}"
+      if [[ -z "${FIRMWARE_MANIFEST_URL}" && -z "${FIRMWARE_GITHUB_REPO}" ]]; then
+        FIRMWARE_GITHUB_REPO="${LATEST_RELEASE_GITHUB_REPO}"
       fi
       shift
       ;;
@@ -45,9 +45,9 @@ while [[ $# -gt 0 ]]; do
       SERVICE_UI=1
       shift
       ;;
-    --latest-main-service)
+    --latest-release-service)
       SERVICE_UI=1
-      FIRMWARE_MANIFEST_URL="${LATEST_MAIN_MANIFEST_URL}"
+      FIRMWARE_GITHUB_REPO="${LATEST_RELEASE_GITHUB_REPO}"
       shift
       ;;
     --firmware-manifest-url)
@@ -72,7 +72,7 @@ if [[ -n "${E2E_MODE}" ]]; then
 fi
 
 if [[ "${E2E_MODE}" == "ota" &&
-  "${OTA_LATEST_MAIN}" -eq 0 &&
+  "${OTA_LATEST_RELEASE}" -eq 0 &&
   ( -z "${OTA_URL}" || -z "${OTA_SHA256}" ) ]]; then
   echo "--ota-url and --ota-sha256 are required for e2e mode ota" >&2
   exit 1
@@ -105,8 +105,8 @@ fi
       --dart-define="BOATLOCK_APP_E2E_MODE=${E2E_MODE}" \
     )
     if [[ "${E2E_MODE}" == "ota" ]]; then
-      if [[ "${OTA_LATEST_MAIN}" -eq 1 ]]; then
-        build_args+=(--dart-define="BOATLOCK_APP_E2E_OTA_LATEST_MAIN=true")
+      if [[ "${OTA_LATEST_RELEASE}" -eq 1 ]]; then
+        build_args+=(--dart-define="BOATLOCK_APP_E2E_OTA_LATEST_RELEASE=true")
       else
         build_args+=(
           --dart-define="BOATLOCK_APP_E2E_OTA_URL=${OTA_URL}"

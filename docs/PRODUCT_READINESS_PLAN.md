@@ -74,7 +74,7 @@ What matches the target:
   controller, authenticated when paired, can hold the control lease.
 - `ANCHOR_ON` is behind anchor-point, heading, and GNSS quality gates.
 - STOP/failsafes latch quiet `HOLD` instead of auto-entering manual control.
-- On-device HIL `S0..S19` and offline `tools/sim` are real validation assets and
+- On-device HIL `S0..S19` plus `RF0..RF4` and offline `tools/sim` are real validation assets and
   should stay in `main`.
 - Native production-path tests now cover the shared
   `RuntimeMotion -> StepperControl -> MotorControl` quiet-output cases for STOP,

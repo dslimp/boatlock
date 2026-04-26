@@ -31,7 +31,7 @@ Map<String, dynamic> _manifestJson({
 }
 
 void main() {
-  test('parses latest-main service firmware manifest', () {
+  test('parses main service firmware manifest', () {
     final manifest = FirmwareUpdateManifest.fromJson(_manifestJson());
 
     expect(manifest.channel, 'main');
@@ -43,9 +43,31 @@ void main() {
     expect(manifest.displayLabel, '0.2.0 10d54f1');
   });
 
-  test('rejects non-main and non-service manifests', () {
+  test('parses release service firmware manifest', () {
+    final manifest = FirmwareUpdateManifest.fromJson(
+      _manifestJson(
+        channel: 'release',
+        branch: 'release/v0.2.x',
+        binaryUrl:
+            'https://github.com/dslimp/boatlock/releases/download/v0.2.0/firmware-esp32s3-service.bin',
+      ),
+    );
+
+    expect(manifest.channel, 'release');
+    expect(manifest.branch, 'release/v0.2.x');
+    expect(manifest.platformioEnv, 'esp32s3_service');
+    expect(manifest.commandProfile, 'service');
+  });
+
+  test('rejects invalid branch/channel and non-service manifests', () {
     expect(
       () => FirmwareUpdateManifest.fromJson(_manifestJson(branch: 'feature/x')),
+      throwsFormatException,
+    );
+    expect(
+      () => FirmwareUpdateManifest.fromJson(
+        _manifestJson(channel: 'release', branch: 'release/v0.3.x'),
+      ),
       throwsFormatException,
     );
     expect(

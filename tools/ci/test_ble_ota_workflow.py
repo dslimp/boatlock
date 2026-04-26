@@ -52,7 +52,7 @@ def test_flutter_ble_ota_protocol_is_wired():
     assert "boatLockOtaChunkBytesForMtu" in payload
     assert "boatLockSha256Hex" in payload
     assert "Обновить по BLE" in settings
-    assert "Обновить до main" in settings
+    assert "Обновить до релиза" in settings
     assert "BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL" in client
     assert "BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO" in client
     assert "isBoatLockFirmwareUpdateUrlAllowed" in client

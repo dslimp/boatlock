@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - "release/**"
     tags:
       - "v*"
   pull_request:
@@ -176,92 +177,6 @@ jobs:
           if-no-files-found: error
           path: dist/firmware-esp32s3-service/*
 
-  firmware-main-channel:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    name: firmware-main-channel
-    needs:
-      - firmware-checks
-      - firmware-test
-      - firmware-sim
-      - firmware-build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install PlatformIO
-        run: python3 -m pip install platformio
-
-      - name: Build OTA-capable main firmware
-        working-directory: boatlock
-        run: pio run -e esp32s3_service
-
-      - name: Pack latest-main firmware channel
-        run: |
-          set -euo pipefail
-          site_dir="dist/pages"
-          channel_dir="${site_dir}/firmware/main"
-          build_dir="boatlock/.pio/build/esp32s3_service"
-          base_url="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/firmware/main"
-          firmware_version="$(python3 tools/ci/check_firmware_version.py --print-only)"
-
-          mkdir -p "${channel_dir}"
-          cp "${build_dir}/firmware.bin" "${channel_dir}/firmware.bin"
-          cp "${build_dir}/firmware.elf" "${channel_dir}/firmware.elf"
-
-          python3 tools/ci/generate_firmware_update_manifest.py \
-            --firmware "${channel_dir}/firmware.bin" \
-            --out "${channel_dir}/manifest.json" \
-            --base-url "${base_url}" \
-            --git-sha "${GITHUB_SHA}" \
-            --workflow-run-id "${GITHUB_RUN_ID}" \
-            --firmware-version "${firmware_version}"
-
-          firmware_sha256="$(sha256sum "${channel_dir}/firmware.bin" | awk '{print $1}')"
-          {
-            echo "firmware_version=${firmware_version}"
-            echo "firmware_sha256=${firmware_sha256}"
-            echo "artifact_name=firmware-esp32s3-service"
-            echo "platformio_env=esp32s3_service"
-            echo "command_profile=service"
-            echo "github_ref=${GITHUB_REF}"
-            echo "github_sha=${GITHUB_SHA}"
-            echo "manifest_url=${base_url}/manifest.json"
-          } > "${channel_dir}/BUILD_INFO.txt"
-
-          (cd "${channel_dir}" && sha256sum firmware.bin firmware.elf manifest.json BUILD_INFO.txt > SHA256SUMS)
-
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload latest-main Pages artifact
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: dist/pages
-
-      - name: Deploy latest-main firmware channel
-        id: deployment
-        uses: actions/deploy-pages@v4
-
-      - name: Verify latest-main Pages channel
-        run: |
-          python3 tools/ci/verify_firmware_update_channel.py \
-            --manifest-url "${{ steps.deployment.outputs.page_url }}firmware/main/manifest.json" \
-            --expected-git-sha "${GITHUB_SHA}" \
-            --expected-workflow-run-id "${GITHUB_RUN_ID}"
-
   flutter-checks:
     name: flutter-checks
     runs-on: ubuntu-latest
@@ -346,20 +261,20 @@ jobs:
           mkdir -p dist/flutter-android-apk
           cp boatlock_ui/build/app/outputs/flutter-apk/app-release.apk dist/flutter-android-apk/boatlock-app.apk
 
-      - name: Build Android service APK (latest main)
+      - name: Build Android service APK (latest release)
         working-directory: boatlock_ui
         env:
           GRADLE_OPTS: -Dorg.gradle.vfs.watch=false
         run: |
           flutter build apk --release \
             --dart-define=BOATLOCK_SERVICE_UI=true \
-            --dart-define=BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/firmware/main/manifest.json
+            --dart-define=BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=${{ github.repository }}
 
       - name: Pack Android service APK
         run: |
           set -euo pipefail
           mkdir -p dist/flutter-android-service-apk
-          cp boatlock_ui/build/app/outputs/flutter-apk/app-release.apk dist/flutter-android-service-apk/boatlock-service-main.apk
+          cp boatlock_ui/build/app/outputs/flutter-apk/app-release.apk dist/flutter-android-service-apk/boatlock-service-release.apk
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
@@ -373,7 +288,7 @@ jobs:
         with:
           name: flutter-android-service-apk
           if-no-files-found: error
-          path: dist/flutter-android-service-apk/boatlock-service-main.apk
+          path: dist/flutter-android-service-apk/boatlock-service-release.apk
 
   flutter-build-web:
     name: flutter-build-web
@@ -439,19 +354,19 @@ jobs:
           cd build/macos/Build/Products/Release
           ditto -c -k --sequesterRsrc --keepParent boatlock_ui.app ../../../../../boatlock-macos.zip
 
-      - name: Build macOS service app (latest main)
+      - name: Build macOS service app (latest release)
         working-directory: boatlock_ui
         run: |
           flutter build macos --release \
             --dart-define=BOATLOCK_SERVICE_UI=true \
-            --dart-define=BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/firmware/main/manifest.json
+            --dart-define=BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=${{ github.repository }}
 
       - name: Pack macOS service app
         working-directory: boatlock_ui
         run: |
           set -euo pipefail
           cd build/macos/Build/Products/Release
-          ditto -c -k --sequesterRsrc --keepParent boatlock_ui.app ../../../../../boatlock-macos-service-main.zip
+          ditto -c -k --sequesterRsrc --keepParent boatlock_ui.app ../../../../../boatlock-macos-service-release.zip
 
       - name: Upload macOS app
         uses: actions/upload-artifact@v4
@@ -465,7 +380,7 @@ jobs:
         with:
           name: flutter-macos-service-app
           if-no-files-found: error
-          path: boatlock_ui/boatlock-macos-service-main.zip
+          path: boatlock_ui/boatlock-macos-service-release.zip
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -484,9 +399,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Validate release tag against firmware version
         run: python3 tools/ci/check_firmware_version.py --tag "${{ github.ref_name }}"
+
+      - name: Validate release branch containment
+        run: python3 tools/ci/check_release_ref.py --tag "${{ github.ref_name }}" --require-current-commit
 
       - name: Generate release notes from changelog
         run: |
@@ -498,23 +418,73 @@ jobs:
         with:
           path: artifacts
 
-      - name: Add release firmware update manifest
+      - name: Prepare GitHub Release assets
         run: |
+          set -euo pipefail
+          tag="${{ github.ref_name }}"
+          release_branch="$(python3 tools/ci/check_release_ref.py --tag "${tag}" --print-branch)"
+          release_dir="release-assets"
+          firmware_version="$(python3 tools/ci/check_firmware_version.py --print-only)"
+          mkdir -p "${release_dir}"
+
+          cp artifacts/firmware-esp32s3/firmware.bin "${release_dir}/firmware-esp32s3.bin"
+          cp artifacts/firmware-esp32s3/bootloader.bin "${release_dir}/bootloader-esp32s3.bin"
+          cp artifacts/firmware-esp32s3/partitions.bin "${release_dir}/partitions-esp32s3.bin"
+          cp artifacts/firmware-esp32s3/firmware.elf "${release_dir}/firmware-esp32s3.elf"
+
+          cp artifacts/firmware-esp32s3-service/firmware.bin "${release_dir}/firmware-esp32s3-service.bin"
+          cp artifacts/firmware-esp32s3-service/bootloader.bin "${release_dir}/bootloader-esp32s3-service.bin"
+          cp artifacts/firmware-esp32s3-service/partitions.bin "${release_dir}/partitions-esp32s3-service.bin"
+          cp artifacts/firmware-esp32s3-service/firmware.elf "${release_dir}/firmware-esp32s3-service.elf"
+
+          release_sha256="$(sha256sum "${release_dir}/firmware-esp32s3.bin" | awk '{print $1}')"
+          {
+            echo "firmware_version=${firmware_version}"
+            echo "firmware_sha256=${release_sha256}"
+            echo "artifact_name=firmware-esp32s3"
+            echo "platformio_env=esp32s3"
+            echo "release_branch=${release_branch}"
+            echo "github_ref=${GITHUB_REF}"
+            echo "github_sha=${GITHUB_SHA}"
+            echo "github_run_id=${GITHUB_RUN_ID}"
+          } > "${release_dir}/BUILD_INFO-esp32s3.txt"
+
+          service_sha256="$(sha256sum "${release_dir}/firmware-esp32s3-service.bin" | awk '{print $1}')"
+          {
+            echo "firmware_version=${firmware_version}"
+            echo "firmware_sha256=${service_sha256}"
+            echo "artifact_name=firmware-esp32s3-service"
+            echo "platformio_env=esp32s3_service"
+            echo "command_profile=service"
+            echo "release_branch=${release_branch}"
+            echo "github_ref=${GITHUB_REF}"
+            echo "github_sha=${GITHUB_SHA}"
+            echo "github_run_id=${GITHUB_RUN_ID}"
+          } > "${release_dir}/BUILD_INFO-esp32s3-service.txt"
+
+          (
+            cd "${release_dir}"
+            sha256sum firmware-esp32s3.bin bootloader-esp32s3.bin partitions-esp32s3.bin firmware-esp32s3.elf BUILD_INFO-esp32s3.txt > SHA256SUMS-esp32s3.txt
+            sha256sum firmware-esp32s3-service.bin bootloader-esp32s3-service.bin partitions-esp32s3-service.bin firmware-esp32s3-service.elf BUILD_INFO-esp32s3-service.txt > SHA256SUMS-esp32s3-service.txt
+          )
+
           python3 tools/ci/generate_firmware_update_manifest.py \
-            --firmware artifacts/firmware-esp32s3-service/firmware.bin \
-            --out artifacts/firmware-esp32s3-service/manifest.json \
+            --firmware "${release_dir}/firmware-esp32s3-service.bin" \
+            --out "${release_dir}/manifest.json" \
             --base-url "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}" \
+            --binary-filename "firmware-esp32s3-service.bin" \
+            --channel release \
+            --branch "${release_branch}" \
             --git-sha "${GITHUB_SHA}" \
             --workflow-run-id "${GITHUB_RUN_ID}" \
-            --firmware-version "$(python3 tools/ci/check_firmware_version.py --print-only)"
+            --firmware-version "${firmware_version}"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           body_path: release-notes.md
           files: |
-            artifacts/firmware-esp32s3/*
-            artifacts/firmware-esp32s3-service/*
+            release-assets/*
             artifacts/simulation-reports/*
             artifacts/flutter-android-apk/*
             artifacts/flutter-android-service-apk/*

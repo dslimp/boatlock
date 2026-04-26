@@ -12,7 +12,7 @@ RUN_PUB_GET=0
 SERVICE_UI=0
 FIRMWARE_MANIFEST_URL=""
 FIRMWARE_GITHUB_REPO=""
-LATEST_MAIN_MANIFEST_URL="${BOATLOCK_LATEST_MAIN_MANIFEST_URL:-https://dslimp.github.io/boatlock/firmware/main/manifest.json}"
+LATEST_RELEASE_GITHUB_REPO="${BOATLOCK_LATEST_RELEASE_GITHUB_REPO:-dslimp/boatlock}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -32,9 +32,9 @@ while [[ $# -gt 0 ]]; do
       SERVICE_UI=1
       shift
       ;;
-    --latest-main-service)
+    --latest-release-service)
       SERVICE_UI=1
-      FIRMWARE_MANIFEST_URL="${LATEST_MAIN_MANIFEST_URL}"
+      FIRMWARE_GITHUB_REPO="${LATEST_RELEASE_GITHUB_REPO}"
       shift
       ;;
     --firmware-manifest-url)

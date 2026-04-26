@@ -21,6 +21,8 @@
   - cover both `test_settings` and the command/runtime tests that exercise the changed write paths
 - Version or release-note change:
   - keep `boatlock/main.cpp`, `CHANGELOG.md`, `docs/releases/`, and CI version checks aligned
+- Release process change:
+  - keep `docs/RELEASE_PROCESS.md`, `.github/workflows/ci.yml`, release branch checks, and service app firmware source defines aligned
 
 ## Common Commands
 
@@ -39,6 +41,10 @@
   - publish/serve the binary from a trusted URL and copy its SHA-256
   - in the app Settings screen, use Firmware OTA URL + SHA-256 to upload over BLE
   - bench automation: `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin`
+- Latest-release phone bridge:
+  - service app builds use `BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=dslimp/boatlock`
+  - local shortcuts: `tools/android/build-app-apk.sh --latest-release-service` and `tools/macos/build-app.sh --latest-release-service`
+  - local manifest-backed bench automation: `tools/hw/nh02/android-run-app-e2e.sh --ota-latest-release --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin`
 - Full native tests:
   - `cd boatlock && platformio test -e native`
 - Do not run multiple `platformio test -e native ...` commands in parallel against the same checkout/build directory. PlatformIO shares `.pio/build/native`, and parallel suites can kill or corrupt each other; run suites sequentially or use isolated worktrees/build dirs.
@@ -79,6 +85,8 @@
   - `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130`
   - `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180`
   - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin`
+  - `tools/hw/nh02/android-run-app-e2e.sh --sim-suite --wait-secs 1800`
+  - `tools/hw/nh02/run-sim-suite.sh`
   - `tools/hw/nh02/android-run-app-e2e.sh --reconnect --wait-secs 130`
   - `tools/hw/nh02/android-run-app-e2e.sh --esp-reset --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130`
@@ -132,7 +140,8 @@ Minimum validation order after profile-gate changes:
 5. Acceptance-profile bench checks:
    - flash the acceptance profile through `tools/hw/nh02/flash.sh --profile acceptance`
    - run `tools/hw/nh02/acceptance.sh`
-   - run Android `sim` smoke/e2e and require `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, and `SIM_ABORT` through the normal BLE command path
+   - run Android `sim` smoke/e2e for quick `SIM_RUN`/`SIM_ABORT` delivery proof
+   - run `tools/hw/nh02/run-sim-suite.sh` when the standard full on-device HIL suite is required; it runs `SIM_LIST`, every listed scenario through `SIM_RUN:<id>,0`, `SIM_STATUS`, and `SIM_REPORT`, then restores the release profile
 6. Recovery check:
    - flash the release profile again through `tools/hw/nh02/flash.sh --profile release` and confirm the normal BLE reconnect/manual/anchor readiness smoke still uses the release surface only
 
@@ -160,6 +169,8 @@ Risk review items for the rollout:
 
 - Firmware version string lives in `boatlock/main.cpp` as `kFirmwareVersion`.
 - Version consistency is checked by `tools/ci/check_firmware_version.py`.
+- Release tags use `vX.Y.Z`, are cut from `release/vX.Y.x`, and are checked by `tools/ci/check_release_ref.py`.
+- GitHub Releases, not GitHub Pages, are the standard release delivery channel.
 - Settings schema version lives in `boatlock/Settings.h` as `Settings::VERSION`.
 - Schema consistency is checked by `tools/ci/check_config_schema_version.py`.
 - Release-note generation helpers live under `tools/ci/generate_release_notes.py`.

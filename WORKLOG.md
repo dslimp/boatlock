@@ -6865,3 +6865,47 @@ Validation:
 
 Self-review:
 - This does not make the current public Pages URL live locally; it makes the next real `main` CI run fail loudly if Pages visibility, deployment, manifest metadata, binary SHA, or build info are wrong.
+
+### 2026-04-26 Stage 233: GitHub Releases and release branches
+
+Scope:
+- Replace the temporary Pages/latest-main firmware delivery path with release
+  branches and GitHub Releases.
+- Keep one-button service OTA intact while moving its default source to the
+  latest GitHub Release.
+
+External baseline:
+- GitHub Releases are tag-backed distribution records with downloadable assets,
+  so they are the correct durable public firmware/app artifact surface for
+  BoatLock.
+- GitHub Actions branch/tag filters are the workflow gate for running CI on
+  `main`, `release/**`, and `v*` tags.
+
+Key outcomes:
+- Deleted the remote `gh-pages` branch after GitHub Pages API deactivation
+  returned `422`.
+- Removed the CI Pages deployment job and all service app `github.io` firmware
+  defines.
+- Added `release/**` CI branch coverage and `tools/ci/check_release_ref.py`,
+  which maps `vX.Y.Z` to `release/vX.Y.x` and requires tag commits to be
+  contained in the matching remote release branch.
+- Changed release packaging to publish unique flat GitHub Release asset names,
+  with `manifest.json` pointing at `firmware-esp32s3-service.bin`.
+- Updated Flutter OTA manifest parsing, GitHub release fallback parsing, service
+  UI copy, Android/macOS wrappers, docs, and tests for latest-release OTA.
+
+Validation:
+- `python3 -m py_compile tools/ci/generate_firmware_update_manifest.py tools/ci/verify_firmware_update_channel.py tools/ci/check_release_ref.py` -> PASS.
+- `bash -n tools/android/build-app-apk.sh tools/android/run-app-e2e.sh tools/hw/nh02/android-run-app-e2e.sh tools/macos/build-app.sh tools/macos/acceptance.sh` -> PASS.
+- `bash -n tools/hw/nh02/run-sim-suite.sh tools/android/run-smoke.sh tools/hw/nh02/remote/boatlock-run-android-smoke.sh` -> PASS.
+- `python3 -m pytest -q tools/ci/test_*.py` -> PASS (`35/35`).
+- `cd boatlock_ui && flutter test` -> PASS (`119/119`).
+- `cd boatlock && platformio test -e native -f test_hil_sim` -> PASS (`12/12`).
+- `tools/android/build-app-apk.sh --latest-release-service` -> PASS, produced `boatlock_ui/build/app/outputs/flutter-apk/app-debug.apk`.
+- `tools/macos/build-app.sh --latest-release-service --debug` -> PASS, produced `boatlock_ui/build/macos/Build/Products/Debug/boatlock_ui.app`.
+- `git diff --check` -> PASS.
+
+Self-review:
+- The standard release path is now coherent, but the next tag must still prove
+  the GitHub Release upload and a real service-app OTA against the public release
+  manifest.

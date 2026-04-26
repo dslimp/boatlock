@@ -7,7 +7,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 FLUTTER_DIR="${REPO_ROOT}/boatlock_ui"
 BUILD_SCRIPT="${SCRIPT_DIR}/build-app.sh"
 
-LATEST_MAIN_MANIFEST_URL="${BOATLOCK_LATEST_MAIN_MANIFEST_URL:-https://dslimp.github.io/boatlock/firmware/main/manifest.json}"
+LATEST_RELEASE_GITHUB_REPO="${BOATLOCK_LATEST_RELEASE_GITHUB_REPO:-dslimp/boatlock}"
 LOG_ROOT="${BOATLOCK_MACOS_ACCEPTANCE_LOG_DIR:-${TMPDIR:-/tmp}/boatlock-macos-acceptance}"
 LOG_DIR="${LOG_ROOT}/$(date +%Y%m%d-%H%M%S)"
 
@@ -19,7 +19,7 @@ ARTIFACT_ZIP=""
 STATIC_ONLY=0
 MANUAL=0
 LAUNCH_SECONDS=8
-USE_LATEST_MAIN=1
+USE_LATEST_RELEASE=1
 FIRMWARE_MANIFEST_URL=""
 FIRMWARE_GITHUB_REPO=""
 EXECUTABLE_NAME=""
@@ -36,13 +36,13 @@ Options:
   --pub-get                         Run flutter pub get before building.
   --debug                           Build/use Debug output.
   --release                         Build/use Release output (default).
-  --latest-main-service             Build service UI with latest-main manifest (default).
+  --latest-release-service          Build service UI with latest GitHub Release source (default).
   --firmware-manifest-url URL       Build service UI with a custom manifest URL.
   --firmware-github-repo OWNER/REPO Build service UI with latest release source.
   --no-build                        Use the existing Flutter build output.
   --app-path PATH                   Validate this .app bundle instead of building.
   --artifact-zip PATH               Unpack a CI artifact zip such as
-                                    boatlock-macos-service-main.zip and validate it.
+                                    boatlock-macos-service-release.zip and validate it.
   --static-only                     Validate bundle/signature/entitlements only.
   --runtime-seconds N               Launch-smoke duration before terminating the app.
   --manual                          Open the app and print the operator checklist.
@@ -108,17 +108,17 @@ while [[ $# -gt 0 ]]; do
       BUILD_MODE="release"
       shift
       ;;
-    --latest-main-service)
-      USE_LATEST_MAIN=1
+    --latest-release-service)
+      USE_LATEST_RELEASE=1
       shift
       ;;
     --firmware-manifest-url)
-      USE_LATEST_MAIN=0
+      USE_LATEST_RELEASE=0
       FIRMWARE_MANIFEST_URL="${2:?missing firmware manifest URL}"
       shift 2
       ;;
     --firmware-github-repo)
-      USE_LATEST_MAIN=0
+      USE_LATEST_RELEASE=0
       FIRMWARE_GITHUB_REPO="${2:?missing GitHub repository}"
       shift 2
       ;;
@@ -175,8 +175,8 @@ build_service_app() {
   if [[ "${RUN_PUB_GET}" -eq 1 ]]; then
     build_args+=(--pub-get)
   fi
-  if [[ "${USE_LATEST_MAIN}" -eq 1 ]]; then
-    build_args+=(--latest-main-service)
+  if [[ "${USE_LATEST_RELEASE}" -eq 1 ]]; then
+    build_args+=(--latest-release-service)
   fi
   if [[ -n "${FIRMWARE_MANIFEST_URL}" ]]; then
     build_args+=(--firmware-manifest-url "${FIRMWARE_MANIFEST_URL}")
@@ -369,7 +369,7 @@ print_manual_checklist() {
   cat <<USAGE
 Manual macOS service update acceptance:
 - App bundle: ${APP_PATH}
-- Build source: ${FIRMWARE_GITHUB_REPO:-${FIRMWARE_MANIFEST_URL:-${LATEST_MAIN_MANIFEST_URL}}}
+- Build source: ${FIRMWARE_GITHUB_REPO:-${FIRMWARE_MANIFEST_URL:-${LATEST_RELEASE_GITHUB_REPO}}}
 - Confirm the app opens without a crash and macOS permission prompts are understandable.
 - Open Settings and confirm service firmware update controls are visible.
 - Without BLE hardware, record this only as bundle/runtime smoke accepted.

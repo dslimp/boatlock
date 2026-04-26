@@ -191,6 +191,29 @@ void test_s16_display_loss_events_without_control_failure() {
   TEST_ASSERT_TRUE(hasEvent(r, "DISPLAY_RESTORED_EMU"));
 }
 
+void test_rf_water_scenarios_are_in_default_catalog() {
+  SimScenario s;
+  TEST_ASSERT_TRUE(findScenario("RF0_oka_normal_55lb", &s));
+  TEST_ASSERT_TRUE(findScenario("RF1_volga_spring_flow_80lb", &s));
+  TEST_ASSERT_TRUE(findScenario("RF2_rybinsk_fetch_55lb", &s));
+  TEST_ASSERT_TRUE(findScenario("RF3_ladoga_storm_abort", &s));
+  TEST_ASSERT_TRUE(findScenario("RF4_baltic_gulf_drift", &s));
+}
+
+void test_rf_wave_wake_packets_emit_events() {
+  SimScenario oka;
+  TEST_ASSERT_TRUE(findScenario("RF0_oka_normal_55lb", &oka));
+  const auto okaResult = runScenario(oka);
+  TEST_ASSERT_TRUE_MESSAGE(okaResult.pass, "RF0 should pass with wake packet event");
+  TEST_ASSERT_TRUE(hasEvent(okaResult, "WAKE_PACKET_EMU"));
+
+  SimScenario rybinsk;
+  TEST_ASSERT_TRUE(findScenario("RF2_rybinsk_fetch_55lb", &rybinsk));
+  const auto rybinskResult = runScenario(rybinsk);
+  TEST_ASSERT_TRUE_MESSAGE(rybinskResult.pass, "RF2 should pass with chop packet events");
+  TEST_ASSERT_TRUE(hasEvent(rybinskResult, "CHOP_PACKET_EMU"));
+}
+
 void test_all_default_scenarios_pass() {
   const auto scenarios = hilsim::defaultScenarios();
   TEST_ASSERT_TRUE_MESSAGE(!scenarios.empty(), "defaultScenarios() must not be empty");
@@ -216,6 +239,8 @@ int main() {
   RUN_TEST(test_s12_compass_dropout_triggers_sensor_timeout_failsafe);
   RUN_TEST(test_s14_power_loss_emits_loss_restore_and_failsafe);
   RUN_TEST(test_s16_display_loss_events_without_control_failure);
+  RUN_TEST(test_rf_water_scenarios_are_in_default_catalog);
+  RUN_TEST(test_rf_wave_wake_packets_emit_events);
   RUN_TEST(test_all_default_scenarios_pass);
   return UNITY_END();
 }

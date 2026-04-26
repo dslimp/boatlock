@@ -15,7 +15,7 @@ BOATLOCK_ANDROID_HOME="${BOATLOCK_ANDROID_HOME:-${HOME:-/tmp}}"
 BOATLOCK_ANDROID_XDG_CACHE_HOME="${BOATLOCK_ANDROID_XDG_CACHE_HOME:-${XDG_CACHE_HOME:-${BOATLOCK_ANDROID_HOME}/.cache}}"
 BOATLOCK_ANDROID_GRADLE_USER_HOME="${BOATLOCK_ANDROID_GRADLE_USER_HOME:-${GRADLE_USER_HOME:-${BOATLOCK_ANDROID_HOME}/.gradle}}"
 BOATLOCK_SMOKE_MODES=(basic reconnect manual status sim anchor compass gps)
-BOATLOCK_APP_E2E_MODES=(basic reconnect manual status sim anchor compass gps ota)
+BOATLOCK_APP_E2E_MODES=(basic reconnect manual status sim sim_suite anchor compass gps ota)
 
 FLUTTER_ENV=(
   env

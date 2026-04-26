@@ -163,9 +163,11 @@
 - EEPROM/write-throttling work must consider all `settings.save()` call sites, not only PID persistence.
 - If you change BLE commands, telemetry keys, settings schema, or simulation behavior, update code, tests, and docs together.
 
-## Main Branch Policy
+## Main And Release Branch Policy
 
-- Treat `main` as the release branch, not as a parking lot for unfinished runtime features.
+- Treat `main` as the releasable integration branch, not as a parking lot for unfinished runtime features.
+- Stabilize shippable cuts on `release/vX.Y.x` branches and publish artifacts only through GitHub Releases from `vX.Y.Z` tags.
+- GitHub Pages is not a BoatLock firmware-release channel.
 - Before removing non-core runtime behavior, preserve it in a dedicated branch first.
 - Default extraction order:
   - `feature/runtime-tuning-and-diagnostics`

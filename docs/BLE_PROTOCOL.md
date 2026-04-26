@@ -65,7 +65,7 @@ Current classification:
 | `OTA_BEGIN:<size>,<sha256>` | firmware size in bytes and 64-hex SHA-256 | Enter safe stopped state, start writing a new firmware image to the inactive OTA partition, and arm binary chunk writes on `9abc` |
 | `OTA_FINISH` | none | Validate byte count and SHA-256, finalize the OTA image, then reboot into the new partition |
 | `OTA_ABORT` | none | Abort an active BLE OTA transfer and keep the current firmware active |
-| `SIM_LIST` | none | List built-in on-device HIL scenarios (`S0..S19`) |
+| `SIM_LIST` | none | List built-in on-device HIL scenarios (`S0..S19`, `RF0..RF4`) |
 | `SIM_RUN:<scenario_id>[,<speedup>]` | id + speed mode (`0` fastest, `1` realtime) | Start deterministic closed-loop simulation on device |
 | `SIM_STATUS` | none | Return current simulation progress JSON |
 | `SIM_REPORT` | none | Return final simulation report JSON (chunked in logs) |
@@ -75,6 +75,7 @@ Current built-in HIL groups:
 - `S0..S3`: baseline hold/current/gust behavior
 - `S4..S9`: GNSS/control-loop/NaN safety regressions
 - `S10..S19`: randomized + hardware-failure emulation (compass/power/display/actuator)
+- `RF0..RF4`: RF water-body profiles derived from the offline Russian scenario set; ESP HIL includes current/gust, wave/wake packet, drift, and fail-closed approximations that are visible in `SIM_REPORT` events such as `WAKE_PACKET_EMU` and `CHOP_PACKET_EMU`
 
 These commands correspond to the implementation in [`boatlock/BleCommandHandler.h`](../boatlock/BleCommandHandler.h). The normal mobile application exposes the release subset; service and dev/HIL commands are accepted only through explicit service/test paths on the app side.
 
@@ -209,17 +210,18 @@ BLE OTA uses the phone as the bridge:
 
 During active OTA, firmware rejects all runtime commands except `HEARTBEAT`, `OTA_FINISH`, and `OTA_ABORT`. Chunk writes before a successful `OTA_BEGIN` are ignored. If the BLE link disconnects during an active transfer, firmware aborts the update and keeps the current boot partition.
 
-The service UI can also use a build-defined latest-main manifest URL from
-`BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL`. That manifest must describe a
-`main` branch `esp32s3_service` binary with `commandProfile=service`, positive
-size, HTTPS binary URL, and a 64-hex SHA-256. If no manifest URL is configured,
-the app can instead scan the latest GitHub release from
-`BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO`, preferring a release manifest asset and
-falling back to `firmware.bin` plus `BUILD_INFO.txt` and matching SHA-256
-metadata. The app validates the resolved manifest, downloads the binary,
-verifies size and SHA-256, then reuses the same BLE OTA transport path. This
-intentionally avoids trusting expiring workflow artifact links or
-unauthenticated binaries.
+The service UI uses `BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO` for one-button
+updates from the latest GitHub Release. A release should include `manifest.json`
+plus the service binary asset named `firmware-esp32s3-service.bin`; the manifest
+must describe a `release/vX.Y.x` branch `esp32s3_service` binary with
+`commandProfile=service`, positive size, HTTPS binary URL, and a 64-hex
+SHA-256. `BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL` remains available for local
+acceptance smokes and must point to a manifest with the same service-profile
+safety fields. If the release manifest is unavailable, the app can reconstruct a
+manifest from unambiguous service release assets: `firmware-esp32s3-service.bin`,
+`BUILD_INFO-esp32s3-service.txt`, and `SHA256SUMS-esp32s3-service.txt`. The app
+validates the resolved manifest, downloads the binary, verifies size and
+SHA-256, then reuses the same BLE OTA transport path.
 
 The current phone bridge requests a larger MTU and uses write-without-response
 for OTA chunks when the platform and characteristic support it, with a small

@@ -73,6 +73,7 @@ tools/hw/nh02/android-run-app-e2e.sh --status --wait-secs 130
 tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130
 tools/hw/nh02/android-run-app-e2e.sh --anchor --wait-secs 130
 tools/hw/nh02/android-run-app-e2e.sh --sim --wait-secs 130
+tools/hw/nh02/run-sim-suite.sh
 tools/hw/nh02/android-run-app-e2e.sh --reconnect --wait-secs 130
 tools/hw/nh02/android-run-app-e2e.sh --esp-reset --wait-secs 130
 ```
@@ -102,7 +103,8 @@ Record each check with command, expected output, measured output, and pass/fail:
 | `MANUAL_OFF` | `PWM=0` | idle |
 | `ANCHOR_ON` denied on bench | `PWM=0` | idle |
 | `ANCHOR_OFF` | `PWM=0` | idle |
-| `SIM_RUN` then `SIM_ABORT` | simulation must not drive real outputs | idle |
+| `SIM_RUN` then `SIM_ABORT` | simulation smoke must not drive real outputs | idle |
+| full on-device `sim_suite` | standard HIL suite must not drive real outputs | idle |
 | BLE disconnect/reconnect | `PWM=0` | idle |
 | ESP reset | `PWM=0` during and after reboot | idle |
 | OTA begin/abort | `PWM=0` | idle |

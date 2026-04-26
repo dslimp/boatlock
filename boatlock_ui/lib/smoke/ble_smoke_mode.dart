@@ -4,6 +4,7 @@ enum BleSmokeMode {
   manual,
   status,
   sim,
+  sim_suite,
   anchor,
   compass,
   gps,
@@ -23,6 +24,8 @@ BleSmokeMode boatLockSmokeModeFromString(String value) {
       return BleSmokeMode.status;
     case 'sim':
       return BleSmokeMode.sim;
+    case 'sim_suite':
+      return BleSmokeMode.sim_suite;
     case 'anchor':
       return BleSmokeMode.anchor;
     case 'compass':

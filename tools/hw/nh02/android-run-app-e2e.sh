@@ -9,7 +9,7 @@ BUILD_FIRST=1
 MODE="basic"
 PASS_ARGS=()
 OTA_FIRMWARE=""
-OTA_LATEST_MAIN=0
+OTA_LATEST_RELEASE=0
 OTA_MANIFEST=""
 OTA_PORT=18080
 OTA_PORT_SET=0
@@ -38,6 +38,10 @@ while [[ $# -gt 0 ]]; do
       PASS_ARGS+=("$1")
       shift
       ;;
+    --sim-suite)
+      MODE="sim_suite"
+      shift
+      ;;
     --anchor)
       MODE="anchor"
       PASS_ARGS+=("$1")
@@ -57,9 +61,9 @@ while [[ $# -gt 0 ]]; do
       MODE="ota"
       shift
       ;;
-    --ota-latest-main)
+    --ota-latest-release)
       MODE="ota"
-      OTA_LATEST_MAIN=1
+      OTA_LATEST_RELEASE=1
       shift
       ;;
     --ota-firmware)
@@ -135,7 +139,7 @@ else:
 PY")"
   fi
   printf 'ota_port=%s\n' "${OTA_PORT}"
-  if [[ "${OTA_LATEST_MAIN}" -eq 1 ]]; then
+  if [[ "${OTA_LATEST_RELEASE}" -eq 1 ]]; then
     OTA_MANIFEST="$(mktemp -t boatlock-ota-manifest.XXXXXX.json)"
     (
       cd "${REPO_ROOT}"
@@ -159,12 +163,16 @@ PY")"
   fi
 fi
 
+if [[ "${MODE}" == "sim_suite" && "${WAIT_SET}" -eq 0 ]]; then
+  PASS_ARGS+=(--wait-secs 1800)
+fi
+
 if [[ "${BUILD_FIRST}" -eq 1 ]]; then
   build_args=(--e2e-mode "${MODE}")
   if [[ "${MODE}" == "ota" ]]; then
-    if [[ "${OTA_LATEST_MAIN}" -eq 1 ]]; then
+    if [[ "${OTA_LATEST_RELEASE}" -eq 1 ]]; then
       build_args+=(
-        --e2e-ota-latest-main
+        --e2e-ota-latest-release
         --firmware-manifest-url "http://127.0.0.1:${OTA_PORT}/manifest.json"
       )
     else

@@ -93,7 +93,7 @@ class _SettingsPageState extends State<SettingsPage> {
   int _lastSeenCommandRejectEvents = 0;
   _ProfileRejectionWait? _profileRejectionWait;
   late final FirmwareUpdateClient _firmwareUpdateClient;
-  FirmwareUpdateManifest? _latestFirmwareManifest;
+  FirmwareUpdateManifest? _releaseFirmwareManifest;
 
   @override
   void initState() {
@@ -606,10 +606,10 @@ class _SettingsPageState extends State<SettingsPage> {
     _showMessage(ok ? 'OTA завершено' : failureMessage);
   }
 
-  Future<void> _runLatestMainOta() async {
+  Future<void> _runReleaseOta() async {
     if (!isConnected || _otaBusy) return;
     if (!_firmwareUpdateClient.configured) {
-      _showMessage('Manifest URL не задан в сборке приложения');
+      _showMessage('Источник релиза не задан в сборке приложения');
       return;
     }
 
@@ -617,18 +617,18 @@ class _SettingsPageState extends State<SettingsPage> {
       _otaBusy = true;
       _otaProgress = null;
       _otaProgressLabel = '';
-      _otaStatus = 'Поиск latest main';
+      _otaStatus = 'Поиск релиза';
       _otaStartedAt = DateTime.now();
       _otaLastLogAt = null;
       _otaLastLogBucket = -1;
-      _latestFirmwareManifest = null;
+      _releaseFirmwareManifest = null;
     });
     _logOta('manifest_fetch_start');
     try {
       final manifest = await _firmwareUpdateClient.fetchLatestManifest();
       if (!mounted) return;
       setState(() {
-        _latestFirmwareManifest = manifest;
+        _releaseFirmwareManifest = manifest;
         _otaStatus = 'Найдена ${manifest.displayLabel}, скачивание';
       });
       _logOta(
@@ -643,7 +643,7 @@ class _SettingsPageState extends State<SettingsPage> {
           if (!mounted) return;
           final progress = total > 0 ? received / total : null;
           final label = _formatOtaProgress(
-            'Скачивание latest main',
+            'Скачивание релиза',
             received,
             total,
           );
@@ -652,7 +652,7 @@ class _SettingsPageState extends State<SettingsPage> {
             _otaProgressLabel = label;
             _otaStatus = label;
           });
-          _logOtaProgress('download_latest_main', received, total);
+          _logOtaProgress('download_release', received, total);
         },
       );
       if (!mounted) return;
@@ -661,10 +661,10 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) return;
       setState(() {
         _otaBusy = false;
-        _otaStatus = 'Ошибка latest main OTA';
+        _otaStatus = 'Ошибка release OTA';
       });
-      _logOta('latest_main_error', detail: e.toString());
-      _showMessage('Ошибка latest main OTA: $e');
+      _logOta('release_error', detail: e.toString());
+      _showMessage('Ошибка release OTA: $e');
     }
   }
 
@@ -891,18 +891,18 @@ class _SettingsPageState extends State<SettingsPage> {
                         isConnected &&
                             !_otaBusy &&
                             _firmwareUpdateClient.configured
-                        ? _runLatestMainOta
+                        ? _runReleaseOta
                         : null,
                     icon: const Icon(Icons.system_update_alt),
-                    label: const Text('Обновить до main'),
+                    label: const Text('Обновить до релиза'),
                   ),
-                  if (_latestFirmwareManifest != null)
+                  if (_releaseFirmwareManifest != null)
                     Text(
-                      '${_latestFirmwareManifest!.displayLabel} '
-                      '${_latestFirmwareManifest!.platformioEnv}',
+                      '${_releaseFirmwareManifest!.displayLabel} '
+                      '${_releaseFirmwareManifest!.platformioEnv}',
                     )
                   else if (!_firmwareUpdateClient.configured)
-                    const Text('Latest-main manifest не задан'),
+                    const Text('Источник релиза не задан'),
                 ],
               ),
             ),
