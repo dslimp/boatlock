@@ -6266,3 +6266,28 @@ Validation:
 
 Self-review:
 - This reduces pre-powered ambiguity but does not identify the actual driver. The TODO stays open until photos, pinout, current limits, polarity, safe idle, and STOP behavior are captured and reflected in firmware/docs.
+
+### 2026-04-26 Stage 213: Flutter profile rejection feedback
+
+Scope:
+- Surface firmware command-profile rejections in the Flutter app and smoke helpers.
+- Keep this app-side and diagnostics-only; no firmware command behavior changed.
+
+External baseline:
+- Flutter's ScaffoldMessenger documentation confirms SnackBars are managed through a messenger scope and can persist across route changes, which fits asynchronous BLE log feedback: https://docs.flutter.dev/release/breaking-changes/scaffold-messenger.
+
+Key outcomes:
+- Added a pure parser for firmware `[BLE] command rejected reason=profile ...` log lines.
+- Extended BLE diagnostics with command rejection events, last rejection, and diagnostics-page copy output.
+- Settings now shows a Snackbar when an open settings/service flow receives a profile rejection, including the current and required firmware profile.
+- OTA begin/finish waits now fail immediately on matching profile rejection logs instead of timing out.
+- Smoke logic can classify profile rejections, and sim/compass smoke modes return explicit profile-rejection reasons.
+
+Validation:
+- `cd boatlock_ui && flutter test test/ble_command_rejection_test.dart test/ble_debug_snapshot_test.dart test/ble_smoke_logic_test.dart test/diagnostics_page_test.dart test/settings_page_test.dart` -> PASS (`19/19`).
+- `cd boatlock_ui && flutter test` -> PASS (`94/94`).
+- `cd boatlock_ui && flutter analyze` -> PASS.
+- `git diff --check -- boatlock_ui WORKLOG.md` -> PASS.
+
+Self-review:
+- This makes release-vs-service/acceptance mismatch visible to operators and wrappers, but it does not replace the required `nh02` proof that the firmware profile gate logs match real BLE behavior.

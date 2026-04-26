@@ -531,6 +531,31 @@ class _BleSmokePageState extends State<BleSmokePage> {
     _deviceLogEvents += 1;
     _lastDeviceLog = line.trim();
     _appendEvent('device_log ${_lastDeviceLog!}');
+    final profileRejection = smokeProfileRejection(_lastDeviceLog);
+    if (profileRejection != null) {
+      _appendEvent(
+        encodeSmokeStageLine(
+          'command_rejected_${profileRejection.commandName}_${profileRejection.profile}',
+        ),
+      );
+      if (widget.mode == BleSmokeMode.sim &&
+          profileRejection.matchesCommandPrefix('SIM_RUN')) {
+        _finish(false, 'sim_rejected_by_profile_${profileRejection.profile}');
+        return;
+      }
+      if (widget.mode == BleSmokeMode.compass &&
+          (profileRejection.matchesCommandPrefix('COMPASS_CAL_START') ||
+              profileRejection.matchesCommandPrefix(
+                'COMPASS_DCD_AUTOSAVE_OFF',
+              ) ||
+              profileRejection.matchesCommandPrefix('COMPASS_DCD_SAVE'))) {
+        _finish(
+          false,
+          'compass_rejected_by_profile_${profileRejection.profile}',
+        );
+        return;
+      }
+    }
     if (widget.mode == BleSmokeMode.anchor &&
         smokeAnchorDeniedLogSeen(_lastDeviceLog)) {
       _anchorDeniedSeen = true;

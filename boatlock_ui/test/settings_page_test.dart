@@ -1,4 +1,5 @@
 import 'package:boatlock_ui/ble/ble_boatlock.dart';
+import 'package:boatlock_ui/ble/ble_command_rejection.dart';
 import 'package:boatlock_ui/ble/ble_security_codec.dart';
 import 'package:boatlock_ui/pages/settings_page.dart';
 import 'package:flutter/material.dart';
@@ -124,5 +125,28 @@ void main() {
     expect(find.text('Firmware OTA'), findsNothing);
     expect(find.text('BNO08x quality'), findsNothing);
     expect(find.text('Owner secret'), findsOneWidget);
+  });
+
+  testWidgets('shows firmware profile command rejection from diagnostics', (
+    WidgetTester tester,
+  ) async {
+    final ble = FakeBleBoatLock();
+    await tester.pumpWidget(_wrap(_page(ble)));
+
+    ble.diagnostics.value = ble.diagnostics.value.copyWith(
+      commandRejectEvents: 1,
+      lastCommandRejection: const BleCommandRejection(
+        reason: 'profile',
+        profile: 'release',
+        scope: 'service',
+        command: 'OTA_BEGIN:4096,abcd',
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.text('Команда OTA_BEGIN отклонена профилем release: нужен service'),
+      findsOneWidget,
+    );
   });
 }

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../ble/ble_command_rejection.dart';
 import '../models/boat_data.dart';
 
 const kBoatLockSmokeResultPrefix = 'BOATLOCK_SMOKE_RESULT ';
@@ -55,6 +56,25 @@ bool smokeCompassDcdAutosaveLogSeen(String? line) {
 
 bool smokeCompassDcdSaveLogSeen(String? line) {
   return line != null && line.contains('[EVENT] COMPASS_DCD_SAVE');
+}
+
+BleCommandRejection? smokeProfileRejection(String? line) {
+  if (line == null) return null;
+  return parseBleCommandRejectionLog(line);
+}
+
+bool smokeCommandRejectedByProfile(
+  String? line, {
+  required String commandPrefix,
+  String? profile,
+  String? scope,
+}) {
+  final rejection = smokeProfileRejection(line);
+  if (rejection == null) return false;
+  if (!rejection.matchesCommandPrefix(commandPrefix)) return false;
+  if (profile != null && rejection.profile != profile) return false;
+  if (scope != null && rejection.scope != scope) return false;
+  return true;
 }
 
 bool smokeGpsFixLooksHealthy(BoatData data) {

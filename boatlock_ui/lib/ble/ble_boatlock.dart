@@ -6,6 +6,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter/widgets.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/boat_data.dart';
+import 'ble_command_rejection.dart';
 import 'ble_debug_snapshot.dart';
 import 'ble_command_scope.dart';
 import 'ble_commands.dart';
@@ -62,6 +63,8 @@ class BleBoatLock with WidgetsBindingObserver {
       ValueNotifier<BleDebugSnapshot>(BleDebugSnapshot.initial());
   final List<String> _debugAppLogs = <String>[];
   final List<String> _debugDeviceLogs = <String>[];
+  final List<BleCommandRejection> _debugCommandRejects =
+      <BleCommandRejection>[];
 
   BoatData? get currentData => _lastData;
   bool get secPaired => _secPaired;
@@ -513,10 +516,15 @@ class BleBoatLock with WidgetsBindingObserver {
 
   void _onLogNotify(List<int> value) {
     final line = decodeBoatLockLogLine(value);
-    if (line.trim().isEmpty) return;
-    _appendDeviceDebugLog(line.trim());
-    _handleOtaLogLine(line);
-    onLog?.call(line);
+    final trimmed = line.trim();
+    if (trimmed.isEmpty) return;
+    _appendDeviceDebugLog(trimmed);
+    final rejection = parseBleCommandRejectionLog(trimmed);
+    if (rejection != null) {
+      _appendCommandRejection(rejection);
+    }
+    _handleOtaLogLine(trimmed, rejection: rejection);
+    onLog?.call(trimmed);
   }
 
   Future<bool> _waitForOtaAck(
@@ -526,11 +534,14 @@ class BleBoatLock with WidgetsBindingObserver {
     return completer.future.timeout(timeout, onTimeout: () => false);
   }
 
-  void _handleOtaLogLine(String line) {
+  void _handleOtaLogLine(String line, {BleCommandRejection? rejection}) {
     if (_otaBeginAck != null && !_otaBeginAck!.isCompleted) {
       if (line.contains('[OTA] begin ok')) {
         _otaBeginAck!.complete(true);
       } else if (line.contains('[OTA] begin rejected')) {
+        _otaBeginAck!.complete(false);
+      } else if (rejection != null &&
+          rejection.matchesCommandPrefix('OTA_BEGIN')) {
         _otaBeginAck!.complete(false);
       }
     }
@@ -538,6 +549,9 @@ class BleBoatLock with WidgetsBindingObserver {
       if (line.contains('[OTA] finish ok')) {
         _otaFinishAck!.complete(true);
       } else if (line.contains('[OTA] finish rejected')) {
+        _otaFinishAck!.complete(false);
+      } else if (rejection != null &&
+          rejection.matchesCommandPrefix('OTA_FINISH')) {
         _otaFinishAck!.complete(false);
       }
     }
@@ -1029,6 +1043,20 @@ class BleBoatLock with WidgetsBindingObserver {
     );
   }
 
+  void _appendCommandRejection(BleCommandRejection rejection) {
+    _debugCommandRejects.add(rejection);
+    if (_debugCommandRejects.length > 40) {
+      _debugCommandRejects.removeRange(0, _debugCommandRejects.length - 40);
+    }
+    _setDiagnostics(
+      commandRejectEvents: diagnostics.value.commandRejectEvents + 1,
+      lastCommandRejection: rejection,
+      commandRejects: List<BleCommandRejection>.unmodifiable(
+        _debugCommandRejects,
+      ),
+    );
+  }
+
   void _setDiagnostics({
     String? adapterState,
     String? connectionState,
@@ -1043,6 +1071,7 @@ class BleBoatLock with WidgetsBindingObserver {
     bool? hasOtaChar,
     int? dataEvents,
     int? deviceLogEvents,
+    int? commandRejectEvents,
     int? appLogEvents,
     DateTime? connectedAt,
     bool clearConnectedAt = false,
@@ -1053,8 +1082,11 @@ class BleBoatLock with WidgetsBindingObserver {
     DateTime? lastAppLogAt,
     bool clearLastAppLogAt = false,
     String? lastError,
+    BleCommandRejection? lastCommandRejection,
+    bool clearLastCommandRejection = false,
     List<String>? appLogLines,
     List<String>? deviceLogLines,
+    List<BleCommandRejection>? commandRejects,
   }) {
     diagnostics.value = diagnostics.value.copyWith(
       adapterState: adapterState,
@@ -1070,6 +1102,7 @@ class BleBoatLock with WidgetsBindingObserver {
       hasOtaChar: hasOtaChar,
       dataEvents: dataEvents,
       deviceLogEvents: deviceLogEvents,
+      commandRejectEvents: commandRejectEvents,
       appLogEvents: appLogEvents,
       connectedAt: connectedAt,
       clearConnectedAt: clearConnectedAt,
@@ -1080,8 +1113,11 @@ class BleBoatLock with WidgetsBindingObserver {
       lastAppLogAt: lastAppLogAt,
       clearLastAppLogAt: clearLastAppLogAt,
       lastError: lastError,
+      lastCommandRejection: lastCommandRejection,
+      clearLastCommandRejection: clearLastCommandRejection,
       appLogLines: appLogLines,
       deviceLogLines: deviceLogLines,
+      commandRejects: commandRejects,
     );
   }
 

@@ -122,6 +122,42 @@ void main() {
     expect(smokeCompassDcdSaveLogSeen('[BLE] COMPASS_DCD_SAVE'), isFalse);
   });
 
+  test('smoke identifies firmware profile command rejections', () {
+    const serviceLine =
+        '[BLE] command rejected reason=profile profile=release '
+        'scope=service command=COMPASS_CAL_START';
+    const hilLine =
+        '[BLE] command rejected reason=profile profile=service '
+        'scope=dev_hil command=SIM_RUN:S0_hold_still_good,1';
+
+    expect(
+      smokeCommandRejectedByProfile(
+        serviceLine,
+        commandPrefix: 'COMPASS_CAL_START',
+        profile: 'release',
+        scope: 'service',
+      ),
+      isTrue,
+    );
+    expect(
+      smokeCommandRejectedByProfile(
+        hilLine,
+        commandPrefix: 'SIM_RUN',
+        profile: 'service',
+        scope: 'dev_hil',
+      ),
+      isTrue,
+    );
+    expect(
+      smokeCommandRejectedByProfile(
+        hilLine,
+        commandPrefix: 'SIM_ABORT',
+        profile: 'service',
+      ),
+      isFalse,
+    );
+  });
+
   test('gps smoke requires real coordinates and live GNSS quality', () {
     expect(
       smokeGpsFixLooksHealthy(_data(lat: 59.938631, lon: 30.314112, gnssQ: 1)),

@@ -1,4 +1,5 @@
 import 'package:boatlock_ui/ble/ble_boatlock.dart';
+import 'package:boatlock_ui/ble/ble_command_rejection.dart';
 import 'package:boatlock_ui/ble/ble_debug_snapshot.dart';
 import 'package:boatlock_ui/models/boat_data.dart';
 import 'package:boatlock_ui/pages/diagnostics_page.dart';
@@ -69,7 +70,14 @@ void main() {
       hasOtaChar: true,
       dataEvents: 12,
       deviceLogEvents: 2,
+      commandRejectEvents: 1,
       appLogEvents: 3,
+      lastCommandRejection: const BleCommandRejection(
+        reason: 'profile',
+        profile: 'release',
+        scope: 'service',
+        command: 'OTA_BEGIN:4096,abcd',
+      ),
       deviceLogLines: const ['[OTA] finish ok size=711776'],
       appLogLines: const ['Connected to device'],
     );
@@ -85,6 +93,11 @@ void main() {
     expect(find.text('247'), findsOneWidget);
     expect(find.text('IDLE'), findsOneWidget);
     expect(find.text('NO_GPS'), findsOneWidget);
+    expect(find.text('1'), findsOneWidget);
+    expect(
+      find.text('OTA_BEGIN rejected by release scope=service needs=service'),
+      findsOneWidget,
+    );
     expect(find.textContaining('[OTA] finish ok'), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.refresh));

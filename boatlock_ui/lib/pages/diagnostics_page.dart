@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../ble/ble_boatlock.dart';
+import '../ble/ble_command_rejection.dart';
 import '../ble/ble_debug_snapshot.dart';
 import '../models/boat_data.dart';
 
@@ -74,9 +75,18 @@ class DiagnosticsPage extends StatelessWidget {
                 title: 'Runtime',
                 children: [
                   _KV('Device logs', snapshot.deviceLogEvents.toString()),
+                  _KV(
+                    'Command rejects',
+                    snapshot.commandRejectEvents.toString(),
+                  ),
                   _KV('App logs', snapshot.appLogEvents.toString()),
                   _KV('Last device log', _age(snapshot.lastDeviceLogAt)),
                   _KV('Last app log', _age(snapshot.lastAppLogAt)),
+                  if (snapshot.lastCommandRejection != null)
+                    _KV(
+                      'Last command reject',
+                      _rejectionText(snapshot.lastCommandRejection!),
+                    ),
                   if (snapshot.lastError.isNotEmpty)
                     _KV('Last error', snapshot.lastError),
                 ],
@@ -142,12 +152,20 @@ class DiagnosticsPage extends StatelessWidget {
       'reasons=${data?.statusReasons ?? '-'}',
       'gnssQ=${data?.gnssQ ?? '-'}',
       if (snapshot.lastError.isNotEmpty) 'lastError=${snapshot.lastError}',
+      'commandRejectEvents=${snapshot.commandRejectEvents}',
+      if (snapshot.lastCommandRejection != null)
+        'lastCommandReject=${_rejectionText(snapshot.lastCommandRejection!)}',
     ];
     await Clipboard.setData(ClipboardData(text: lines.join('\n')));
     if (!context.mounted) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Диагностика скопирована')));
+  }
+
+  String _rejectionText(BleCommandRejection rejection) {
+    return '${rejection.commandName} rejected by ${rejection.profile} '
+        'scope=${rejection.scope} needs=${rejection.requiredProfile}';
   }
 }
 

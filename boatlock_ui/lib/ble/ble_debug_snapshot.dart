@@ -1,3 +1,5 @@
+import 'ble_command_rejection.dart';
+
 class BleDebugSnapshot {
   const BleDebugSnapshot({
     required this.adapterState,
@@ -13,14 +15,17 @@ class BleDebugSnapshot {
     required this.hasOtaChar,
     required this.dataEvents,
     required this.deviceLogEvents,
+    required this.commandRejectEvents,
     required this.appLogEvents,
     required this.connectedAt,
     required this.lastDataAt,
     required this.lastDeviceLogAt,
     required this.lastAppLogAt,
     required this.lastError,
+    required this.lastCommandRejection,
     required this.appLogLines,
     required this.deviceLogLines,
+    required this.commandRejects,
   });
 
   factory BleDebugSnapshot.initial() => const BleDebugSnapshot(
@@ -37,14 +42,17 @@ class BleDebugSnapshot {
     hasOtaChar: false,
     dataEvents: 0,
     deviceLogEvents: 0,
+    commandRejectEvents: 0,
     appLogEvents: 0,
     connectedAt: null,
     lastDataAt: null,
     lastDeviceLogAt: null,
     lastAppLogAt: null,
     lastError: '',
+    lastCommandRejection: null,
     appLogLines: <String>[],
     deviceLogLines: <String>[],
+    commandRejects: <BleCommandRejection>[],
   );
 
   final String adapterState;
@@ -60,14 +68,17 @@ class BleDebugSnapshot {
   final bool hasOtaChar;
   final int dataEvents;
   final int deviceLogEvents;
+  final int commandRejectEvents;
   final int appLogEvents;
   final DateTime? connectedAt;
   final DateTime? lastDataAt;
   final DateTime? lastDeviceLogAt;
   final DateTime? lastAppLogAt;
   final String lastError;
+  final BleCommandRejection? lastCommandRejection;
   final List<String> appLogLines;
   final List<String> deviceLogLines;
+  final List<BleCommandRejection> commandRejects;
 
   bool get connected => connectionState == 'connected';
   bool get coreReady => hasDataChar && hasCommandChar && hasLogChar;
@@ -87,6 +98,7 @@ class BleDebugSnapshot {
     bool? hasOtaChar,
     int? dataEvents,
     int? deviceLogEvents,
+    int? commandRejectEvents,
     int? appLogEvents,
     DateTime? connectedAt,
     bool clearConnectedAt = false,
@@ -97,8 +109,11 @@ class BleDebugSnapshot {
     DateTime? lastAppLogAt,
     bool clearLastAppLogAt = false,
     String? lastError,
+    BleCommandRejection? lastCommandRejection,
+    bool clearLastCommandRejection = false,
     List<String>? appLogLines,
     List<String>? deviceLogLines,
+    List<BleCommandRejection>? commandRejects,
   }) {
     return BleDebugSnapshot(
       adapterState: adapterState ?? this.adapterState,
@@ -114,6 +129,7 @@ class BleDebugSnapshot {
       hasOtaChar: hasOtaChar ?? this.hasOtaChar,
       dataEvents: dataEvents ?? this.dataEvents,
       deviceLogEvents: deviceLogEvents ?? this.deviceLogEvents,
+      commandRejectEvents: commandRejectEvents ?? this.commandRejectEvents,
       appLogEvents: appLogEvents ?? this.appLogEvents,
       connectedAt: clearConnectedAt ? null : (connectedAt ?? this.connectedAt),
       lastDataAt: clearLastDataAt ? null : (lastDataAt ?? this.lastDataAt),
@@ -124,8 +140,12 @@ class BleDebugSnapshot {
           ? null
           : (lastAppLogAt ?? this.lastAppLogAt),
       lastError: lastError ?? this.lastError,
+      lastCommandRejection: clearLastCommandRejection
+          ? null
+          : (lastCommandRejection ?? this.lastCommandRejection),
       appLogLines: appLogLines ?? this.appLogLines,
       deviceLogLines: deviceLogLines ?? this.deviceLogLines,
+      commandRejects: commandRejects ?? this.commandRejects,
     );
   }
 }

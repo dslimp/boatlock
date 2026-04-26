@@ -82,6 +82,7 @@ class _SettingsPageState extends State<SettingsPage> {
   DateTime? _otaStartedAt;
   DateTime? _otaLastLogAt;
   int _otaLastLogBucket = -1;
+  int _lastSeenCommandRejectEvents = 0;
 
   @override
   void initState() {
@@ -109,10 +110,14 @@ class _SettingsPageState extends State<SettingsPage> {
     _otaUrlCtrl = TextEditingController();
     _otaShaCtrl = TextEditingController();
     widget.ble.setOwnerSecret(_ownerSecretCtrl.text);
+    _lastSeenCommandRejectEvents =
+        widget.ble.diagnostics.value.commandRejectEvents;
+    widget.ble.diagnostics.addListener(_onDiagnosticsChanged);
   }
 
   @override
   void dispose() {
+    widget.ble.diagnostics.removeListener(_onDiagnosticsChanged);
     _ownerSecretCtrl.dispose();
     _otaUrlCtrl.dispose();
     _otaShaCtrl.dispose();
@@ -124,6 +129,31 @@ class _SettingsPageState extends State<SettingsPage> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _onDiagnosticsChanged() {
+    final snapshot = widget.ble.diagnostics.value;
+    if (snapshot.commandRejectEvents <= _lastSeenCommandRejectEvents) {
+      return;
+    }
+    _lastSeenCommandRejectEvents = snapshot.commandRejectEvents;
+    final rejection = snapshot.lastCommandRejection;
+    if (rejection == null) return;
+    _showProfileRejection(
+      rejection.commandName,
+      rejection.profile,
+      rejection.requiredProfile,
+    );
+  }
+
+  void _showProfileRejection(
+    String commandName,
+    String profile,
+    String requiredProfile,
+  ) {
+    _showMessage(
+      'Команда $commandName отклонена профилем $profile: нужен $requiredProfile',
+    );
   }
 
   void _syncOwnerSecret() {
