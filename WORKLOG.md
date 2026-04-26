@@ -5214,3 +5214,28 @@ Self-review:
 - The web build failure was real and would have kept the Flutter artifact from being uploaded in Actions.
 - The BigInt change only touches the low-frequency security proof/signature path and keeps exact protocol outputs covered by tests.
 - Remaining delivery proof is GitHub Actions after pushing this commit to `main`, including uploaded firmware and Flutter artifacts.
+
+### 2026-04-26 Stage 171: CI failure diagnosis and split jobs
+
+Scope:
+- Diagnose the failed GitHub Actions run after pushing delivery changes to `main`.
+- Split the pipeline into clear failure domains so future failures are visible at the job level.
+
+Key outcomes:
+- GitHub run `24949496909` failed in `firmware` step `Build firmware (esp32s3)` after firmware checks, native tests, and simulation all passed.
+- Root cause was a case-sensitive Linux include failure: `BleOtaUpdate.cpp` used `#include <ESP.h>`, while Arduino-ESP32 provides `Esp.h`; macOS local build did not catch it.
+- Fixed the include to `#include <Esp.h>`.
+- Split `.github/workflows/ci.yml` into `firmware-checks`, `firmware-test`, `firmware-sim`, `firmware-build`, `flutter-checks`, `flutter-build-android`, and `flutter-build-web`.
+- Split Flutter artifacts into `flutter-android-apk` and `flutter-web`; release now depends on all separate jobs and publishes both artifacts.
+- Added a CI helper test that locks the split job names and artifact names.
+
+Validation:
+- `python3 -m pytest tools/ci/test_*.py` -> PASS (`18/18`).
+- `cd boatlock && pio run -e esp32s3` -> PASS, including recompilation of `BleOtaUpdate.cpp`.
+- `python3` YAML parse for `.github/workflows/ci.yml` -> PASS.
+- `git diff --check` -> PASS.
+
+Self-review:
+- This was a real local/CI parity gap caused by macOS case-insensitive filesystem behavior.
+- CI is now more verbose by design; duplicated setup time is acceptable because failures are easier to identify and build/test jobs can run independently.
+- Remaining proof is the next GitHub Actions run on the new commit.

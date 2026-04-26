@@ -9,7 +9,8 @@ on:
   pull_request:
 
 jobs:
-  firmware:
+  firmware-checks:
+    name: firmware-checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -18,13 +19,13 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          python-version: "3.12"
 
       - name: Install cppcheck
         run: sudo apt-get update && sudo apt-get install -y cppcheck
 
       - name: Install Python tools
-        run: python3 -m pip install platformio pytest
+        run: python3 -m pip install pytest
 
       - name: Run CI helper tests
         run: python3 -m pytest tools/ci/test_*.py
@@ -41,9 +42,36 @@ jobs:
       - name: Firmware static analysis (cppcheck)
         run: bash tools/ci/check_firmware_cppcheck.sh
 
+  firmware-test:
+    name: firmware-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PlatformIO
+        run: python3 -m pip install platformio
+
       - name: Run firmware unit tests
         working-directory: boatlock
         run: pio test -e native
+
+  firmware-sim:
+    name: firmware-sim
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Run anchor simulation tests
         run: |
@@ -51,6 +79,30 @@ jobs:
           python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json
           python3 tools/sim/test_soak.py
           python3 tools/sim/run_soak.py --hours 6 --check --json-out tools/sim/soak_report.json
+
+      - name: Upload simulation reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulation-reports
+          if-no-files-found: error
+          path: |
+            tools/sim/report.json
+            tools/sim/soak_report.json
+
+  firmware-build:
+    name: firmware-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PlatformIO
+        run: python3 -m pip install platformio
 
       - name: Build firmware (esp32s3)
         working-directory: boatlock
@@ -87,26 +139,12 @@ jobs:
           if-no-files-found: error
           path: dist/firmware-esp32s3/*
 
-      - name: Upload simulation reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: simulation-reports
-          if-no-files-found: error
-          path: |
-            tools/sim/report.json
-            tools/sim/soak_report.json
-
-  flutter:
+  flutter-checks:
+    name: flutter-checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -131,9 +169,58 @@ jobs:
         working-directory: boatlock_ui
         run: flutter test
 
+  flutter-build-android:
+    name: flutter-build-android
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.32.4"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        working-directory: boatlock_ui
+        run: flutter pub get
+
       - name: Build Android APK (release)
         working-directory: boatlock_ui
         run: flutter build apk --release
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-android-apk
+          if-no-files-found: error
+          path: boatlock_ui/build/app/outputs/flutter-apk/app-release.apk
+
+  flutter-build-web:
+    name: flutter-build-web
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.32.4"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        working-directory: boatlock_ui
+        run: flutter pub get
 
       - name: Build web
         working-directory: boatlock_ui
@@ -145,20 +232,23 @@ jobs:
           cd build/web
           zip -r ../../web-build.zip .
 
-      - name: Upload Flutter artifacts
+      - name: Upload web build
         uses: actions/upload-artifact@v4
         with:
-          name: flutter-android-web
+          name: flutter-web
           if-no-files-found: error
-          path: |
-            boatlock_ui/build/app/outputs/flutter-apk/app-release.apk
-            boatlock_ui/web-build.zip
+          path: boatlock_ui/web-build.zip
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs:
-      - firmware
-      - flutter
+      - firmware-checks
+      - firmware-test
+      - firmware-sim
+      - firmware-build
+      - flutter-checks
+      - flutter-build-android
+      - flutter-build-web
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -186,4 +276,5 @@ jobs:
           files: |
             artifacts/firmware-esp32s3/*
             artifacts/simulation-reports/*
-            artifacts/flutter-android-web/*
+            artifacts/flutter-android-apk/*
+            artifacts/flutter-web/*
