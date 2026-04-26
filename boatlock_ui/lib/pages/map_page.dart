@@ -13,8 +13,24 @@ import '../widgets/status_panel.dart';
 import 'diagnostics_page.dart';
 import 'settings_page.dart';
 
+typedef MapPageBleFactory =
+    BleBoatLock Function({
+      required BoatDataCallback onData,
+      LogCallback? onLog,
+    });
+
 class MapPage extends StatefulWidget {
-  const MapPage({super.key});
+  const MapPage({
+    super.key,
+    this.bleFactory,
+    this.enableLocation = true,
+    this.loadMapTiles = true,
+  });
+
+  final MapPageBleFactory? bleFactory;
+  final bool enableLocation;
+  final bool loadMapTiles;
+
   @override
   State<MapPage> createState() => _MapPageState();
 }
@@ -171,31 +187,36 @@ class _MapPageState extends State<MapPage> {
   @override
   void initState() {
     super.initState();
-    ble = BleBoatLock(
-      onData: (data) {
-        _e2eProbe?.onData(data);
-        setState(() {
-          boatData = data;
-          if (data != null && data.lat != 0 && data.lon != 0) {
-            final p = LatLng(data.lat, data.lon);
-            _addToHistory(p);
-            if (_autoCenter) {
-              _mapController.move(p, _zoom);
-            }
+    void handleData(BoatData? data) {
+      _e2eProbe?.onData(data);
+      setState(() {
+        boatData = data;
+        if (data != null && data.lat != 0 && data.lon != 0) {
+          final p = LatLng(data.lat, data.lon);
+          _addToHistory(p);
+          if (_autoCenter) {
+            _mapController.move(p, _zoom);
           }
-        });
-      },
-      onLog: (line) {
-        _e2eProbe?.onDeviceLog(line);
-      },
-    );
+        }
+      });
+    }
+
+    void handleLog(String line) {
+      _e2eProbe?.onDeviceLog(line);
+    }
+
+    ble =
+        widget.bleFactory?.call(onData: handleData, onLog: handleLog) ??
+        BleBoatLock(onData: handleData, onLog: handleLog);
     _e2eProbe = BoatLockAppE2eProbe.maybeCreate(ble);
     _bootstrap();
   }
 
   Future<void> _bootstrap() async {
     await ble.connectAndListen();
-    await _initLocation();
+    if (widget.enableLocation) {
+      await _initLocation();
+    }
   }
 
   @override
@@ -332,12 +353,13 @@ class _MapPageState extends State<MapPage> {
               },
             ),
             children: [
-              TileLayer(
-                urlTemplate: _satellite
-                    ? 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-                    : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.boatlock_ui',
-              ),
+              if (widget.loadMapTiles)
+                TileLayer(
+                  urlTemplate: _satellite
+                      ? 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                      : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.example.boatlock_ui',
+                ),
               if (_history.length > 1)
                 PolylineLayer(
                   polylines: [
@@ -417,7 +439,11 @@ class _MapPageState extends State<MapPage> {
             top: 0,
             left: 0,
             right: 0,
-            child: StatusPanel(data: boatData),
+            child: ValueListenableBuilder(
+              valueListenable: ble.diagnostics,
+              builder: (context, diagnostics, child) =>
+                  StatusPanel(data: boatData, diagnostics: diagnostics),
+            ),
           ),
           Positioned(
             top: 80,

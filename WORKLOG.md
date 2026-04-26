@@ -5698,3 +5698,28 @@ Validation:
 
 Self-review:
 - This is not calibrated from real motor current/voltage logs yet and does not model prop ventilation, battery capacity over time, hull windage, or production `RuntimeMotion/MotorControl/StepperControl` coupling.
+
+### 2026-04-26 Stage 187: Readiness panel and MapPage tests
+
+Scope:
+- Add first-class app readiness visibility using current live telemetry and BLE diagnostics.
+- Add focused MapPage widget tests through a small BLE factory seam.
+
+External baseline:
+- Reused the Stage 179 commercial GPS-anchor baseline for visible readiness and explicit blocked reasons.
+- Checked the official Flutter Material widget catalog for compact status/tile composition.
+
+Key outcomes:
+- `StatusPanel` now renders readiness tiles for BLE/GATT, data, auth, GNSS, heading, saved anchor, safety, mode/manual, driver config, and distance/bearing placeholder.
+- `MapPage` passes BLE diagnostics into the status panel and exposes test-only seams for BLE construction, location, and map tiles.
+- Added widget tests covering null telemetry/disconnect, blocked anchor preflight, auth reject feedback, emergency STOP confirmation, and manual `MANUAL OFF` wording.
+- Marked readiness panel and MapPage test TODO items done.
+
+Validation:
+- `cd boatlock_ui && dart format lib/pages/map_page.dart lib/widgets/status_panel.dart test/status_panel_test.dart test/map_page_test.dart` -> PASS.
+- `cd boatlock_ui && flutter analyze` -> PASS, no issues.
+- `cd boatlock_ui && flutter test test/status_panel_test.dart test/map_page_test.dart test/manual_control_sheet_test.dart` -> PASS (`12/12`).
+- `cd boatlock_ui && flutter test` -> PASS (`82/82`).
+
+Self-review:
+- Bearing to anchor, manual lease TTL/source, motor current/health, and real heading freshness timestamp are still telemetry gaps. The panel displays available proxies and placeholders instead of inventing sensor state.

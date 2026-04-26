@@ -1,0 +1,257 @@
+import 'package:boatlock_ui/ble/ble_boatlock.dart';
+import 'package:boatlock_ui/models/boat_data.dart';
+import 'package:boatlock_ui/pages/map_page.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  testWidgets('null telemetry returns map to disconnected state', (
+    tester,
+  ) async {
+    final ble = await _pumpMapPage(tester);
+
+    expect(find.text('Поиск устройства BoatLock…'), findsOneWidget);
+
+    ble.emit(_boatData());
+    await tester.pump();
+
+    expect(find.text('Поиск устройства BoatLock…'), findsNothing);
+
+    ble.emit(null);
+    await tester.pump();
+
+    expect(find.text('Поиск устройства BoatLock…'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Сохранить якорь'));
+    await tester.pump();
+
+    expect(ble.setAnchorCalls, 0);
+  });
+
+  testWidgets('anchor preflight blocks enable when readiness is missing', (
+    tester,
+  ) async {
+    final ble = await _pumpMapPage(tester);
+    ble.emit(
+      _boatData(
+        lat: 0,
+        lon: 0,
+        anchorLat: 0,
+        anchorLon: 0,
+        statusReasons: 'NO_GPS,NO_HEADING',
+        compassQ: 0,
+        gnssQ: 0,
+        stepSpr: 0,
+        stepMaxSpd: 0,
+        stepAccel: 0,
+        secPaired: true,
+        secAuth: false,
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Включить якорь'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Проверка перед якорем'), findsOneWidget);
+    final enableButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Включить'),
+    );
+    expect(enableButton.onPressed, isNull);
+
+    await tester.tap(find.text('Отмена'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(ble.anchorOnCalls, 0);
+    expect(find.textContaining('ANCHOR_ON заблокирован:'), findsOneWidget);
+  });
+
+  testWidgets('anchor command failure shows security reject feedback', (
+    tester,
+  ) async {
+    final ble = await _pumpMapPage(tester);
+    ble
+      ..setAnchorResult = false
+      ..secRejectValue = 'AUTH';
+    ble.emit(_boatData(secReject: 'AUTH'));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Сохранить якорь'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(ble.setAnchorCalls, 1);
+    expect(find.text('SET_ANCHOR отклонена: AUTH'), findsOneWidget);
+  });
+
+  testWidgets('emergency stop confirms before sending STOP', (tester) async {
+    final ble = await _pumpMapPage(tester);
+    ble.emit(_boatData());
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Аварийный STOP'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Остановить якорь и моторы прямо сейчас?'),
+      findsOneWidget,
+    );
+    expect(ble.stopAllCalls, 0);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'STOP'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(ble.stopAllCalls, 1);
+    expect(find.text('STOP отправлен'), findsOneWidget);
+  });
+
+  testWidgets('manual sheet exposes MANUAL OFF instead of emergency STOP', (
+    tester,
+  ) async {
+    final ble = await _pumpMapPage(tester);
+    ble.emit(_boatData(mode: 'MANUAL'));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Ручное управление'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('MANUAL OFF'), findsOneWidget);
+    expect(find.text('STOP'), findsNothing);
+
+    await tester.tap(find.text('MANUAL OFF'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(ble.manualOffCalls, 1);
+    expect(find.text('MANUAL_OFF отправлен'), findsOneWidget);
+  });
+}
+
+Future<FakeBleBoatLock> _pumpMapPage(WidgetTester tester) async {
+  tester.view.physicalSize = const Size(1200, 1000);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
+  late FakeBleBoatLock ble;
+  await tester.pumpWidget(
+    MaterialApp(
+      home: MapPage(
+        bleFactory: ({required onData, onLog}) {
+          ble = FakeBleBoatLock(onData: onData, onLog: onLog);
+          return ble;
+        },
+        enableLocation: false,
+        loadMapTiles: false,
+      ),
+    ),
+  );
+  await tester.pump();
+  return ble;
+}
+
+BoatData _boatData({
+  double lat = 55.751244,
+  double lon = 37.618423,
+  double anchorLat = 55.7513,
+  double anchorLon = 37.6185,
+  String status = 'OK',
+  String statusReasons = '',
+  String mode = 'IDLE',
+  bool secPaired = false,
+  bool secAuth = false,
+  String secReject = 'NONE',
+  int compassQ = 3,
+  int gnssQ = 2,
+  int stepSpr = 4096,
+  double stepMaxSpd = 1000,
+  double stepAccel = 500,
+}) {
+  return BoatData(
+    lat: lat,
+    lon: lon,
+    anchorLat: anchorLat,
+    anchorLon: anchorLon,
+    anchorHeading: 12,
+    distance: 3.5,
+    heading: 42,
+    battery: 87,
+    status: status,
+    statusReasons: statusReasons,
+    mode: mode,
+    rssi: -58,
+    holdHeading: false,
+    stepSpr: stepSpr,
+    stepMaxSpd: stepMaxSpd,
+    stepAccel: stepAccel,
+    headingRaw: 42,
+    compassOffset: 0,
+    compassQ: compassQ,
+    magQ: 3,
+    gyroQ: 3,
+    rvAcc: 2,
+    magNorm: 50,
+    gyroNorm: 0.02,
+    pitch: 1.2,
+    roll: -0.4,
+    secPaired: secPaired,
+    secAuth: secAuth,
+    secPairWindowOpen: false,
+    secReject: secReject,
+    gnssQ: gnssQ,
+  );
+}
+
+class FakeBleBoatLock extends BleBoatLock {
+  FakeBleBoatLock({required super.onData, super.onLog});
+
+  int setAnchorCalls = 0;
+  int anchorOnCalls = 0;
+  int stopAllCalls = 0;
+  int manualOffCalls = 0;
+  bool setAnchorResult = true;
+  bool anchorOnResult = true;
+  bool stopAllResult = true;
+  bool manualOffResult = true;
+  String secRejectValue = 'NONE';
+
+  @override
+  String get secReject => secRejectValue;
+
+  void emit(BoatData? data) => onData(data);
+
+  @override
+  Future<void> connectAndListen() async {}
+
+  @override
+  Future<void> requestSnapshot() async {}
+
+  @override
+  Future<bool> setAnchor() async {
+    setAnchorCalls += 1;
+    return setAnchorResult;
+  }
+
+  @override
+  Future<bool> anchorOn() async {
+    anchorOnCalls += 1;
+    return anchorOnResult;
+  }
+
+  @override
+  Future<bool> stopAll() async {
+    stopAllCalls += 1;
+    return stopAllResult;
+  }
+
+  @override
+  Future<bool> manualOff() async {
+    manualOffCalls += 1;
+    return manualOffResult;
+  }
+
+  @override
+  void dispose() {}
+}
