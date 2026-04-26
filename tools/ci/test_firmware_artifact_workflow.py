@@ -43,11 +43,14 @@ def test_android_build_uses_ci_caches():
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
     gradle_properties = (ROOT / "boatlock_ui/android/gradle.properties").read_text()
 
+    assert "FLUTTER_CI_IMAGE: ghcr.io/${{ github.repository }}/flutter-android-ci:3.32.4-android33-ndk27.0" in workflow
+    assert "image: ${{ env.FLUTTER_CI_IMAGE }}" in workflow
+    assert "username: ${{ github.actor }}" in workflow
+    assert "password: ${{ secrets.GITHUB_TOKEN }}" in workflow
     assert "uses: gradle/actions/setup-gradle@v6" in workflow
-    assert "Cache Android SDK packages" in workflow
-    assert "/usr/local/lib/android/sdk/ndk/27.0.12077973" in workflow
-    assert "/usr/local/lib/android/sdk/platforms/android-33" in workflow
-    assert "/usr/local/lib/android/sdk/cmake/3.22.1" in workflow
+    assert "Cache Android SDK packages" not in workflow
+    assert "uses: actions/setup-java@v5" not in workflow
+    assert "uses: subosito/flutter-action@v2" in workflow
     assert "GRADLE_OPTS: -Dorg.gradle.vfs.watch=false" in workflow
     assert "org.gradle.caching=true" in gradle_properties
     assert "org.gradle.parallel=true" in gradle_properties

@@ -5414,12 +5414,15 @@ Key outcomes:
 - Added `.github/workflows/flutter-ci-image.yml` to publish `ghcr.io/dslimp/boatlock/flutter-android-ci:3.32.4-android33-ndk27.0`, `latest`, and `sha-*` tags.
 - Added CI helper coverage for the image workflow, pinned toolchain values, and GHCR publishing permissions.
 - Added `.dockerignore` so local Flutter/Gradle/PlatformIO build artifacts and `local.properties` are not accidentally sent into the CI image context.
+- After the toolchain-only image was published, switched Linux Flutter check, Android build, and web build jobs to run inside `ghcr.io/dslimp/boatlock/flutter-android-ci:3.32.4-android33-ndk27.0` with `GITHUB_TOKEN` GHCR credentials.
+- Removed `setup-java`, `subosito/flutter-action`, and the Android SDK package cache from those Linux Flutter jobs. The Android job still keeps `gradle/actions/setup-gradle` for project dependencies and build transforms.
 
 Validation:
 - First publisher run failed because the Dockerfile copied local `boatlock_ui/android/gradlew`, which exists on this Mac but is not tracked in git. Fixed the image warmup to use the real Flutter build path instead of the untracked local wrapper.
 - Second publisher run failed because `yes | sdkmanager --licenses` trips `pipefail` with exit `141` after `sdkmanager` closes the pipe. Scoped `pipefail` off only around license acceptance and kept the rest of the Dockerfile strict.
 - Third publisher run exhausted the GitHub-hosted runner disk while building the prewarmed project image. Removed project source copy, debug APK warmup, Buildx GHA layer export, and provenance attestation so the GHCR image is toolchain-only rather than a full project build cache snapshot.
-- Pending: publish the first GHCR image from GitHub Actions, then switch Flutter CI jobs to consume it and compare warm-run durations.
+- Toolchain-only publisher run succeeded in `5:37`.
+- Pending: run CI with the GHCR image consumers and compare warm-run durations.
 
 Self-review:
 - This deliberately lands the image publisher before switching CI consumers, so `main` does not point at a non-existent container image.
