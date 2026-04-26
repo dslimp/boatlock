@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Callable, Dict, List, Optional, Tuple
 import math
 import random
@@ -61,6 +61,11 @@ class SimConfig:
     thrust_ramp_pct_per_s: float = 35.0
     max_turn_rate_dps: float = 180.0
     heading_align_deg: float = 5.0
+    steering_response_dps: float = 180.0
+    steering_backlash_deg: float = 0.0
+    steering_wrong_zero_deg: float = 0.0
+    steering_jam_start_s: float = -1.0
+    steering_jam_duration_s: float = 0.0
     ramp_span_m: float = 12.0
     min_pwm_raw: int = 35
     dist_filter_alpha: float = 0.22
@@ -129,6 +134,7 @@ class StepSample:
     dist_meas_m: float
     bearing_to_anchor_deg: float
     heading_deg: float
+    heading_error_deg: float
     thrust_pct: float
     applied_thrust_pct: float
     gnss_ok: bool
@@ -141,6 +147,8 @@ class StepSample:
     motor_current_limited: bool = False
     motor_thermal_derated: bool = False
     motor_driver_active: bool = False
+    steering_jammed: bool = False
+    steering_backlash_crossing: bool = False
 
 
 @dataclass
@@ -153,6 +161,7 @@ class Scenario:
     comm_ok_fn: Callable[[int], bool] = lambda _t: True
     inject_nan_fn: Callable[[int], bool] = lambda _t: False
     profile: Optional[EnvironmentProfile] = None
+    config_overrides: Dict[str, float] = field(default_factory=dict)
 
 
 def make_gnss_observer(
@@ -411,11 +420,69 @@ class BrushedMotorModel:
         )
 
 
+@dataclass
+class SteeringState:
+    heading_delta_deg: float
+    jammed: bool
+    backlash_crossing: bool
+
+
+class SteeringModel:
+    def __init__(self, cfg: SimConfig) -> None:
+        self.cfg = cfg
+        self.last_command_sign = 0
+        self.backlash_remaining_deg = 0.0
+
+    def update(self, t_s: float, requested_delta_deg: float, dt_s: float) -> SteeringState:
+        dt = max(0.0, dt_s)
+        jam_start = self.cfg.steering_jam_start_s
+        jam_end = jam_start + max(0.0, self.cfg.steering_jam_duration_s)
+        jammed = jam_start >= 0.0 and jam_start <= t_s < jam_end
+        if jammed:
+            return SteeringState(heading_delta_deg=0.0, jammed=True, backlash_crossing=False)
+
+        command = requested_delta_deg if math.isfinite(requested_delta_deg) else 0.0
+        command = clamp(command, -self.cfg.max_turn_rate_dps * dt, self.cfg.max_turn_rate_dps * dt)
+        if abs(command) < 1e-9:
+            return SteeringState(heading_delta_deg=0.0, jammed=False, backlash_crossing=False)
+
+        sign = 1 if command > 0.0 else -1
+        backlash_crossing = (
+            self.cfg.steering_backlash_deg > 0.0
+            and self.last_command_sign != 0
+            and sign != self.last_command_sign
+        )
+        if backlash_crossing:
+            self.backlash_remaining_deg = max(0.0, self.cfg.steering_backlash_deg)
+        self.last_command_sign = sign
+
+        command_mag = abs(command)
+        if self.backlash_remaining_deg > 0.0:
+            lost = min(command_mag, self.backlash_remaining_deg)
+            self.backlash_remaining_deg -= lost
+            command_mag -= lost
+
+        if command_mag <= 0.0:
+            return SteeringState(heading_delta_deg=0.0, jammed=False, backlash_crossing=backlash_crossing)
+
+        biased_command = (sign * command_mag) - self.cfg.steering_wrong_zero_deg
+        max_response = max(0.0, self.cfg.steering_response_dps) * dt
+        achieved = clamp(biased_command, -max_response, max_response)
+        return SteeringState(
+            heading_delta_deg=achieved,
+            jammed=False,
+            backlash_crossing=backlash_crossing,
+        )
+
+
 def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict[str, object]:
+    if scenario.config_overrides:
+        cfg = replace(cfg, **scenario.config_overrides)
     rnd = random.Random(seed)
     gate = GnssGate(cfg)
     ctrl = AnchorController(cfg)
     motor = BrushedMotorModel(cfg)
+    steering = SteeringModel(cfg)
 
     anchor_lat = ANCHOR_LAT
     anchor_lon = ANCHOR_LON
@@ -467,9 +534,15 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
             brg_to_anchor = bearing_deg(-x_m, -y_m)
 
         heading_err = angle_diff_deg(brg_to_anchor, heading)
-        max_turn = cfg.max_turn_rate_dps * cfg.dt_s
-        heading += clamp(heading_err, -max_turn, max_turn)
+        requested_heading_delta = clamp(
+            heading_err,
+            -cfg.max_turn_rate_dps * cfg.dt_s,
+            cfg.max_turn_rate_dps * cfg.dt_s,
+        )
+        steering_state = steering.update(float(t), requested_heading_delta, cfg.dt_s)
+        heading += steering_state.heading_delta_deg
         heading = wrap_deg(heading)
+        heading_err = angle_diff_deg(brg_to_anchor, heading)
 
         allow_thrust = anchor_enabled and gnss_ok and abs(angle_diff_deg(brg_to_anchor, heading)) <= cfg.heading_align_deg
         thrust_pct = ctrl.update(float(t), dist_meas, allow_thrust)
@@ -513,6 +586,7 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
                 dist_meas_m=dist_meas,
                 bearing_to_anchor_deg=brg_to_anchor,
                 heading_deg=heading,
+                heading_error_deg=heading_err,
                 thrust_pct=thrust_pct,
                 applied_thrust_pct=motor_state.applied_thrust_pct,
                 gnss_ok=gnss_ok,
@@ -525,6 +599,8 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
                 motor_current_limited=motor_state.current_limited,
                 motor_thermal_derated=motor_state.thermal_derated,
                 motor_driver_active=motor_state.driver_active,
+                steering_jammed=steering_state.jammed,
+                steering_backlash_crossing=steering_state.backlash_crossing,
             )
         )
 
@@ -542,6 +618,8 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
     sorted_dists = sorted(dists)
     idx95 = int(0.95 * (len(sorted_dists) - 1))
     p95 = sorted_dists[idx95]
+    heading_errors = sorted(abs(s.heading_error_deg) for s in samples)
+    idx95_heading = int(0.95 * (len(heading_errors) - 1)) if heading_errors else 0
     rocking_abs = sorted(abs(s.rocking_roll_deg) for s in samples)
     idx95_rock = int(0.95 * (len(rocking_abs) - 1)) if rocking_abs else 0
     applied = [s.applied_thrust_pct for s in samples]
@@ -551,11 +629,23 @@ def simulate_scenario(cfg: SimConfig, scenario: Scenario, seed: int = 1) -> Dict
     current_limited_hits = sum(1 for s in samples if s.motor_current_limited)
     thermal_derated_hits = sum(1 for s in samples if s.motor_thermal_derated)
     driver_inactive_hits = sum(1 for s in samples if s.thrust_pct > 0.0 and not s.motor_driver_active)
+    steering_jammed_hits = sum(1 for s in samples if s.steering_jammed)
+    backlash_crossings = sum(1 for s in samples if s.steering_backlash_crossing)
+    thrust_misaligned_hits = sum(
+        1
+        for s in samples
+        if s.applied_thrust_pct > 0.5 and abs(s.heading_error_deg) > cfg.heading_align_deg
+    )
 
     metrics = {
         "time_in_deadband_pct": (deadband_hits * 100.0) / max(1, len(samples)),
         "p95_error_m": p95,
         "max_error_m": max(dists) if dists else 0.0,
+        "p95_heading_error_deg": heading_errors[idx95_heading] if heading_errors else 0.0,
+        "max_heading_error_deg": max(heading_errors) if heading_errors else 0.0,
+        "steering_jammed_time_pct": (steering_jammed_hits * 100.0) / max(1, len(samples)),
+        "steering_backlash_crossings_per_min": backlash_crossings * 60.0 / max(1, scenario.duration_s),
+        "thrust_while_misaligned_time_pct": (thrust_misaligned_hits * 100.0) / max(1, len(samples)),
         "control_saturation_time_pct": (sat_hits * 100.0) / max(1, len(samples)),
         "num_thrust_direction_changes_per_min": dir_changes * 60.0 / max(1, scenario.duration_s),
         "invalid_thrust_count": float(invalid_thrust_count),
@@ -614,10 +704,31 @@ def default_scenarios() -> List[Scenario]:
             return 0.09, -0.02
         return 0.025, 0.0
 
+    def accel_wake(t: int) -> Tuple[float, float]:
+        base_x, base_y = 0.022, 0.0
+        wake = 0.0
+        if 35 <= t <= 55 or 115 <= t <= 135 or 195 <= t <= 215:
+            wake = 0.11 * math.sin((t % 20) * math.pi / 10.0)
+        return base_x, base_y + wake
+
     return [
         Scenario("calm_good_gps", 240, (8.0, 0.0), accel_zero, obs_good),
         Scenario("constant_current", 240, (10.0, -4.0), accel_current, obs_good),
         Scenario("gusts", 240, (10.0, 6.0), accel_gusts, obs_good),
+        Scenario(
+            "wake_steering_backlash",
+            260,
+            (11.0, -5.0),
+            accel_wake,
+            obs_good,
+            config_overrides={
+                "steering_response_dps": 55.0,
+                "steering_backlash_deg": 7.0,
+                "steering_wrong_zero_deg": 1.5,
+                "steering_jam_start_s": 150.0,
+                "steering_jam_duration_s": 8.0,
+            },
+        ),
         Scenario("gnss_dropout", 240, (9.0, -3.0), accel_current, obs_dropout),
         Scenario("poor_hdop", 240, (8.0, 4.0), accel_current, obs_hdop_bad),
         Scenario("position_jumps", 240, (11.0, 1.0), accel_current, obs_jump),

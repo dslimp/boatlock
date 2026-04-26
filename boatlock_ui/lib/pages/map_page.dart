@@ -102,6 +102,21 @@ class _MapPageState extends State<MapPage> {
     return ok;
   }
 
+  bool _canNudgeAnchor(LatLng? anchorPos) {
+    final data = boatData;
+    if (data == null) return false;
+    return data.mode == 'ANCHOR' && anchorPos != null;
+  }
+
+  Future<void> _sendAnchorNudge(String direction) async {
+    final command = 'NUDGE_DIR:$direction';
+    await _sendMapCommand(
+      command: command,
+      success: '$command отправлена',
+      send: () => ble.nudgeDir(direction),
+    );
+  }
+
   Future<void> _confirmAndEnableAnchor() async {
     final data = boatData;
     if (data == null) return;
@@ -277,6 +292,7 @@ class _MapPageState extends State<MapPage> {
     final boatDirectionDeg = anchorPos != null
         ? boatData?.anchorHeading ?? 0
         : boatData?.heading ?? 0;
+    final canNudgeAnchor = _canNudgeAnchor(anchorPos);
 
     return Scaffold(
       appBar: AppBar(
@@ -548,6 +564,12 @@ class _MapPageState extends State<MapPage> {
                 ),
               ),
             ),
+          if (canNudgeAnchor)
+            Positioned(
+              left: 12,
+              bottom: 96,
+              child: _AnchorNudgePad(onNudge: _sendAnchorNudge),
+            ),
         ],
       ),
       floatingActionButton: Wrap(
@@ -605,6 +627,87 @@ class _MapPageState extends State<MapPage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AnchorNudgePad extends StatelessWidget {
+  const _AnchorNudgePad({required this.onNudge});
+
+  final Future<void> Function(String direction) onNudge;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
+      elevation: 2,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.all(6),
+        child: SizedBox(
+          width: 128,
+          height: 128,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Positioned(
+                top: 0,
+                child: _AnchorNudgeButton(
+                  tooltip: 'Сдвинуть якорь вперед',
+                  icon: Icons.keyboard_arrow_up,
+                  onPressed: () => onNudge('FWD'),
+                ),
+              ),
+              Positioned(
+                bottom: 0,
+                child: _AnchorNudgeButton(
+                  tooltip: 'Сдвинуть якорь назад',
+                  icon: Icons.keyboard_arrow_down,
+                  onPressed: () => onNudge('BACK'),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                child: _AnchorNudgeButton(
+                  tooltip: 'Сдвинуть якорь влево',
+                  icon: Icons.keyboard_arrow_left,
+                  onPressed: () => onNudge('LEFT'),
+                ),
+              ),
+              Positioned(
+                right: 0,
+                child: _AnchorNudgeButton(
+                  tooltip: 'Сдвинуть якорь вправо',
+                  icon: Icons.keyboard_arrow_right,
+                  onPressed: () => onNudge('RIGHT'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnchorNudgeButton extends StatelessWidget {
+  const _AnchorNudgeButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton.filledTonal(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      icon: Icon(icon),
+      iconSize: 28,
     );
   }
 }

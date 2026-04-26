@@ -85,6 +85,52 @@ void main() {
     expect(find.text('SET_ANCHOR отклонена: AUTH'), findsOneWidget);
   });
 
+  testWidgets('anchor nudge sends firmware cardinal command', (tester) async {
+    final ble = await _pumpMapPage(tester);
+    ble.emit(_boatData(mode: 'ANCHOR'));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Сдвинуть якорь влево'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(ble.nudgeDirs, ['LEFT']);
+    expect(find.text('NUDGE_DIR:LEFT отправлена'), findsOneWidget);
+  });
+
+  testWidgets('anchor nudge is hidden until active anchor context exists', (
+    tester,
+  ) async {
+    final ble = await _pumpMapPage(tester);
+    ble.emit(_boatData(mode: 'ANCHOR', anchorLat: 0, anchorLon: 0));
+    await tester.pump();
+
+    expect(find.byTooltip('Сдвинуть якорь вперед'), findsNothing);
+
+    ble.emit(_boatData());
+    await tester.pump();
+
+    expect(find.byTooltip('Сдвинуть якорь вперед'), findsNothing);
+  });
+
+  testWidgets('anchor nudge failure shows security reject feedback', (
+    tester,
+  ) async {
+    final ble = await _pumpMapPage(tester);
+    ble
+      ..nudgeDirResult = false
+      ..secRejectValue = 'AUTH';
+    ble.emit(_boatData(mode: 'ANCHOR', secReject: 'AUTH'));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Сдвинуть якорь вперед'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(ble.nudgeDirs, ['FWD']);
+    expect(find.text('NUDGE_DIR:FWD отклонена: AUTH'), findsOneWidget);
+  });
+
   testWidgets('emergency stop confirms before sending STOP', (tester) async {
     final ble = await _pumpMapPage(tester);
     ble.emit(_boatData());
@@ -211,10 +257,12 @@ class FakeBleBoatLock extends BleBoatLock {
   int anchorOnCalls = 0;
   int stopAllCalls = 0;
   int manualOffCalls = 0;
+  final List<String> nudgeDirs = [];
   bool setAnchorResult = true;
   bool anchorOnResult = true;
   bool stopAllResult = true;
   bool manualOffResult = true;
+  bool nudgeDirResult = true;
   String secRejectValue = 'NONE';
 
   @override
@@ -250,6 +298,12 @@ class FakeBleBoatLock extends BleBoatLock {
   Future<bool> manualOff() async {
     manualOffCalls += 1;
     return manualOffResult;
+  }
+
+  @override
+  Future<bool> nudgeDir(String direction) async {
+    nudgeDirs.add(direction);
+    return nudgeDirResult;
   }
 
   @override

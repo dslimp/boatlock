@@ -25,6 +25,13 @@ DEFAULT_THRESHOLDS: Dict[str, Dict[str, object]] = {
         "p95_error_m_max": 24.0,
         "max_error_m_max": 45.0,
     },
+    "wake_steering_backlash": {
+        "p95_error_m_max": 32.0,
+        "max_error_m_max": 65.0,
+        "p95_heading_error_deg_max": 45.0,
+        "steering_jammed_time_pct_min": 2.5,
+        "steering_backlash_crossings_per_min_min": 1.0,
+    },
     "gnss_dropout": {
         "p95_error_m_max": 28.0,
         "max_error_m_max": 50.0,
@@ -81,6 +88,9 @@ def check_thresholds(scenario_name: str, metrics: Dict[str, object]) -> List[str
     max_p95 = limits.get("p95_error_m_max")
     max_max = limits.get("max_error_m_max")
     min_rocking = limits.get("p95_rocking_roll_deg_min")
+    max_p95_heading = limits.get("p95_heading_error_deg_max")
+    min_jammed = limits.get("steering_jammed_time_pct_min")
+    min_backlash_crossings = limits.get("steering_backlash_crossings_per_min_min")
     required_failsafe = limits.get("required_failsafe_reason")
     if isinstance(min_dead, float) and metrics["time_in_deadband_pct"] < min_dead:
         errs.append(
@@ -93,6 +103,22 @@ def check_thresholds(scenario_name: str, metrics: Dict[str, object]) -> List[str
     if isinstance(min_rocking, float) and metrics["p95_rocking_roll_deg"] < min_rocking:
         errs.append(
             f"p95_rocking_roll_deg={metrics['p95_rocking_roll_deg']:.2f} < {min_rocking:.2f}"
+        )
+    if isinstance(max_p95_heading, float) and metrics["p95_heading_error_deg"] > max_p95_heading:
+        errs.append(
+            f"p95_heading_error_deg={metrics['p95_heading_error_deg']:.2f} > {max_p95_heading:.2f}"
+        )
+    if isinstance(min_jammed, float) and metrics["steering_jammed_time_pct"] < min_jammed:
+        errs.append(
+            f"steering_jammed_time_pct={metrics['steering_jammed_time_pct']:.2f} < {min_jammed:.2f}"
+        )
+    if (
+        isinstance(min_backlash_crossings, float)
+        and metrics["steering_backlash_crossings_per_min"] < min_backlash_crossings
+    ):
+        errs.append(
+            "steering_backlash_crossings_per_min="
+            f"{metrics['steering_backlash_crossings_per_min']:.2f} < {min_backlash_crossings:.2f}"
         )
     if isinstance(required_failsafe, str):
         events = metrics.get("events", [])
@@ -128,8 +154,11 @@ def main() -> int:
     failed = False
 
     print("Scenario summary:")
-    print("name | deadband% | p95(m) | max(m) | sat% | dirChanges/min | rock95(deg) | status")
-    print("-" * 110)
+    print(
+        "name | deadband% | p95(m) | max(m) | head95(deg) | jam% | "
+        "backlash/min | misalignThrust% | sat% | dirChanges/min | rock95(deg) | status"
+    )
+    print("-" * 160)
     for i, sc in enumerate(scenarios_for_set(args.scenario_set)):
         r = simulate_scenario(cfg, sc, seed=args.seed + i)
         m = r["metrics"]
@@ -151,6 +180,10 @@ def main() -> int:
             f"{m['time_in_deadband_pct']:.2f} | "
             f"{m['p95_error_m']:.2f} | "
             f"{m['max_error_m']:.2f} | "
+            f"{m['p95_heading_error_deg']:.2f} | "
+            f"{m['steering_jammed_time_pct']:.2f} | "
+            f"{m['steering_backlash_crossings_per_min']:.2f} | "
+            f"{m['thrust_while_misaligned_time_pct']:.2f} | "
             f"{m['control_saturation_time_pct']:.2f} | "
             f"{m['num_thrust_direction_changes_per_min']:.2f} | "
             f"{m['p95_rocking_roll_deg']:.2f} | "

@@ -10,9 +10,11 @@ from anchor_sim import (
     GnssGate,
     GnssObservation,
     SimConfig,
+    SteeringModel,
     clamp,
     environment_accel_mps2,
     russian_water_scenarios,
+    scenarios_for_set,
     simulate_scenario,
     wave_rocking_roll_deg,
 )
@@ -109,6 +111,40 @@ class SimCoreTests(unittest.TestCase):
         self.assertTrue(any(s.thermal_derated for s in states))
         self.assertLess(states[-1].applied_thrust_pct, states[1].applied_thrust_pct)
 
+    def test_steering_response_limits_heading_delta(self) -> None:
+        cfg = SimConfig(steering_response_dps=12.0, max_turn_rate_dps=90.0)
+        steering = SteeringModel(cfg)
+        state = steering.update(0.0, 90.0, 1.0)
+        self.assertEqual(state.heading_delta_deg, 12.0)
+        self.assertFalse(state.jammed)
+
+    def test_steering_backlash_consumes_reversal(self) -> None:
+        cfg = SimConfig(steering_response_dps=90.0, steering_backlash_deg=8.0)
+        steering = SteeringModel(cfg)
+        first = steering.update(0.0, 20.0, 1.0)
+        second = steering.update(1.0, -6.0, 1.0)
+        third = steering.update(2.0, -10.0, 1.0)
+        self.assertEqual(first.heading_delta_deg, 20.0)
+        self.assertTrue(second.backlash_crossing)
+        self.assertEqual(second.heading_delta_deg, 0.0)
+        self.assertEqual(third.heading_delta_deg, -8.0)
+
+    def test_steering_jam_blocks_heading_delta(self) -> None:
+        cfg = SimConfig(steering_jam_start_s=5.0, steering_jam_duration_s=2.0)
+        steering = SteeringModel(cfg)
+        jammed = steering.update(5.0, 30.0, 1.0)
+        recovered = steering.update(7.0, 30.0, 1.0)
+        self.assertTrue(jammed.jammed)
+        self.assertEqual(jammed.heading_delta_deg, 0.0)
+        self.assertFalse(recovered.jammed)
+        self.assertGreater(recovered.heading_delta_deg, 0.0)
+
+    def test_steering_wrong_zero_biases_achieved_delta(self) -> None:
+        cfg = SimConfig(steering_response_dps=90.0, steering_wrong_zero_deg=2.0)
+        steering = SteeringModel(cfg)
+        state = steering.update(0.0, 10.0, 1.0)
+        self.assertEqual(state.heading_delta_deg, 8.0)
+
     def test_simulation_reports_motor_metrics(self) -> None:
         cfg = SimConfig()
         scenario = next(s for s in russian_water_scenarios() if s.name == "river_oka_normal_55lb")
@@ -118,6 +154,21 @@ class SimCoreTests(unittest.TestCase):
         self.assertGreater(metrics["max_motor_current_a"], 0.0)
         self.assertLess(metrics["min_battery_voltage_v"], cfg.motor_nominal_voltage_v)
         self.assertEqual(metrics["invalid_motor_count"], 0.0)
+
+    def test_simulation_reports_steering_metrics(self) -> None:
+        cfg = SimConfig()
+        scenario = next(s for s in scenarios_for_set("core") if s.name == "wake_steering_backlash")
+        result = simulate_scenario(cfg, scenario, seed=5)
+        metrics = result["metrics"]
+        self.assertIn("p95_heading_error_deg", metrics)
+        self.assertGreater(metrics["max_heading_error_deg"], 0.0)
+        self.assertGreater(metrics["steering_jammed_time_pct"], 0.0)
+        self.assertGreater(metrics["steering_backlash_crossings_per_min"], 0.0)
+        self.assertIn("thrust_while_misaligned_time_pct", metrics)
+
+    def test_wake_steering_backlash_is_offline_scenario(self) -> None:
+        names = {s.name for s in scenarios_for_set("core")}
+        self.assertIn("wake_steering_backlash", names)
 
 
 if __name__ == "__main__":

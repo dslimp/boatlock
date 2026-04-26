@@ -123,7 +123,8 @@ Important mismatch:
   current mode, failsafe latch, manual lease state, and motor/stepper configured.
 - Add user-visible anchor controls expected from commercial systems:
   current-position save, map-point save, enable/disable, fixed 1.5 m jog controls,
-  distance/bearing to anchor, and clear blocked reasons.
+  distance/bearing to anchor, and clear blocked reasons. Fixed jog controls are
+  now present in the app; distance/bearing-to-anchor telemetry is still pending.
 - Add conservative anchor profiles for water trials: `quiet`, `normal`, `current`,
   with `quiet` as the default for first powered tests.
 - Add track/history around anchor events so drift, correction, and failsafe exits
@@ -165,11 +166,11 @@ Next simulation work:
 - Add waves/rocking: significant wave height, peak wave, period, direction,
   roll/pitch/heave perturbations, and their effect on BNO08x/GNSS samples.
 - Add river/reservoir wake events and short steep chop.
-- Add brushed motor dynamics: voltage, max current, battery sag, current limit,
-  thermal derate, deadband/stiction, reverse asymmetry, prop/weed load.
-- Add steering mechanics: gear ratio, backlash, current/torque limit, jam/stall,
-  wrong bow-zero, and delayed response.
-- Add candidate scenarios from Russian water-body research:
+- Extend the initial brushed motor dynamics with reverse asymmetry, prop/weed
+  load, and calibration from real current/voltage logs.
+- Extend the initial steering mechanics beyond backlash, jam windows, wrong
+  bow-zero, and response delay with gear ratio and current/torque limits.
+- Calibrate the Russian water-body scenarios now present in the simulator:
   `river_oka_normal_55lb`, `volga_spring_flow_80lb`,
   `rybinsk_fetch_55lb`, `ladoga_storm_abort`, `baltic_gulf_drift`.
 - Add a production-path actuator simulation or native tests around

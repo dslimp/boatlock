@@ -31,6 +31,7 @@ Use this file for:
 - ArduPilot Using SITL: <https://ardupilot.org/dev/docs/using-sitl-for-ardupilot-testing.html>
 - ArduPilot Simulation on Hardware: <https://ardupilot.org/dev/docs/sim-on-hardware.html>
 - PX4 Simulation: <https://docs.px4.io/main/en/simulation/>
+- NASA BACT Simulation User Guide: <https://ntrs.nasa.gov/api/citations/19990004130/downloads/19990004130.pdf>
 - Signal K Anchor Alarm guide: <https://demo.signalk.org/documentation/Guides/Anchor_Alarm.html>
 - Signal K notifications spec: <https://signalk.org/specification/1.7.0/doc/notifications.html>
 - Signal K local/remote alerts: <https://signalk.org/2025/signalk-local-remote-alerts/>
@@ -277,6 +278,7 @@ Implication for BoatLock:
 - HIL simulated sensors should be isolated from scenario orchestration and should keep invalid samples fail-closed, including stale/invalid age fields during rate-limited returns.
 - HIL status/report JSON builders should use the shared JSON string encoder and avoid fixed buffers for variable-length string fields.
 - On real hardware, simulation acceptance must keep dangerous actuator movement disabled or explicitly zero-throttle unless a powered bench procedure is defined.
+- Offline actuator models should expose response limits, static bias, backlash, and fault windows as explicit scenario/config inputs so tests can separate controller intent from achieved motion.
 
 ## What ESP32 Storage Guidance Gets Right
 

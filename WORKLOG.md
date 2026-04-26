@@ -5723,3 +5723,71 @@ Validation:
 
 Self-review:
 - Bearing to anchor, manual lease TTL/source, motor current/health, and real heading freshness timestamp are still telemetry gaps. The panel displays available proxies and placeholders instead of inventing sensor state.
+
+### 2026-04-26 Stage 188: Firmware command-gate integration decision
+
+Scope:
+- Review the candidate firmware-side release/service/dev/HIL BLE command gate before integrating it into `main`.
+- Keep `main` releasable for BLE OTA and `SIM_*` acceptance.
+
+External baseline:
+- Reused the command-surface and HIL guidance already captured in `skills/boatlock/references/external-patterns.md`: non-release command surfaces should be explicit and narrow, while simulation and acceptance paths must remain deterministic validation infrastructure.
+
+Key outcomes:
+- Did not integrate the firmware gate as-is because default `esp32s3` would reject `OTA_BEGIN`/`OTA_FINISH`/`OTA_ABORT` and `SIM_*` without any matching PlatformIO profile or nh02 wrapper prerequisite.
+- Saved the reviewed candidate patch outside the repo at `/tmp/boatlock-firmware-command-gate.patch` for follow-up.
+- Reworded the active TODO into the real next step: add the firmware gate only with explicit release/service/acceptance build profiles and wrapper/docs alignment.
+
+Validation:
+- `git diff --check` -> PASS after removing the unsafe candidate diff from the worktree.
+
+Self-review:
+- The firmware gate direction is still valid, but landing it without build-profile and wrapper changes would silently break app OTA and HIL smoke paths, which is worse than leaving the current app-side gate as the only product-surface boundary for now.
+
+### 2026-04-26 Stage 189: Anchor jog controls in app
+
+Scope:
+- Expose the existing firmware `NUDGE_DIR` 1.5 m anchor jog path in the normal app UI.
+- Keep jog available only while anchor mode is active and a valid anchor point exists.
+
+External baseline:
+- Reused the commercial GPS-anchor baseline: Minn Kota, Garmin Force, and MotorGuide Pinpoint all expose small directional jog from anchor lock rather than making the user reset the anchor point.
+
+Key outcomes:
+- Added a compact four-direction nudge pad on `MapPage` with forward/back/left/right controls.
+- Changed `BleBoatLock.nudgeDir()` to return write success so map actions can show the same auth/command failure feedback as anchor actions.
+- Added MapPage widget tests for sending a cardinal nudge, hidden inactive state, and security reject feedback.
+- Marked the anchor-jog TODO item done.
+
+Validation:
+- `cd boatlock_ui && dart format lib/ble/ble_boatlock.dart lib/pages/map_page.dart test/map_page_test.dart` -> PASS.
+- `cd boatlock_ui && flutter analyze` -> PASS, no issues.
+- `cd boatlock_ui && flutter test` -> PASS (`85/85`).
+
+Self-review:
+- This is a UI surface for an existing release command, not a new firmware actuation path. Distance/bearing-to-anchor still needs proper live telemetry instead of UI inference.
+
+### 2026-04-26 Stage 190: Steering mechanics in offline simulation
+
+Scope:
+- Extend only the offline simulator with steering response, backlash, wrong bow-zero, and jam-window behavior.
+- Keep firmware BLE/HIL command surfaces untouched.
+
+External baseline:
+- Used the already recorded autopilot simulation baseline and NASA BACT-style actuator modeling guidance: actuator response limits, bias, and faults should be explicit model inputs rather than hidden controller behavior.
+
+Key outcomes:
+- Added `SteeringModel` and steering config fields for response rate, backlash, wrong-zero offset, and jam window.
+- Added steering metrics: p95/max heading error, jammed time, backlash crossings per minute, and thrust while misaligned.
+- Added `wake_steering_backlash` to offline scenarios and checks.
+- Updated simulator README, run summary columns, and focused sim tests.
+- Marked the steering backlash/jam/wrong-zero simulation TODO item done.
+
+Validation:
+- `python3 tools/sim/test_sim_core.py` -> PASS (`17/17`).
+- `python3 tools/sim/run_sim.py --scenario-set all --check --json-out /tmp/boatlock-steering-report.json` -> PASS.
+- `python3 tools/sim/test_soak.py` -> PASS (`2/2`).
+- `python3 tools/sim/run_soak.py --hours 6 --check --json-out /tmp/boatlock-steering-soak-report.json` -> PASS, no violations.
+
+Self-review:
+- This is still an offline model, not proof of the production `RuntimeMotion -> StepperControl -> MotorControl` path. Real steering driver identity, gear ratio, torque/current limits, end stops, and jam detection remain hardware-dependent blockers.

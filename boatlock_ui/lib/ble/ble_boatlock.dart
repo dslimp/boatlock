@@ -569,11 +569,11 @@ class BleBoatLock with WidgetsBindingObserver {
     return _writeCommand('STOP');
   }
 
-  Future<void> nudgeDir(String direction) async {
-    if (_cmdChar == null) return;
+  Future<bool> nudgeDir(String direction) async {
+    if (_cmdChar == null) return false;
     final cmd = buildNudgeDirCommand(direction);
-    if (cmd == null) return;
-    await _writeCommand(cmd);
+    if (cmd == null) return false;
+    return _writeCommand(cmd);
   }
 
   Future<void> nudgeBearing(double bearingDeg) async {

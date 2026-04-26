@@ -13,7 +13,7 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 - [x] Fix manual sheet wording: red `STOP` must either send real emergency `STOP` or be renamed to manual off.
 - [x] Verify/fix that phone GPS fallback cannot update GPS-to-compass correction used by control heading.
 - [x] Classify BLE commands into release/service/dev surfaces and gate service/dev paths from normal water UI.
-- [ ] Decide whether service/dev/HIL commands also need a firmware-side gate beyond pairing/auth before untrusted BLE clients are in scope.
+- [ ] Add a firmware-side service/dev/HIL gate only together with explicit release/service/acceptance PlatformIO profiles and nh02 wrapper docs so BLE OTA and `SIM_*` acceptance are not silently broken.
 - [ ] Identify the exact steering stepper driver/mechanics and update firmware/docs if it is not the current 28BYJ-48 + ULN2003 path.
 - [x] Build a no-load motor output acceptance checklist for `PWM=7`, `DIR=5/10`, boot, STOP, HOLD, reconnect, anchor denial, SIM, and OTA begin.
 - [x] Add powered-bench wiring requirements: current-limited supply, fuse/breaker, physical kill path, polarity proof, strain relief, and thermal check.
@@ -22,7 +22,7 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 ## P1 — Before First Protected-Water Test
 
 - [x] Add a first-class readiness panel in the app with link age, GNSS/heading freshness, auth, anchor gate, failsafe, manual lease, and motor readiness.
-- [ ] Add fixed 1.5 m anchor jog controls to the normal app UI.
+- [x] Add fixed 1.5 m anchor jog controls to the normal app UI.
 - [ ] Show distance and bearing to anchor as primary telemetry.
 - [ ] Add battery/power/current visibility or a required external measurement step in water-test logs.
 - [ ] Add track/history around anchor events for post-run review.
@@ -35,7 +35,7 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 - [ ] Normalize `tools/sim/research/environment_inputs.*` into simulator scenario data.
 - [ ] Add windage, waves/rocking, wakes, and current direction changes to simulation.
 - [x] Add brushed motor, battery sag/current limit, thermal derate, and driver deadband to simulation.
-- [ ] Add steering backlash/jam/wrong-zero scenarios.
+- [x] Add steering backlash/jam/wrong-zero scenarios.
 - [x] Add RF/Russian water-body scenarios: Oka normal, Volga spring flow, Rybinsk fetch, Ladoga storm abort, Baltic/Gulf drift.
 - [ ] Add production-path tests or simulation around `RuntimeMotion/MotorControl/StepperControl`.
 - [ ] Add heading-hold as a separate operator flow after safe anchor hold is proven.
