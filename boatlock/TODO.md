@@ -7,7 +7,7 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 
 - [x] Clear stale app telemetry on BLE disconnect and disable map controls from stale `boatData`.
 - [x] Split app anchor flow into explicit save-anchor and enable-anchor actions.
-- [ ] Add anchor enable preflight checklist: link, auth, saved anchor, hardware GNSS, fresh heading, safety latch, motor readiness, STOP.
+- [x] Add anchor enable preflight checklist: link, auth, saved anchor, hardware GNSS, fresh heading, safety latch, motor readiness, STOP.
 - [x] Add a normal `ANCHOR_OFF` UI action separate from emergency STOP.
 - [x] Surface command/auth failures from map anchor actions.
 - [x] Fix manual sheet wording: red `STOP` must either send real emergency `STOP` or be renamed to manual off.

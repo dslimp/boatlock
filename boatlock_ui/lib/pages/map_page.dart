@@ -6,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import '../ble/ble_boatlock.dart';
 import '../e2e/app_e2e_probe.dart';
+import '../models/anchor_preflight.dart';
 import '../models/boat_data.dart';
 import '../widgets/manual_control_sheet.dart';
 import '../widgets/status_panel.dart';
@@ -83,6 +84,59 @@ class _MapPageState extends State<MapPage> {
     if (!mounted) return ok;
     _showCommandSnack(ok ? success : _commandFailedText(command));
     return ok;
+  }
+
+  Future<void> _confirmAndEnableAnchor() async {
+    final data = boatData;
+    if (data == null) return;
+    final preflight = buildAnchorPreflight(data);
+    final enable = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Проверка перед якорем'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final item in preflight.items)
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    item.passed ? Icons.check_circle : Icons.error,
+                    color: item.passed ? Colors.green : Colors.red,
+                  ),
+                  title: Text(item.label),
+                  subtitle: Text(item.detail),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: preflight.canEnable
+                ? () => Navigator.of(ctx).pop(true)
+                : null,
+            child: const Text('Включить'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (enable == true) {
+      await _sendMapCommand(
+        command: 'ANCHOR_ON',
+        success: 'Якорь включен',
+        send: ble.anchorOn,
+      );
+    } else if (!preflight.canEnable) {
+      _showCommandSnack('ANCHOR_ON заблокирован: ${preflight.blockedSummary}');
+    }
   }
 
   void _centerOnCurrent() {
@@ -505,13 +559,7 @@ class _MapPageState extends State<MapPage> {
           FloatingActionButton(
             heroTag: 'anchor_on',
             tooltip: "Включить якорь",
-            onPressed: boatData == null
-                ? null
-                : () => _sendMapCommand(
-                    command: 'ANCHOR_ON',
-                    success: 'Якорь включен',
-                    send: ble.anchorOn,
-                  ),
+            onPressed: boatData == null ? null : _confirmAndEnableAnchor,
             backgroundColor: boatData == null ? Colors.grey : Colors.green,
             child: const Icon(Icons.play_arrow),
           ),

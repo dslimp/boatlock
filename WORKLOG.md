@@ -5570,3 +5570,27 @@ Validation:
 Self-review:
 - This change deliberately leaves phone GPS as a visible fix source for telemetry/UI while keeping `controlGpsAvailable()` and corrected control heading hardware-only.
 - No Flutter, anchor UI, BLE command surface, or hardware pinout files were touched.
+
+### 2026-04-26 Stage 183: Anchor enable preflight
+
+Scope:
+- Add a minimal app-side preflight gate before the user can send `ANCHOR_ON`.
+- Keep firmware gating unchanged and test the visible readiness logic as a pure Flutter helper.
+
+External baseline:
+- Reused the Stage 179 commercial GPS-anchor baseline: anchor lock should be an explicit mode transition with visible readiness, not a blind command.
+- `docs/BLE_PROTOCOL.md` remains the local contract: `ANCHOR_ON` is allowed only after a saved anchor, onboard heading, and GNSS gate pass.
+
+Key outcomes:
+- Added `buildAnchorPreflight()` to evaluate BLE link, auth, saved anchor, GNSS gate, heading, safety latch/failsafe, stepper config, and STOP reachability from current telemetry.
+- `MapPage` now shows a checklist dialog before `ANCHOR_ON` and disables the enable button when any visible prerequisite fails.
+- Updated the active TODO checklist for the preflight item.
+
+Validation:
+- `cd boatlock_ui && dart format lib/models/anchor_preflight.dart lib/pages/map_page.dart test/anchor_preflight_test.dart` -> PASS.
+- `cd boatlock_ui && flutter test test/anchor_preflight_test.dart` -> PASS (`4/4`).
+- `cd boatlock_ui && flutter analyze && flutter test` -> PASS, no analyzer issues, tests `71/71`.
+
+Self-review:
+- Motor readiness is still bounded by available telemetry; the app can only check stepper config fields today, while firmware remains the final authority for actuation gates.
+- A full readiness panel with link age, hardware GPS source, current/power, and richer blocked reasons remains a separate P1/P0 follow-up before powered bench.
