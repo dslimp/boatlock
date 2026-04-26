@@ -272,6 +272,46 @@ void test_phone_fallback_does_not_seed_hardware_accel() {
   TEST_ASSERT_FALSE(gnss.currentAccelValid());
 }
 
+void test_hardware_fix_updates_heading_correction() {
+  Settings settings;
+  settings.reset();
+  settings.set("GpsFWin", 1.0f);
+  settings.set("MaxPosJumpM", 100.0f);
+
+  RuntimeGnss gnss;
+  RuntimeGnss::HardwareFixInput fix;
+  fix.lat = 59.9386f;
+  fix.lon = 30.3141f;
+  fix.speedKmh = 10.0f;
+  fix.satellites = 10;
+  fix.hdop = 1.0f;
+  fix.ageMs = 100;
+  TEST_ASSERT_EQUAL((int)RuntimeGnss::ApplyResult::APPLIED,
+                    (int)gnss.applyHardwareFix(fix, settings, true, 45.0f, 1000));
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, gnss.headingCorrectionDeg(1000));
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 45.0f, gnss.currentHeadingValue(true, 45.0f, 1000));
+
+  fix.lat = 59.9388f;
+  TEST_ASSERT_EQUAL((int)RuntimeGnss::ApplyResult::APPLIED,
+                    (int)gnss.applyHardwareFix(fix, settings, true, 45.0f, 2000));
+  TEST_ASSERT_FLOAT_WITHIN(2.0f, -45.0f, gnss.headingCorrectionDeg(2000));
+  TEST_ASSERT_FLOAT_WITHIN(2.0f, 0.0f, gnss.currentHeadingValue(true, 45.0f, 2000));
+}
+
+void test_phone_fallback_does_not_update_heading_correction() {
+  RuntimeGnss gnss;
+
+  gnss.setPhoneFix(59.9386f, 30.3141f, 10.0f, 10, 1000);
+  TEST_ASSERT_TRUE(gnss.applyPhoneFallback(true, 45.0f, 1000));
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, gnss.headingCorrectionDeg(1000));
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 45.0f, gnss.currentHeadingValue(true, 45.0f, 1000));
+
+  gnss.setPhoneFix(59.9388f, 30.3141f, 10.0f, 10, 2000);
+  TEST_ASSERT_TRUE(gnss.applyPhoneFallback(true, 45.0f, 2000));
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, gnss.headingCorrectionDeg(2000));
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 45.0f, gnss.currentHeadingValue(true, 45.0f, 2000));
+}
+
 void test_hardware_reacquires_after_clear_fix_without_jump_lockout() {
   Settings settings;
   settings.reset();
@@ -315,6 +355,8 @@ int main() {
   RUN_TEST(test_phone_fallback_quality_sample_does_not_reuse_hardware_metrics);
   RUN_TEST(test_hardware_accel_uses_zero_timestamp_sample);
   RUN_TEST(test_phone_fallback_does_not_seed_hardware_accel);
+  RUN_TEST(test_hardware_fix_updates_heading_correction);
+  RUN_TEST(test_phone_fallback_does_not_update_heading_correction);
   RUN_TEST(test_hardware_reacquires_after_clear_fix_without_jump_lockout);
   RUN_TEST(test_angle_normalization_uses_bounded_math);
   return UNITY_END();

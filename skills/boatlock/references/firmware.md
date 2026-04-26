@@ -112,6 +112,7 @@
 ## GPS-To-Compass Correction
 
 - Purpose: correct constant yaw bias using movement-derived GPS course.
+- Only hardware GPS samples may seed or update this correction. Phone GPS fallback is telemetry/display only and must not influence corrected control heading.
 - Active only when:
   - compass is ready
   - speed is `>= 3.0 km/h`

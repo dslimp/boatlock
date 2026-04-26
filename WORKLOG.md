@@ -5521,3 +5521,24 @@ Self-review:
 - This cut does not add the full anchor preflight panel yet; `ANCHOR_ON` is still available as an explicit user action and remains firmware-gated.
 - `MapPage` still needs widget coverage with an injectable BLE facade before the stale-disconnect and command-failure UI can be tested directly.
 - Hardware and Android BLE smokes were not run for this UI-only cut; they should run before any powered bench session.
+
+### 2026-04-26 Stage 181: Phone GPS yaw-correction isolation
+
+Scope:
+- Verify and fix the P0 invariant that `SET_PHONE_GPS` fallback is telemetry/display only.
+- Own only `RuntimeGnss` yaw-correction behavior plus focused tests/reference notes.
+
+External baseline:
+- No new external source was needed for this cut: the required baseline is the repo invariant that control GNSS and GPS-to-compass correction must be hardware-only.
+
+Key outcomes:
+- `RuntimeGnss::applyPhoneFallback()` no longer seeds or updates GPS-to-compass yaw correction, even when called with fresh compass data and moving phone GPS samples.
+- Added focused native coverage proving hardware GPS still updates yaw correction while phone fallback does not.
+- Updated the firmware reference to make the hardware-only yaw-correction source explicit.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_runtime_gnss` -> PASS (`15/15`).
+
+Self-review:
+- This change deliberately leaves phone GPS as a visible fix source for telemetry/UI while keeping `controlGpsAvailable()` and corrected control heading hardware-only.
+- No Flutter, anchor UI, BLE command surface, or hardware pinout files were touched.

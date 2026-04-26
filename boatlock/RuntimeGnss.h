@@ -178,6 +178,8 @@ public:
   bool applyPhoneFallback(bool compassReady,
                           float compassHeadingDeg,
                           unsigned long nowMs) {
+    (void)compassReady;
+    (void)compassHeadingDeg;
     if (!phoneGpsValid_ || nowMs - phoneGpsUpdatedMs_ > kPhoneGpsTimeoutMs) {
       return false;
     }
@@ -198,8 +200,6 @@ public:
     pendingJumpValid_ = false;
     gpsSourcePhone_ = true;
     gpsFix_ = true;
-    maybeUpdateHeadingCorrection(
-        lastLat_, lastLon_, currentSpeedKmh_, compassReady, compassHeadingDeg, nowMs);
     return true;
   }
 
