@@ -109,6 +109,11 @@ Important mismatch:
 - Keep BLE command profiles enforced across firmware, Flutter, tests, and docs:
   release firmware must reject service/dev/HIL commands before side effects,
   while service and acceptance profiles must stay explicit at bench entry points.
+- Identify the exact brushed/collector motor driver with
+  `docs/BRUSHED_MOTOR_DRIVER_INTAKE.md`. Current firmware only proves a simple
+  `PWM=7` plus `DIR=5/10` command shape; it does not prove the real driver's
+  brake/coast, enable, fault, current-limit, thermal, polarity, or safe-idle
+  behavior.
 - Decide the exact steering stepper driver and mechanics. Current firmware is
   fixed to 28BYJ-48 + ULN2003 HALF4WIRE. If the real steering drive is not that
   stack and is also not A4988 STEP/DIR, add an explicit supported driver path with

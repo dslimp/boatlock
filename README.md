@@ -147,6 +147,12 @@ Do not treat old HC 160A snippets or direction-pin examples as current wiring
 authority. The present release path only documents the two thruster direction
 outputs above and the current 28BYJ-48 + ULN2003-style steering path.
 
+Before powering the thruster driver, complete
+[docs/BRUSHED_MOTOR_DRIVER_INTAKE.md](docs/BRUSHED_MOTOR_DRIVER_INTAKE.md).
+The current firmware command shape is only `PWM=7` plus `DIR=5/10`; the actual
+driver's brake/coast, enable, fault, current-limit, polarity, and safe-idle
+behavior must be captured before powered tests.
+
 If the installed steering driver is not the documented 28BYJ-48 + ULN2003 path,
 complete [docs/STEERING_DRIVER_INTAKE.md](docs/STEERING_DRIVER_INTAKE.md) first.
 The real driver identity, pinout, limits, idle behavior, and STOP behavior must

@@ -6245,3 +6245,24 @@ Validation:
 
 Self-review:
 - The local gate covers profile classification and pre-side-effect rejection, including wrapped `SEC_CMD` payload scope. Remaining proof is bench-level profile rejection logs and Android/HIL behavior, intentionally deferred by the task boundary.
+
+### 2026-04-26 Stage 211: Brushed motor driver intake gate
+
+Scope:
+- Add a hardware-fact intake for the real brushed/collector thruster motor driver before powered bench.
+- Keep this documentation-only; no firmware, Flutter, simulator, or wrapper behavior changed.
+
+External baseline:
+- Pololu high-power motor-driver documentation shows why a brushed H-bridge intake must capture sleep/enable, brake/coast, fault, current-sense, and current-limit behavior, not just PWM and direction pins: https://www.pololu.com/docs/0J72/4.b.
+- Pololu Simple Motor Controller documentation shows practical operator-visible motor-controller status concepts such as target/current speed, errors, voltage, temperature, and brake/coast settings: https://www.pololu.com/docs/0j44/all.
+
+Key outcomes:
+- Added `docs/BRUSHED_MOTOR_DRIVER_INTAKE.md` for driver identity, pinout, power/current/thermal limits, brake/coast/enable behavior, direction proof, fault/current telemetry, and firmware follow-up.
+- Updated the powered-bench checklist so brushed motor driver intake is required before low-power thruster connection.
+- Updated product readiness, README, and active TODO to separate "current firmware PWM/DIR command shape" from "real motor driver proven safe."
+
+Validation:
+- `git diff --check -- docs/BRUSHED_MOTOR_DRIVER_INTAKE.md docs/POWERED_BENCH_CHECKLIST.md docs/PRODUCT_READINESS_PLAN.md boatlock/TODO.md README.md WORKLOG.md` -> PASS.
+
+Self-review:
+- This reduces pre-powered ambiguity but does not identify the actual driver. The TODO stays open until photos, pinout, current limits, polarity, safe idle, and STOP behavior are captured and reflected in firmware/docs.

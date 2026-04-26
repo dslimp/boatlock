@@ -15,6 +15,7 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 - [x] Classify BLE commands into release/service/dev surfaces and gate service/dev paths from normal water UI.
 - [x] Add explicit release/service/acceptance PlatformIO profiles and `nh02` flash-wrapper profile selection.
 - [x] Implement firmware-side service/dev/HIL command enforcement through those profiles so BLE OTA and `SIM_*` acceptance are not silently broken.
+- [ ] Identify the exact brushed/collector motor driver with `docs/BRUSHED_MOTOR_DRIVER_INTAKE.md` and update firmware/docs if it is not the current `PWM+DIR1+DIR2` path.
 - [ ] Identify the exact steering stepper driver/mechanics with `docs/STEERING_DRIVER_INTAKE.md` and update firmware/docs if it is not the current 28BYJ-48 + ULN2003 path.
 - [x] Build a no-load motor output acceptance checklist for `PWM=7`, `DIR=5/10`, boot, STOP, HOLD, reconnect, anchor denial, SIM, and OTA begin.
 - [x] Add powered-bench wiring requirements: current-limited supply, fuse/breaker, physical kill path, polarity proof, strain relief, and thermal check.
