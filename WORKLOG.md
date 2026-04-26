@@ -6318,3 +6318,21 @@ Validation:
 
 Self-review:
 - This closes the immediate paired-mode auth bypass for safety/control commands. It does not solve per-client auth or control ownership; those still require a separate multi-client lease implementation before accepting a second controller.
+
+### 2026-04-26 Stage 214: Product readiness docs cleanup
+
+Scope:
+- Remove completed app-flow and simulation baseline items from the product readiness docs.
+- Preserve the remaining powered-bench, water-test, security, hardware, and simulation blockers.
+
+Key outcomes:
+- Replaced stale app P0 bullets with current blockers around command acceptance proof, paired-mode auth policy, GPS correction source ownership, and `nh02`/Android command-profile proof.
+- Reframed first-water readiness as app-driven checklist coverage rather than a missing first-class panel and anchor-control surface.
+- Marked simulation provenance/confidence, loaded mass, drag, and windage as the current baseline, leaving yaw inertia, wake/chop, sensor-frame effects, and hardware-calibrated motor/steering data as open work.
+- Updated the commercial UX review so its next simulator item points at the next physics cut instead of stale backlog wording.
+
+Validation:
+- `git diff --check -- docs/PRODUCT_READINESS_PLAN.md docs/COMMERCIAL_ANCHOR_UX_REVIEW.md WORKLOG.md` -> PASS.
+
+Self-review:
+- This is documentation cleanup only. It does not change firmware, Flutter, simulation code, CAD, or the underlying acceptance gates.

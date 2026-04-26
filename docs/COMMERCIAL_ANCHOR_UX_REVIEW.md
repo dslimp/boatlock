@@ -69,8 +69,10 @@ Still weak before powered or water confidence:
 - Control ownership for a future remote/controller is not designed yet.
 - Firmware-side service/dev/HIL command gating is implemented, but release vs
   service/acceptance rejection still needs powered bench and Android proof.
-- Simulation still needs provenance/confidence metadata, loaded boat mass,
-  yaw/windage refinement, wake/chop events, and hardware-calibrated motor data.
+- Simulation already has provenance/confidence, loaded mass, water drag, and
+  windage baseline; remaining gaps are yaw/heading inertia, wake/chop
+  transients, sensor-frame rocking effects, and hardware-calibrated
+  motor/steering data.
 
 ## Product Decisions
 
@@ -97,6 +99,6 @@ Next autonomous work that does not require powered hardware:
 2. Make first-water quiet values the default with a safe settings migration.
 3. Turn command-profile rejection into visible app/operator feedback where it
    affects service or acceptance workflows.
-4. Tighten simulator backlog wording around the remaining physics and provenance
-   gaps.
+4. Implement the next simulator physics cut: yaw inertia, wake/chop events, and
+   BNO08x/GNSS sensor-frame effects.
 5. Design multi-client control ownership before a second BLE controller exists.

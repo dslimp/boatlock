@@ -91,24 +91,19 @@ Important mismatch:
 
 ### P0 Before Powered Bench
 
-- Fix stale app state on BLE disconnect: when `BleBoatLock` clears its internal
-  last data, `MapPage` must also receive `null` or an explicit disconnected
-  state so anchor/STOP/settings actions are not enabled from stale telemetry.
-- Split app anchor flow into explicit `Save anchor` and `Enable anchor` actions.
-  `Enable` must show a preflight checklist: link live, auth ready when paired,
-  saved anchor, hardware GNSS gate, fresh BNO08x heading, no latched HOLD/failsafe,
-  motors configured, and STOP reachable.
-- Add a normal `Anchor off` action to the main UI. Emergency STOP must remain
-  separate from ordinary anchor disable.
-- Rename the red `STOP` inside the manual sheet to `Manual off` or wire it to the
-  real emergency `STOP`. Right now it sends `MANUAL_OFF`, which is unsafe wording.
-- Surface write-command failures on the main map. Anchor/map actions currently
-  ignore false returns from secure/session failures.
+- Keep app command acceptance explicit: operator UI must distinguish command
+  sent from telemetry/log-confirmed acceptance, especially for service and
+  acceptance workflows.
+- Prove app-visible firmware command-profile rejections on `nh02` and Android so
+  release firmware blocking service/dev/HIL commands cannot look like a silent
+  write.
+- Resolve paired-mode auth policy for raw safety commands: either document and
+  test an intentional emergency exception, or require `SEC_CMD` for all
+  control/write commands that refresh safety state.
 - Prove or fix GPS-to-compass correction source ownership. Phone GPS fallback is
   display/telemetry only and must not indirectly bias control heading correction.
-- Keep BLE command profiles enforced across firmware, Flutter, tests, and docs:
-  release firmware must reject service/dev/HIL commands before side effects,
-  while service and acceptance profiles must stay explicit at bench entry points.
+- Prove BLE command profiles end-to-end on `nh02` and Android: release rejection
+  logs, service positive paths, and acceptance HIL positive paths.
 - Identify the exact brushed/collector motor driver with
   `docs/BRUSHED_MOTOR_DRIVER_INTAKE.md`. Current firmware only proves a simple
   `PWM=7` plus `DIR=5/10` command shape; it does not prove the real driver's
@@ -131,26 +126,20 @@ Important mismatch:
 
 ### P1 Before First Water
 
-- Add a first-class readiness panel to the app, not only diagnostics:
-  live-frame age, BLE state, RSSI, auth state, GNSS quality, hardware GPS age,
-  satellites/HDOP when available, heading freshness/quality, anchor gate result,
-  current mode, failsafe latch, manual lease state, and motor/stepper configured.
-- Add user-visible anchor controls expected from commercial systems:
-  current-position save, map-point save, enable/disable, fixed 1.5 m jog controls,
-  distance/bearing to anchor, and clear blocked reasons. Fixed jog controls and
-  distance/bearing-to-anchor telemetry are now present in the app.
+- Turn the protected-water checklist into app-driven readiness where practical:
+  live-frame age, RSSI, auth/session, GNSS/heading freshness, active firmware
+  profile, STOP proof, manual-release proof, and active blockers.
+- Keep current anchor controls covered by tests: current-position save,
+  map-point save, enable/disable, fixed 1.5 m jog, distance/bearing, and blocked
+  reasons.
 - Add conservative anchor profiles for water trials: `quiet`, `normal`, `current`,
   with `quiet` as the default for first powered tests.
-- Add track/history around anchor events so drift, correction, and failsafe exits
-  can be reviewed after a run. App-side anchor event history now records command
-  requests, preflight blocks, telemetry transitions, and allowlisted device
-  events.
+- Add export/screenshot bundle for water-test sessions after the event shape is
+  stable.
 - Add battery/power telemetry later; for the first powered bench and protected
   water sessions, `docs/PROTECTED_WATER_TEST_LOG.md` is the required external
   voltage/current/power measurement path. Motor sizing and runtime are not
   product polish; they directly bound safety.
-- Add `MapPage` widget tests for stale disconnect state, anchor preflight, auth
-  reject, STOP, and manual-off wording.
 - Remove current main-branch leftovers that confuse release scope: old route UI
   labels, unused persisted knobs such as `ReacqStrat`, and board-specific
   `BOATLOCK_BOARD_JC4832W535` branches unless they are explicitly preserved on a
@@ -179,12 +168,10 @@ Keep two layers:
 
 Next simulation work:
 
-- Keep the already-normalized Russian water-body profiles as executable scenario
-  data with visible provenance and confidence in JSON reports; next, improve
-  source granularity and confidence calibration after real bench/water logs exist.
-- Add loaded boat mass plus drag/windage parameters to scenario data and the
-  world model. Thrust margin needs to be judged against the configured boat, not
-  only against generic motor class.
+- Keep schema v2 Russian scenarios with provenance/confidence, loaded mass,
+  submerged drag, and windage as the current baseline.
+- Improve provenance granularity and confidence calibration only after real
+  bench/water logs exist.
 - Add yaw moment and heading inertia so current, wind/gust, and wave forcing can
   rotate the hull, not only translate it.
 - Add river/reservoir wake events and short steep chop as separate transient
@@ -192,17 +179,10 @@ Next simulation work:
 - Extend current wave/rocking support from hull-motion metrics to sensor-frame
   effects on BNO08x/GNSS samples: roll, pitch, heave, heading jitter, and
   measurement quality changes.
-- Extend the initial brushed motor dynamics with reverse asymmetry, prop/weed
-  load, and later calibration from real current/voltage logs.
-- Extend the initial steering mechanics beyond backlash, jam windows, wrong
-  bow-zero, and response delay with gear ratio and current/torque limits.
-- Calibrate the Russian water-body scenarios now present in the simulator after
-  powered bench and protected-water logs exist:
-  `river_oka_normal_55lb`, `volga_spring_flow_80lb`,
-  `rybinsk_fetch_55lb`, `ladoga_storm_abort`, `baltic_gulf_drift`.
-- Extend the current production-path actuator tests with hardware-calibrated
-  steering ratio, torque/current limits, end-stop, and jam behavior after the
-  real steering driver is identified.
+- Extend reports and thresholds for pitch, heave, heading jitter, degraded GNSS
+  time, wake/chop active time, and environmental yaw rate.
+- Keep motor and steering hardware-calibration simulation work blocked on real
+  driver identity and logs.
 
 ## Bench Plan
 
