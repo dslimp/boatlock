@@ -6,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import '../ble/ble_boatlock.dart';
 import '../e2e/app_e2e_probe.dart';
+import '../models/anchor_event.dart';
 import '../models/anchor_preflight.dart';
 import '../models/boat_data.dart';
 import '../widgets/manual_control_sheet.dart';
@@ -45,6 +46,7 @@ class _MapPageState extends State<MapPage> {
   bool _satellite = false;
   LatLng? phonePos;
   final List<LatLng> _history = [];
+  final List<AnchorEvent> _anchorEvents = [];
   StreamSubscription<Position>? _posSub;
   bool _autoCenter = true;
 
@@ -72,6 +74,12 @@ class _MapPageState extends State<MapPage> {
     if (ok == true) {
       final sent = await ble.stopAll();
       if (!mounted) return;
+      _recordAnchorEvent(
+        'STOP',
+        sent ? 'request sent' : _commandFailedText('STOP'),
+        sent ? AnchorEventLevel.critical : AnchorEventLevel.warning,
+        AnchorEventSource.app,
+      );
       _showCommandSnack(sent ? 'STOP отправлен' : 'STOP не отправлен');
     }
   }
@@ -98,6 +106,12 @@ class _MapPageState extends State<MapPage> {
     if (boatData == null) return false;
     final ok = await send();
     if (!mounted) return ok;
+    _recordAnchorEvent(
+      command,
+      ok ? 'request sent' : _commandFailedText(command),
+      ok ? AnchorEventLevel.info : AnchorEventLevel.warning,
+      AnchorEventSource.app,
+    );
     _showCommandSnack(ok ? success : _commandFailedText(command));
     return ok;
   }
@@ -166,6 +180,12 @@ class _MapPageState extends State<MapPage> {
         send: ble.anchorOn,
       );
     } else if (!preflight.canEnable) {
+      _recordAnchorEvent(
+        'ANCHOR_ON',
+        'blocked: ${preflight.blockedSummary}',
+        AnchorEventLevel.warning,
+        AnchorEventSource.app,
+      );
       _showCommandSnack('ANCHOR_ON заблокирован: ${preflight.blockedSummary}');
     }
   }
@@ -205,6 +225,7 @@ class _MapPageState extends State<MapPage> {
     void handleData(BoatData? data) {
       _e2eProbe?.onData(data);
       setState(() {
+        _captureTelemetryEvent(boatData, data);
         boatData = data;
         if (data != null && data.lat != 0 && data.lon != 0) {
           final p = LatLng(data.lat, data.lon);
@@ -218,6 +239,14 @@ class _MapPageState extends State<MapPage> {
 
     void handleLog(String line) {
       _e2eProbe?.onDeviceLog(line);
+      if (_isAnchorEventLog(line)) {
+        _recordAnchorEvent(
+          _deviceEventToken(line),
+          line,
+          _logEventLevel(line),
+          AnchorEventSource.device,
+        );
+      }
     }
 
     ble =
@@ -276,6 +305,153 @@ class _MapPageState extends State<MapPage> {
     if (_history.length > 500) _history.removeAt(0);
   }
 
+  void _appendAnchorEvent(
+    String title,
+    String detail,
+    AnchorEventLevel level,
+    AnchorEventSource source,
+  ) {
+    final now = DateTime.now();
+    final last = _anchorEvents.isEmpty ? null : _anchorEvents.last;
+    if (last != null &&
+        last.title == title &&
+        last.detail == detail &&
+        last.source == source &&
+        now.difference(last.timestamp).inSeconds < 2) {
+      return;
+    }
+    _anchorEvents.add(
+      AnchorEvent(
+        timestamp: now,
+        title: title,
+        detail: detail,
+        level: level,
+        source: source,
+      ),
+    );
+    if (_anchorEvents.length > 80) {
+      _anchorEvents.removeRange(0, _anchorEvents.length - 80);
+    }
+  }
+
+  void _recordAnchorEvent(
+    String title,
+    String detail,
+    AnchorEventLevel level,
+    AnchorEventSource source,
+  ) {
+    if (!mounted) return;
+    setState(() => _appendAnchorEvent(title, detail, level, source));
+  }
+
+  void _captureTelemetryEvent(BoatData? previous, BoatData? next) {
+    if (previous != null && next == null) {
+      _appendAnchorEvent(
+        'BLE',
+        'telemetry disconnected',
+        AnchorEventLevel.warning,
+        AnchorEventSource.telemetry,
+      );
+      return;
+    }
+    if (next == null) return;
+    if (previous == null) {
+      _appendAnchorEvent(
+        'BLE',
+        'telemetry live',
+        AnchorEventLevel.info,
+        AnchorEventSource.telemetry,
+      );
+      return;
+    }
+    if (previous.mode != next.mode) {
+      _appendAnchorEvent(
+        'MODE',
+        '${previous.mode} -> ${next.mode}',
+        next.mode == 'ANCHOR'
+            ? AnchorEventLevel.info
+            : AnchorEventLevel.warning,
+        AnchorEventSource.telemetry,
+      );
+    }
+    if (previous.status != next.status) {
+      _appendAnchorEvent(
+        'STATUS',
+        '${previous.status} -> ${next.status}',
+        next.status == 'ALERT'
+            ? AnchorEventLevel.critical
+            : next.status == 'WARN'
+            ? AnchorEventLevel.warning
+            : AnchorEventLevel.info,
+        AnchorEventSource.telemetry,
+      );
+    }
+    if (previous.statusReasons != next.statusReasons &&
+        next.statusReasons.isNotEmpty) {
+      _appendAnchorEvent(
+        'REASON',
+        next.statusReasons,
+        AnchorEventLevel.warning,
+        AnchorEventSource.telemetry,
+      );
+    }
+    if ((previous.anchorLat != next.anchorLat ||
+            previous.anchorLon != next.anchorLon) &&
+        next.anchorLat != 0.0 &&
+        next.anchorLon != 0.0) {
+      _appendAnchorEvent(
+        'ANCHOR',
+        '${next.anchorLat.toStringAsFixed(6)}, ${next.anchorLon.toStringAsFixed(6)}',
+        AnchorEventLevel.info,
+        AnchorEventSource.telemetry,
+      );
+    }
+  }
+
+  bool _isAnchorEventLog(String line) {
+    const allowed = {
+      'ANCHOR_ON',
+      'ANCHOR_OFF',
+      'ANCHOR_DENIED',
+      'ANCHOR_REJECTED',
+      'ANCHOR_POINT_SAVED',
+      'NUDGE_APPLIED',
+      'NUDGE_DENIED',
+      'FAILSAFE_TRIGGERED',
+      'DRIFT_ALERT',
+      'DRIFT_FAIL',
+    };
+    return allowed.contains(_deviceEventToken(line));
+  }
+
+  String _deviceEventToken(String line) {
+    if (!line.startsWith('[EVENT] ')) return '';
+    final rest = line.substring(8).trimLeft();
+    final end = rest.indexOf(' ');
+    return end < 0 ? rest : rest.substring(0, end);
+  }
+
+  AnchorEventLevel _logEventLevel(String line) {
+    if (line.contains('FAILSAFE') ||
+        line.contains('STOP') ||
+        line.contains('DRIFT_FAIL') ||
+        line.contains('CONTAINMENT')) {
+      return AnchorEventLevel.critical;
+    }
+    if (line.contains('DENIED') || line.contains('WARN')) {
+      return AnchorEventLevel.warning;
+    }
+    return AnchorEventLevel.info;
+  }
+
+  void _showAnchorEvents() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => _AnchorEventSheet(events: List.of(_anchorEvents)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final boatPos =
@@ -306,6 +482,11 @@ class _MapPageState extends State<MapPage> {
                 builder: (_) => DiagnosticsPage(ble: ble, data: boatData),
               ),
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: 'История якоря',
+            onPressed: _showAnchorEvents,
           ),
           IconButton(
             icon: const Icon(Icons.settings),
@@ -628,6 +809,88 @@ class _MapPageState extends State<MapPage> {
         ],
       ),
     );
+  }
+}
+
+class _AnchorEventSheet extends StatelessWidget {
+  const _AnchorEventSheet({required this.events});
+
+  final List<AnchorEvent> events;
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleEvents = events.reversed.toList(growable: false);
+    return SafeArea(
+      child: SizedBox(
+        height: 420,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: Text(
+                'История якоря',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+            ),
+            Expanded(
+              child: visibleEvents.isEmpty
+                  ? const Center(child: Text('Событий пока нет'))
+                  : ListView.separated(
+                      itemCount: visibleEvents.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final event = visibleEvents[index];
+                        return ListTile(
+                          dense: true,
+                          leading: Icon(
+                            _eventIcon(event.level),
+                            color: _eventColor(context, event.level),
+                          ),
+                          title: Text(event.title),
+                          subtitle: Text(
+                            '${_sourceLabel(event.source)}: ${event.detail}',
+                          ),
+                          trailing: Text(_eventTime(event.timestamp)),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _eventIcon(AnchorEventLevel level) {
+    return switch (level) {
+      AnchorEventLevel.info => Icons.info_outline,
+      AnchorEventLevel.warning => Icons.warning_amber_rounded,
+      AnchorEventLevel.critical => Icons.report,
+    };
+  }
+
+  Color _eventColor(BuildContext context, AnchorEventLevel level) {
+    return switch (level) {
+      AnchorEventLevel.info => Theme.of(context).colorScheme.primary,
+      AnchorEventLevel.warning => Colors.orange.shade800,
+      AnchorEventLevel.critical => Colors.red.shade700,
+    };
+  }
+
+  String _sourceLabel(AnchorEventSource source) {
+    return switch (source) {
+      AnchorEventSource.app => 'app',
+      AnchorEventSource.telemetry => 'telemetry',
+      AnchorEventSource.device => 'device',
+    };
+  }
+
+  String _eventTime(DateTime timestamp) {
+    final h = timestamp.hour.toString().padLeft(2, '0');
+    final m = timestamp.minute.toString().padLeft(2, '0');
+    final s = timestamp.second.toString().padLeft(2, '0');
+    return '$h:$m:$s';
   }
 }
 

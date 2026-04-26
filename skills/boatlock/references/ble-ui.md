@@ -82,6 +82,9 @@
   - log char `78ab`
 - The app sends `STREAM_START`, then `SNAPSHOT`, after connect.
 - Heartbeat is sent every `1 s` once connected.
+- A successful app-side BLE write only proves that a command request was sent.
+  Operator history and UI copy must not call it firmware acceptance; acceptance
+  comes from later telemetry transitions or allowlisted device event logs.
 
 ## Android Smoke App
 

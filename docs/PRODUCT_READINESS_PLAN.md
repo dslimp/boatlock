@@ -131,7 +131,9 @@ Important mismatch:
 - Add conservative anchor profiles for water trials: `quiet`, `normal`, `current`,
   with `quiet` as the default for first powered tests.
 - Add track/history around anchor events so drift, correction, and failsafe exits
-  can be reviewed after a run.
+  can be reviewed after a run. App-side anchor event history now records command
+  requests, preflight blocks, telemetry transitions, and allowlisted device
+  events.
 - Add battery/power telemetry later; for the first powered bench and protected
   water sessions, `docs/PROTECTED_WATER_TEST_LOG.md` is the required external
   voltage/current/power measurement path. Motor sizing and runtime are not

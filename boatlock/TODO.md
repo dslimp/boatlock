@@ -25,7 +25,7 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 - [x] Add fixed 1.5 m anchor jog controls to the normal app UI.
 - [x] Show distance and bearing to anchor as primary telemetry.
 - [x] Add battery/power/current visibility or a required external measurement step in water-test logs.
-- [ ] Add track/history around anchor events for post-run review.
+- [x] Add track/history around anchor events for post-run review.
 - [x] Add `MapPage` tests for disconnect, preflight, auth reject, STOP, and manual-off behavior.
 - [x] Remove or branch off leftover non-target surfaces: `BOATLOCK_BOARD_JC4832W535`, route UI labels, and unused `ReacqStrat`.
 - [ ] Run full local, `nh02`, Android, and no-load output validation before mounting powered hardware.

@@ -5876,3 +5876,30 @@ Validation:
 
 Self-review:
 - This is an operator log requirement, not live power telemetry. Real current/power telemetry remains a future protocol/hardware feature after the driver and sensing hardware are known.
+
+### 2026-04-26 Stage 194: App anchor event history
+
+Scope:
+- Add a normal app-side history view for anchor-relevant events before powered and protected-water tests.
+- Keep the change Flutter-only for runtime behavior; no firmware, BLE protocol, settings schema, hardware wrapper, or Android smoke path changes.
+
+External baseline:
+- Reused the existing external-patterns baseline: commercial GPS anchors expose anchor state/jog/range feedback, and Signal K style anchor workflows treat track/history around anchor as part of the feature rather than diagnostics.
+- Reused the BLE/UI reference rule that command writes are transport requests; firmware acceptance must be inferred from telemetry or device logs.
+
+Key outcomes:
+- Added a bounded anchor event model and app bar history sheet on `MapPage`.
+- History now records app command requests, preflight-blocked `ANCHOR_ON`, telemetry link/mode/status/reason/anchor transitions, and an exact allowlist of device anchor/failsafe event logs.
+- Command history says `request sent` instead of claiming acceptance after a successful BLE write.
+- Updated `MapPage` tests for history capture, preflight history, and ignoring unrelated `[EVENT]` logs.
+- Updated readiness docs, TODO state, and the BLE/UI reference with the write-success versus acceptance rule.
+
+Validation:
+- `cd boatlock_ui && dart format lib/pages/map_page.dart lib/models/anchor_event.dart test/map_page_test.dart` -> PASS.
+- `cd boatlock_ui && flutter analyze` -> PASS, no issues.
+- `cd boatlock_ui && flutter test test/map_page_test.dart test/status_panel_test.dart` -> PASS (`15/15`).
+- `cd boatlock_ui && flutter test` -> PASS (`88/88`).
+
+Self-review:
+- This is session-local app history, not a persisted voyage log. That is enough for first bench/water review without widening storage or protocol scope.
+- The history depends on currently available app telemetry and BLE log lines; deeper correction/actuator trace review still belongs in firmware/device logs and simulation reports.

@@ -65,6 +65,12 @@ void main() {
 
     expect(ble.anchorOnCalls, 0);
     expect(find.textContaining('ANCHOR_ON заблокирован:'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('История якоря'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('ANCHOR_ON'), findsOneWidget);
+    expect(find.textContaining('app: blocked:'), findsOneWidget);
   });
 
   testWidgets('anchor command failure shows security reject feedback', (
@@ -83,6 +89,59 @@ void main() {
 
     expect(ble.setAnchorCalls, 1);
     expect(find.text('SET_ANCHOR отклонена: AUTH'), findsOneWidget);
+  });
+
+  testWidgets('anchor history records commands and telemetry transitions', (
+    tester,
+  ) async {
+    final ble = await _pumpMapPage(tester);
+    ble.emit(_boatData());
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Сохранить якорь'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    ble.emit(
+      _boatData(mode: 'ANCHOR', status: 'WARN', statusReasons: 'NO_GPS'),
+    );
+    await tester.pump();
+    ble.emitLog('[EVENT] FAILSAFE_TRIGGERED reason=STOP_CMD action=STOP');
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('История якоря'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('История якоря'), findsOneWidget);
+    expect(find.text('SET_ANCHOR'), findsOneWidget);
+    expect(find.text('app: request sent'), findsOneWidget);
+    expect(find.text('MODE'), findsOneWidget);
+    expect(find.text('telemetry: IDLE -> ANCHOR'), findsOneWidget);
+    expect(find.text('REASON'), findsOneWidget);
+    expect(find.text('telemetry: NO_GPS'), findsOneWidget);
+    expect(find.text('FAILSAFE_TRIGGERED'), findsOneWidget);
+    expect(
+      find.text(
+        'device: [EVENT] FAILSAFE_TRIGGERED reason=STOP_CMD action=STOP',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('LOG'), findsNothing);
+  });
+
+  testWidgets('anchor history ignores unrelated event logs', (tester) async {
+    final ble = await _pumpMapPage(tester);
+    ble.emit(_boatData());
+    await tester.pump();
+
+    ble.emitLog('[EVENT] OTA_BEGIN size=1');
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('История якоря'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('OTA_BEGIN'), findsNothing);
+    expect(find.textContaining('OTA_BEGIN'), findsNothing);
   });
 
   testWidgets('anchor nudge sends firmware cardinal command', (tester) async {
@@ -270,6 +329,7 @@ class FakeBleBoatLock extends BleBoatLock {
   String get secReject => secRejectValue;
 
   void emit(BoatData? data) => onData(data);
+  void emitLog(String line) => onLog?.call(line);
 
   @override
   Future<void> connectAndListen() async {}
