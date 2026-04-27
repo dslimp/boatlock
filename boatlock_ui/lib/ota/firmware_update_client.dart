@@ -6,12 +6,8 @@ import '../ble/ble_ota_payload.dart';
 import 'firmware_update_manifest.dart';
 import 'github_release_firmware_source.dart';
 
-const String kBoatLockFirmwareUpdateManifestUrl = String.fromEnvironment(
-  'BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL',
-);
-const String kBoatLockFirmwareUpdateGithubRepo = String.fromEnvironment(
-  'BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO',
-);
+const String kBoatLockFirmwareUpdateManifestUrl = '';
+const String kBoatLockFirmwareUpdateGithubRepo = 'dslimp/boatlock';
 
 class FirmwareUpdateBundle {
   final FirmwareUpdateManifest manifest;

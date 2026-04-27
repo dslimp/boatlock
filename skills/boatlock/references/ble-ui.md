@@ -14,12 +14,12 @@
 - `boatlock_ui/lib/ble/ble_scan_config.dart`: scan timing constants
 - `boatlock_ui/lib/ble/ble_rssi_throttle.dart`: app-side RSSI read throttling policy
 - `boatlock_ui/lib/ble/ble_commands.dart`: pure command builders and value allowlists for app-originated commands
-- `boatlock_ui/lib/ble/ble_command_scope.dart`: app-side release/service/dev command-surface classifier and dev/HIL compile-time gate
+- `boatlock_ui/lib/ble/ble_command_scope.dart`: app-side release/dev-HIL command-surface classifier and dev/HIL compile-time gate
 - `boatlock_ui/lib/ble/ble_security_codec.dart`: owner-secret normalization, owner auth proof, and secure command envelope formatting
 - `boatlock_ui/lib/ble/ble_live_frame.dart`: live binary telemetry decoder
 - `boatlock_ui/lib/ble/ble_log_line.dart`: log characteristic byte-string decoder
 - `boatlock_ui/lib/models/boat_data.dart`: telemetry fields parsed by Flutter
-- `boatlock_ui/lib/smoke/ble_smoke_mode.dart`: Android smoke APK mode enum and compile-time mode parser
+- `boatlock_ui/lib/smoke/ble_smoke_mode.dart`: app runtime check mode enum and parser
 - `boatlock_ui/lib/smoke/ble_smoke_logic.dart`: pure Android smoke result/stage and telemetry verdict helpers
 
 ## BLE Identity
@@ -36,7 +36,7 @@
 - Service discovery should inspect BoatLock characteristics only under service `12ab`; a matching characteristic UUID under another service is not a valid BoatLock control/data/log endpoint.
 - A connected GATT service is usable only when data `34cd`, command `56ef`, and log `78ab` characteristics are all found. Partial discovery must clear the link and retry instead of leaving the app half-connected.
 - BLE OTA is optional for basic connection but required for app-driven firmware update. The app must discover `9abc` before allowing an OTA upload.
-- The app should bind data, command, log, and OTA characteristic references before enabling data/log notifications. Notifications can arrive immediately after subscription and may start e2e logic that needs the OTA characteristic.
+- The app should bind data, command, log, and OTA characteristic references before enabling data/log notifications. Notifications can arrive immediately after subscription and may start app check logic that needs the OTA characteristic.
 - On Android, if data/command/log are present but OTA is missing, the app may clear the GATT cache and rediscover once before declaring the link incomplete.
 - Live notify payload length must be validated before `setValue()`; producer-side packets whose length is not exactly the live-frame size are dropped rather than padded, truncated, or read past the packet buffer.
 - Flutter must reject live-frame payloads whose length is not exactly 72 bytes; accepting padded frames hides characteristic-value bugs and can mask protocol drift.
@@ -75,7 +75,7 @@
 - On app resume, the app schedules a fresh scan unless an active data/control link already exists.
 - Heartbeat write failure is treated as a link loss and schedules reconnect.
 - RSSI reads should be throttled through `ble_rssi_throttle.dart`; do not call GATT RSSI reads on every telemetry notification.
-- Firmware logs should suppress high-frequency `HEARTBEAT` command lines while preserving operator/service commands.
+- Firmware logs should suppress high-frequency `HEARTBEAT` command lines while preserving operator setup/control commands.
 - Immediate BLE transport commands are exact-match only: `STREAM_START`, `STREAM_STOP`, and `SNAPSHOT`. Prefixes, suffixes, and decorated variants must fall through to the normal command path and be rejected there if invalid.
 - App command builders should remain pure top-level functions in `ble_commands.dart`; do not hide value formatting/range checks inside the stateful BLE transport class.
 - Security envelope formatting should remain pure top-level functions in `ble_security_codec.dart`; `BleBoatLock` owns session state and write order, not reusable codec internals.
@@ -88,36 +88,38 @@
   Operator history and UI copy must not call it firmware acceptance; acceptance
   comes from later telemetry transitions or allowlisted device event logs.
 
-## Android Smoke App
+## App Runtime Checks
 
-- Smoke APK mode selection is compiled through `BOATLOCK_SMOKE_MODE`.
-- Supported smoke mode names are `basic`, `reconnect`, `manual`, `status`, `sim`, and `anchor`.
-- The mode enum and parser belong in `ble_smoke_mode.dart`, not in `main_smoke.dart` or the smoke page widget.
-- `main_smoke.dart` should stay entrypoint glue: read the compile-time define, parse it through the pure helper, and construct `BleSmokePage`.
-- Smoke result and stage line encoding belongs in `ble_smoke_logic.dart` so wrapper parsing can be covered by unit tests before Android device runs.
-
-## Production App E2E
-
-- Production-app bench tests must build `lib/main.dart`, not `lib/main_smoke.dart`.
-- Main-app e2e hooks are enabled only by the compile-time `BOATLOCK_APP_E2E_MODE` define; normal app builds leave the hook disabled.
-- Main-app e2e verdicts intentionally reuse `BOATLOCK_SMOKE_STAGE` and `BOATLOCK_SMOKE_RESULT` lines so the canonical adb/logcat runner remains the single acceptance path.
-- Use `tools/android/build-app-apk.sh --e2e-mode <mode>` to build the release main-app APK with the hook enabled.
-- Use `tools/hw/nh02/android-run-app-e2e.sh --<mode> --wait-secs 130` for nh02 production-app BLE acceptance.
-- Keep mode names aligned with `BleSmokeMode` unless the production app needs a flow that cannot share the existing safe command contract.
+- Android and macOS ship one release app per platform. Do not add separate
+  smoke/check/debug/setup/OTA entrypoints, artifacts, or `dart-define` behavior
+  switches.
+- Smoke and acceptance mode names live in `ble_smoke_mode.dart`.
+- Runtime command parsing belongs in `app_runtime_command.dart`; Android wrappers
+  may pass `boatlock_check_mode` and OTA URL/SHA extras to the already-built
+  release app.
+- App check verdicts intentionally reuse `BOATLOCK_SMOKE_STAGE` and
+  `BOATLOCK_SMOKE_RESULT` lines so the canonical adb/logcat runner remains the
+  single acceptance path.
+- Use `tools/android/build-app-apk.sh` for the only Android artifact, then use
+  `tools/hw/nh02/android-run-app-check.sh --<mode> --wait-secs 130` or
+  `tools/hw/nh02/android-run-smoke.sh --<mode>` to launch a runtime check in
+  that same installed app.
+- Keep mode names aligned with `BleSmokeMode` unless the app needs a flow that
+  cannot share the existing safe command contract.
 
 ## Command Surface
 
 - Command scope groups:
-  - release: stream/control point, explicit anchor save/enable/disable, manual deadman, STOP/heartbeat, anchor jog, hold-heading, pairing/auth commands, and `SIM_*`.
-  - service: anchor tuning profiles, heading offset/reset, SH2 compass calibration/DCD/tare, stepper bow/tuning, and BLE OTA.
+  - release: stream/control point, explicit anchor save/enable/disable, manual deadman, STOP/heartbeat, anchor jog, hold-heading, pairing/auth commands, setup/tuning, compass calibration/DCD/tare, BLE OTA, and `SIM_*`.
   - dev/HIL: `SET_PHONE_GPS`.
-- The release Flutter app includes service controls, but the normal water UI
-  keeps them hidden until the operator enables the Settings `Сервисный режим`
+- The release Flutter app includes setup controls, but the normal water UI
+  keeps them hidden until the operator enables the Settings `Настройка оборудования`
   switch.
-- Android/macOS app wrappers build one release app only. Do not split service
-  UI into a separate debug/service app variant. Service command callers must
-  still pass `allowService: true` to `sendCustomCommand()`.
-- Dev/HIL commands are hidden unless the app is built with `--dart-define=BOATLOCK_DEV_HIL_COMMANDS=true` or a validation harness passes `allowDevHil: true` to `sendCustomCommand()`. `SIM_*` is not dev/HIL; it must run fail-quiet in the normal firmware and provide simulated live telemetry for map views.
+- Android/macOS app wrappers build one release app only. Do not split setup UI
+  into a separate debug or alternate app variant.
+- Dev/HIL commands are not part of the normal app control surface. `SIM_*` is
+  not dev/HIL; it must run fail-quiet in the normal firmware and provide
+  simulated live telemetry for map views.
 - `SEC_CMD` is the security envelope; the effective scope is the scope of the wrapped payload. Flutter custom-command callers should pass the unwrapped command and let `BleBoatLock` build the envelope after classification.
 - Do not keep compatibility-only BLE commands in firmware or Flutter. If a command is obsolete, remove it from command handling, UI, tests, and docs in the same change.
 - Route commands, phone-heading commands, and log-export commands are removed and should stay no-op unless intentionally restored.

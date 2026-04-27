@@ -8,27 +8,24 @@ def test_ci_uploads_firmware_artifact_with_hash_manifest():
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
 
     assert 'name: firmware-esp32s3' in workflow
-    assert 'name: firmware-esp32s3-service' in workflow
     assert 'path: dist/firmware-esp32s3/*' in workflow
-    assert 'path: dist/firmware-esp32s3-service/*' in workflow
     assert 'if-no-files-found: error' in workflow
     assert 'firmware_sha256="$(sha256sum "${artifact_dir}/firmware.bin"' in workflow
     assert 'echo "firmware_sha256=${firmware_sha256}"' in workflow
     assert 'echo "artifact_name=firmware-esp32s3"' in workflow
-    assert 'echo "artifact_name=firmware-esp32s3-service"' in workflow
-    assert "pio run -e esp32s3_service" in workflow
-    assert "command_profile=service" in workflow
+    assert "pio run -e esp32s3" in workflow
+    assert "command_profile=release" in workflow
     assert "sha256sum firmware.bin bootloader.bin partitions.bin firmware.elf > SHA256SUMS" in workflow
 
 
-def test_release_publishes_service_firmware_update_manifest():
+def test_release_publishes_firmware_update_manifest():
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
 
     assert "Prepare GitHub Release assets" in workflow
     assert '--out "${release_dir}/manifest.json"' in workflow
-    assert "firmware-esp32s3-service.bin" in workflow
+    assert "firmware-esp32s3.bin" in workflow
     assert "--base-url \"https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}\"" in workflow
-    assert "--binary-filename \"firmware-esp32s3-service.bin\"" in workflow
+    assert "--binary-filename \"firmware-esp32s3.bin\"" in workflow
     assert "--channel release" in workflow
     assert "--branch \"${release_branch}\"" in workflow
     assert "release-assets/*" in workflow
@@ -80,35 +77,29 @@ def test_ci_builds_single_apps_with_latest_release_firmware_source():
     assert "boatlock-app.apk" in workflow
     assert "Build macOS app" in workflow
     assert "boatlock-macos.zip" in workflow
-    assert "--dart-define=BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=${{ github.repository }}" in workflow
-    assert "flutter-android-service-apk" not in workflow
-    assert "flutter-macos-service-app" not in workflow
+    assert "--dart-" + "define" not in workflow
 
 
-def test_flutter_ci_runs_service_ui_tests():
+def test_flutter_ci_runs_setup_ui_tests():
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
 
-    assert "Test service UI" in workflow
-    assert "flutter test test/settings_page_service_ui_test.dart" in workflow
+    assert "Test setup UI" in workflow
+    assert "flutter test test/settings_page_setup_ui_test.dart" in workflow
 
 
 def test_macos_build_wrapper_builds_single_release_app():
     script = (ROOT / "tools/macos/build-app.sh").read_text()
 
-    assert "BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL=" in script
-    assert "BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=" in script
-    assert "BOATLOCK_LATEST_RELEASE_GITHUB_REPO" in script
     assert "build macos" in script
     assert "--release" in script
+    assert "--dart-" + "define" not in script
     assert "--debug" not in script
     assert "boatlock_ui.app" in script
 
 
-def test_macos_acceptance_wrapper_covers_service_artifact_and_runtime_smoke():
+def test_macos_acceptance_wrapper_covers_app_artifact_and_runtime_smoke():
     script = (ROOT / "tools/macos/acceptance.sh").read_text()
 
-    assert "--firmware-manifest-url" in script
-    assert "--firmware-github-repo" in script
     assert "--artifact-zip" in script
     assert "boatlock-macos.zip" in script
     assert "ditto -x -k" in script

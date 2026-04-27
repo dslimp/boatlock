@@ -56,19 +56,17 @@ The release job flattens CI artifacts into unique GitHub Release asset names:
 
 - `manifest.json`
 - `firmware-esp32s3.bin`
-- `firmware-esp32s3-service.bin`
-- `bootloader-esp32s3*.bin`
-- `partitions-esp32s3*.bin`
-- `firmware-esp32s3*.elf`
-- `BUILD_INFO-esp32s3*.txt`
-- `SHA256SUMS-esp32s3*.txt`
+- `bootloader-esp32s3.bin`
+- `partitions-esp32s3.bin`
+- `firmware-esp32s3.elf`
+- `BUILD_INFO-esp32s3.txt`
+- `SHA256SUMS-esp32s3.txt`
 - Android/macOS/web app artifacts and simulation reports
 
-The release app reads `manifest.json` from the latest GitHub Release through
-`BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=dslimp/boatlock`. The manifest points at
-`firmware-esp32s3-service.bin` and must use `channel=release`,
-`branch=release/vX.Y.x`, `platformioEnv=esp32s3_service`, and
-`commandProfile=service`.
+The release app reads `manifest.json` from the latest GitHub Release for
+`dslimp/boatlock`. The manifest points at `firmware-esp32s3.bin` and must use
+`channel=release`, `branch=release/vX.Y.x`, `platformioEnv=esp32s3`, and
+`commandProfile=release`.
 
 ## Local App Builds
 
@@ -81,7 +79,7 @@ tools/macos/acceptance.sh --static-only
 For a local `nh02` OTA proof with a wrapper-served manifest:
 
 ```bash
-tools/hw/nh02/android-run-app-e2e.sh \
+tools/hw/nh02/android-run-app-check.sh \
   --ota-latest-release \
-  --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin
+  --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin
 ```

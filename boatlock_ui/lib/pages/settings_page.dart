@@ -9,8 +9,10 @@ import '../ble/ble_command_rejection.dart';
 import '../ble/ble_debug_snapshot.dart';
 import '../ble/ble_ota_payload.dart';
 import '../ble/ble_security_codec.dart';
+import '../app_check/app_check_probe.dart';
 import '../ota/firmware_update_client.dart';
 import '../ota/firmware_update_manifest.dart';
+import '../smoke/ble_smoke_mode.dart';
 import 'settings_command_rejection_guard.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -33,6 +35,7 @@ class SettingsPage extends StatefulWidget {
   final bool secPairWindowOpen;
   final String secReject;
   final FirmwareUpdateClient firmwareUpdateClient;
+  final ValueChanged<BoatLockAppCheckConfig>? onStartAppCheck;
 
   const SettingsPage({
     super.key,
@@ -55,6 +58,7 @@ class SettingsPage extends StatefulWidget {
     required this.secPairWindowOpen,
     required this.secReject,
     this.firmwareUpdateClient = const FirmwareUpdateClient(),
+    this.onStartAppCheck,
   });
 
   @override
@@ -62,10 +66,10 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  static bool _serviceMenuSessionEnabled = false;
+  static bool _setupMenuSessionEnabled = false;
 
   late bool holdHeading;
-  late bool serviceMenuEnabled;
+  late bool setupMenuEnabled;
   late double stepMaxSpd;
   late double stepAccel;
   late double compassOffset;
@@ -96,12 +100,13 @@ class _SettingsPageState extends State<SettingsPage> {
   _ProfileRejectionWait? _profileRejectionWait;
   late final FirmwareUpdateClient _firmwareUpdateClient;
   FirmwareUpdateManifest? _releaseFirmwareManifest;
+  BleSmokeMode _appCheckMode = BleSmokeMode.basic;
 
   @override
   void initState() {
     super.initState();
     holdHeading = widget.holdHeading;
-    serviceMenuEnabled = _serviceMenuSessionEnabled;
+    setupMenuEnabled = _setupMenuSessionEnabled;
     stepMaxSpd = widget.stepMaxSpd;
     stepAccel = widget.stepAccel;
     compassOffset = widget.compassOffset;
@@ -216,7 +221,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return result;
   }
 
-  Future<void> _commitServiceSetting({
+  Future<void> _commitSetupSetting({
     required String commandPrefix,
     required Future<bool> Function() write,
     required VoidCallback rollback,
@@ -274,12 +279,12 @@ class _SettingsPageState extends State<SettingsPage> {
     widget.ble.setOwnerSecret(_ownerSecretCtrl.text);
   }
 
-  bool get _serviceMenuVisible => serviceMenuEnabled;
+  bool get _setupMenuVisible => setupMenuEnabled;
 
-  void _toggleServiceMenu(bool value) {
+  void _toggleSetupMenu(bool value) {
     setState(() {
-      serviceMenuEnabled = value;
-      _serviceMenuSessionEnabled = value;
+      setupMenuEnabled = value;
+      _setupMenuSessionEnabled = value;
     });
   }
 
@@ -320,7 +325,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (val == null) return;
     final previous = compassOffset;
     setState(() => compassOffset = val);
-    await _commitServiceSetting(
+    await _commitSetupSetting(
       commandPrefix: 'SET_COMPASS_OFFSET',
       write: () => widget.ble.setCompassOffset(val),
       rollback: () => compassOffset = previous,
@@ -331,7 +336,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!isConnected) return;
     final previous = compassOffset;
     setState(() => compassOffset = 0.0);
-    await _commitServiceSetting(
+    await _commitSetupSetting(
       commandPrefix: 'RESET_COMPASS_OFFSET',
       write: widget.ble.resetCompassOffset,
       rollback: () => compassOffset = previous,
@@ -364,7 +369,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (val == null || val == stepMaxSpd) return;
     final previous = stepMaxSpd;
     setState(() => stepMaxSpd = val);
-    await _commitServiceSetting(
+    await _commitSetupSetting(
       commandPrefix: 'SET_STEP_MAXSPD',
       write: () => widget.ble.setStepMaxSpeed(val),
       rollback: () => stepMaxSpd = previous,
@@ -397,7 +402,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (val == null || val == stepAccel) return;
     final previous = stepAccel;
     setState(() => stepAccel = val);
-    await _commitServiceSetting(
+    await _commitSetupSetting(
       commandPrefix: 'SET_STEP_ACCEL',
       write: () => widget.ble.setStepAccel(val),
       rollback: () => stepAccel = previous,
@@ -742,6 +747,32 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  void _startAppCheck() {
+    final start = widget.onStartAppCheck;
+    if (start == null) {
+      _showMessage('Проверки доступны из главного экрана');
+      return;
+    }
+    final sha = normalizeBoatLockSha256Hex(_otaShaCtrl.text);
+    final otaUrl = _otaUrlCtrl.text.trim();
+    final useReleaseSource =
+        _appCheckMode == BleSmokeMode.ota &&
+        (otaUrl.isEmpty || sha == null) &&
+        _firmwareUpdateClient.configured;
+    start(
+      BoatLockAppCheckConfig(
+        mode: _appCheckMode,
+        otaUrl: otaUrl,
+        otaSha256: sha ?? '',
+        otaLatestRelease: useReleaseSource,
+        firmwareManifestUrl: useReleaseSource
+            ? _firmwareUpdateClient.manifestUrl
+            : '',
+      ),
+    );
+    _showMessage('Проверка ${_appCheckMode.wireName} запущена');
+  }
+
   Widget _securityTile(String label, String value) {
     return ListTile(dense: true, title: Text(label), trailing: Text(value));
   }
@@ -759,11 +790,11 @@ class _SettingsPageState extends State<SettingsPage> {
             onChanged: isConnected ? _toggleHoldHeading : null,
           ),
           SwitchListTile(
-            title: const Text('Сервисный режим'),
-            value: serviceMenuEnabled,
-            onChanged: _toggleServiceMenu,
+            title: const Text('Настройка оборудования'),
+            value: setupMenuEnabled,
+            onChanged: _toggleSetupMenu,
           ),
-          if (_serviceMenuVisible) ...[
+          if (_setupMenuVisible) ...[
             ListTile(
               title: const Text('Макс. скорость'),
               subtitle: Text(stepMaxSpd.round().toString()),
@@ -846,7 +877,7 @@ class _SettingsPageState extends State<SettingsPage> {
           _securityTile('Auth', secAuth ? 'YES' : 'NO'),
           _securityTile('Pair window', secPairWindowOpen ? 'OPEN' : 'CLOSED'),
           _securityTile('Last reject', secReject),
-          if (_serviceMenuVisible) ...[
+          if (_setupMenuVisible) ...[
             const Divider(),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
@@ -921,6 +952,33 @@ class _SettingsPageState extends State<SettingsPage> {
                   else if (!_firmwareUpdateClient.configured)
                     const Text('Источник релиза не задан'),
                 ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: DropdownButtonFormField<BleSmokeMode>(
+                initialValue: _appCheckMode,
+                decoration: const InputDecoration(labelText: 'Проверка'),
+                items: [
+                  for (final mode in BleSmokeMode.values)
+                    DropdownMenuItem(value: mode, child: Text(mode.wireName)),
+                ],
+                onChanged: isConnected
+                    ? (value) {
+                        if (value == null) return;
+                        setState(() {
+                          _appCheckMode = value;
+                        });
+                      }
+                    : null,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: FilledButton.icon(
+                onPressed: isConnected ? _startAppCheck : null,
+                icon: const Icon(Icons.fact_check),
+                label: const Text('Запустить проверку'),
               ),
             ),
             if (_otaProgress != null)

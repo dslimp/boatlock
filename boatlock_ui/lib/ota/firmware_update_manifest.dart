@@ -84,14 +84,14 @@ class FirmwareUpdateManifest {
     if (!_isHexSha(gitSha)) {
       throw const FormatException('gitSha must be hex');
     }
-    if (platformioEnv != 'esp32s3_service') {
+    if (platformioEnv != 'esp32s3') {
       throw FormatException(
-        'OTA firmware must use esp32s3_service, got $platformioEnv',
+        'OTA firmware must use esp32s3, got $platformioEnv',
       );
     }
-    if (commandProfile != 'service') {
+    if (commandProfile != 'release') {
       throw FormatException(
-        'OTA firmware must use service profile, got $commandProfile',
+        'OTA firmware must use release profile, got $commandProfile',
       );
     }
     if (binaryUrl == null || !binaryUrl.hasScheme || !binaryUrl.hasAuthority) {

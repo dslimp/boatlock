@@ -81,7 +81,7 @@ Acceptance requires both lines in the same clean capture:
 
 Android:
 
-- `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130`
+- `tools/hw/nh02/android-run-app-check.sh --compass --wait-secs 130`
 
 On current RVC wiring this Android smoke proves only BLE command delivery and
 device-log acknowledgements (`ok=0 source=BNO08x-RVC`). DCD/tare success requires

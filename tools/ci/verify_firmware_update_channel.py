@@ -37,9 +37,9 @@ def verify(args: argparse.Namespace) -> None:
     require_equal("channel", manifest.get("channel"), "main")
     require_equal("repo", manifest.get("repo"), args.expected_repo)
     require_equal("branch", manifest.get("branch"), "main")
-    require_equal("platformioEnv", manifest.get("platformioEnv"), "esp32s3_service")
-    require_equal("commandProfile", manifest.get("commandProfile"), "service")
-    require_equal("artifactName", manifest.get("artifactName"), "firmware-esp32s3-service")
+    require_equal("platformioEnv", manifest.get("platformioEnv"), "esp32s3")
+    require_equal("commandProfile", manifest.get("commandProfile"), "release")
+    require_equal("artifactName", manifest.get("artifactName"), "firmware-esp32s3")
     if args.expected_git_sha:
         require_equal("gitSha", manifest.get("gitSha"), args.expected_git_sha)
     if args.expected_workflow_run_id is not None:
@@ -65,9 +65,9 @@ def verify(args: argparse.Namespace) -> None:
     build_info = fetch_text(sibling_url(args.manifest_url, "BUILD_INFO.txt"))
     for line in (
         f"firmware_sha256={firmware_sha}",
-        "artifact_name=firmware-esp32s3-service",
-        "platformio_env=esp32s3_service",
-        "command_profile=service",
+        "artifact_name=firmware-esp32s3",
+        "platformio_env=esp32s3",
+        "command_profile=release",
     ):
         if line not in build_info:
             raise SystemExit(f"BUILD_INFO.txt missing {line}")

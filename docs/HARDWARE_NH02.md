@@ -55,20 +55,18 @@ page again.
 - Install or refresh the remote bench runtime:
   - `tools/hw/nh02/install.sh`
 - Build locally and update moved hardware through phone BLE OTA:
-  - `cd boatlock && pio run -e esp32s3_service`
-  - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
+  - `cd boatlock && pio run -e esp32s3`
+  - `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
 - Seed or recover over USB through `nh02`:
   - `tools/hw/nh02/flash.sh`
-- Flash an explicit command-scope profile through `nh02`:
-  - `tools/hw/nh02/flash.sh --profile release`
-  - `tools/hw/nh02/flash.sh --profile service`
+- Flash the dev/HIL acceptance profile through `nh02`:
   - `tools/hw/nh02/flash.sh --profile acceptance`
 - Build a firmware binary for BLE OTA:
-  - `cd boatlock && pio run -e esp32s3_service && shasum -a 256 .pio/build/esp32s3_service/firmware.bin`
+  - `cd boatlock && pio run -e esp32s3 && shasum -a 256 .pio/build/esp32s3/firmware.bin`
 - Upload firmware without ESP32 USB:
   - publish or serve `firmware.bin` from a trusted URL, then use the app Settings screen with Firmware OTA URL + SHA-256
 - Prove phone-bridged BLE OTA through the production app on `nh02`:
-  - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
+  - `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
 - Flash the current build without rebuilding:
   - `tools/hw/nh02/flash.sh --no-build`
 - Run post-flash hardware acceptance:
@@ -77,7 +75,7 @@ page again.
   - `tools/hw/nh02/acceptance.sh --no-reset`
 - Open the serial monitor through RFC2217:
   - `tools/hw/nh02/monitor.sh`
-- Check service/device status on the bench host:
+- Check bridge/device status on the bench host:
   - `tools/hw/nh02/status.sh`
 - Install or refresh Android USB tooling on `nh02`:
   - `tools/hw/nh02/android-install.sh`
@@ -87,7 +85,7 @@ page again.
   - `tools/hw/nh02/android-install-app.sh`
 - Enable Android ADB over Wi-Fi after initial USB discovery:
   - `tools/hw/nh02/android-wifi-debug.sh`
-- Android smoke/e2e wrappers use ADB Wi-Fi by default when no `--serial` is
+- Android smoke/check wrappers use ADB Wi-Fi by default when no `--serial` is
   passed. Set `BOATLOCK_NH02_ANDROID_WIFI_ADB=0` to force the default `adb`
   target selection.
 - Build, install/update, and run the Android BLE smoke app through `nh02`:
@@ -97,9 +95,9 @@ page again.
 - Build, install/update, and prove phone recovery after ESP32 reboot:
   - `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130`
 - Build, install/update, and prove compass calibration command delivery:
-  - `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130`
+  - `tools/hw/nh02/android-run-app-check.sh --compass --wait-secs 130`
 - Build, install/update, and prove BLE-visible hardware GPS fix:
-  - `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180`
+  - `tools/hw/nh02/android-run-app-check.sh --gps --wait-secs 180`
 - Run the full standard on-device HIL suite on the bench using the normal
   release firmware profile:
   - `tools/hw/nh02/run-sim-suite.sh`
@@ -108,46 +106,67 @@ page again.
 
 ## Profile-Aware Gate
 
-Firmware command-scope enforcement is implemented in the shared BLE command path. PlatformIO profile aliases and `tools/hw/nh02/flash.sh` profile reporting select whether the flashed firmware accepts only release commands, service commands, or service/test commands. `SIM_*` is release scope and runs as a safe software simulation mode in the ordinary firmware.
+Firmware command-scope enforcement is implemented in the shared BLE command
+path. The normal `esp32s3` firmware accepts release commands, including setup,
+BLE OTA, and `SIM_*`. The `esp32s3_acceptance` firmware additionally accepts
+dev/HIL sensor injection such as `SET_PHONE_GPS`.
 
 The effective firmware profile must stay visible at every bench entry point:
 
-- USB flash wrappers must print the effective PlatformIO environment and whether it is a `release`, `service`, or `acceptance` command-scope profile.
-- `tools/hw/nh02/flash.sh` may keep `BOATLOCK_PIO_ENV` as the override, but the accepted values must be documented and must not silently fall back from a requested service or acceptance profile to release.
-- `tools/hw/nh02/acceptance.sh` must know which profile is flashed. Release acceptance must keep `SIM_*` available through the normal BLE command path while service-only and external sensor-injection commands stay gated.
-- `tools/hw/nh02/android-run-app-e2e.sh --ota` must require a service-capable target firmware before sending `OTA_BEGIN`. If the OTA candidate is a release image that intentionally disables BLE OTA after reboot, the wrapper output must say so.
-- `tools/hw/nh02/android-run-app-e2e.sh --sim`, `--sim-suite`, and the smoke `sim` mode run against the release profile.
-- `tools/hw/nh02/run-sim-suite.sh` is the standard full on-device HIL bench gate. It flashes `release`, runs boot acceptance, then runs production-app `sim_suite`.
-- `tools/hw/nh02/install.sh` must be rerun after changing any tracked remote helper that enforces or reports the selected profile.
+- USB flash wrappers must print the effective PlatformIO environment and
+  command-scope profile.
+- `tools/hw/nh02/flash.sh` accepts the normal `esp32s3` environment by default
+  and `--profile acceptance` only when dev/HIL injection is required.
+- `tools/hw/nh02/acceptance.sh` must know which profile is flashed. Normal
+  acceptance keeps `SIM_*`, setup, and BLE OTA available while external
+  sensor-injection commands stay gated.
+- `tools/hw/nh02/android-run-app-check.sh --ota` runs against the normal firmware
+  and must prove post-update telemetry recovery.
+- `tools/hw/nh02/android-run-app-check.sh --sim`, `--sim-suite`, and the smoke
+  `sim` mode run against the normal firmware.
+- `tools/hw/nh02/run-sim-suite.sh` is the standard full on-device HIL bench
+  gate. It flashes the normal firmware, runs boot acceptance, then runs
+  production-app `sim_suite`.
+- `tools/hw/nh02/install.sh` must be rerun after changing any tracked remote
+  helper that enforces or reports the selected profile.
 
-Accepted flash profile selectors:
+Accepted flash profile selector:
 
-- `--profile release` or `BOATLOCK_PIO_ENV=release` builds `esp32s3_release`.
-- `--profile service` or `BOATLOCK_PIO_ENV=service` builds `esp32s3_service`.
-- `--profile acceptance` or `BOATLOCK_PIO_ENV=acceptance` builds `esp32s3_acceptance`.
+- `--profile acceptance` or `BOATLOCK_PIO_ENV=acceptance` builds
+  `esp32s3_acceptance`.
 
 Accepted direct PlatformIO environments:
 
-- `esp32s3`: release-compatible legacy environment kept for existing local and CI workflows.
-- `esp32s3_release`: explicit release profile.
-- `esp32s3_service`: explicit service profile for BLE OTA and calibration/service flows.
-- `esp32s3_acceptance`: explicit broad bench profile for service/test command validation.
-- `esp32s3_bno08x_sh2_uart`: service profile with SH2-UART compass support.
-- `esp32s3_debug_wifi_ota`: service profile with debug Wi-Fi/OTA flags; this is not proof that BLE OTA works.
-- `gpio_probe` and `uart_rvc_probe_rx12`: debug probe builds, not release/service/acceptance command-scope firmware.
+- `esp32s3`: normal firmware with setup, BLE OTA, and release commands.
+- `esp32s3_acceptance`: bench profile with dev/HIL sensor injection enabled.
+- `esp32s3_bno08x_sh2_uart`: normal command profile with SH2-UART compass
+  support.
+- `gpio_probe` and `uart_rvc_probe_rx12`: debug probe builds, not release
+  artifacts.
 
-`BOATLOCK_PIO_ENV` must name one of the accepted selectors above. An empty or unknown value is a wrapper error and must not fall back to the default release-compatible build.
+`BOATLOCK_PIO_ENV` must name one of the accepted selectors above. An empty or
+unknown value is a wrapper error and must not silently fall back to another
+build.
 
 Expected operator flow:
 
-1. Use phone BLE OTA as the normal moved-hardware update path when the current image supports OTA; use USB flash only to seed/recover an OTA-capable image.
-2. Flash the release profile for USB-bench water-readiness checks and verify service/external-injection commands are rejected without actuation.
-3. Update to the service profile for BLE OTA acceptance, then run `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware ... --wait-secs 1800`.
-4. Run quick on-device HIL on the release profile with the normal `nh02` acceptance plus Android `sim` smoke/e2e path.
-5. For the standard full on-device HIL suite, run `tools/hw/nh02/run-sim-suite.sh`; it flashes and validates the release profile before the suite.
-6. Return the bench to the release profile after HIL or service work unless the next task explicitly needs another profile.
+1. Use phone BLE OTA as the normal moved-hardware update path; use USB flash
+   only to seed/recover the device.
+2. Run USB-bench water-readiness checks against the normal firmware and verify
+   external-injection commands are rejected without actuation.
+3. Run phone BLE OTA proof with
+   `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`.
+4. Run quick on-device HIL on the normal firmware with the standard `nh02`
+   acceptance plus Android `sim` smoke/check path.
+5. For the standard full on-device HIL suite, run
+   `tools/hw/nh02/run-sim-suite.sh`; it flashes and validates the normal
+   firmware before the suite.
+6. Use `--profile acceptance` only when a test explicitly needs dev/HIL
+   injection, then return to the normal firmware.
 
-If `OTA_BEGIN` or `SIM_RUN` appears broken, check the printed profile first; the wrappers are expected to fail loudly instead of silently running the wrong profile.
+If `OTA_BEGIN` or `SIM_RUN` appears broken, check the printed profile first; the
+wrappers are expected to fail loudly instead of silently running the wrong
+profile.
 
 ## USB Seed/Recovery Deploy Path
 
@@ -165,7 +184,7 @@ If `OTA_BEGIN` or `SIM_RUN` appears broken, check the printed profile first; the
 5. In the app Settings screen, paste Firmware OTA URL and SHA-256, then start `Обновить по BLE`.
 6. The app downloads the binary, verifies SHA-256 before transfer, sends authenticated `OTA_BEGIN`, writes chunks to BLE characteristic `9abc`, then sends `OTA_FINISH`.
 7. ESP32 validates byte count and SHA-256 before finalizing the OTA partition and rebooting. Disconnect or failed validation aborts without changing the active boot partition.
-8. Bench automation can run the same path with `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`; the wrapper serves `firmware.bin` on `nh02`, exposes it to the phone with `adb reverse`, installs the production app with OTA e2e defines, and waits for post-reboot telemetry.
+8. Bench automation can run the same path with `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`; the wrapper serves `firmware.bin` on `nh02`, exposes it to the phone with `adb reverse`, installs the ordinary release app, starts its runtime OTA check, and waits for post-reboot telemetry.
    When `--serial` is omitted, the wrapper enables and uses Android ADB Wi-Fi
    automatically.
 9. Current BLE upload requests high connection priority, a larger MTU, and
@@ -179,7 +198,7 @@ If `OTA_BEGIN` or `SIM_RUN` appears broken, check the printed profile first; the
 11. Do not keep ESP32 debug Wi-Fi OTA running as the normal persistent bench
     channel while BLE is active. On this ESP32-S3/Arduino/NimBLE stack,
     Wi-Fi+BLE coexistence requires Wi-Fi modem sleep and was not reliable enough
-    for service flashing. Use Android ADB Wi-Fi to control the phone and BLE OTA
+    for firmware flashing. Use Android ADB Wi-Fi to control the phone and BLE OTA
     from the phone to flash the ESP32.
 12. The BLE log characteristic `78ab` mirrors firmware `logMessage()` serial
     lines generated while the phone is connected and subscribed, including
@@ -191,22 +210,22 @@ If `OTA_BEGIN` or `SIM_RUN` appears broken, check the printed profile first; the
 1. Rerun `tools/hw/nh02/install.sh` after changing tracked Android helpers.
 2. `tools/hw/nh02/android-install.sh` ensures `adb` exists on `nh02`.
 3. `tools/hw/nh02/android-status.sh` checks whether the phone is visible over USB and whether `adb devices -l` sees it.
-4. `tools/hw/nh02/android-install-app.sh` builds, copies, and installs the normal production app APK on the `nh02` phone without running a smoke/e2e probe.
+4. `tools/hw/nh02/android-install-app.sh` builds, copies, and installs the normal production app APK on the `nh02` phone without running a smoke/check probe.
 5. `tools/hw/nh02/android-wifi-debug.sh` can switch the same phone to ADB TCP/IP and prints `android_wifi_serial=<ip>:5555`.
 6. `tools/hw/nh02/android-run-smoke.sh` and
-   `tools/hw/nh02/android-run-app-e2e.sh` call the Wi-Fi ADB helper
+   `tools/hw/nh02/android-run-app-check.sh` call the Wi-Fi ADB helper
    automatically unless `BOATLOCK_NH02_ANDROID_WIFI_ADB=0` is set or an explicit
    `--serial` is passed.
 7. Any Android smoke wrapper can still use explicit `--serial <ip>:5555` to
    prove install/logcat/debug control over Wi-Fi instead of USB.
-8. `tools/hw/nh02/android-run-smoke.sh` copies the smoke APK to `nh02`, installs or updates it with remote `adb`, launches the app, and waits for the `BOATLOCK_SMOKE_RESULT` log line.
+8. `tools/hw/nh02/android-run-smoke.sh` copies the ordinary release app APK to `nh02`, installs or updates it with remote `adb`, launches a runtime check in the app, and waits for the `BOATLOCK_SMOKE_RESULT` log line.
 9. `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` additionally waits for first telemetry, cycles phone Bluetooth through ADB, and requires telemetry recovery without restarting the app.
 10. `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` waits for first telemetry, resets the ESP32-S3 with the tracked remote reset helper, and requires telemetry recovery without restarting the app.
-11. `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130` sends safe compass-service commands (`COMPASS_CAL_START`, `COMPASS_DCD_AUTOSAVE_OFF`, `COMPASS_DCD_SAVE`) and requires device log acknowledgements.
-12. `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180` waits for production-app BLE telemetry with non-zero valid coordinates and GNSS quality `>0`; this can run while ESP32 is powered away from USB if BLE remains reachable.
-13. `tools/hw/nh02/android-run-app-e2e.sh --sim-suite --wait-secs 1800` runs `SIM_LIST`, every listed scenario through `SIM_RUN:<id>,0`, polls `SIM_STATUS`, collects `SIM_REPORT`, and fails on any `pass:false`.
+11. `tools/hw/nh02/android-run-app-check.sh --compass --wait-secs 130` sends safe compass setup commands (`COMPASS_CAL_START`, `COMPASS_DCD_AUTOSAVE_OFF`, `COMPASS_DCD_SAVE`) and requires device log acknowledgements.
+12. `tools/hw/nh02/android-run-app-check.sh --gps --wait-secs 180` waits for production-app BLE telemetry with non-zero valid coordinates and GNSS quality `>0`; this can run while ESP32 is powered away from USB if BLE remains reachable.
+13. `tools/hw/nh02/android-run-app-check.sh --sim-suite --wait-secs 1800` runs `SIM_LIST`, every listed scenario through `SIM_RUN:<id>,0`, polls `SIM_STATUS`, collects `SIM_REPORT`, and fails on any `pass:false`.
 14. `tools/hw/nh02/run-sim-suite.sh` wraps the full bench flow around `--sim-suite`: helper install, target proof, release flash, boot acceptance, and production-app suite run.
-15. `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800` verifies phone download, SHA-256 check, BLE upload, ESP32 reboot, and app telemetry recovery.
+15. `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800` verifies phone download, SHA-256 check, BLE upload, ESP32 reboot, and app telemetry recovery.
 16. If the phone appears only as `MTP` or a vendor USB device and not in `adb devices`, the cable path is alive but USB debugging is still off on the phone.
 17. Status smoke recovery may clear `STOP_CMD` directly to `IDLE/WARN` after a
     zero-throttle manual recovery command without exposing a visible `MANUAL`
@@ -219,7 +238,7 @@ If `OTA_BEGIN` or `SIM_RUN` appears broken, check the printed profile first; the
 - The tracked `adb install -r` update path succeeded after the phone-side MIUI flow was satisfied: Xiaomi account, inserted SIM card, and `Install via USB` approval.
 - Treat first-install policy and later USB update as separate checkpoints; do not assume the first failure means all future `adb install -r` updates are blocked.
 
-## Bench Service Path
+## Bench Bridge Path
 
 - Runtime logs go through the persistent RFC2217 bridge on `nh02`.
 - `monitor.sh` uses local `pyserial-miniterm` against the RFC2217 endpoint.
@@ -227,32 +246,30 @@ If `OTA_BEGIN` or `SIM_RUN` appears broken, check the printed profile first; the
 - BLE OTA through the phone is the normal no-USB firmware update path after the
   first OTA-capable image is present.
 - Keep the expected SHA-256 from the build output or CI artifact metadata; do not let the phone trust an arbitrary downloaded binary without comparing the expected hash first.
-- The app wrappers build one release Android/macOS app. Service controls are in
-  that app and hidden behind the Settings `Сервисный режим` switch. The
+- The app wrappers build one release Android/macOS app. Setup controls are in
+  that app and hidden behind the Settings `Настройка оборудования` switch. The
   one-button release OTA path resolves firmware through the latest GitHub
-  Release via `BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=dslimp/boatlock`. Local
-  wrapper shortcuts: `tools/android/build-app-apk.sh` and
-  `tools/macos/build-app.sh`.
+  Release for `dslimp/boatlock`. Local wrapper shortcuts:
+  `tools/android/build-app-apk.sh` and `tools/macos/build-app.sh`.
 - CI publishes one ready-to-install app artifact per platform:
   `flutter-android-apk/boatlock-app.apk` and
   `flutter-macos-app/boatlock-macos.zip`.
 - macOS app local acceptance is covered by
   `tools/macos/acceptance.sh`. Use `--static-only` for bundle/signature/
   entitlement checks, `--artifact-zip boatlock-macos.zip` for a CI
-  artifact, and `--manual` to open the app with the service update checklist.
+  artifact, and `--manual` to open the app with the update checklist.
   Without BLE hardware this proves only bundle/runtime readiness, not OTA.
-- Android app e2e can exercise the manifest-backed latest-release path with
-  `tools/hw/nh02/android-run-app-e2e.sh --ota-latest-release --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin`.
-  The wrapper serves both `manifest.json` and `firmware.bin`, builds the app
-  with `BOATLOCK_APP_E2E_OTA_LATEST_RELEASE=true`, and still waits for
+- Android app checks can exercise the manifest-backed latest-release path with
+  `tools/hw/nh02/android-run-app-check.sh --ota-latest-release --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin`.
+  The wrapper serves both `manifest.json` and `firmware.bin`, starts the normal
+  app with runtime check extras, and still waits for
   post-reboot telemetry.
-- Tagged releases publish `manifest.json` and
-  `firmware-esp32s3-service.bin` with the same `esp32s3_service` and `service`
-  profile constraints as the local manifest path. The fallback release metadata
-  files are `BUILD_INFO-esp32s3-service.txt` and
-  `SHA256SUMS-esp32s3-service.txt`.
+- Tagged releases publish `manifest.json` and `firmware-esp32s3.bin` with the
+  same `esp32s3` and `release` constraints as the local manifest path. The
+  fallback release metadata files are `BUILD_INFO-esp32s3.txt` and
+  `SHA256SUMS-esp32s3.txt`.
 - `tools/hw/nh02/flash.sh` stages `boot_app0.bin` and flashes it at `0xe000`, so a USB seed flash after prior OTA boots the freshly flashed `ota_0` image instead of a stale OTA slot.
-- Keep the seed flash recoverable through USB. If a BLE OTA upload fails before `OTA_FINISH`, the current firmware remains active; if the app cannot reconnect, flash the release profile again through `tools/hw/nh02/flash.sh --profile release`.
+- Keep the seed flash recoverable through USB. If a BLE OTA upload fails before `OTA_FINISH`, the current firmware remains active; if the app cannot reconnect, flash the normal firmware again through `tools/hw/nh02/flash.sh`.
 
 ## Compass Wiring
 

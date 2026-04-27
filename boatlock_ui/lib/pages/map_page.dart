@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+import '../app_runtime_command.dart';
 import '../ble/ble_boatlock.dart';
-import '../e2e/app_e2e_probe.dart';
+import '../app_check/app_check_probe.dart';
 import '../models/anchor_event.dart';
 import '../models/anchor_preflight.dart';
 import '../models/boat_data.dart';
+import '../smoke/ble_smoke_mode.dart';
 import '../widgets/manual_control_sheet.dart';
 import '../widgets/status_panel.dart';
 import 'diagnostics_page.dart';
@@ -39,7 +41,7 @@ class MapPage extends StatefulWidget {
 class _MapPageState extends State<MapPage> {
   BoatData? boatData;
   late BleBoatLock ble;
-  BoatLockAppE2eProbe? _e2eProbe;
+  BoatLockAppCheckProbe? _appCheckProbe;
   LatLng? selectedAnchorPos;
   final MapController _mapController = MapController();
   double _zoom = 16;
@@ -202,11 +204,32 @@ class _MapPageState extends State<MapPage> {
     );
   }
 
+  void _startAppCheck(BoatLockAppCheckConfig config) {
+    _appCheckProbe?.dispose();
+    _appCheckProbe = BoatLockAppCheckProbe(ble: ble, config: config);
+  }
+
+  Future<void> _loadRuntimeCommand() async {
+    final command = await BoatLockRuntimeCommand.readInitial();
+    if (!mounted || !command.enabled) {
+      return;
+    }
+    _startAppCheck(
+      BoatLockAppCheckConfig(
+        mode: boatLockSmokeModeFromString(command.mode),
+        otaUrl: command.otaUrl,
+        otaSha256: command.otaSha256,
+        otaLatestRelease: command.otaLatestRelease,
+        firmwareManifestUrl: command.firmwareManifestUrl,
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
     void handleData(BoatData? data) {
-      _e2eProbe?.onData(data);
+      _appCheckProbe?.onData(data);
       setState(() {
         _captureTelemetryEvent(boatData, data);
         boatData = data;
@@ -221,7 +244,7 @@ class _MapPageState extends State<MapPage> {
     }
 
     void handleLog(String line) {
-      _e2eProbe?.onDeviceLog(line);
+      _appCheckProbe?.onDeviceLog(line);
       if (_isAnchorEventLog(line)) {
         _recordAnchorEvent(
           _deviceEventToken(line),
@@ -235,11 +258,11 @@ class _MapPageState extends State<MapPage> {
     ble =
         widget.bleFactory?.call(onData: handleData, onLog: handleLog) ??
         BleBoatLock(onData: handleData, onLog: handleLog);
-    _e2eProbe = BoatLockAppE2eProbe.maybeCreate(ble);
     _bootstrap();
   }
 
   Future<void> _bootstrap() async {
+    await _loadRuntimeCommand();
     await ble.connectAndListen();
     if (widget.enableLocation) {
       await _initLocation();
@@ -248,7 +271,7 @@ class _MapPageState extends State<MapPage> {
 
   @override
   void dispose() {
-    _e2eProbe?.dispose();
+    _appCheckProbe?.dispose();
     ble.dispose();
     _posSub?.cancel();
     super.dispose();
@@ -478,6 +501,7 @@ class _MapPageState extends State<MapPage> {
               MaterialPageRoute(
                 builder: (_) => SettingsPage(
                   ble: ble,
+                  onStartAppCheck: _startAppCheck,
                   holdHeading: boatData?.holdHeading ?? false,
                   stepMaxSpd: boatData?.stepMaxSpd ?? 1000,
                   stepAccel: boatData?.stepAccel ?? 500,

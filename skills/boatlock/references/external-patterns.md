@@ -242,7 +242,7 @@ Implication for BoatLock:
 - Anchor jog/nudge projection should be fail-atomic: compute and validate the whole next point before publishing or persisting it.
 - Expose distance/bearing-to-anchor in the main UX.
 - Keep heading hold separate from position hold in both UI and state model.
-- Surface calibration / sensor readiness as enable-blocking status, not hidden service detail.
+- Surface calibration / sensor readiness as enable-blocking status, not hidden setup detail.
 - Avoid claiming precision beyond consumer GNSS reality.
 
 ## What pypilot And Similar Open Autopilots Get Right
@@ -312,7 +312,7 @@ Implication for BoatLock:
 - UART-RVC is a one-way heading stream. It is useful for a simple, robust bench path, but it cannot configure dynamic calibration, save Dynamic Calibration Data, or perform tare.
 - SH2 features such as rotation-vector reports, dynamic calibration config, DCD save/autosave, and tare require a bidirectional SH2 transport: SH2 UART, SPI, or I2C.
 - On this bench, I2C was rejected by hardware evidence, so SH2-UART is the preferred migration path. Keep it behind an explicit build target until the module is physically rewired.
-- Tare changes the heading basis and can make control point the wrong way. Do not run tare casually in generic smokes; keep it as an explicit service/calibration action.
+- Tare changes the heading basis and can make control point the wrong way. Do not run tare casually in generic smokes; keep it as an explicit setup/calibration action.
 
 Implication for BoatLock:
 - Keep the accepted RVC production path buildable and testable while SH2-UART is being brought up.
@@ -331,7 +331,7 @@ Implication for BoatLock:
 - Use USB once to seed BLE OTA capability, then let the phone bridge the firmware binary to ESP32 over the existing BLE link.
 - Require an authenticated `OTA_BEGIN` when the device is paired, and require an expected SHA-256 before the phone starts transfer.
 - Keep USB flashing through `tools/hw/nh02/flash.sh` as the recovery path for failed OTA, bad hashes, or partition/bootloader changes.
-- For Android, prove Wi-Fi ADB by installing/running a smoke or e2e APK through `--serial <ip>:5555`; `adb devices` alone is only discovery proof.
+- For Android, prove Wi-Fi ADB by installing/running a smoke or ordinary app APK through `--serial <ip>:5555`; `adb devices` alone is only discovery proof.
 
 ## What STEP/DIR Steering Driver Guidance Gets Right
 
@@ -354,13 +354,13 @@ Implication for BoatLock:
 
 ## What Flutter And GitHub Release Delivery Guidance Gets Right
 
-- Flutter's CLI is the canonical build entry point for platform artifacts; use `flutter build apk --release` and `flutter build macos --release` with explicit `--dart-define` values only for runtime configuration such as the firmware release source.
+- Flutter's CLI is the canonical build entry point for platform artifacts; use `flutter build apk --release` and `flutter build macos --release` without app-behavior `dart-define` variants.
 - Flutter macOS release builds run inside the macOS App Sandbox by default. The release app downloads firmware, so it must keep the network-client entitlement in release builds.
 - GitHub release assets have a public browser download URL and an API asset URL. For token-backed/private validation, request the API asset URL with `Accept: application/octet-stream` and handle the normal binary/redirect response path.
 
 Implication for BoatLock:
-- Ship one release app artifact per platform; hide OTA/tuning controls behind the app's service-mode switch instead of producing service-only app variants.
-- Publish service firmware assets with a manifest that the app validator accepts (`esp32s3_service`, `service`, SHA-256, size, main channel).
+- Ship one release app artifact per platform; hide OTA/tuning controls behind the app's setup switch instead of producing alternate app variants.
+- Publish normal firmware assets with a manifest that the app validator accepts (`esp32s3`, `release`, SHA-256, size, main/release channel).
 - Do not rely on unauthenticated browser release URLs as proof that private release-asset validation works.
 
 ## Best-Practice Decisions For BoatLock

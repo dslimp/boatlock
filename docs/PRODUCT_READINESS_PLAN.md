@@ -92,10 +92,10 @@ Important mismatch:
 ### P0 Before Powered Bench
 
 - Keep app command acceptance explicit: operator UI must distinguish command
-  sent from telemetry/log-confirmed acceptance, especially for service and
+  sent from telemetry/log-confirmed acceptance, especially for setup and
   acceptance workflows.
 - Prove app-visible firmware command-profile rejections on `nh02` and Android so
-  release firmware blocking service/dev/HIL commands cannot look like a silent
+  release firmware blocking setup/dev/HIL commands cannot look like a silent
   write.
 - Resolve paired-mode auth policy for raw safety commands: either document and
   test an intentional emergency exception, or require `SEC_CMD` for all
@@ -103,7 +103,7 @@ Important mismatch:
 - Prove or fix GPS-to-compass correction source ownership. Phone GPS fallback is
   display/telemetry only and must not indirectly bias control heading correction.
 - Prove BLE command profiles end-to-end on `nh02` and Android: release rejection
-  logs, service positive paths, and acceptance HIL positive paths.
+  logs, setup positive paths, and acceptance HIL positive paths.
 - Identify the exact brushed/collector motor driver with
   `docs/BRUSHED_MOTOR_DRIVER_INTAKE.md`. Current firmware only proves a simple
   `PWM=7` plus `DIR=8/10` command shape; it does not prove the real driver's
@@ -147,7 +147,7 @@ Important mismatch:
 ### P2 Product Polish After Safe Water Proof
 
 - Add heading-hold as a separate operator concept from position hold in the app.
-- Add service-only setup flows for heading offset, steering bow-zero, and boat
+- Add setup flows for heading offset, steering bow-zero, and boat
   scale style tuning.
 - Implement the documented second-controller gate in `docs/MANUAL_CONTROL.md`
   and `docs/BLE_PROTOCOL.md`: per-client identity/auth, read-only telemetry

@@ -11,7 +11,6 @@ enum BleSmokeMode {
   ota,
 }
 
-const kBoatLockSmokeModeDefine = 'BOATLOCK_SMOKE_MODE';
 const kBoatLockDefaultSmokeModeName = 'basic';
 
 extension BleSmokeModeWireName on BleSmokeMode {

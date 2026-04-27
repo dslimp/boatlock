@@ -6,8 +6,8 @@ const _sha = '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff';
 Map<String, dynamic> _manifestJson({
   String channel = 'main',
   String branch = 'main',
-  String platformioEnv = 'esp32s3_service',
-  String commandProfile = 'service',
+  String platformioEnv = 'esp32s3',
+  String commandProfile = 'release',
   String binaryUrl = 'https://example.com/firmware/main/firmware.bin',
   String sha256 = _sha,
   int size = 711776,
@@ -22,7 +22,7 @@ Map<String, dynamic> _manifestJson({
     'firmwareVersion': '0.2.0',
     'platformioEnv': platformioEnv,
     'commandProfile': commandProfile,
-    'artifactName': 'firmware-esp32s3-service',
+    'artifactName': 'firmware-esp32s3',
     'binaryUrl': binaryUrl,
     'size': size,
     'sha256': sha256,
@@ -31,35 +31,35 @@ Map<String, dynamic> _manifestJson({
 }
 
 void main() {
-  test('parses main service firmware manifest', () {
+  test('parses main firmware manifest', () {
     final manifest = FirmwareUpdateManifest.fromJson(_manifestJson());
 
     expect(manifest.channel, 'main');
     expect(manifest.branch, 'main');
-    expect(manifest.platformioEnv, 'esp32s3_service');
-    expect(manifest.commandProfile, 'service');
+    expect(manifest.platformioEnv, 'esp32s3');
+    expect(manifest.commandProfile, 'release');
     expect(manifest.sha256, _sha);
     expect(manifest.shortGitSha, '10d54f1');
     expect(manifest.displayLabel, '0.2.0 10d54f1');
   });
 
-  test('parses release service firmware manifest', () {
+  test('parses release firmware manifest', () {
     final manifest = FirmwareUpdateManifest.fromJson(
       _manifestJson(
         channel: 'release',
         branch: 'release/v0.2.x',
         binaryUrl:
-            'https://github.com/dslimp/boatlock/releases/download/v0.2.0/firmware-esp32s3-service.bin',
+            'https://github.com/dslimp/boatlock/releases/download/v0.2.0/firmware-esp32s3.bin',
       ),
     );
 
     expect(manifest.channel, 'release');
     expect(manifest.branch, 'release/v0.2.x');
-    expect(manifest.platformioEnv, 'esp32s3_service');
-    expect(manifest.commandProfile, 'service');
+    expect(manifest.platformioEnv, 'esp32s3');
+    expect(manifest.commandProfile, 'release');
   });
 
-  test('rejects invalid branch/channel and non-service manifests', () {
+  test('rejects invalid branch/channel and mismatched firmware manifests', () {
     expect(
       () => FirmwareUpdateManifest.fromJson(_manifestJson(branch: 'feature/x')),
       throwsFormatException,
@@ -72,13 +72,13 @@ void main() {
     );
     expect(
       () => FirmwareUpdateManifest.fromJson(
-        _manifestJson(platformioEnv: 'esp32s3_release'),
+        _manifestJson(platformioEnv: 'esp32s3_acceptance'),
       ),
       throwsFormatException,
     );
     expect(
       () => FirmwareUpdateManifest.fromJson(
-        _manifestJson(commandProfile: 'release'),
+        _manifestJson(commandProfile: 'acceptance'),
       ),
       throwsFormatException,
     );

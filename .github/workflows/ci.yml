@@ -127,35 +127,7 @@ jobs:
             echo "firmware_sha256=${firmware_sha256}"
             echo "artifact_name=firmware-esp32s3"
             echo "platformio_env=esp32s3"
-            echo "github_ref=${GITHUB_REF}"
-            echo "github_sha=${GITHUB_SHA}"
-          } > "${artifact_dir}/BUILD_INFO.txt"
-
-          (cd "${artifact_dir}" && sha256sum firmware.bin bootloader.bin partitions.bin firmware.elf > SHA256SUMS)
-
-      - name: Build service firmware (esp32s3_service)
-        working-directory: boatlock
-        run: pio run -e esp32s3_service
-
-      - name: Pack service firmware binary artifact
-        run: |
-          set -euo pipefail
-          artifact_dir="dist/firmware-esp32s3-service"
-          build_dir="boatlock/.pio/build/esp32s3_service"
-          mkdir -p "${artifact_dir}"
-          cp "${build_dir}/firmware.bin" "${artifact_dir}/firmware.bin"
-          cp "${build_dir}/bootloader.bin" "${artifact_dir}/bootloader.bin"
-          cp "${build_dir}/partitions.bin" "${artifact_dir}/partitions.bin"
-          cp "${build_dir}/firmware.elf" "${artifact_dir}/firmware.elf"
-
-          firmware_version="$(python3 tools/ci/check_firmware_version.py --print-only)"
-          firmware_sha256="$(sha256sum "${artifact_dir}/firmware.bin" | awk '{print $1}')"
-          {
-            echo "firmware_version=${firmware_version}"
-            echo "firmware_sha256=${firmware_sha256}"
-            echo "artifact_name=firmware-esp32s3-service"
-            echo "platformio_env=esp32s3_service"
-            echo "command_profile=service"
+            echo "command_profile=release"
             echo "github_ref=${GITHUB_REF}"
             echo "github_sha=${GITHUB_SHA}"
             echo "github_run_id=${GITHUB_RUN_ID}"
@@ -169,13 +141,6 @@ jobs:
           name: firmware-esp32s3
           if-no-files-found: error
           path: dist/firmware-esp32s3/*
-
-      - name: Upload service firmware binary artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: firmware-esp32s3-service
-          if-no-files-found: error
-          path: dist/firmware-esp32s3-service/*
 
   flutter-checks:
     name: flutter-checks
@@ -207,9 +172,9 @@ jobs:
         working-directory: boatlock_ui
         run: flutter test
 
-      - name: Test service UI
+      - name: Test setup UI
         working-directory: boatlock_ui
-        run: flutter test test/settings_page_service_ui_test.dart
+        run: flutter test test/settings_page_setup_ui_test.dart
 
   flutter-build-android:
     name: flutter-build-android
@@ -253,9 +218,7 @@ jobs:
         working-directory: boatlock_ui
         env:
           GRADLE_OPTS: -Dorg.gradle.vfs.watch=false
-        run: |
-          flutter build apk --release \
-            --dart-define=BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=${{ github.repository }}
+        run: flutter build apk --release
 
       - name: Pack Android APK
         run: |
@@ -325,9 +288,7 @@ jobs:
 
       - name: Build macOS app
         working-directory: boatlock_ui
-        run: |
-          flutter build macos --release \
-            --dart-define=BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=${{ github.repository }}
+        run: flutter build macos --release
 
       - name: Pack macOS app
         working-directory: boatlock_ui
@@ -393,47 +354,29 @@ jobs:
           cp artifacts/firmware-esp32s3/partitions.bin "${release_dir}/partitions-esp32s3.bin"
           cp artifacts/firmware-esp32s3/firmware.elf "${release_dir}/firmware-esp32s3.elf"
 
-          cp artifacts/firmware-esp32s3-service/firmware.bin "${release_dir}/firmware-esp32s3-service.bin"
-          cp artifacts/firmware-esp32s3-service/bootloader.bin "${release_dir}/bootloader-esp32s3-service.bin"
-          cp artifacts/firmware-esp32s3-service/partitions.bin "${release_dir}/partitions-esp32s3-service.bin"
-          cp artifacts/firmware-esp32s3-service/firmware.elf "${release_dir}/firmware-esp32s3-service.elf"
-
           release_sha256="$(sha256sum "${release_dir}/firmware-esp32s3.bin" | awk '{print $1}')"
           {
             echo "firmware_version=${firmware_version}"
             echo "firmware_sha256=${release_sha256}"
             echo "artifact_name=firmware-esp32s3"
             echo "platformio_env=esp32s3"
+            echo "command_profile=release"
             echo "release_branch=${release_branch}"
             echo "github_ref=${GITHUB_REF}"
             echo "github_sha=${GITHUB_SHA}"
             echo "github_run_id=${GITHUB_RUN_ID}"
           } > "${release_dir}/BUILD_INFO-esp32s3.txt"
 
-          service_sha256="$(sha256sum "${release_dir}/firmware-esp32s3-service.bin" | awk '{print $1}')"
-          {
-            echo "firmware_version=${firmware_version}"
-            echo "firmware_sha256=${service_sha256}"
-            echo "artifact_name=firmware-esp32s3-service"
-            echo "platformio_env=esp32s3_service"
-            echo "command_profile=service"
-            echo "release_branch=${release_branch}"
-            echo "github_ref=${GITHUB_REF}"
-            echo "github_sha=${GITHUB_SHA}"
-            echo "github_run_id=${GITHUB_RUN_ID}"
-          } > "${release_dir}/BUILD_INFO-esp32s3-service.txt"
-
           (
             cd "${release_dir}"
             sha256sum firmware-esp32s3.bin bootloader-esp32s3.bin partitions-esp32s3.bin firmware-esp32s3.elf BUILD_INFO-esp32s3.txt > SHA256SUMS-esp32s3.txt
-            sha256sum firmware-esp32s3-service.bin bootloader-esp32s3-service.bin partitions-esp32s3-service.bin firmware-esp32s3-service.elf BUILD_INFO-esp32s3-service.txt > SHA256SUMS-esp32s3-service.txt
           )
 
           python3 tools/ci/generate_firmware_update_manifest.py \
-            --firmware "${release_dir}/firmware-esp32s3-service.bin" \
+            --firmware "${release_dir}/firmware-esp32s3.bin" \
             --out "${release_dir}/manifest.json" \
             --base-url "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}" \
-            --binary-filename "firmware-esp32s3-service.bin" \
+            --binary-filename "firmware-esp32s3.bin" \
             --channel release \
             --branch "${release_branch}" \
             --git-sha "${GITHUB_SHA}" \

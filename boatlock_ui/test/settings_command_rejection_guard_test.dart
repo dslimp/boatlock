@@ -8,14 +8,14 @@ void main() {
     const oldRejection = BleCommandRejection(
       reason: 'profile',
       profile: 'release',
-      scope: 'service',
-      command: 'SET_COMPASS_OFFSET:1.0',
+      scope: 'unknown',
+      command: 'SET_ROUTE:old',
     );
     const newRejection = BleCommandRejection(
       reason: 'profile',
       profile: 'release',
-      scope: 'service',
-      command: 'SET_STEP_MAXSPD:1200',
+      scope: 'dev_hil',
+      command: 'SET_PHONE_GPS:59,30',
     );
 
     final snapshot = BleDebugSnapshot.initial().copyWith(
@@ -28,7 +28,7 @@ void main() {
       findMatchingCommandRejectionAfter(
         snapshot,
         baselineEvents: 1,
-        commandPrefix: 'SET_STEP_MAXSPD',
+        commandPrefix: 'SET_PHONE_GPS',
       ),
       newRejection,
     );
@@ -36,7 +36,7 @@ void main() {
       findMatchingCommandRejectionAfter(
         snapshot,
         baselineEvents: 1,
-        commandPrefix: 'SET_COMPASS_OFFSET',
+        commandPrefix: 'SET_ROUTE',
       ),
       isNull,
     );
@@ -46,8 +46,8 @@ void main() {
     const rejection = BleCommandRejection(
       reason: 'profile',
       profile: 'release',
-      scope: 'service',
-      command: 'RESET_COMPASS_OFFSET',
+      scope: 'unknown',
+      command: 'SET_ROUTE:old',
     );
 
     final snapshot = BleDebugSnapshot.initial().copyWith(
@@ -59,7 +59,7 @@ void main() {
       findMatchingCommandRejectionAfter(
         snapshot,
         baselineEvents: 0,
-        commandPrefix: 'RESET_COMPASS_OFFSET',
+        commandPrefix: 'SET_ROUTE',
       ),
       rejection,
     );
@@ -69,14 +69,14 @@ void main() {
     const beginRejection = BleCommandRejection(
       reason: 'profile',
       profile: 'release',
-      scope: 'service',
-      command: 'OTA_BEGIN:4096,abcd',
+      scope: 'unknown',
+      command: 'SET_ROUTE:old',
     );
     const finishRejection = BleCommandRejection(
       reason: 'profile',
       profile: 'release',
-      scope: 'service',
-      command: 'OTA_FINISH',
+      scope: 'dev_hil',
+      command: 'SET_PHONE_GPS:59,30',
     );
 
     final snapshot = BleDebugSnapshot.initial().copyWith(
@@ -89,7 +89,7 @@ void main() {
       findAnyMatchingCommandRejectionAfter(
         snapshot,
         baselineEvents: 0,
-        commandPrefixes: const ['OTA_BEGIN', 'OTA_FINISH'],
+        commandPrefixes: const ['SET_ROUTE', 'SET_PHONE_GPS'],
       ),
       finishRejection,
     );

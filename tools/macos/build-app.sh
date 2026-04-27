@@ -8,9 +8,6 @@ FLUTTER_DIR="${REPO_ROOT}/boatlock_ui"
 
 BOATLOCK_MACOS_FLUTTER_BIN="${BOATLOCK_MACOS_FLUTTER_BIN:-${REPO_ROOT}/flutter/bin/flutter}"
 RUN_PUB_GET=0
-FIRMWARE_MANIFEST_URL=""
-FIRMWARE_GITHUB_REPO=""
-LATEST_RELEASE_GITHUB_REPO="${BOATLOCK_LATEST_RELEASE_GITHUB_REPO:-dslimp/boatlock}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -21,14 +18,6 @@ while [[ $# -gt 0 ]]; do
     --release)
       shift
       ;;
-    --firmware-manifest-url)
-      FIRMWARE_MANIFEST_URL="${2:?missing firmware manifest URL}"
-      shift 2
-      ;;
-    --firmware-github-repo)
-      FIRMWARE_GITHUB_REPO="${2:?missing GitHub repository}"
-      shift 2
-      ;;
     *)
       echo "unknown argument: $1" >&2
       exit 1
@@ -36,21 +25,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "${FIRMWARE_MANIFEST_URL}" && -z "${FIRMWARE_GITHUB_REPO}" ]]; then
-  FIRMWARE_GITHUB_REPO="${LATEST_RELEASE_GITHUB_REPO}"
-fi
-
 build_args=(--release)
-if [[ -n "${FIRMWARE_MANIFEST_URL}" ]]; then
-  build_args+=(
-    --dart-define="BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL=${FIRMWARE_MANIFEST_URL}"
-  )
-fi
-if [[ -n "${FIRMWARE_GITHUB_REPO}" ]]; then
-  build_args+=(
-    --dart-define="BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=${FIRMWARE_GITHUB_REPO}"
-  )
-fi
 
 (
   cd "${FLUTTER_DIR}"

@@ -30,25 +30,21 @@
   - `tools/ci/run_local_prepowered_gate.sh`
 - Firmware build:
   - `cd boatlock && pio run -e esp32s3`
-- Explicit firmware profile builds:
-  - `cd boatlock && pio run -e esp32s3_release`
-  - `cd boatlock && pio run -e esp32s3_service`
+- Acceptance firmware profile build:
   - `cd boatlock && pio run -e esp32s3_acceptance`
-- Debug Wi-Fi/OTA firmware build:
-  - `cd boatlock && BOATLOCK_WIFI_SSID=... BOATLOCK_WIFI_PASS=... BOATLOCK_OTA_PASS=... pio run -e esp32s3_debug_wifi_ota`
 - Normal phone BLE OTA firmware update:
-  - build `boatlock/.pio/build/esp32s3_service/firmware.bin`
+  - build `boatlock/.pio/build/esp32s3/firmware.bin`
   - publish/serve the binary from a trusted URL and copy its SHA-256
   - in the app Settings screen, use Firmware OTA URL + SHA-256 to upload over BLE
-  - bench automation: `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
+  - bench automation: `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
   - USB flash is only the seed/recovery path when the target lacks an OTA-capable image or cannot reconnect over BLE
   - if BLE discovery may take time, add `--wait-secs 1800`; the wrapper wait
     starts before scan/connect and can expire during upload when advertising
     appears late
 - Latest-release phone bridge:
-  - release app builds use `BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=dslimp/boatlock`
+  - release app builds use the built-in `dslimp/boatlock` GitHub release source
   - local shortcuts: `tools/android/build-app-apk.sh` and `tools/macos/build-app.sh`
-  - local manifest-backed bench automation: `tools/hw/nh02/android-run-app-e2e.sh --ota-latest-release --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin`
+  - local manifest-backed bench automation: `tools/hw/nh02/android-run-app-check.sh --ota-latest-release --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin`
 - Full native tests:
   - `cd boatlock && platformio test -e native`
 - Do not run multiple `platformio test -e native ...` commands in parallel against the same checkout/build directory. PlatformIO shares `.pio/build/native`, and parallel suites can kill or corrupt each other; run suites sequentially or use isolated worktrees/build dirs.
@@ -62,8 +58,8 @@
   - `cd boatlock_ui && flutter test`
 - App release builds:
   - Android and macOS app wrappers build release artifacts only.
-  - Do not add separate debug/service app variants; the release app includes
-    service controls hidden behind the Settings `Сервисный режим` switch.
+  - Do not add separate debug or alternate app variants; the release app includes
+    setup controls hidden behind the Settings `Настройка оборудования` switch.
   - Android APK output is `boatlock_ui/build/app/outputs/flutter-apk/app-release.apk`.
   - macOS app output is `boatlock_ui/build/macos/Build/Products/Release/boatlock_ui.app`.
 - Offline simulation harness:
@@ -73,10 +69,8 @@
   - `python3 tools/sim/run_soak.py --hours 6 --check --json-out tools/sim/soak_report.json`
 - NH02 hardware bench:
   - `tools/hw/nh02/install.sh`
-  - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
+  - `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
   - `tools/hw/nh02/flash.sh` (USB seed/recovery)
-  - `tools/hw/nh02/flash.sh --profile release`
-  - `tools/hw/nh02/flash.sh --profile service`
   - `tools/hw/nh02/flash.sh --profile acceptance`
   - `tools/hw/nh02/acceptance.sh`
   - `pytest -q tools/hw/nh02/test_acceptance.py`
@@ -93,80 +87,82 @@
   - verify display redraws still work
   - verify `/boatlock/*.jsonl` grows on the card
   - for rotation/low-space work, test file rotation or low-space deletion on real media before water use
-- Android USB + BLE smoke:
+- Android USB + BLE app checks:
   - `tools/android/status.sh`
   - `tools/android/build-app-apk.sh`
-  - `tools/android/run-app-e2e.sh`
-  - `tools/android/build-smoke-apk.sh`
+  - `tools/android/run-app-check.sh`
   - `tools/android/run-smoke.sh`
-  - `tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130`
-  - `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130`
-  - `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180`
-  - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin`
-  - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
-  - `tools/hw/nh02/android-run-app-e2e.sh --sim-suite --wait-secs 1800`
+  - `tools/hw/nh02/android-run-app-check.sh --manual --wait-secs 130`
+  - `tools/hw/nh02/android-run-app-check.sh --compass --wait-secs 130`
+  - `tools/hw/nh02/android-run-app-check.sh --gps --wait-secs 180`
+  - `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin`
+  - `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
+  - `tools/hw/nh02/android-run-app-check.sh --sim-suite --wait-secs 1800`
   - `tools/hw/nh02/run-sim-suite.sh`
-  - `tools/hw/nh02/android-run-app-e2e.sh --reconnect --wait-secs 130`
-  - `tools/hw/nh02/android-run-app-e2e.sh --esp-reset --wait-secs 130`
+  - `tools/hw/nh02/android-run-app-check.sh --reconnect --wait-secs 130`
+  - `tools/hw/nh02/android-run-app-check.sh --esp-reset --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --compass --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --gps --wait-secs 180`
   - `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130`
   - `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130`
-- Smoke APK mode constants and parser live in `boatlock_ui/lib/smoke/ble_smoke_mode.dart`.
-- Production-app e2e builds use `BOATLOCK_APP_E2E_MODE` and `lib/main.dart`; do not count the smoke entrypoint as production-app acceptance.
-- Shell smoke wrapper mode allowlist lives in `tools/android/common.sh`; do not duplicate hard-coded mode case lists in individual wrappers.
-- When the smoke mode contract changes, run its Flutter unit test, `pytest -q tools/ci/test_android_smoke_modes.py`, and `tools/android/build-smoke-apk.sh --mode <mode>` at minimum.
+- App check mode constants and parser live in `boatlock_ui/lib/smoke/ble_smoke_mode.dart`.
+- Android checks build `lib/main.dart` once and pass runtime extras to the same release app; do not use alternate entrypoints or compile-time switches.
+- Shell app-check mode allowlist lives in `tools/android/common.sh`; do not duplicate hard-coded mode case lists in individual wrappers.
+- When the check mode contract changes, run its Flutter unit test, `pytest -q tools/ci/test_android_smoke_modes.py`, and `tools/android/build-app-apk.sh` at minimum.
 - CI helper tests:
   - `pytest tools/ci/test_*.py`
 - Quick audit for persistence call sites:
   - `rg -n "settings\\.save\\(" boatlock`
 
-## Service/Dev/HIL Gate Validation
+## Release/Dev/HIL Gate Validation
 
 Firmware command enforcement is implemented in the shared BLE command path. PlatformIO profile aliases and the `nh02` flash wrapper profile report select which command scopes are compiled into the firmware command gate.
 
 Profile rules:
 
-- `release` profile: accepts release commands, including `SIM_*`, and rejects service plus dev/HIL commands before side effects.
-- `service` profile: accepts release plus service commands, including BLE OTA and `SIM_*`, and rejects dev/HIL such as `SET_PHONE_GPS`.
-- `acceptance` profile: accepts release, service, and dev/HIL for broad bench validation.
-- `esp32s3_release`, `esp32s3_service`, and `esp32s3_acceptance` are the explicit profile aliases.
-- `tools/hw/nh02/flash.sh --profile release|service|acceptance` maps to those explicit aliases.
-- `BOATLOCK_PIO_ENV=release|service|acceptance` maps to those explicit aliases; an empty or unknown `BOATLOCK_PIO_ENV` is an error.
-- Legacy `esp32s3` is a release-compatible environment for existing local and CI workflows.
-- `esp32s3_bno08x_sh2_uart` and `esp32s3_debug_wifi_ota` are treated as service profile environments by the flash wrapper.
-- `gpio_probe` and `uart_rvc_probe_rx12` are debug probe builds with no release/service/acceptance command-scope profile.
+- `release` profile: accepts release commands, including setup, BLE OTA, and
+  `SIM_*`, and rejects dev/HIL commands such as `SET_PHONE_GPS`.
+- `acceptance` profile: accepts release plus dev/HIL for broad bench
+  validation.
+- `esp32s3` is the normal firmware build and release artifact source.
+- `esp32s3_acceptance` is the explicit dev/HIL profile alias.
+- `tools/hw/nh02/flash.sh --profile acceptance` maps to
+  `esp32s3_acceptance`; the wrapper defaults to `esp32s3`.
+- `BOATLOCK_PIO_ENV=acceptance` maps to `esp32s3_acceptance`; an empty or
+  unknown `BOATLOCK_PIO_ENV` is an error.
+- `esp32s3_bno08x_sh2_uart` uses the normal command profile with SH2-UART
+  compass support.
+- `gpio_probe` and `uart_rvc_probe_rx12` are debug probe builds with no release
+  artifact role.
 
 Minimum validation order after profile-gate changes:
 
 1. Local docs/static checks:
    - `bash -n tools/hw/nh02/flash.sh`
    - `git diff --check -- boatlock/platformio.ini tools/hw/nh02/flash.sh docs/BLE_PROTOCOL.md docs/HARDWARE_NH02.md skills/boatlock/references/validation.md boatlock/TODO.md`
-   - `rg -n "esp32s3_release|esp32s3_service|esp32s3_acceptance|release|service|dev/HIL|SIM_|OTA|BOATLOCK_PIO_ENV|PlatformIO|nh02" boatlock/platformio.ini tools/hw/nh02/flash.sh docs/BLE_PROTOCOL.md docs/HARDWARE_NH02.md skills/boatlock/references/validation.md boatlock/TODO.md`
+   - `rg -n "esp32s3_acceptance|release|dev/HIL|SIM_|OTA|BOATLOCK_PIO_ENV|PlatformIO|nh02" boatlock/platformio.ini tools/hw/nh02/flash.sh docs/BLE_PROTOCOL.md docs/HARDWARE_NH02.md skills/boatlock/references/validation.md boatlock/TODO.md`
 2. Local firmware/unit checks, run sequentially in one build directory:
    - native BLE command/security tests cover each profile's allow/deny matrix
    - native HIL tests cover `SIM_*` as a release-scope safe simulation mode
    - each PlatformIO firmware profile builds without relying on stale `.pio` artifacts
-3. Release-profile bench checks:
-   - flash the release profile through `tools/hw/nh02/flash.sh --profile release`
+3. Normal firmware bench checks:
+   - flash the normal firmware through `tools/hw/nh02/flash.sh`
    - run `tools/hw/nh02/acceptance.sh`
-   - prove a representative service command and `OTA_BEGIN` are rejected with stable gate logs and no output motion
-   - run Android `sim` smoke/e2e and verify `SIM` telemetry without motor/stepper output
-4. Service-profile bench checks:
-   - build the service profile and update the target through phone BLE OTA when the OTA-capable image is already present; use `tools/hw/nh02/flash.sh --profile service` only as seed/recovery
-   - run `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
-   - prove `SET_PHONE_GPS` is rejected with stable gate logs
+   - prove `SET_PHONE_GPS` is rejected with stable gate logs and no output motion
+   - run Android `sim` smoke/check and verify `SIM` telemetry without motor/stepper output
+4. BLE OTA bench checks:
+   - build the normal firmware and update the target through phone BLE OTA
+   - run `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
+   - prove telemetry recovers after the ESP32 reboots into the uploaded image
 5. Release-profile full HIL bench checks:
-   - run `tools/hw/nh02/run-sim-suite.sh` when the standard full on-device HIL suite is required; it runs `SIM_LIST`, every listed scenario through `SIM_RUN:<id>,0`, `SIM_STATUS`, and `SIM_REPORT` on the release profile
+   - run `tools/hw/nh02/run-sim-suite.sh` when the standard full on-device HIL suite is required; it runs `SIM_LIST`, every listed scenario through `SIM_RUN:<id>,0`, `SIM_STATUS`, and `SIM_REPORT` on the normal firmware
 6. Recovery check:
-   - flash the release profile again through `tools/hw/nh02/flash.sh --profile release` and confirm the normal BLE reconnect/manual/anchor readiness smoke still uses the release surface only
+   - flash the normal firmware again through `tools/hw/nh02/flash.sh` and confirm the normal BLE reconnect/manual/anchor readiness smoke still uses the release surface only
 
 Risk review items for the rollout:
 
 - `SEC_CMD` must classify and gate the wrapped payload, not the raw envelope.
-- A release image without service commands removes BLE OTA from that image; the USB seed/recovery and service-profile update path must remain documented.
-- A service image must not accidentally expose `SIM_*` or phone-GPS injection.
 - An acceptance image must not be left on the boat for water use because it exposes injected sensor and HIL commands.
 - Wrapper output must distinguish profile-gated rejection from BLE timeout, auth failure, and parser failure.
 

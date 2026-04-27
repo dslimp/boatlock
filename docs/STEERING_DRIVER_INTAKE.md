@@ -237,7 +237,7 @@ operator-visible stop condition, powered bench cannot proceed.
 
 ## Bow-Zero Procedure
 
-Bow-zero is a service setup step, not an automatic calibration.
+Bow-zero is a setup step, not an automatic calibration.
 
 1. Disable thrust and keep the boat/mount restrained.
 2. Confirm driver identity, direction, idle behavior, and travel limits are
@@ -246,7 +246,7 @@ Bow-zero is a service setup step, not an automatic calibration.
 4. Move to bow-forward using the smallest low-power manual movement that is
    already proven safe, or by hand if the mechanics permit it.
 5. Confirm there is travel margin to both sides and no cable bind at zero.
-6. Capture the zero only through the supported service path for the actual
+6. Capture the zero only through the supported setup path for the actual
    driver. The existing `SET_STEPPER_BOW` path is valid only after the firmware
    driver model and steps-per-degree mapping are correct for this hardware.
 7. Power-cycle and verify the mechanism does not move unexpectedly and that the
@@ -268,7 +268,7 @@ change. Required decision points:
 - Motion/runtime logic: apply measured steps-per-degree, max speed,
   acceleration, travel limits, idle/hold-current policy, and fault/limit
   handling.
-- Settings/schema: add or remove user/service settings only if the hardware
+- Settings/schema: add or remove user/setup settings only if the hardware
   needs configurable limits; update `docs/CONFIG_SCHEMA.md` with any schema
   change.
 - BLE protocol: update `docs/BLE_PROTOCOL.md` only if commands, telemetry, or

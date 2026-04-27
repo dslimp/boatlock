@@ -56,9 +56,9 @@ def main() -> None:
     ap.add_argument("--git-sha", required=True)
     ap.add_argument("--workflow-run-id", type=int, default=None)
     ap.add_argument("--firmware-version", default=None)
-    ap.add_argument("--platformio-env", default="esp32s3_service")
-    ap.add_argument("--command-profile", default="service")
-    ap.add_argument("--artifact-name", default="firmware-esp32s3-service")
+    ap.add_argument("--platformio-env", default="esp32s3")
+    ap.add_argument("--command-profile", default="release")
+    ap.add_argument("--artifact-name", default="firmware-esp32s3")
     ap.add_argument("--built-at", default=None)
     args = ap.parse_args()
 

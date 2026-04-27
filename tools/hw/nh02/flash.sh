@@ -19,22 +19,17 @@ NO_BUILD=0
 
 usage() {
   cat >&2 <<'USAGE'
-usage: tools/hw/nh02/flash.sh [--no-build] [--env PLATFORMIO_ENV] [--profile release|service|acceptance]
+usage: tools/hw/nh02/flash.sh [--no-build] [--env PLATFORMIO_ENV] [--profile acceptance]
 
 Profile aliases:
-  release     -> esp32s3_release
-  service     -> esp32s3_service
   acceptance  -> esp32s3_acceptance
 
-Legacy/profiled envs accepted through --env or BOATLOCK_PIO_ENV:
-  esp32s3                         release-compatible legacy env
-  esp32s3_release                 release
-  esp32s3_service                 service
-  esp32s3_acceptance              acceptance
-  esp32s3_bno08x_sh2_uart         service
-  esp32s3_debug_wifi_ota          service
-  gpio_probe                      debug-probe, no command-scope firmware profile
-  uart_rvc_probe_rx12             debug-probe, no command-scope firmware profile
+Env values accepted through --env or BOATLOCK_PIO_ENV:
+  esp32s3                         normal app/OTA firmware
+  esp32s3_acceptance              bench validation firmware with injected sensors
+  esp32s3_bno08x_sh2_uart         SH2-UART compass experiment
+  gpio_probe                      pin probe sketch
+  uart_rvc_probe_rx12             UART-RVC probe sketch
 USAGE
 }
 
@@ -46,14 +41,6 @@ fail_usage() {
 
 resolve_profile() {
   case "$1" in
-    release)
-      PIO_ENV="esp32s3_release"
-      COMMAND_PROFILE="release"
-      ;;
-    service)
-      PIO_ENV="esp32s3_service"
-      COMMAND_PROFILE="service"
-      ;;
     acceptance)
       PIO_ENV="esp32s3_acceptance"
       COMMAND_PROFILE="acceptance"
@@ -69,16 +56,12 @@ resolve_profile() {
 
 resolve_env() {
   case "$1" in
-    release|service|acceptance)
+    acceptance)
       resolve_profile "$1"
       ;;
-    esp32s3|esp32s3_release)
+    esp32s3|esp32s3_bno08x_sh2_uart)
       PIO_ENV="$1"
       COMMAND_PROFILE="release"
-      ;;
-    esp32s3_service|esp32s3_bno08x_sh2_uart|esp32s3_debug_wifi_ota)
-      PIO_ENV="$1"
-      COMMAND_PROFILE="service"
       ;;
     esp32s3_acceptance)
       PIO_ENV="$1"
@@ -86,7 +69,7 @@ resolve_env() {
       ;;
     gpio_probe|uart_rvc_probe_rx12)
       PIO_ENV="$1"
-      COMMAND_PROFILE="debug-probe"
+      COMMAND_PROFILE="probe"
       ;;
     "")
       fail_usage "${PIO_ENV_REQUEST_SOURCE} is empty"
@@ -145,8 +128,8 @@ BOOT_APP0_BIN="${BOATLOCK_BOOT_APP0_BIN:-${HOME}/.platformio/packages/framework-
 
 echo "BoatLock flash profile: ${COMMAND_PROFILE}"
 echo "PlatformIO env: ${PIO_ENV} (${REQUEST_DESCRIPTION})"
-if [[ "${COMMAND_PROFILE}" == "debug-probe" ]]; then
-  echo "warning: ${PIO_ENV} is a debug probe build and has no release/service/acceptance command scope" >&2
+if [[ "${COMMAND_PROFILE}" == "probe" ]]; then
+  echo "warning: ${PIO_ENV} is a probe sketch and not normal BoatLock firmware" >&2
 fi
 
 if [[ "${NO_BUILD}" -eq 0 ]]; then

@@ -10,8 +10,8 @@ import 'package:boatlock_ui/pages/settings_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-class ServiceFakeBleBoatLock extends BleBoatLock {
-  ServiceFakeBleBoatLock() : super(onData: (_) {});
+class SetupFakeBleBoatLock extends BleBoatLock {
+  SetupFakeBleBoatLock() : super(onData: (_) {});
 
   bool rejectNextStepMaxSpeed = false;
   bool rejectNextOtaBegin = false;
@@ -42,9 +42,6 @@ class ServiceFakeBleBoatLock extends BleBoatLock {
   }) async {
     onProgress?.call(0, firmware.length);
     if (rejectNextOtaBegin) {
-      Future<void>.delayed(const Duration(milliseconds: 10), () {
-        _emitProfileRejection('OTA_BEGIN:${firmware.length},$sha256Hex');
-      });
       return false;
     }
     return true;
@@ -55,7 +52,7 @@ class ServiceFakeBleBoatLock extends BleBoatLock {
     final rejection = BleCommandRejection(
       reason: reason,
       profile: 'release',
-      scope: 'service',
+      scope: 'unknown',
       command: command,
     );
     diagnostics.value = diagnostics.value.copyWith(
@@ -95,17 +92,20 @@ class FakeFirmwareUpdateClient extends FirmwareUpdateClient {
 
 Widget _wrap(Widget child) => MaterialApp(home: child);
 
-Future<void> _setServiceMenu(WidgetTester tester, bool enabled) async {
-  final serviceSwitch = find.widgetWithText(SwitchListTile, 'Сервисный режим');
-  expect(serviceSwitch, findsOneWidget);
+Future<void> _setSetupMenu(WidgetTester tester, bool enabled) async {
+  final setupSwitch = find.widgetWithText(
+    SwitchListTile,
+    'Настройка оборудования',
+  );
+  expect(setupSwitch, findsOneWidget);
   final visible = find.text('Макс. скорость').evaluate().isNotEmpty;
   if (visible == enabled) return;
-  await tester.tap(serviceSwitch);
+  await tester.tap(setupSwitch);
   await tester.pumpAndSettle();
 }
 
 SettingsPage _page(
-  ServiceFakeBleBoatLock ble, {
+  SetupFakeBleBoatLock ble, {
   FirmwareUpdateClient firmwareUpdateClient = const FirmwareUpdateClient(),
 }) {
   return SettingsPage(
@@ -132,31 +132,29 @@ SettingsPage _page(
 }
 
 void main() {
-  testWidgets('service switch gates service controls', (
-    WidgetTester tester,
-  ) async {
+  testWidgets('setup switch gates setup controls', (WidgetTester tester) async {
     await tester.binding.setSurfaceSize(const Size(900, 1800));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final ble = ServiceFakeBleBoatLock();
+    final ble = SetupFakeBleBoatLock();
     await tester.pumpWidget(_wrap(_page(ble)));
 
-    await _setServiceMenu(tester, false);
+    await _setSetupMenu(tester, false);
     expect(find.text('Макс. скорость'), findsNothing);
     expect(find.text('Firmware OTA'), findsNothing);
 
-    await _setServiceMenu(tester, true);
+    await _setSetupMenu(tester, true);
     expect(find.text('Макс. скорость'), findsOneWidget);
     expect(find.text('Firmware OTA'), findsOneWidget);
   });
 
-  testWidgets('rolls back service setting when profile rejection arrives', (
+  testWidgets('rolls back setup setting when firmware rejects command', (
     WidgetTester tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(900, 1800));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final ble = ServiceFakeBleBoatLock()..rejectNextStepMaxSpeed = true;
+    final ble = SetupFakeBleBoatLock()..rejectNextStepMaxSpeed = true;
     await tester.pumpWidget(_wrap(_page(ble)));
-    await _setServiceMenu(tester, true);
+    await _setSetupMenu(tester, true);
 
     await tester.tap(find.text('Макс. скорость'));
     await tester.pumpAndSettle();
@@ -176,13 +174,13 @@ void main() {
     expect(find.text('1200'), findsNothing);
     expect(
       find.text(
-        'Команда SET_STEP_MAXSPD отклонена профилем release: нужен service',
+        'Команда SET_STEP_MAXSPD отклонена профилем release: нужен unknown',
       ),
       findsOneWidget,
     );
   });
 
-  testWidgets('shows structured OTA profile rejection after upload failure', (
+  testWidgets('shows OTA upload rejection after upload failure', (
     WidgetTester tester,
   ) async {
     final firmware = Uint8List.fromList(List<int>.filled(64, 0x42));
@@ -195,9 +193,9 @@ void main() {
       gitSha: '14c43a5',
       workflowRunId: 123,
       firmwareVersion: '0.2.0',
-      platformioEnv: 'esp32s3_service',
-      commandProfile: 'service',
-      artifactName: 'firmware-esp32s3-service',
+      platformioEnv: 'esp32s3',
+      commandProfile: 'release',
+      artifactName: 'firmware-esp32s3',
       binaryUrl: Uri.parse('https://example.com/firmware.bin'),
       size: firmware.length,
       sha256: sha,
@@ -206,7 +204,7 @@ void main() {
 
     await tester.binding.setSurfaceSize(const Size(900, 1800));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final ble = ServiceFakeBleBoatLock()..rejectNextOtaBegin = true;
+    final ble = SetupFakeBleBoatLock()..rejectNextOtaBegin = true;
     await tester.pumpWidget(
       _wrap(
         _page(
@@ -217,15 +215,12 @@ void main() {
         ),
       ),
     );
-    await _setServiceMenu(tester, true);
+    await _setSetupMenu(tester, true);
 
     await tester.tap(find.text('Обновить до релиза'));
     await tester.pump(const Duration(milliseconds: 50));
     await tester.pump(const Duration(milliseconds: 700));
 
-    expect(
-      find.text('Команда OTA_BEGIN отклонена профилем release: нужен service'),
-      findsWidgets,
-    );
+    expect(find.text('OTA отклонено'), findsWidgets);
   });
 }

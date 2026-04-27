@@ -70,19 +70,19 @@ Then flash and run the tracked bench path:
 ```bash
 tools/hw/nh02/flash.sh
 tools/hw/nh02/acceptance.sh --seconds 180
-tools/hw/nh02/android-run-app-e2e.sh --status --wait-secs 130
-tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130
-tools/hw/nh02/android-run-app-e2e.sh --anchor --wait-secs 130
-tools/hw/nh02/android-run-app-e2e.sh --sim --wait-secs 130
+tools/hw/nh02/android-run-app-check.sh --status --wait-secs 130
+tools/hw/nh02/android-run-app-check.sh --manual --wait-secs 130
+tools/hw/nh02/android-run-app-check.sh --anchor --wait-secs 130
+tools/hw/nh02/android-run-app-check.sh --sim --wait-secs 130
 tools/hw/nh02/run-sim-suite.sh
-tools/hw/nh02/android-run-app-e2e.sh --reconnect --wait-secs 130
-tools/hw/nh02/android-run-app-e2e.sh --esp-reset --wait-secs 130
+tools/hw/nh02/android-run-app-check.sh --reconnect --wait-secs 130
+tools/hw/nh02/android-run-app-check.sh --esp-reset --wait-secs 130
 ```
 
 If hardware GPS is visible, also run:
 
 ```bash
-tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180
+tools/hw/nh02/android-run-app-check.sh --gps --wait-secs 180
 ```
 
 ## Gate 1: No-Load Output Instrumentation
@@ -142,7 +142,7 @@ Do not enable thrust. Steering can be attached to the turn mechanism only if the
 mechanism cannot hit a hard stop at speed.
 
 - Mark physical bow-zero.
-- Use service setup to capture bow-zero only after the mechanics are known.
+- Use setup to capture bow-zero only after the mechanics are known.
 - Check manual left/right and release-to-idle.
 - Command small target bearing changes and watch for hunting.
 - Check cable wrap, mechanical limits, and jam behavior manually before powered
@@ -168,7 +168,7 @@ Every powered-bench run should record:
 - Brushed motor driver intake reference, steering intake reference, and wiring
   photo reference.
 - Motor and steering driver temperatures before/after each phase.
-- Exact BLE/e2e command or wrapper used.
+- Exact BLE/app check command or wrapper used.
 - Measured `PWM=7`, `DIR=8`, `DIR=10`, and steering output behavior.
 - Any reset, brownout, latch, STOP, or unexpected motion.
 

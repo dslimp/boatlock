@@ -10,18 +10,18 @@ Status after the 2026-04-26 autonomous pass.
   profile.
 - Product readiness docs were refreshed around current app, simulator, and
   hardware blockers.
-- Flutter service OTA can consume a validated release firmware manifest and
+- Flutter OTA can consume a validated release firmware manifest and
   expose `Обновить до релиза`.
 - CI now treats `release/**` branches as stabilization branches and publishes
   release artifacts only from `v*` tags through GitHub Releases.
 - The app resolves the latest GitHub release as the firmware source, preferring a
-  release manifest asset and falling back to unambiguous service release assets
+  release manifest asset and falling back to unambiguous release assets
   with matching SHA-256 metadata.
-- Flutter service settings now roll back optimistic values when firmware
+- Flutter setup settings now roll back optimistic values when firmware
   accepts the BLE write but then rejects the command by profile in diagnostics.
-- OTA upload failures in service UI now show the rejected command, active
+- OTA upload failures in setup UI now show the rejected command, active
   profile, and required profile instead of a generic rejection.
-- Smoke and production-app e2e result JSON now include structured
+- Smoke and production-app check result JSON now include structured
   `commandReject*` fields for firmware profile rejections.
 - Offline Russian-water simulation now reports wave steepness, roll-rate, and
   GNSS/heading sensor-frame degradation metrics/events with thresholds for
@@ -29,21 +29,21 @@ Status after the 2026-04-26 autonomous pass.
 - Android and macOS CI now publish one release app artifact per platform
   configured with the latest GitHub Release source, and local wrappers build the
   same one-button update app.
-- GitHub Releases now receive a service-profile `firmware-esp32s3-service`
+- GitHub Releases now receive a release `firmware-esp32s3`
   asset set plus `manifest.json`, and the app can use authenticated release
   asset API URLs when a token-backed validation client is injected.
-- Android app e2e now has a manifest-backed latest-release OTA mode that serves
+- Android app check now has a manifest-backed latest-release OTA mode that serves
   `manifest.json` plus `firmware.bin` and uses the app firmware-update client
   before the normal BLE OTA/reconnect verdict.
-- Manifest-backed Android OTA e2e has been proven on `nh02` against the
-  service firmware profile, including phone HTTP manifest download, BLE upload,
+- Manifest-backed Android OTA app check has been proven on `nh02` against the
+  normal firmware profile, including phone HTTP manifest download, BLE upload,
   ESP32 reboot, and app telemetry recovery.
 - The Flutter BLE client now binds all BoatLock GATT characteristics before
   enabling data/log notifications, treats the OTA characteristic as required
   for upload, and can clear the Android GATT cache plus rediscover when OTA is
   missing.
-- OTA control commands now use explicit service-scope app writes, and CI runs
-  the service UI widget test against the normal release app surface.
+- OTA control commands now use the release app command path, and CI runs
+  the setup UI widget test against the normal release app surface.
 - Firmware OTA ownership is tied to the BLE connection handle that starts the
   update, so a non-owner central disconnect no longer aborts an active phone
   OTA transfer.
@@ -66,10 +66,10 @@ Status after the 2026-04-26 autonomous pass.
 
 - Cut the next release from `release/v0.2.x` only after the release branch CI is
   green, then verify that `manifest.json` resolves
-  `firmware-esp32s3-service.bin` from the published GitHub Release.
+  `firmware-esp32s3.bin` from the published GitHub Release.
 - Wire the pure multi-client control lease helper into the live BLE command path
   only after per-client security/session metadata is available.
-- Decide whether Android/macOS service builds should intentionally replace the
+- Decide whether Android/macOS app builds should intentionally replace the
   normal app or get distinct app/bundle IDs before operator distribution.
 
 ## Hardware-Gated Tasks
@@ -84,7 +84,7 @@ Status after the 2026-04-26 autonomous pass.
   facts are captured. The current firmware assumes PWM plus two direction pins
   for the brushed motor and DRV8825-compatible STEP/DIR steering on the Vanchor
   `36:1` gearbox.
-- After the next GitHub Release is published, run a service-app OTA proof
+- After the next GitHub Release is published, run a release-app OTA proof
   against the public release manifest instead of the local wrapper-served
   manifest.
 
@@ -93,15 +93,15 @@ Status after the 2026-04-26 autonomous pass.
 - Route following, waypoint workflows, cruise/fishing convenience modes, and
   arrival-to-anchor flows.
 - A second BLE controller or joystick until the control-owner lease model exists.
-- Broad tuning/calibration UI in normal water builds; keep it service-gated.
+- Broad tuning/calibration UI in normal water builds; keep it setup-gated.
 - Hardware-calibrated motor/steering simulation until powered bench logs exist.
 
 ## Agent Notes Captured
 
 - `Darwin`: paired auth bypass checklist; implemented and pushed.
-- `Carver` / `Russell`: app e2e and service rejection gaps; implemented
-  through fast-fail e2e handling, settings rollback, detailed OTA rejections,
-  and structured smoke/e2e result fields.
+- `Carver` / `Russell`: app check and profile rejection gaps; implemented
+  through fast-fail app check handling, settings rollback, detailed OTA rejections,
+  and structured smoke/check result fields.
 - `Helmholtz`: simulator wake/chop/sensor-frame implementation plan; wave
   steepness and sensor-frame degradation are implemented, wake bursts remain
   deferred until water-test inputs or powered logs exist.
@@ -112,15 +112,15 @@ Status after the 2026-04-26 autonomous pass.
   Actions artifacts; implemented through app manifest client and GitHub Release
   assets.
 - `Epicurus`: latest GitHub release source; implemented through release parsing,
-  service-profile release artifacts, release manifest publishing, and
-  token-backed asset API support behind `BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO`.
-- `Bacon`: OTA commands must be written through the service-scoped app command
+  release artifacts, release manifest publishing, and token-backed asset API
+  support in the app release client.
+- `Bacon`: OTA commands must be written through the release app command
   path; implemented and covered.
-- `Leibniz`: one-button release OTA mostly existed, but service UI CI, stale
+- `Leibniz`: one-button release OTA mostly existed, but setup UI CI, stale
   OTA throughput docs, and real release/macOS proof gaps were identified. CI/docs
   fixes are implemented; release/macOS proof remains open.
 - `Hume`: Android OTA failure triage pointed at missing OTA characteristic
-  detail, service-profile artifact consistency, and stale remote-helper risks.
+  detail, release artifact consistency, and stale remote-helper risks.
   The OTA diagnostics/artifact guidance was fixed and `install.sh` was rerun
   before hardware proof.
 - `Faraday`: prioritized the remaining autonomous/gated tasks; `nh02`

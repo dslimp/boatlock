@@ -220,36 +220,32 @@ void test_default_release_allows_sim_command_path() {
   TEST_ASSERT_EQUAL_STRING("SIM_STATUS", simLastCommand.c_str());
 }
 
-void test_default_release_rejects_ota_before_safe_state_side_effects() {
+void test_default_release_accepts_ota_after_safe_state_side_effects() {
   settings.set("AnchorEnabled", 1.0f);
   manualControl.apply(ManualControlSource::BLE_PHONE, 1, 50, 500, 1000);
 
   handleBleCommand("OTA_BEGIN:4096,00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff");
 
-  TEST_ASSERT_EQUAL(0, controlActivityNotes);
-  TEST_ASSERT_EQUAL((int)FailsafeReason::NONE, (int)lastFailsafeReason);
-  TEST_ASSERT_EQUAL_FLOAT(1.0f, settings.get("AnchorEnabled"));
-  TEST_ASSERT_TRUE(manualControl.active());
-  TEST_ASSERT_EQUAL(0, manualStopCalls);
-  TEST_ASSERT_FALSE(stepperControl.cancelCalled);
-  TEST_ASSERT_FALSE(motor.stopCalled);
-  TEST_ASSERT_FALSE(stopAllMotionCalled);
-  TEST_ASSERT_EQUAL(0, bleOta.beginCalls);
+  TEST_ASSERT_EQUAL(1, controlActivityNotes);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
+  TEST_ASSERT_FALSE(manualControl.active());
+  TEST_ASSERT_EQUAL(1, manualStopCalls);
+  TEST_ASSERT_TRUE(stepperControl.cancelCalled);
+  TEST_ASSERT_TRUE(motor.stopCalled);
+  TEST_ASSERT_TRUE(stopAllMotionCalled);
+  TEST_ASSERT_EQUAL(1, bleOta.beginCalls);
 }
 
-void test_default_release_rejects_service_tuning_before_side_effects() {
-  const float compassOffsetBefore = compass.getHeadingOffsetDeg();
-  const float stepMaxBefore = settings.get("StepMaxSpd");
-
+void test_default_release_accepts_setup_commands() {
   handleBleCommand("SET_COMPASS_OFFSET:12.5");
   handleBleCommand("SET_STEP_MAXSPD:1234");
   handleBleCommand("SET_STEPPER_BOW");
 
-  TEST_ASSERT_EQUAL(0, controlActivityNotes);
-  TEST_ASSERT_EQUAL_FLOAT(compassOffsetBefore, compass.getHeadingOffsetDeg());
-  TEST_ASSERT_EQUAL_FLOAT(stepMaxBefore, settings.get("StepMaxSpd"));
-  TEST_ASSERT_FALSE(stepperControl.loadCalled);
-  TEST_ASSERT_FALSE(stepperBowCaptured);
+  TEST_ASSERT_EQUAL(3, controlActivityNotes);
+  TEST_ASSERT_EQUAL_FLOAT(12.5f, compass.getHeadingOffsetDeg());
+  TEST_ASSERT_EQUAL_FLOAT(1234.0f, settings.get("StepMaxSpd"));
+  TEST_ASSERT_TRUE(stepperControl.loadCalled);
+  TEST_ASSERT_TRUE(stepperBowCaptured);
 }
 
 void test_default_release_rejects_external_sensor_injection_before_side_effects() {
@@ -261,20 +257,20 @@ void test_default_release_rejects_external_sensor_injection_before_side_effects(
   TEST_ASSERT_FALSE(phoneGpsFixSet);
 }
 
-void test_default_release_gates_unwrapped_secure_payload_scope() {
+void test_default_release_classifies_unwrapped_secure_payload_scope() {
   securityRequireWrapper = true;
   securitySessionActive = true;
 
   handleBleCommand("SEC_CMD:1:deadbeef:SET_COMPASS_OFFSET:12.5");
 
   TEST_ASSERT_EQUAL_UINT32(1, securityLastCounter);
-  TEST_ASSERT_EQUAL(0, controlActivityNotes);
-  TEST_ASSERT_EQUAL_FLOAT(0.0f, compass.getHeadingOffsetDeg());
+  TEST_ASSERT_EQUAL(1, controlActivityNotes);
+  TEST_ASSERT_EQUAL_FLOAT(12.5f, compass.getHeadingOffsetDeg());
 
   handleBleCommand("SEC_CMD:2:deadbeef:SET_HOLD_HEADING:1");
 
   TEST_ASSERT_EQUAL_UINT32(2, securityLastCounter);
-  TEST_ASSERT_EQUAL(1, controlActivityNotes);
+  TEST_ASSERT_EQUAL(2, controlActivityNotes);
   TEST_ASSERT_EQUAL_FLOAT(1.0f, settings.get("HoldHeading"));
 }
 
@@ -282,9 +278,9 @@ int main() {
   UNITY_BEGIN();
   RUN_TEST(test_default_release_allows_release_command_path);
   RUN_TEST(test_default_release_allows_sim_command_path);
-  RUN_TEST(test_default_release_rejects_ota_before_safe_state_side_effects);
-  RUN_TEST(test_default_release_rejects_service_tuning_before_side_effects);
+  RUN_TEST(test_default_release_accepts_ota_after_safe_state_side_effects);
+  RUN_TEST(test_default_release_accepts_setup_commands);
   RUN_TEST(test_default_release_rejects_external_sensor_injection_before_side_effects);
-  RUN_TEST(test_default_release_gates_unwrapped_secure_payload_scope);
+  RUN_TEST(test_default_release_classifies_unwrapped_secure_payload_scope);
   return UNITY_END();
 }

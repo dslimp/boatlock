@@ -41,8 +41,8 @@ void main() {
     const rejection = BleCommandRejection(
       reason: 'profile',
       profile: 'release',
-      scope: 'service',
-      command: 'OTA_BEGIN:4096,abcd',
+      scope: 'dev_hil',
+      command: 'SET_PHONE_GPS:59,30',
     );
 
     final snapshot = BleDebugSnapshot.initial().copyWith(
@@ -52,8 +52,8 @@ void main() {
     );
 
     expect(snapshot.commandRejectEvents, 1);
-    expect(snapshot.lastCommandRejection?.commandName, 'OTA_BEGIN');
-    expect(snapshot.commandRejects.single.requiredProfile, 'service');
+    expect(snapshot.lastCommandRejection?.commandName, 'SET_PHONE_GPS');
+    expect(snapshot.commandRejects.single.requiredProfile, 'acceptance');
 
     final cleared = snapshot.copyWith(clearLastCommandRejection: true);
     expect(cleared.lastCommandRejection, isNull);

@@ -18,7 +18,6 @@ class BleCommandRejection {
 
   String get requiredProfile {
     if (scope == 'dev_hil') return 'acceptance';
-    if (scope == 'service') return 'service';
     return scope;
   }
 
@@ -29,8 +28,8 @@ class BleCommandRejection {
 
 final RegExp _profileRejectLine = RegExp(
   r'^\[BLE\] command rejected reason=(profile) '
-  r'profile=(release|service|acceptance) '
-  r'scope=(service|dev_hil|unknown) command=(.+)$',
+  r'profile=(release|acceptance) '
+  r'scope=(dev_hil|unknown) command=(.+)$',
 );
 
 BleCommandRejection? parseBleCommandRejectionLog(String line) {

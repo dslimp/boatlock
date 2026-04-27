@@ -10,46 +10,65 @@ BUILD_FIRST=1
 INSTALL_APP=1
 WAIT_SECS=45
 ANDROID_SERIAL=""
-SMOKE_MODE="basic"
+APP_MODE="basic"
 CYCLE_BLUETOOTH=0
 RESET_ESP32=0
 OTA_FIRMWARE=""
 OTA_MANIFEST=""
 OTA_PORT=18080
+OTA_SHA256=""
+OTA_LATEST_RELEASE=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --reconnect)
-      SMOKE_MODE="reconnect"
+      APP_MODE="reconnect"
       CYCLE_BLUETOOTH=1
       shift
       ;;
     --manual)
-      SMOKE_MODE="manual"
+      APP_MODE="manual"
       shift
       ;;
     --status)
-      SMOKE_MODE="status"
+      APP_MODE="status"
       shift
       ;;
     --sim)
-      SMOKE_MODE="sim"
+      APP_MODE="sim"
+      shift
+      ;;
+    --sim-suite)
+      APP_MODE="sim_suite"
       shift
       ;;
     --anchor)
-      SMOKE_MODE="anchor"
+      APP_MODE="anchor"
       shift
       ;;
     --compass)
-      SMOKE_MODE="compass"
+      APP_MODE="compass"
       shift
       ;;
     --gps)
-      SMOKE_MODE="gps"
+      APP_MODE="gps"
+      shift
+      ;;
+    --mode)
+      APP_MODE="${2:?missing app check mode}"
+      shift 2
+      ;;
+    --ota)
+      APP_MODE="ota"
+      shift
+      ;;
+    --ota-latest-release)
+      APP_MODE="ota"
+      OTA_LATEST_RELEASE=1
       shift
       ;;
     --esp-reset)
-      SMOKE_MODE="reconnect"
+      APP_MODE="reconnect"
       RESET_ESP32=1
       shift
       ;;
@@ -63,6 +82,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --ota-port)
       OTA_PORT="${2:?missing OTA port}"
+      shift 2
+      ;;
+    --ota-sha256)
+      OTA_SHA256="${2:?missing OTA SHA-256}"
       shift 2
       ;;
     --no-build)
@@ -88,7 +111,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-boatlock_validate_smoke_mode "${SMOKE_MODE}"
+boatlock_validate_app_check_mode "${APP_MODE}"
 
 if [[ "${CYCLE_BLUETOOTH}" -eq 1 && "${RESET_ESP32}" -eq 1 ]]; then
   echo "choose only one reconnect trigger: --reconnect or --esp-reset" >&2
@@ -96,7 +119,7 @@ if [[ "${CYCLE_BLUETOOTH}" -eq 1 && "${RESET_ESP32}" -eq 1 ]]; then
 fi
 
 if [[ "${BUILD_FIRST}" -eq 1 ]]; then
-  "${REPO_ROOT}/tools/android/build-smoke-apk.sh" --mode "${SMOKE_MODE}" >/dev/null
+  "${REPO_ROOT}/tools/android/build-app-apk.sh" >/dev/null
 fi
 
 if [[ -z "${ANDROID_SERIAL}" && "${BOATLOCK_NH02_ANDROID_WIFI_ADB:-1}" -eq 1 ]]; then
@@ -108,7 +131,7 @@ if [[ -z "${ANDROID_SERIAL}" && "${BOATLOCK_NH02_ANDROID_WIFI_ADB:-1}" -eq 1 ]];
 fi
 
 if [[ "${INSTALL_APP}" -eq 1 && ! -f "${BOATLOCK_ANDROID_APK}" ]]; then
-  echo "smoke APK not found at ${BOATLOCK_ANDROID_APK}" >&2
+  echo "Android app APK not found at ${BOATLOCK_ANDROID_APK}" >&2
   exit 1
 fi
 
@@ -132,6 +155,9 @@ if [[ -n "${OTA_FIRMWARE}" ]]; then
   remote_shell "mkdir -p '${BOATLOCK_NH02_REMOTE_ANDROID_STAGE}'"
   remote_ota_path="${BOATLOCK_NH02_REMOTE_ANDROID_STAGE}/firmware.bin"
   "${RSYNC_BASE[@]}" "${OTA_FIRMWARE}" "${BOATLOCK_NH02_SSH_TARGET}:${remote_ota_path}"
+  if [[ -z "${OTA_SHA256}" ]]; then
+    OTA_SHA256="$(shasum -a 256 "${OTA_FIRMWARE}" | awk '{print $1}')"
+  fi
   if [[ -n "${OTA_MANIFEST}" ]]; then
     "${RSYNC_BASE[@]}" "${OTA_MANIFEST}" "${BOATLOCK_NH02_SSH_TARGET}:${BOATLOCK_NH02_REMOTE_ANDROID_STAGE}/manifest.json"
   fi
@@ -164,12 +190,16 @@ fi
 
 ota_arg=""
 if [[ -n "${remote_ota_path}" ]]; then
-  ota_arg="--ota-firmware '${remote_ota_path}' --ota-port '${OTA_PORT}'"
+  ota_arg="--ota-firmware '${remote_ota_path}' --ota-port '${OTA_PORT}' --ota-sha256 '${OTA_SHA256}'"
+  if [[ "${OTA_LATEST_RELEASE}" -eq 1 ]]; then
+    ota_arg+=" --ota-latest-release"
+  fi
 fi
 
 remote_shell "'${BOATLOCK_NH02_REMOTE_ANDROID_SMOKE_BIN}' \
   --package '${BOATLOCK_ANDROID_PACKAGE}' \
   --activity '${BOATLOCK_ANDROID_ACTIVITY}' \
+  --mode '${APP_MODE}' \
   --wait-secs '${WAIT_SECS}' \
   ${install_arg} \
   ${cycle_arg} \

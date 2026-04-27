@@ -40,7 +40,6 @@ def test_flutter_ble_ota_protocol_is_wired():
     assert "boatLockOtaCharacteristicUuid = '9abc'" in ids
     assert "uploadFirmwareOtaBytes" in transport
     assert "sendCustomCommand(\n        'OTA_BEGIN:${firmware.length},$sha'" in transport
-    assert "allowService: true" in transport
     assert "OTA_FINISH" in transport
     assert "OTA_ABORT" in transport
     assert "otaFound: otaFound" in transport
@@ -53,12 +52,11 @@ def test_flutter_ble_ota_protocol_is_wired():
     assert "boatLockSha256Hex" in payload
     assert "Обновить по BLE" in settings
     assert "Обновить до релиза" in settings
-    assert "BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL" in client
-    assert "BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO" in client
+    assert "dslimp/boatlock" in client
     assert "isBoatLockFirmwareUpdateUrlAllowed" in client
     assert "boatLockFirmwareUpdateDownloadHeaders" in client
-    assert "platformioEnv != 'esp32s3_service'" in manifest
-    assert "commandProfile != 'service'" in manifest
+    assert "platformioEnv != 'esp32s3'" in manifest
+    assert "commandProfile != 'release'" in manifest
     assert "binaryUrl must use HTTPS or localhost HTTP" in manifest
 
 
@@ -67,6 +65,5 @@ def test_ble_protocol_docs_include_ota_surface():
     assert "Firmware OTA characteristic `9abc`" in protocol
     assert "OTA_BEGIN:<size>,<sha256>" in protocol
     assert "During active OTA" in protocol
-    assert "BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL" in protocol
-    assert "BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO" in protocol
-    assert "esp32s3_service" in protocol
+    assert "latest GitHub Release" in protocol
+    assert "esp32s3" in protocol

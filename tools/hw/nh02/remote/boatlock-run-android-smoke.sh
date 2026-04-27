@@ -8,11 +8,14 @@ ACTIVITY=""
 WAIT_SECS=45
 SERIAL=""
 INSTALL_APP=1
+APP_MODE="basic"
 CYCLE_BLUETOOTH=0
 RESET_ESP32=0
 ESP32_RESET_BIN="${BOATLOCK_ESP32_RESET_BIN:-/opt/boatlock-hw/bin/boatlock-reset-esp32s3.sh}"
 OTA_FIRMWARE=""
 OTA_PORT=18080
+OTA_SHA256=""
+OTA_LATEST_RELEASE=0
 OTA_SERVER_PID=""
 PERMISSIONS=()
 
@@ -25,6 +28,10 @@ while [[ $# -gt 0 ]]; do
     --no-install)
       INSTALL_APP=0
       shift
+      ;;
+    --mode)
+      APP_MODE="${2:?missing app check mode}"
+      shift 2
       ;;
     --cycle-bluetooth)
       CYCLE_BLUETOOTH=1
@@ -45,6 +52,14 @@ while [[ $# -gt 0 ]]; do
     --ota-port)
       OTA_PORT="${2:?missing OTA port}"
       shift 2
+      ;;
+    --ota-sha256)
+      OTA_SHA256="${2:?missing OTA SHA-256}"
+      shift 2
+      ;;
+    --ota-latest-release)
+      OTA_LATEST_RELEASE=1
+      shift
       ;;
     --package)
       PACKAGE="${2:?missing package name}"
@@ -101,6 +116,11 @@ fi
 
 if [[ -n "${OTA_FIRMWARE}" && ! -f "${OTA_FIRMWARE}" ]]; then
   echo "OTA firmware not found: ${OTA_FIRMWARE}" >&2
+  exit 1
+fi
+
+if [[ -n "${OTA_FIRMWARE}" && -z "${OTA_SHA256}" ]]; then
+  echo "OTA SHA-256 is required when OTA firmware is provided" >&2
   exit 1
 fi
 
@@ -164,7 +184,7 @@ if [[ "${INSTALL_APP}" -eq 1 ]]; then
     sleep 2
   done
   if [[ "${install_status}" -ne 0 ]]; then
-    manual_apk="/sdcard/Download/boatlock-smoke.apk"
+    manual_apk="/sdcard/Download/boatlock-app.apk"
     "${ADB[@]}" push "${APK}" "${manual_apk}" >/dev/null 2>&1 || true
     echo "adb install failed; staged APK for phone-side inspection only: ${manual_apk}" >&2
     echo "fix the phone-side install policy, keep the phone unlocked for prompts, then rerun the same smoke command with install enabled" >&2
@@ -203,7 +223,16 @@ fi
 "${ADB[@]}" logcat -c || true
 "${ADB[@]}" shell am force-stop "${PACKAGE}" >/dev/null 2>&1 || true
 keep_phone_awake
-"${ADB[@]}" shell am start -W -n "${ACTIVITY}" >/dev/null
+start_args=(-W -n "${ACTIVITY}" --es boatlock_check_mode "${APP_MODE}")
+if [[ -n "${OTA_FIRMWARE}" ]]; then
+  start_args+=(--es boatlock_ota_url "http://127.0.0.1:${OTA_PORT}/firmware.bin")
+  start_args+=(--es boatlock_ota_sha256 "${OTA_SHA256}")
+fi
+if [[ "${OTA_LATEST_RELEASE}" -eq 1 ]]; then
+  start_args+=(--ez boatlock_ota_latest_release true)
+  start_args+=(--es boatlock_firmware_manifest_url "http://127.0.0.1:${OTA_PORT}/manifest.json")
+fi
+"${ADB[@]}" shell am start "${start_args[@]}" >/dev/null
 
 if [[ "${CYCLE_BLUETOOTH}" -eq 1 || "${RESET_ESP32}" -eq 1 ]]; then
   ready_deadline=$(( $(date +%s) + 60 ))
@@ -241,7 +270,7 @@ while [[ $(date +%s) -lt ${deadline} ]]; do
   if [[ -n "${result_line}" ]]; then
     break
   fi
-  progress_line="$(printf '%s\n' "${dump}" | grep -E 'BOATLOCK_OTA_PROGRESS|BoatLockAppE2E.*ota_progress|\\[OTA\\] progress|BLE OTA progress|BoatLockAppE2E.*sim_suite_report|BOATLOCK_SMOKE_STAGE .*sim_suite_' | tail -n 1 || true)"
+  progress_line="$(printf '%s\n' "${dump}" | grep -E 'BOATLOCK_OTA_PROGRESS|BoatLockAppCheck.*ota_progress|\\[OTA\\] progress|BLE OTA progress|BoatLockAppCheck.*sim_suite_report|BOATLOCK_SMOKE_STAGE .*sim_suite_' | tail -n 1 || true)"
   if [[ -n "${progress_line}" && "${progress_line}" != "${last_progress_line}" ]]; then
     printf '%s\n' "${progress_line}"
     last_progress_line="${progress_line}"
@@ -252,7 +281,7 @@ done
 if [[ -z "${result_line}" ]]; then
   printf 'no BOATLOCK_SMOKE_RESULT found in logcat within %ss\n' "${WAIT_SECS}" >&2
   printf 'recent relevant logcat:\n' >&2
-  "${ADB[@]}" logcat -d 2>/dev/null | grep -E 'BoatLockSmoke|BoatLockAppE2E|BOATLOCK_SMOKE_RESULT|BOATLOCK_OTA_PROGRESS|FlutterBluePlus|flutter|\\[OTA\\]|\\[SIM\\]' | tail -n 160 >&2 || true
+  "${ADB[@]}" logcat -d 2>/dev/null | grep -E 'BoatLockSmoke|BoatLockAppCheck|BOATLOCK_SMOKE_RESULT|BOATLOCK_OTA_PROGRESS|FlutterBluePlus|flutter|\\[OTA\\]|\\[SIM\\]' | tail -n 160 >&2 || true
   exit 1
 fi
 

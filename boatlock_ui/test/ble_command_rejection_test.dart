@@ -5,23 +5,23 @@ void main() {
   test('parses firmware profile rejection log', () {
     final rejection = parseBleCommandRejectionLog(
       '[BLE] command rejected reason=profile profile=release '
-      'scope=service command=OTA_BEGIN:4096,abcd',
+      'scope=dev_hil command=SET_PHONE_GPS:59,30',
     );
 
     expect(rejection, isNotNull);
     expect(rejection!.reason, 'profile');
     expect(rejection.profile, 'release');
-    expect(rejection.scope, 'service');
-    expect(rejection.command, 'OTA_BEGIN:4096,abcd');
-    expect(rejection.commandName, 'OTA_BEGIN');
-    expect(rejection.requiredProfile, 'service');
-    expect(rejection.matchesCommandPrefix('OTA_BEGIN'), isTrue);
+    expect(rejection.scope, 'dev_hil');
+    expect(rejection.command, 'SET_PHONE_GPS:59,30');
+    expect(rejection.commandName, 'SET_PHONE_GPS');
+    expect(rejection.requiredProfile, 'acceptance');
+    expect(rejection.matchesCommandPrefix('SET_PHONE_GPS'), isTrue);
     expect(rejection.matchesCommandPrefix('OTA_FINISH'), isFalse);
   });
 
   test('maps dev HIL scope to acceptance profile', () {
     final rejection = parseBleCommandRejectionLog(
-      '[BLE] command rejected reason=profile profile=service '
+      '[BLE] command rejected reason=profile profile=release '
       'scope=dev_hil command=SET_PHONE_GPS:59,30',
     );
 
@@ -48,14 +48,14 @@ void main() {
     expect(
       parseBleCommandRejectionLog(
         '[BLE] command rejected reason=auth profile=release '
-        'scope=service command=OTA_BEGIN:bad',
+        'scope=dev_hil command=SET_PHONE_GPS:bad',
       ),
       isNull,
     );
     expect(
       parseBleCommandRejectionLog(
         '[BLE] command rejected reason=profile profile=debug '
-        'scope=service command=OTA_BEGIN:bad',
+        'scope=dev_hil command=SET_PHONE_GPS:bad',
       ),
       isNull,
     );

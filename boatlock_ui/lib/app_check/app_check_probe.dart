@@ -13,30 +13,32 @@ import '../ota/firmware_update_client.dart';
 import '../smoke/ble_smoke_logic.dart';
 import '../smoke/ble_smoke_mode.dart';
 
-const kBoatLockAppE2eModeDefine = 'BOATLOCK_APP_E2E_MODE';
-const kBoatLockAppE2eModeName = String.fromEnvironment(
-  kBoatLockAppE2eModeDefine,
-  defaultValue: '',
-);
-const kBoatLockAppE2eOtaUrlDefine = 'BOATLOCK_APP_E2E_OTA_URL';
-const kBoatLockAppE2eOtaSha256Define = 'BOATLOCK_APP_E2E_OTA_SHA256';
-const kBoatLockAppE2eOtaLatestReleaseDefine =
-    'BOATLOCK_APP_E2E_OTA_LATEST_RELEASE';
-const kBoatLockAppE2eOtaUrl = String.fromEnvironment(
-  kBoatLockAppE2eOtaUrlDefine,
-  defaultValue: '',
-);
-const kBoatLockAppE2eOtaSha256 = String.fromEnvironment(
-  kBoatLockAppE2eOtaSha256Define,
-  defaultValue: '',
-);
-const kBoatLockAppE2eOtaLatestRelease = bool.fromEnvironment(
-  kBoatLockAppE2eOtaLatestReleaseDefine,
-);
-
 enum _SimSuitePhase { idle, listing, starting, running, reporting, cleanup }
 
-List<String> parseAppE2eSimListLog(String line) {
+class BoatLockAppCheckConfig {
+  const BoatLockAppCheckConfig({
+    required this.mode,
+    this.otaUrl = '',
+    this.otaSha256 = '',
+    this.otaLatestRelease = false,
+    this.firmwareManifestUrl = '',
+  });
+
+  final BleSmokeMode mode;
+  final String otaUrl;
+  final String otaSha256;
+  final bool otaLatestRelease;
+  final String firmwareManifestUrl;
+
+  FirmwareUpdateClient firmwareUpdateClient() {
+    if (firmwareManifestUrl.trim().isNotEmpty) {
+      return FirmwareUpdateClient(manifestUrl: firmwareManifestUrl.trim());
+    }
+    return const FirmwareUpdateClient();
+  }
+}
+
+List<String> parseAppCheckSimListLog(String line) {
   const prefix = '[SIM] LIST ';
   if (!line.startsWith(prefix)) {
     return const <String>[];
@@ -49,7 +51,7 @@ List<String> parseAppE2eSimListLog(String line) {
       .toList(growable: false);
 }
 
-Map<String, dynamic>? parseAppE2eSimJsonLog(String line, String prefix) {
+Map<String, dynamic>? parseAppCheckSimJsonLog(String line, String prefix) {
   if (!line.startsWith(prefix)) {
     return null;
   }
@@ -62,7 +64,7 @@ Map<String, dynamic>? parseAppE2eSimJsonLog(String line, String prefix) {
   return null;
 }
 
-String? appE2eSimReportChunk(String line) {
+String? appCheckSimReportChunk(String line) {
   const prefix = '[SIM] REPORT ';
   if (!line.startsWith(prefix) || line == '[SIM] REPORT unavailable') {
     return null;
@@ -70,12 +72,12 @@ String? appE2eSimReportChunk(String line) {
   return line.substring(prefix.length);
 }
 
-String? appE2eProfileRejectionStage(BleCommandRejection? rejection) {
+String? appCheckProfileRejectionStage(BleCommandRejection? rejection) {
   if (rejection == null) return null;
   return 'command_rejected_${rejection.commandName}_${rejection.profile}';
 }
 
-String? appE2eProfileRejectionReason(
+String? appCheckProfileRejectionReason(
   BleSmokeMode mode,
   BleCommandRejection? rejection,
 ) {
@@ -109,11 +111,14 @@ String? appE2eProfileRejectionReason(
   return null;
 }
 
-class BoatLockAppE2eProbe {
-  BoatLockAppE2eProbe._({required BleBoatLock ble, required BleSmokeMode mode})
-    : _ble = ble,
-      _mode = mode {
-    _log('starting_app_e2e mode=${_mode.wireName}');
+class BoatLockAppCheckProbe {
+  BoatLockAppCheckProbe({
+    required BleBoatLock ble,
+    required BoatLockAppCheckConfig config,
+  }) : _ble = ble,
+       _config = config,
+       _mode = config.mode {
+    _log('starting_app_check mode=${_mode.wireName}');
     final timeout = switch (_mode) {
       BleSmokeMode.reconnect => const Duration(seconds: 150),
       BleSmokeMode.gps => const Duration(seconds: 180),
@@ -136,6 +141,7 @@ class BoatLockAppE2eProbe {
   }
 
   final BleBoatLock _ble;
+  final BoatLockAppCheckConfig _config;
   final BleSmokeMode _mode;
   Timer? _timeoutTimer;
   Timer? _gapTimer;
@@ -183,16 +189,6 @@ class BoatLockAppE2eProbe {
   bool _otaUploadDone = false;
   bool _otaReconnectGapSeen = false;
   int _otaProgressBucket = -1;
-
-  static BoatLockAppE2eProbe? maybeCreate(BleBoatLock ble) {
-    if (kBoatLockAppE2eModeName.isEmpty) {
-      return null;
-    }
-    return BoatLockAppE2eProbe._(
-      ble: ble,
-      mode: boatLockSmokeModeFromString(kBoatLockAppE2eModeName),
-    );
-  }
 
   void onData(BoatData? data) {
     if (_completed || data == null) {
@@ -246,9 +242,9 @@ class BoatLockAppE2eProbe {
     if (rejection != null) {
       _lastCommandRejection = rejection;
     }
-    final rejectionReason = appE2eProfileRejectionReason(_mode, rejection);
+    final rejectionReason = appCheckProfileRejectionReason(_mode, rejection);
     if (rejectionReason != null) {
-      final stage = appE2eProfileRejectionStage(rejection);
+      final stage = appCheckProfileRejectionStage(rejection);
       if (stage != null) {
         _stage(stage);
       }
@@ -435,7 +431,7 @@ class BoatLockAppE2eProbe {
 
   void _handleSimSuiteDeviceLog(String line) {
     if (_simSuitePhase == _SimSuitePhase.listing) {
-      final ids = parseAppE2eSimListLog(line);
+      final ids = parseAppCheckSimListLog(line);
       if (ids.isNotEmpty) {
         _simSuiteScenarioIds = ids;
         _stage('sim_suite_list_received_${ids.length}');
@@ -456,7 +452,7 @@ class BoatLockAppE2eProbe {
       return;
     }
 
-    final status = parseAppE2eSimJsonLog(line, '[SIM] STATUS ');
+    final status = parseAppCheckSimJsonLog(line, '[SIM] STATUS ');
     if (status != null) {
       _handleSimSuiteStatus(status);
       return;
@@ -466,7 +462,7 @@ class BoatLockAppE2eProbe {
       _finish(false, 'app_sim_suite_report_unavailable');
       return;
     }
-    final chunk = appE2eSimReportChunk(line);
+    final chunk = appCheckSimReportChunk(line);
     if (chunk != null) {
       _handleSimSuiteReportChunk(chunk);
     }
@@ -621,12 +617,12 @@ class BoatLockAppE2eProbe {
   }
 
   Future<void> _runOtaUpload() async {
-    if (kBoatLockAppE2eOtaLatestRelease) {
+    if (_config.otaLatestRelease) {
       await _runLatestReleaseOtaUpload();
       return;
     }
-    final uri = Uri.tryParse(kBoatLockAppE2eOtaUrl);
-    final expectedSha = normalizeBoatLockSha256Hex(kBoatLockAppE2eOtaSha256);
+    final uri = Uri.tryParse(_config.otaUrl);
+    final expectedSha = normalizeBoatLockSha256Hex(_config.otaSha256);
     if (uri == null || !uri.hasScheme || expectedSha == null) {
       _finish(false, 'app_ota_missing_firmware_define');
       return;
@@ -659,7 +655,7 @@ class BoatLockAppE2eProbe {
   Future<void> _runLatestReleaseOtaUpload() async {
     try {
       _stage('ota_latest_release_manifest_fetch');
-      final bundle = await const FirmwareUpdateClient().fetchLatestFirmware(
+      final bundle = await _config.firmwareUpdateClient().fetchLatestFirmware(
         onProgress: (received, total) {
           if (total <= 0) {
             return;
@@ -860,18 +856,11 @@ class BoatLockAppE2eProbe {
   }
 
   Future<void> _sendCompassCommands() async {
-    final calOk = await _ble.sendCustomCommand(
-      'COMPASS_CAL_START',
-      allowService: true,
-    );
+    final calOk = await _ble.sendCustomCommand('COMPASS_CAL_START');
     final autosaveOffOk = await _ble.sendCustomCommand(
       'COMPASS_DCD_AUTOSAVE_OFF',
-      allowService: true,
     );
-    final saveOk = await _ble.sendCustomCommand(
-      'COMPASS_DCD_SAVE',
-      allowService: true,
-    );
+    final saveOk = await _ble.sendCustomCommand('COMPASS_DCD_SAVE');
     _log(
       'compass_commands cal=$calOk autosaveOff=$autosaveOffOk dcdSave=$saveOk',
     );
@@ -940,15 +929,15 @@ class BoatLockAppE2eProbe {
       commandRejection: _lastCommandRejection,
     );
     _logLine(encodeSmokeResultLine(payload));
-    developer.log(jsonEncode(payload), name: 'BoatLockAppE2E');
+    developer.log(jsonEncode(payload), name: 'BoatLockAppCheck');
   }
 
   void _log(String line) {
-    _logLine('[BoatLockAppE2E] $line');
+    _logLine('[BoatLockAppCheck] $line');
   }
 
   void _logLine(String line) {
     debugPrint(line);
-    developer.log(line, name: 'BoatLockAppE2E');
+    developer.log(line, name: 'BoatLockAppCheck');
   }
 }

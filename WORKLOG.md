@@ -692,12 +692,12 @@ Scope:
 - Let the first canonical Android smoke build finish instead of starting a second path, then verify the next blocker honestly.
 
 Key outcomes:
-- Waited for the original `tools/android/build-smoke-apk.sh` run to reach terminal status instead of re-running the build through a manual fallback.
-- Confirmed the dedicated smoke APK build completes successfully and emits `build/app/outputs/flutter-apk/app-debug.apk`.
+- Waited for the original `tools/android/build-app-apk.sh` run to reach terminal status instead of re-running the build through a manual fallback.
+- Confirmed the dedicated app check build completes successfully and emits `build/app/outputs/flutter-apk/app-release.apk`.
 - Checked the canonical ADB visibility path afterward; current blocker is now only that no Android device is attached yet.
 
 Validation:
-- live `build-smoke-apk.sh` session reached terminal success
+- live `build-app-apk.sh` session reached terminal success
 - `./tools/android/status.sh`
 
 Self-review:
@@ -972,9 +972,9 @@ Key outcomes:
   - adapter ready schedules scan
   - app resume schedules scan unless a usable data/control link already exists
   - disconnect and heartbeat write failure clear stale link state and retry
-- Added reconnect smoke mode to `main_smoke.dart` and `BleSmokePage`.
+- Added reconnect smoke mode to `main.dart` and `BleSmokePage`.
 - Added wrapper support:
-  - `tools/android/build-smoke-apk.sh --mode reconnect`
+  - `tools/android/build-app-apk.sh --mode reconnect`
   - `tools/android/run-smoke.sh --reconnect`
   - `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130`
   - remote helper `--cycle-bluetooth`
@@ -982,7 +982,7 @@ Key outcomes:
 
 Validation:
 - `dart format ...` -> clean.
-- `bash -n tools/android/build-smoke-apk.sh tools/android/run-smoke.sh tools/hw/nh02/android-run-smoke.sh tools/hw/nh02/remote/boatlock-run-android-smoke.sh` -> clean.
+- `bash -n tools/android/build-app-apk.sh tools/android/run-smoke.sh tools/hw/nh02/android-run-smoke.sh tools/hw/nh02/remote/boatlock-run-android-smoke.sh` -> clean.
 - `cd boatlock_ui && flutter analyze` -> clean.
 - `cd boatlock_ui && flutter test --no-pub` -> `26/26` passed after rerun outside sandbox; the first sandbox run failed only because the test runner could not bind `127.0.0.1`.
 - `./tools/hw/nh02/install.sh` -> refreshed tracked remote helpers.
@@ -1064,13 +1064,13 @@ Scope:
 - Add a hardware acceptance scenario for the phone staying connected/recovering when the ESP32-S3 reboots while the app is running.
 
 Key outcomes:
-- Reused the existing reconnect smoke APK state machine: first telemetry, telemetry gap, telemetry after reconnect.
+- Reused the existing reconnect app check state machine: first telemetry, telemetry gap, telemetry after reconnect.
 - Added `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130`.
 - The `nh02` wrapper now triggers the gap with the tracked `/opt/boatlock-hw/bin/boatlock-reset-esp32s3.sh` helper instead of phone Bluetooth cycling.
 - Kept this as a separate acceptance target from Bluetooth off/on so failures point at the correct side of the link.
 
 Validation:
-- `bash -n tools/hw/nh02/android-run-smoke.sh tools/hw/nh02/remote/boatlock-run-android-smoke.sh tools/android/build-smoke-apk.sh tools/android/run-smoke.sh` -> clean.
+- `bash -n tools/hw/nh02/android-run-smoke.sh tools/hw/nh02/remote/boatlock-run-android-smoke.sh tools/android/build-app-apk.sh tools/android/run-smoke.sh` -> clean.
 - `./tools/hw/nh02/install.sh` -> refreshed the tracked remote helper on `nh02`; RFC2217 service returned active.
 - `./tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` -> exact APK install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect","dataEvents":4,...}` after phone Bluetooth cycle.
 - `./tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` -> exact APK install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_after_reconnect","dataEvents":4,...}` after ESP32 reset.
@@ -1388,7 +1388,7 @@ Validation:
 - `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`.
 - `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-manual-standard-60s.log --json-out /tmp/boatlock-manual-standard-60s.json` -> `PASS`, including RVC compass, display, EEPROM `ver=22`, BLE advertising, stepper, STOP, heading events, and GPS UART.
 - `./tools/hw/nh02/android-run-smoke.sh --wait-secs 100` -> exact APK install eventually `Success` after two MIUI `USER_RESTRICTED` retries, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"telemetry_received",...}`.
-- `./tools/android/build-smoke-apk.sh --mode manual` initially failed in sandbox with Gradle `SocketException: Operation not permitted`; rerun outside sandbox succeeded.
+- `./tools/android/build-app-apk.sh --mode manual` initially failed in sandbox with Gradle `SocketException: Operation not permitted`; rerun outside sandbox succeeded.
 - `./tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` -> exact APK install `Success`, then `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"manual_roundtrip","dataEvents":4,...,"mode":"IDLE"}`.
 
 Self-review:
@@ -1420,11 +1420,11 @@ Key outcomes:
 
 Validation:
 - `cd boatlock_ui && flutter test --no-pub` with `HOME=/tmp XDG_CACHE_HOME=/tmp` -> `29/29` passed.
-- `cd boatlock_ui && flutter build apk --debug --no-pub` with `HOME=/tmp XDG_CACHE_HOME=/tmp` -> success, built `build/app/outputs/flutter-apk/app-debug.apk`.
+- `cd boatlock_ui && flutter build apk --debug --no-pub` with `HOME=/tmp XDG_CACHE_HOME=/tmp` -> success, built `build/app/outputs/flutter-apk/app-release.apk`.
 
 Self-review:
 - This validates the UI command contract locally and the BLE manual roundtrip on phone was already proven by Stage 51 manual smoke.
-- I did not run interactive phone UI automation for this sheet; current hardware proof is the zero-throttle smoke app, not a tap-through of the production map UI.
+- I did not run interactive phone UI automation for this sheet; current hardware proof is the zero-throttle app check, not a tap-through of the production map UI.
 
 Promote to skill:
 - Phone manual control should remain press-and-hold/deadman UI. Do not add one-tap latched manual actuation to the main map.
@@ -1456,7 +1456,7 @@ Validation:
 - `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
 - `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
 - `pytest tools/ci/test_*.py` -> `9/9` passed.
-- `bash -n tools/android/build-smoke-apk.sh tools/android/run-smoke.sh tools/hw/nh02/android-run-smoke.sh` -> clean.
+- `bash -n tools/android/build-app-apk.sh tools/android/run-smoke.sh tools/hw/nh02/android-run-smoke.sh` -> clean.
 - `git diff --check` -> clean.
 - `./tools/hw/nh02/flash.sh` -> rebuilt and flashed ESP32-S3 `98:88:e0:03:ba:5c`.
 - `./tools/hw/nh02/acceptance.sh --seconds 60 --log-out /tmp/boatlock-settings-dirty-60s.log --json-out /tmp/boatlock-settings-dirty-60s.json` -> `PASS`, including RVC compass, display, EEPROM `ver=22`, BLE advertising, stepper, STOP, GPS UART, and heading events.
@@ -1512,7 +1512,7 @@ Validation:
 Self-review:
 - This is a small semantic tightening: invalid anchor inputs are rejected rather than clamped. That is safer for a physical hold point.
 - `0,0` remains reserved as "no anchor point", matching existing runtime behavior. If a real deployment ever needs the Gulf of Guinea coordinate, that requires a schema/state change rather than overloading default coordinates.
-- I did not add an on-device BLE test that sends invalid `SET_ANCHOR` over the phone smoke app; native BLE tests cover the parser path and Android smoke covers transport health.
+- I did not add an on-device BLE test that sends invalid `SET_ANCHOR` over the phone app check; native BLE tests cover the parser path and Android smoke covers transport health.
 
 Promote to skill:
 - Anchor point saving must be explicit and validated. Do not add default arguments or helpers that can arm Anchor as a side effect of storing coordinates.
@@ -1557,7 +1557,7 @@ Validation:
 Self-review:
 - This is a deliberate protocol break, which is acceptable before alpha and removes app/firmware distance validation duplication.
 - Fixed `1.5 m` may need field tuning, but the protocol should not expose arbitrary distance until real-water tests prove a need.
-- Android smoke proves transport, reconnect, and zero-throttle manual command roundtrip; it does not yet send an actual nudge command from the phone smoke app.
+- Android smoke proves transport, reconnect, and zero-throttle manual command roundtrip; it does not yet send an actual nudge command from the phone app check.
 - During an earlier hardware check the RFC2217 port returned connection refused after flashing; I used `status.sh` and reran the canonical acceptance wrapper instead of accepting a manual workaround.
 
 Promote to skill:
@@ -2437,7 +2437,7 @@ Scope:
   - `RuntimeBleLiveFrame`
   - `RuntimeBleParams`
   - `RuntimeTelemetryCadence`
-- Validate the just-pushed `main` firmware and Android smoke APK through canonical wrappers only.
+- Validate the just-pushed `main` firmware and Android app check through canonical wrappers only.
 
 Validation:
 - `./tools/hw/nh02/status.sh` -> ESP32-S3 `98:88:E0:03:BA:5C` visible, RFC2217 service enabled and active.
@@ -2478,7 +2478,7 @@ Validation:
 - `cd boatlock && platformio test -e native -f test_runtime_status -f test_runtime_ble_live_frame -f test_runtime_ble_params` -> `11/11` passed.
 - `cd boatlock && platformio test -e native` -> `249/249` passed.
 - `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub test/ble_smoke_logic_test.dart test/ble_live_frame_test.dart` -> passed.
-- `./tools/android/build-smoke-apk.sh --mode status` -> first sandbox run failed with Gradle `Operation not permitted`; reran host-side and built `app-debug.apk` successfully.
+- `./tools/android/build-app-apk.sh --mode status` -> first sandbox run failed with Gradle `Operation not permitted`; reran host-side and built `app-release.apk` successfully.
 - `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> full suite passed (`30/30`).
 - `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
 - `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> all scenarios `PASS`.
@@ -2580,7 +2580,7 @@ Scope:
   - `RuntimeStatus`
   - BLE log text length handling
   - `RuntimeSimBadge`
-- Prove the pushed `main` firmware and Android smoke APK on the `nh02` bench.
+- Prove the pushed `main` firmware and Android app check on the `nh02` bench.
 
 Bench validation:
 - `./tools/hw/nh02/status.sh` -> RFC2217 service enabled/active, ESP32-S3 USB device present at `/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_98:88:E0:03:BA:5C-if00`, listener on port `4000`.
@@ -2665,7 +2665,7 @@ Validation:
 - `cd boatlock && platformio test -e native -f test_runtime_sim_execution -f test_runtime_sim_command -f test_runtime_sim_log` -> `19/19` passed.
 - `cd boatlock && platformio test -e native -f test_runtime_sim_execution -f test_runtime_sim_command -f test_runtime_sim_log -f test_ble_command_handler` -> `52/52` passed.
 - `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub test/ble_smoke_logic_test.dart` -> passed.
-- `./tools/android/build-smoke-apk.sh --mode sim` -> sandbox Gradle run failed with `java.net.SocketException: Operation not permitted`; reran host-side and built `app-debug.apk` successfully.
+- `./tools/android/build-app-apk.sh --mode sim` -> sandbox Gradle run failed with `java.net.SocketException: Operation not permitted`; reran host-side and built `app-release.apk` successfully.
 - `cd boatlock && platformio test -e native` -> `258/258` passed.
 - `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> full suite passed (`31/31`) before and after SIM smoke cleanup.
 - `python3 tools/sim/test_sim_core.py` -> `4/4` passed.
@@ -2728,7 +2728,7 @@ Scope:
   - `RuntimeSimCommand`
   - `RuntimeSimExecution`
   - `RuntimeSimLog`
-- Prove the firmware and Android smoke app on `nh02`, including the new SIM smoke path.
+- Prove the firmware and Android app check on `nh02`, including the new SIM smoke path.
 
 Bench validation:
 - `./tools/hw/nh02/flash.sh` -> build success, flash success, app image write `697296` bytes, hard reset via RTS.
@@ -2811,7 +2811,7 @@ Key outcomes:
 
 Validation:
 - `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub test/ble_smoke_logic_test.dart` -> passed (`5/5`).
-- `./tools/android/build-smoke-apk.sh --mode anchor` -> sandbox Gradle run failed with `java.net.SocketException: Operation not permitted`; reran host-side and built `app-debug.apk` successfully.
+- `./tools/android/build-app-apk.sh --mode anchor` -> sandbox Gradle run failed with `java.net.SocketException: Operation not permitted`; reran host-side and built `app-release.apk` successfully.
 - `./tools/hw/nh02/android-run-smoke.sh --anchor --no-build --wait-secs 130` -> exact APK install `Success`; final `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"anchor_denied_roundtrip","dataEvents":4,"deviceLogEvents":2,"mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","lastDeviceLog":"[EVENT] ANCHOR_OFF reason=BLE_CMD"}`.
 - `cd boatlock_ui && env HOME=/tmp XDG_CACHE_HOME=/tmp flutter test --no-pub` -> full suite passed (`32/32`).
 - `git diff --check` -> clean.
@@ -4356,7 +4356,7 @@ Key outcomes:
 - Updated basic telemetry health checks to require known current protocol values.
 - Added tests for unknown mode/status rejection.
 - Updated hardware acceptance skill wording so basic Android smoke is documented as known-mode/status telemetry proof.
-- Phone-smoke decision: Android BLE smoke is required because this changes the app-side acceptance criterion used by the smoke APK.
+- Phone-smoke decision: Android BLE smoke is required because this changes the app-side acceptance criterion used by the app check.
 
 Validation:
 - `cd boatlock_ui && flutter test test/ble_smoke_logic_test.dart` -> PASS (`5/5`).
@@ -4370,29 +4370,29 @@ Self-review:
 ### 2026-04-25 Stage 137: Extract Android smoke mode parser
 
 Scope:
-- Continue the refactor batch with module `10/15`: Android BLE smoke APK mode selection.
-- Move the smoke mode enum and `BOATLOCK_SMOKE_MODE` parser out of UI/entrypoint glue into a pure module.
+- Continue the refactor batch with module `10/15`: Android BLE app check mode selection.
+- Move the smoke mode enum and `APP_CHECK_MODE` parser out of UI/entrypoint glue into a pure module.
 
 External baseline:
 - Dart `String.fromEnvironment` is a compile-time environment read and must be consistent across a program, so the define name/default belong in one tested place instead of duplicated literals: <https://api.dart.dev/dart-core/String/String.fromEnvironment.html>.
 - Android testing strategy guidance separates fast local/unit coverage from higher-fidelity device tests; this module needs parser tests plus a real APK compile, not a BLE hardware run because BLE behavior is unchanged: <https://developer.android.com/training/testing/fundamentals/strategies>.
 
 Key outcomes:
-- Added `ble_smoke_mode.dart` with `BleSmokeMode`, `BOATLOCK_SMOKE_MODE` constants, and `boatLockSmokeModeFromString()`.
-- Reduced `main_smoke.dart` to entrypoint glue that reads the define and delegates parsing.
+- Added `ble_smoke_mode.dart` with `BleSmokeMode`, `APP_CHECK_MODE` constants, and `boatLockSmokeModeFromString()`.
+- Reduced `main.dart` to entrypoint glue that reads the define and delegates parsing.
 - `BleSmokePage` now consumes the shared mode enum instead of owning smoke mode definitions.
 - Added focused parser tests for supported modes, unknown-value fallback, and stable define names.
 - Updated BLE/UI and validation references so future smoke modes are added through the pure module and wrapper build path.
-- Phone-smoke decision: no Android BLE smoke required because this does not change scan/connect/write/telemetry behavior; `build-smoke-apk.sh --mode basic` covers the changed smoke entrypoint.
+- Phone-smoke decision: no Android BLE smoke required because this does not change scan/connect/write/telemetry behavior; `build-app-apk.sh --mode basic` covers the changed smoke entrypoint.
 
 Validation:
 - `cd boatlock_ui && flutter test test/ble_smoke_mode_test.dart` -> PASS (`3/3`).
 - `cd boatlock_ui && flutter test` -> PASS (`45/45`).
-- `tools/android/build-smoke-apk.sh --mode basic` -> PASS, produced `boatlock_ui/build/app/outputs/flutter-apk/app-debug.apk`.
+- `tools/android/build-app-apk.sh --mode basic` -> PASS, produced `boatlock_ui/build/app/outputs/flutter-apk/app-release.apk`.
 
 Self-review:
-- This removes test-invisible mode parsing from `main_smoke.dart` without changing accepted mode names.
-- Remaining risk is wrapper/code list drift when a new mode is added; the validation reference now requires parser tests plus smoke APK build for that contract.
+- This removes test-invisible mode parsing from `main.dart` without changing accepted mode names.
+- Remaining risk is wrapper/code list drift when a new mode is added; the validation reference now requires parser tests plus app check build for that contract.
 
 ### 2026-04-25 Stage 138: Centralize Android smoke wrapper modes
 
@@ -4405,17 +4405,17 @@ External baseline:
 - Android testing strategy guidance keeps cheap local checks in front of device tests; wrapper mode drift is a local contract bug and should be caught before any nh02/phone run: <https://developer.android.com/training/testing/fundamentals/strategies>.
 
 Key outcomes:
-- Added `BOATLOCK_SMOKE_MODES`, `boatlock_is_smoke_mode()`, and `boatlock_validate_smoke_mode()` to `tools/android/common.sh`.
-- Updated `tools/android/build-smoke-apk.sh`, `tools/android/run-smoke.sh`, and `tools/hw/nh02/android-run-smoke.sh` to use the shared validator.
+- Added `APP_CHECK_MODES`, `boatlock_is_smoke_mode()`, and `boatlock_validate_smoke_mode()` to `tools/android/common.sh`.
+- Updated `tools/android/build-app-apk.sh`, `tools/android/run-smoke.sh`, and `tools/hw/nh02/android-run-smoke.sh` to use the shared validator.
 - Added `tools/ci/test_android_smoke_modes.py` to compare the shell allowlist with the Flutter `BleSmokeMode` enum and prevent hardcoded wrapper case-list regressions.
 - Updated validation and external-pattern references with the new shared wrapper rule.
 - Phone-smoke decision: no Android BLE smoke required because wrapper mode validation and APK build path changed, not BLE scan/connect/write/telemetry behavior.
 
 Validation:
-- `bash -n tools/android/common.sh tools/android/build-smoke-apk.sh tools/android/run-smoke.sh tools/hw/nh02/android-run-smoke.sh` -> PASS.
+- `bash -n tools/android/common.sh tools/android/build-app-apk.sh tools/android/run-smoke.sh tools/hw/nh02/android-run-smoke.sh` -> PASS.
 - `pytest -q tools/ci/test_android_smoke_modes.py` -> PASS (`2/2`).
-- `tools/android/build-smoke-apk.sh --mode unsupported` -> expected reject with supported-mode list.
-- `tools/android/build-smoke-apk.sh --mode basic` -> PASS, produced `boatlock_ui/build/app/outputs/flutter-apk/app-debug.apk`.
+- `tools/android/build-app-apk.sh --mode unsupported` -> expected reject with supported-mode list.
+- `tools/android/build-app-apk.sh --mode basic` -> PASS, produced `boatlock_ui/build/app/outputs/flutter-apk/app-release.apk`.
 - `pytest -q tools/ci/test_*.py` -> PASS (`11/11`).
 
 Self-review:
@@ -4955,7 +4955,7 @@ Self-review:
 ### 2026-04-25 Stage 160: Production Flutter app e2e bench path
 
 Scope:
-- Add a canonical Android e2e path for the real `lib/main.dart` Flutter app, not only the dedicated smoke entrypoint.
+- Add a canonical Android e2e path for the real `lib/main.dart` Flutter app, not only the separate check entrypoint.
 - Reuse the existing safe BLE smoke modes and logcat verdict parser so production-app acceptance does not create a second proof path.
 
 External baseline:
@@ -4963,16 +4963,16 @@ External baseline:
 - Flutter documents integration/e2e tests as full-app tests run on a real device; BoatLock's bench equivalent is a debuggable main-app APK with a compile-time hook and canonical adb/logcat wrapper: <https://docs.flutter.dev/testing/integration-tests>.
 
 Key outcomes:
-- Added `BoatLockAppE2eProbe`, enabled only by `BOATLOCK_APP_E2E_MODE`, that observes the production `MapPage` BLE client and emits `BOATLOCK_SMOKE_STAGE`/`BOATLOCK_SMOKE_RESULT`.
+- Added `BoatLockAppE2eProbe`, enabled only by `APP_RUNTIME_CHECK_MODE`, that observes the production `MapPage` BLE client and emits `BOATLOCK_SMOKE_STAGE`/`BOATLOCK_SMOKE_RESULT`.
 - Added `tools/android/build-app-apk.sh`, `tools/android/run-app-e2e.sh`, and `tools/hw/nh02/android-run-app-e2e.sh`.
-- Updated validation and hardware skills to distinguish production-app e2e from the dedicated smoke APK.
+- Updated validation and hardware skills to distinguish production-app e2e from the dedicated app check.
 - Added tests proving the e2e define is disabled by default and that app-e2e wrappers build `lib/main.dart`.
 
 Validation:
-- `bash -n tools/android/build-app-apk.sh tools/android/run-app-e2e.sh tools/hw/nh02/android-run-app-e2e.sh tools/android/build-smoke-apk.sh tools/android/run-smoke.sh tools/hw/nh02/android-run-smoke.sh` -> PASS.
+- `bash -n tools/android/build-app-apk.sh tools/android/run-app-e2e.sh tools/hw/nh02/android-run-app-e2e.sh tools/android/build-app-apk.sh tools/android/run-smoke.sh tools/hw/nh02/android-run-smoke.sh` -> PASS.
 - `pytest -q tools/ci/test_android_smoke_modes.py` -> PASS (`4/4`).
 - `cd boatlock_ui && flutter test` -> PASS (`55/55`).
-- `tools/android/build-app-apk.sh --e2e-mode basic` -> PASS, built `boatlock_ui/build/app/outputs/flutter-apk/app-debug.apk` from `lib/main.dart`.
+- `tools/android/build-app-apk.sh --mode basic` -> PASS, built `boatlock_ui/build/app/outputs/flutter-apk/app-release.apk` from `lib/main.dart`.
 - `tools/hw/nh02/android-status.sh` -> PASS, ADB target `68b657f0`, Xiaomi `220333QNY`, device `rain`.
 - `tools/hw/nh02/android-run-app-e2e.sh --wait-secs 130` -> PASS, `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"app_telemetry_received","dataEvents":1,"deviceLogEvents":0,"mode":"IDLE","status":"WARN","statusReasons":"NO_GPS","secPaired":false,"secAuth":false,"rssi":-32,"lastDeviceLog":""}`.
 - `tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130` -> PASS after one expected Xiaomi `USER_RESTRICTED` retry, `reason=app_manual_roundtrip`.
@@ -4980,7 +4980,7 @@ Validation:
 - `tools/hw/nh02/android-run-app-e2e.sh --anchor --wait-secs 130` -> PASS after one expected Xiaomi `USER_RESTRICTED` retry, `reason=app_anchor_denied_roundtrip`.
 
 Self-review:
-- The production app now has direct BLE e2e proof for connect/telemetry and safe command roundtrips without replacing the existing smoke APK path.
+- The production app now has direct BLE e2e proof for connect/telemetry and safe command roundtrips without replacing the existing app check path.
 - Remaining app-e2e gaps are `sim`, `reconnect`, `esp-reset`, and a future `gps-field` mode for BLE-only GNSS validation when ESP32 is powered from a powerbank away from `nh02`.
 
 ### 2026-04-25 Stage 161: BNO08x SH2-UART DCD migration target
@@ -5007,11 +5007,11 @@ Validation:
 - Earlier full native suite after this firmware slice: `cd boatlock && platformio test -e native` -> PASS (`359/359`).
 - `cd boatlock && pio run -e esp32s3` -> PASS, RAM `11.5%`, flash `21.0%`.
 - `cd boatlock && pio run -e esp32s3_bno08x_sh2_uart` -> PASS, RAM `12.5%`, flash `21.3%`.
-- `bash -n tools/android/build-app-apk.sh tools/android/run-app-e2e.sh tools/android/run-smoke.sh tools/android/build-smoke-apk.sh tools/hw/nh02/android-run-app-e2e.sh tools/hw/nh02/android-run-smoke.sh` -> PASS.
+- `bash -n tools/android/build-app-apk.sh tools/android/run-app-e2e.sh tools/android/run-smoke.sh tools/android/build-app-apk.sh tools/hw/nh02/android-run-app-e2e.sh tools/hw/nh02/android-run-smoke.sh` -> PASS.
 - `pytest -q tools/ci/test_android_smoke_modes.py tools/hw/nh02/test_acceptance.py` -> PASS (`9/9`).
 - `cd boatlock_ui && flutter test` -> PASS (`56/56`).
-- `tools/android/build-app-apk.sh --e2e-mode compass` -> PASS.
-- `tools/android/build-smoke-apk.sh --mode compass` -> PASS.
+- `tools/android/build-app-apk.sh --mode compass` -> PASS.
+- `tools/android/build-app-apk.sh --mode compass` -> PASS.
 - `tools/hw/nh02/status.sh` -> `boatlock-esp32s3-rfc2217.service` active, but ESP32 USB target missing at `/dev/serial/by-id/...`; hardware flash/serial acceptance is blocked until the board is back on `nh02` USB.
 
 Self-review:
@@ -5027,17 +5027,17 @@ Scope:
 
 Key outcomes:
 - Added `gnssQ` to the Flutter `BoatData` model and decoded byte `69` from the v2 live frame.
-- Added `gps` mode to the shared smoke-mode parser, smoke APK, production app e2e hook, local wrappers, and `nh02` wrappers.
+- Added `gps` mode to the shared smoke-mode parser, app check, production app e2e hook, local wrappers, and `nh02` wrappers.
 - GPS smoke passes only on valid non-zero coordinates plus `gnssQ > 0`, while rejecting `NO_GPS`, `GPS_DATA_STALE`, and `GPS_HDOP_MISSING`.
 - Smoke result payload now includes `lat`, `lon`, and `gnssQ` so failed field captures show whether BLE is alive but GNSS is absent.
 - Updated hardware/validation docs with `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180`.
 
 Validation:
-- `bash -n tools/android/build-app-apk.sh tools/android/run-app-e2e.sh tools/android/run-smoke.sh tools/android/build-smoke-apk.sh tools/hw/nh02/android-run-app-e2e.sh tools/hw/nh02/android-run-smoke.sh` -> PASS.
+- `bash -n tools/android/build-app-apk.sh tools/android/run-app-e2e.sh tools/android/run-smoke.sh tools/android/build-app-apk.sh tools/hw/nh02/android-run-app-e2e.sh tools/hw/nh02/android-run-smoke.sh` -> PASS.
 - `pytest -q tools/ci/test_android_smoke_modes.py tools/hw/nh02/test_acceptance.py` -> PASS (`9/9`).
 - `cd boatlock_ui && flutter test` -> PASS (`57/57`).
-- `tools/android/build-app-apk.sh --e2e-mode gps` -> PASS.
-- `tools/android/build-smoke-apk.sh --mode gps` -> PASS.
+- `tools/android/build-app-apk.sh --mode gps` -> PASS.
+- `tools/android/build-app-apk.sh --mode gps` -> PASS.
 - `tools/hw/nh02/android-status.sh` -> PASS, ADB target `68b657f0`, Xiaomi `220333QNY`.
 - `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180` -> FAIL after exact APK install succeeded. Result: `{"pass":false,"reason":"app_gps_timeout","dataEvents":176,"deviceLogEvents":0,"mode":"IDLE","status":"WARN","statusReasons":"","secPaired":false,"secAuth":false,"rssi":-54,"lat":0.0,"lon":0.0,"gnssQ":0,"lastDeviceLog":""}`.
 
@@ -5489,7 +5489,7 @@ Key outcomes:
 - Upgraded Flutter dependencies to newest resolvable versions and adjusted API changes in BLE connect licensing and `flutter_map` position zoom.
 - Upgraded PlatformIO ESP32 platform to `espressif32@6.13.0` and NimBLE to `2.5.0`; kept GFX at `1.5.9` because `1.6.x` requires newer Arduino-ESP32 APIs than official PlatformIO `espressif32@6.13.0` provides.
 - Removed the deprecated NimBLE `pService->start()` call, which is a no-op in NimBLE 2.x.
-- Fixed Android e2e build wrappers to reuse a stable Gradle cache instead of forcing `/tmp/boatlock-gradle`, and to fail if `app-debug.apk` is not actually produced.
+- Fixed Android e2e build wrappers to reuse a stable Gradle cache instead of forcing `/tmp/boatlock-gradle`, and to fail if `app-release.apk` is not actually produced.
 - Updated GitHub Actions and the experimental Flutter Android CI image pins to the refreshed toolchain versions.
 
 Validation:
@@ -5677,7 +5677,7 @@ Key outcomes:
 - Added a pure Flutter command classifier with `release`, `service`, `devHil`, and `unknown` scopes.
 - `BleBoatLock.sendCustomCommand()` now rejects unknown commands, service commands without explicit service opt-in, and dev/HIL commands without explicit HIL opt-in.
 - Raw `SEC_CMD` is not accepted through the custom-command classifier; callers pass the unwrapped command and the BLE transport builds the secure envelope after scope classification.
-- Normal Settings UI hides service controls by default: stepper tuning, compass offset/reset, firmware OTA, and raw BNO08x quality panes now require `BOATLOCK_SERVICE_UI=true`.
+- Normal Settings UI hides setup controls by default: stepper tuning, compass offset/reset, firmware OTA, and raw BNO08x quality panes now require `setup UI enabled`.
 - Smoke and main-app e2e probes now opt in explicitly for `SIM_*` and compass service commands.
 - Documented command scopes in `docs/BLE_PROTOCOL.md` and `skills/boatlock/references/ble-ui.md`; updated the active TODO to split app-side UI gating from a possible future firmware-side service/dev gate.
 
@@ -6157,14 +6157,14 @@ External baseline:
 - No new external source was needed for profile naming or wrapper validation.
 
 Key outcomes:
-- Added `esp32s3_release`, `esp32s3_service`, and `esp32s3_acceptance` PlatformIO environments.
+- Added `removed_release_alias`, `removed_setup_env`, and `esp32s3_acceptance` PlatformIO environments.
 - Made `tools/hw/nh02/flash.sh` accept `--profile release|service|acceptance`, map profile aliases, reject empty/unknown envs and `native`, and print the selected profile/env before build or flash.
-- Updated validation docs to use `esp32s3_service` for BLE OTA firmware artifacts.
+- Updated validation docs to use `removed_setup_env` for BLE OTA firmware artifacts.
 
 Validation:
 - `bash -n tools/hw/nh02/flash.sh` -> PASS.
 - `pio project config` -> PASS.
-- `for env in esp32s3_release esp32s3_service esp32s3_acceptance; do pio run -e "$env"; done` -> PASS.
+- `for env in removed_release_alias removed_setup_env esp32s3_acceptance; do pio run -e "$env"; done` -> PASS.
 - Wrapper negative probes rejected empty `BOATLOCK_PIO_ENV`, unknown env, unknown profile, and `native` before build/flash -> PASS.
 - `tools/ci/run_local_prepowered_gate.sh` -> PASS after the final patch set.
 - `git diff --check` -> PASS.
@@ -6279,7 +6279,7 @@ Key outcomes:
 
 Validation:
 - `cd boatlock && platformio test -e native -f test_runtime_ble_command_scope -f test_ble_command_profile_gate -f test_ble_command_handler` -> PASS (`52/52`).
-- `cd boatlock && platformio run -e esp32s3 -e esp32s3_release -e esp32s3_service -e esp32s3_acceptance` -> PASS (`4/4` environments).
+- `cd boatlock && platformio run -e esp32s3 -e removed_release_alias -e removed_setup_env -e esp32s3_acceptance` -> PASS (`4/4` environments).
 - `git diff --check` -> PASS.
 - No `nh02`, hardware, or Android validation run per task boundary.
 
@@ -6454,9 +6454,9 @@ External baseline:
 - GitHub Actions artifacts are API/list/download resources and download redirects are short-lived, so the app should not depend on raw workflow artifact URLs as a durable update channel: https://docs.github.com/en/rest/actions/artifacts.
 
 Key outcomes:
-- Added a validated `FirmwareUpdateManifest` requiring `schema=1`, `channel=main`, `branch=main`, `repo=dslimp/boatlock`, `platformioEnv=esp32s3_service`, `commandProfile=service`, positive size, HTTPS-or-localhost binary URL, and 64-hex SHA-256.
+- Added a validated `FirmwareUpdateManifest` requiring `schema=1`, `channel=main`, `branch=main`, `repo=dslimp/boatlock`, `platformioEnv=removed_setup_env`, `commandProfile=setup`, positive size, HTTPS-or-localhost binary URL, and 64-hex SHA-256.
 - Added `FirmwareUpdateClient` that fetches the manifest, downloads the firmware binary, and checks size plus SHA before upload.
-- Added a service UI button, `Обновить до main`, that fetches latest-main metadata and firmware then reuses the existing BLE OTA transport.
+- Added a setup UI button, `Обновить до main`, that fetches latest-main metadata and firmware then reuses the existing BLE OTA transport.
 - Kept manual URL/SHA OTA as the advanced fallback.
 - Documented the manifest-based OTA path in `docs/BLE_PROTOCOL.md`.
 
@@ -6466,13 +6466,13 @@ Validation:
 - `git diff --check -- boatlock_ui/lib/ota/firmware_update_manifest.dart boatlock_ui/lib/ota/firmware_update_client.dart boatlock_ui/lib/pages/settings_page.dart boatlock_ui/test/firmware_update_manifest_test.dart docs/BLE_PROTOCOL.md WORKLOG.md` -> PASS.
 
 Self-review:
-- This makes the Android/macOS app ready to consume a latest-main channel, but the CI/static publishing side still needs to generate and host the manifest plus `esp32s3_service` binary before the one-button path has a production URL.
+- This makes the Android/macOS app ready to consume a latest-main channel, but the CI/static publishing side still needs to generate and host the manifest plus `removed_setup_env` binary before the one-button path has a production URL.
 
 ### 2026-04-26 Stage 218: Latest-main firmware channel publishing
 
 Scope:
 - Add CI generation and static publishing for the OTA latest-main channel consumed by the app.
-- Keep the channel OTA-capable by building `esp32s3_service`, not the normal release-compatible image.
+- Keep the channel OTA-capable by building `removed_setup_env`, not the normal release-compatible image.
 
 External baseline:
 - GitHub Pages custom workflows use `upload-pages-artifact` plus `deploy-pages`, and the deploy job needs `pages: write` plus `id-token: write`: https://docs.github.com/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages.
@@ -6480,7 +6480,7 @@ External baseline:
 Key outcomes:
 - Added `tools/ci/generate_firmware_update_manifest.py` to generate the validated manifest with firmware size, SHA-256, git SHA, workflow run id, firmware version, service profile, and binary URL.
 - Added CI coverage for manifest generation and latest-main channel workflow wiring.
-- Added a `firmware-main-channel` CI job that runs after the main firmware/test/sim gates on pushes to `main`, builds `esp32s3_service`, packages `firmware/main/{firmware.bin,firmware.elf,manifest.json,BUILD_INFO.txt,SHA256SUMS}`, and deploys it to GitHub Pages.
+- Added a `firmware-main-channel` CI job that runs after the main firmware/test/sim gates on pushes to `main`, builds `removed_setup_env`, packages `firmware/main/{firmware.bin,firmware.elf,manifest.json,BUILD_INFO.txt,SHA256SUMS}`, and deploys it to GitHub Pages.
 - Documented the service app build defines needed for the one-button latest-main OTA path on `nh02`.
 
 Validation:
@@ -6542,10 +6542,10 @@ Key outcomes:
 - Added a service-UI widget test for late `SET_STEP_MAXSPD` rejection rollback plus pure guard tests.
 
 Validation:
-- `cd boatlock_ui && flutter test test/settings_command_rejection_guard_test.dart test/settings_page_test.dart test/settings_page_service_ui_test.dart` -> PASS (`7/7`).
-- `cd boatlock_ui && flutter test --dart-define=BOATLOCK_SERVICE_UI=true test/settings_page_service_ui_test.dart` -> PASS (`1/1`).
+- `cd boatlock_ui && flutter test test/settings_command_rejection_guard_test.dart test/settings_page_test.dart test/settings_page_setup_ui_test.dart` -> PASS (`7/7`).
+- `cd boatlock_ui && flutter test --removed-build-define=setup UI enabled test/settings_page_setup_ui_test.dart` -> PASS (`1/1`).
 - `cd boatlock_ui && flutter analyze` -> PASS.
-- `git diff --check -- boatlock_ui/lib/pages/settings_page.dart boatlock_ui/lib/pages/settings_command_rejection_guard.dart boatlock_ui/test/settings_command_rejection_guard_test.dart boatlock_ui/test/settings_page_service_ui_test.dart WORKLOG.md` -> PASS.
+- `git diff --check -- boatlock_ui/lib/pages/settings_page.dart boatlock_ui/lib/pages/settings_command_rejection_guard.dart boatlock_ui/test/settings_command_rejection_guard_test.dart boatlock_ui/test/settings_page_setup_ui_test.dart WORKLOG.md` -> PASS.
 
 Self-review:
 - This keeps the normal water UI unchanged because the controls remain service-gated. The remaining app-side profile work is structured OTA failure detail and structured smoke/e2e rejection payloads.
@@ -6561,17 +6561,17 @@ External baseline:
 
 Key outcomes:
 - Added `GitHubReleaseFirmwareSource`, which fetches the latest release, prefers a manifest asset, and otherwise reconstructs the app manifest from `firmware.bin`, `BUILD_INFO.txt`, and agreeing SHA-256 metadata from asset digest, `SHA256SUMS`, or build info.
-- Extended `FirmwareUpdateClient` so `BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL` remains first priority, and `BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO` enables latest-release scanning when no manifest URL is configured.
+- Extended `FirmwareUpdateClient` so `RUNTIME_FIRMWARE_MANIFEST_URL` remains first priority, and `BUILTIN_FIRMWARE_GITHUB_REPO` enables latest-release scanning when no manifest URL is configured.
 - Forwarded an optional GitHub token to both latest-release API requests and release asset downloads so private release validation can use one source configuration.
 - Documented the release-source define in BLE protocol and nh02 notes, and moved the `Epicurus` agent output from active work into completed backlog.
 
 Validation:
-- `cd boatlock_ui && flutter test test/github_release_firmware_source_test.dart test/firmware_update_manifest_test.dart test/settings_command_rejection_guard_test.dart test/settings_page_test.dart test/settings_page_service_ui_test.dart` -> PASS (`14/14`).
+- `cd boatlock_ui && flutter test test/github_release_firmware_source_test.dart test/firmware_update_manifest_test.dart test/settings_command_rejection_guard_test.dart test/settings_page_test.dart test/settings_page_setup_ui_test.dart` -> PASS (`14/14`).
 - `cd boatlock_ui && flutter analyze` -> PASS.
 - `git diff --check -- boatlock_ui/lib/ota/firmware_update_client.dart boatlock_ui/lib/ota/github_release_firmware_source.dart boatlock_ui/test/github_release_firmware_source_test.dart docs/BLE_PROTOCOL.md docs/HARDWARE_NH02.md docs/AGENT_TASK_BACKLOG.md WORKLOG.md` -> PASS.
 
 Self-review:
-- This does not make release assets the primary update channel; the static Pages manifest remains better for latest `main`. The release path is useful for one-button updates from published GitHub releases, but it still depends on publishing a service-profile release asset set with consistent SHA metadata.
+- This does not make release assets the primary update channel; the static Pages manifest remains better for latest `main`. The release path is useful for one-button updates from published GitHub releases, but it still depends on publishing a setup-profile release asset set with consistent SHA metadata.
 
 ### 2026-04-26 Stage 223: Structured OTA profile rejection details
 
@@ -6589,8 +6589,8 @@ Key outcomes:
 - Confirmed the public Pages probe is still a deployment gate: unauthenticated requests to `https://dslimp.github.io/boatlock/firmware/main/{manifest.json,firmware.bin,SHA256SUMS,BUILD_INFO.txt}` returned `404` while the GitHub connector reports `dslimp/boatlock` is private.
 
 Validation:
-- `cd boatlock_ui && flutter test test/settings_command_rejection_guard_test.dart test/settings_page_test.dart test/settings_page_service_ui_test.dart` -> PASS (`9/9`).
-- `cd boatlock_ui && flutter test --dart-define=BOATLOCK_SERVICE_UI=true test/settings_page_service_ui_test.dart` -> PASS (`2/2`).
+- `cd boatlock_ui && flutter test test/settings_command_rejection_guard_test.dart test/settings_page_test.dart test/settings_page_setup_ui_test.dart` -> PASS (`9/9`).
+- `cd boatlock_ui && flutter test --removed-build-define=setup UI enabled test/settings_page_setup_ui_test.dart` -> PASS (`2/2`).
 - `cd boatlock_ui && flutter analyze` -> PASS.
 
 Self-review:
@@ -6661,18 +6661,18 @@ External baseline:
 Key outcomes:
 - Added Android wrapper flags for `--service-ui`, `--latest-main-service`, `--firmware-manifest-url`, and `--firmware-github-repo`.
 - Added `tools/macos/build-app.sh` with the same latest-main/service switches.
-- CI now publishes normal and service Android/macOS artifacts separately. Service artifacts are built with `BOATLOCK_SERVICE_UI=true` and the latest-main Pages manifest define.
-- CI release publishing now includes a service-profile `firmware-esp32s3-service` asset set and generates a release `manifest.json` for the app to prefer.
+- CI now publishes normal and setup Android/macOS artifacts separately. Service artifacts are built with `setup UI enabled` and the latest-main Pages manifest define.
+- CI release publishing now includes a setup-profile `firmware-esp32s3-removed-setup-env` asset set and generates a release `manifest.json` for the app to prefer.
 - GitHub release fallback now uses API asset URLs for token-backed/private asset reads and firmware downloads, and manifest URLs now reject unsafe non-local HTTP.
 - Backlog/docs now keep the real remaining gate explicit: live Pages/Release proof and a manifest-backed Android e2e mode.
 
 Validation:
-- `tools/android/build-app-apk.sh --latest-main-service` -> PASS, produced `boatlock_ui/build/app/outputs/flutter-apk/app-debug.apk`.
+- `tools/android/build-app-apk.sh --latest-main-service` -> PASS, produced `boatlock_ui/build/app/outputs/flutter-apk/app-release.apk`.
 - `tools/macos/build-app.sh --latest-main-service` -> PASS, produced `boatlock_ui/build/macos/Build/Products/Release/boatlock_ui.app`.
-- `cd boatlock_ui && flutter test test/github_release_firmware_source_test.dart test/firmware_update_manifest_test.dart test/settings_page_service_ui_test.dart` -> PASS (`13/13`).
+- `cd boatlock_ui && flutter test test/github_release_firmware_source_test.dart test/firmware_update_manifest_test.dart test/settings_page_setup_ui_test.dart` -> PASS (`13/13`).
 - `cd boatlock_ui && flutter analyze` -> PASS.
 - `python3 -m pytest tools/ci/test_android_smoke_modes.py tools/ci/test_ble_ota_workflow.py tools/ci/test_firmware_artifact_workflow.py` -> PASS (`19/19`).
-- `bash -n tools/android/build-app-apk.sh tools/android/build-smoke-apk.sh tools/macos/build-app.sh tools/hw/nh02/android-run-app-e2e.sh` -> PASS.
+- `bash -n tools/android/build-app-apk.sh tools/android/build-app-apk.sh tools/macos/build-app.sh tools/hw/nh02/android-run-app-e2e.sh` -> PASS.
 
 Self-review:
 - The app artifacts are now buildable with one-button latest-main OTA enabled on Android and macOS. This still does not prove the public Pages endpoint or a real GitHub Release asset; those require the next `main`/tag workflow run and device e2e.
@@ -6684,10 +6684,10 @@ Scope:
 - Keep the probe in the existing app e2e mode model and reuse the same BLE OTA reconnect verdict.
 
 External baseline:
-- Reuses Stage 226: Flutter `--dart-define` is the existing app build-time switch, and the app must verify manifest metadata plus SHA before BLE transfer.
+- Reuses Stage 226: Flutter `--removed-build-define` is the existing app build-time switch, and the app must verify manifest metadata plus SHA before BLE transfer.
 
 Key outcomes:
-- Added `BOATLOCK_APP_E2E_OTA_LATEST_MAIN=true`; when set, app e2e `ota` mode downloads firmware through `FirmwareUpdateClient.fetchLatestFirmware()`.
+- Added `APP_RUNTIME_CHECK_OTA_LATEST=true`; when set, app e2e `ota` mode downloads firmware through `FirmwareUpdateClient.fetchLatestFirmware()`.
 - Added local and `nh02` wrapper support for `--ota-latest-main`.
 - The `nh02` wrapper generates a local `manifest.json` from the candidate firmware, serves it beside `firmware.bin`, builds the app with the local manifest URL, and then uses the existing remote HTTP server and reconnect verdict.
 - Updated backlog and nh02 docs so the remaining hardware task is running this e2e path, not implementing it.
@@ -6697,7 +6697,7 @@ Validation:
 - `cd boatlock_ui && flutter analyze` -> PASS.
 - `python3 -m pytest tools/ci/test_android_smoke_modes.py` -> PASS.
 - `bash -n tools/android/build-app-apk.sh tools/android/run-app-e2e.sh tools/hw/nh02/android-run-app-e2e.sh tools/hw/nh02/android-run-smoke.sh` -> PASS.
-- `tools/android/build-app-apk.sh --e2e-mode ota --e2e-ota-latest-main --firmware-manifest-url http://127.0.0.1:18080/manifest.json` -> PASS.
+- `tools/android/build-app-apk.sh --mode ota --ota-latest-release --firmware-manifest-url http://127.0.0.1:18080/manifest.json` -> PASS.
 
 Self-review:
 - This proves the software path and wrapper contract locally. It still needs a real `nh02` run with a service-capable target before calling the one-button update path hardware-proven.
@@ -6715,25 +6715,25 @@ External baseline:
 
 Key outcomes:
 - Reworked Flutter BLE discovery so the app records data, command, log, and OTA characteristics before enabling notifications; OTA uploads now fail with explicit missing-reason logs and retry Android GATT discovery once when OTA is missing.
-- Routed `OTA_BEGIN`, `OTA_FINISH`, and `OTA_ABORT` through the service-scoped app command path and added service UI CI coverage.
-- Updated OTA docs and hardware skill references to the current `esp32s3_service` artifact and write-without-response/fallback transfer behavior.
+- Routed `OTA_BEGIN`, `OTA_FINISH`, and `OTA_ABORT` through the service-scoped app command path and added setup UI CI coverage.
+- Updated OTA docs and hardware skill references to the current `removed_setup_env` artifact and write-without-response/fallback transfer behavior.
 - Added firmware OTA connection-handle ownership so a non-owner central disconnect does not abort an active phone OTA; wrong-owner chunks are rejected, and owner disconnect still aborts.
 - Returned the bench to the release firmware profile after proving the service OTA path.
 
 Validation:
-- `cd boatlock_ui && flutter test test/ble_discovery_check_test.dart test/ble_ota_payload_test.dart test/ble_command_scope_test.dart test/app_e2e_probe_test.dart test/github_release_firmware_source_test.dart test/settings_page_service_ui_test.dart` -> PASS (`23/23`).
-- `cd boatlock_ui && flutter test --dart-define=BOATLOCK_SERVICE_UI=true test/settings_page_service_ui_test.dart` -> PASS (`2/2`).
+- `cd boatlock_ui && flutter test test/ble_discovery_check_test.dart test/ble_ota_payload_test.dart test/ble_command_scope_test.dart test/app_e2e_probe_test.dart test/github_release_firmware_source_test.dart test/settings_page_setup_ui_test.dart` -> PASS (`23/23`).
+- `cd boatlock_ui && flutter test --removed-build-define=setup UI enabled test/settings_page_setup_ui_test.dart` -> PASS (`2/2`).
 - `cd boatlock_ui && flutter analyze` -> PASS.
 - `python3 -m pytest tools/ci/test_ble_ota_workflow.py tools/ci/test_android_smoke_modes.py tools/ci/test_firmware_artifact_workflow.py` -> PASS (`21/21`).
 - `bash -n tools/hw/nh02/android-run-app-e2e.sh tools/hw/nh02/android-run-smoke.sh tools/android/build-app-apk.sh tools/android/run-app-e2e.sh` -> PASS.
-- `cd boatlock && pio run -e esp32s3_service` -> PASS.
+- `cd boatlock && pio run -e removed_setup_env` -> PASS.
 - `cd boatlock && platformio test -e native` -> PASS (`404/404`).
 - `tools/hw/nh02/status.sh` -> PASS.
 - `tools/hw/nh02/android-status.sh` -> PASS (`68b657f0` over USB and `192.168.88.33:5555` over Wi-Fi visible).
 - `tools/hw/nh02/install.sh` -> PASS.
-- `tools/hw/nh02/flash.sh --profile service` -> PASS.
+- `tools/hw/nh02/flash.sh --profile removed-setup` -> PASS.
 - `tools/hw/nh02/acceptance.sh --seconds 20` after service flash -> PASS.
-- `tools/hw/nh02/android-run-app-e2e.sh --ota-latest-main --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --serial 68b657f0 --wait-secs 1800` -> PASS (`app_ota_reconnect_after_update`, last device log `[OTA] finish ok size=717056 reboot_ms=900`).
+- `tools/hw/nh02/android-run-app-e2e.sh --ota-latest-main --ota-firmware boatlock/.pio/build/removed_setup_env/firmware.bin --serial 68b657f0 --wait-secs 1800` -> PASS (`app_ota_reconnect_after_update`, last device log `[OTA] finish ok size=717056 reboot_ms=900`).
 - `tools/hw/nh02/flash.sh --profile release` -> PASS.
 - `tools/hw/nh02/acceptance.sh --seconds 20` after release flash -> PASS.
 - `tools/hw/nh02/android-run-app-e2e.sh --serial 68b657f0 --wait-secs 130` after release flash -> PASS (`app_telemetry_received`).
@@ -6890,7 +6890,7 @@ Key outcomes:
   which maps `vX.Y.Z` to `release/vX.Y.x` and requires tag commits to be
   contained in the matching remote release branch.
 - Changed release packaging to publish unique flat GitHub Release asset names,
-  with `manifest.json` pointing at `firmware-esp32s3-service.bin`.
+  with `manifest.json` pointing at `firmware-esp32s3-removed-setup-env.bin`.
 - Updated Flutter OTA manifest parsing, GitHub release fallback parsing, service
   UI copy, Android/macOS wrappers, docs, and tests for latest-release OTA.
 
@@ -6901,7 +6901,7 @@ Validation:
 - `python3 -m pytest -q tools/ci/test_*.py` -> PASS (`35/35`).
 - `cd boatlock_ui && flutter test` -> PASS (`119/119`).
 - `cd boatlock && platformio test -e native -f test_hil_sim` -> PASS (`12/12`).
-- `tools/android/build-app-apk.sh --latest-release-service` -> PASS, produced `boatlock_ui/build/app/outputs/flutter-apk/app-debug.apk`.
+- `tools/android/build-app-apk.sh --latest-release-service` -> PASS, produced `boatlock_ui/build/app/outputs/flutter-apk/app-release.apk`.
 - `tools/macos/build-app.sh --latest-release-service --debug` -> PASS, produced `boatlock_ui/build/macos/Build/Products/Debug/boatlock_ui.app`.
 - `git diff --check` -> PASS.
 
@@ -6972,8 +6972,8 @@ Key outcomes:
 Validation:
 - `cd boatlock && platformio test -e native` -> PASS (`420/420`).
 - `cd boatlock_ui && flutter test` -> PASS (`120/120`).
-- `cd boatlock && platformio run -e esp32s3_release` -> PASS.
-- `cd boatlock && platformio run -e esp32s3_service` -> PASS.
+- `cd boatlock && platformio run -e removed_release_alias` -> PASS.
+- `cd boatlock && platformio run -e removed_setup_env` -> PASS.
 - `cd boatlock && platformio run -e esp32s3_acceptance` -> PASS.
 - `cd boatlock && platformio test -e native -f test_ble_security` -> PASS
   (`6/6`) after adding SIM paired-mode auth assertions.
@@ -7028,17 +7028,17 @@ Validation:
   -> PASS.
 - `bash -n tools/hw/nh02/android-wifi-debug.sh tools/hw/nh02/android-run-app-e2e.sh tools/hw/nh02/android-run-smoke.sh tools/hw/nh02/remote/boatlock-enable-android-wifi-debug.sh tools/hw/nh02/remote/boatlock-run-android-smoke.sh tools/hw/nh02/flash.sh`
   -> PASS.
-- `tools/hw/nh02/flash.sh --profile service` -> PASS, flashed ESP32-S3
+- `tools/hw/nh02/flash.sh --profile removed-setup` -> PASS, flashed ESP32-S3
   `98:88:E0:03:BA:5C`.
 - `tools/hw/nh02/acceptance.sh` -> PASS after service flash.
 - `tools/hw/nh02/android-wifi-debug.sh --serial 68b657f0` -> PASS,
   `android_wifi_serial=192.168.88.33:5555`.
-- `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --serial 192.168.88.33:5555`
+- `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/removed_setup_env/firmware.bin --serial 192.168.88.33:5555`
   -> PASS, `app_ota_reconnect_after_update`, `size=724784`, RSSI `-43`.
 - Initial `--ota-latest-release` run exposed the post-finish notify race:
   app-side send reached `100%`, then failed `app_ota_upload_failed` despite
   reconnect telemetry. Fixed in `BleBoatLock`.
-- Re-run `tools/hw/nh02/android-run-app-e2e.sh --ota-latest-release --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --serial 192.168.88.33:5555`
+- Re-run `tools/hw/nh02/android-run-app-e2e.sh --ota-latest-release --ota-firmware boatlock/.pio/build/removed_setup_env/firmware.bin --serial 192.168.88.33:5555`
   -> PASS, `app_ota_reconnect_after_update`, `size=724784`, RSSI `-44`.
 - `tools/hw/nh02/android-run-app-e2e.sh --reconnect --wait-secs 130 --serial 192.168.88.33:5555`
   -> PASS, `app_telemetry_after_reconnect`, RSSI `-46`.
@@ -7105,13 +7105,13 @@ Validation:
   -> PASS.
 - `pytest -q tools/ci/test_android_smoke_modes.py` -> PASS (`9/9`).
 - `cd boatlock && platformio test -e native -f test_runtime_log_text` -> PASS.
-- `cd boatlock && pio run -e esp32s3_service` -> PASS, `firmware.bin` size
+- `cd boatlock && pio run -e removed_setup_env` -> PASS, `firmware.bin` size
   `724752` bytes after BLE-log forwarding change.
 - `tools/hw/nh02/android-wifi-debug.sh` -> PASS,
   `android_wifi_serial=192.168.88.33:5555`.
-- `tools/hw/nh02/flash.sh --profile service` -> PASS, bench restored to service
+- `tools/hw/nh02/flash.sh --profile removed-setup` -> PASS, bench restored to service
   firmware before app OTA proof.
-- `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
+- `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/removed_setup_env/firmware.bin --wait-secs 1800`
   -> PASS without explicit `--serial`; wrapper selected `192.168.88.33:5555`,
   BLE OTA reached `100%`, result `app_ota_reconnect_after_update`, RSSI `-45`,
   device log events included `[BLE] subscribe log=1 sub=0x0001`.
@@ -7171,7 +7171,7 @@ Key outcomes:
   readiness plan, and firmware reference docs to use `PWM=7`, `DIR=8/10`.
 
 Validation:
-- `cd boatlock && pio run -e esp32s3_service` -> PASS.
+- `cd boatlock && pio run -e removed_setup_env` -> PASS.
 - `git diff --check` -> PASS.
 
 Self-review:
@@ -7207,8 +7207,8 @@ Key outcomes:
   collection requirement.
 
 Validation:
-- `cd boatlock && pio run -e esp32s3_service` -> PASS.
-- `cd boatlock && pio run -e esp32s3_release` -> PASS.
+- `cd boatlock && pio run -e removed_setup_env` -> PASS.
+- `cd boatlock && pio run -e removed_release_alias` -> PASS.
 - `git diff --check` -> PASS.
 
 Self-review:
@@ -7252,7 +7252,7 @@ Validation:
 - `pytest tools/hw/nh02/test_acceptance.py tools/ci/test_check_config_schema_version.py` -> PASS (`8/8`).
 - `cd boatlock && platformio test -e native -f test_stepper_control -f test_runtime_motion -f test_settings` -> PASS (`46/46`).
 - `cd boatlock && platformio run -e esp32s3` -> PASS.
-- `cd boatlock && platformio run -e esp32s3_service` -> PASS.
+- `cd boatlock && platformio run -e removed_setup_env` -> PASS.
 - `tools/hw/nh02/status.sh` -> blocked for flashing: service active and port
   `4000` listening, but expected ESP32 USB device
   `/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_98:88:E0:03:BA:5C-if00`
@@ -7261,7 +7261,7 @@ Validation:
   `/dev/cu.usbserial*`, or `/dev/tty.usbserial*` device.
 - `tools/hw/nh02/android-status.sh` -> PASS: Xiaomi `220333QNY` visible over
   USB and ADB Wi-Fi at `192.168.88.33:5555`.
-- `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 900`
+- `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/removed_setup_env/firmware.bin --wait-secs 900`
   -> PASS. BLE OTA sent `779440` bytes and the post-update app observed
   `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"app_ota_reconnect_after_update",...}`
   with telemetry recovered in `IDLE/WARN` and `statusReasons=GPS_SATS_TOO_LOW`.
@@ -7302,9 +7302,9 @@ Validation:
 - `python3 tools/ci/check_config_schema_version.py` -> PASS (`0x1c`).
 - `cd boatlock && platformio test -e native -f test_settings -f test_runtime_ble_command_log -f test_ble_command_handler -f test_stepper_control -f test_runtime_motion` -> PASS (`92/92`).
 - `cd boatlock_ui && flutter test test/manual_control_sheet_test.dart test/ble_commands_test.dart test/ble_command_scope_test.dart test/status_panel_test.dart test/anchor_preflight_test.dart test/map_page_test.dart` -> PASS (`36/36`).
-- `cd boatlock && platformio run -e esp32s3_service` -> PASS.
-- First `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 900` -> FAIL: cold BLE scan consumed the wait budget and the wrapper timed out during an active transfer at about `63%`.
-- Rerun `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800` -> PASS. OTA reached `100%` and post-update telemetry recovered with `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"app_ota_reconnect_after_update",...}`.
+- `cd boatlock && platformio run -e removed_setup_env` -> PASS.
+- First `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/removed_setup_env/firmware.bin --wait-secs 900` -> FAIL: cold BLE scan consumed the wait budget and the wrapper timed out during an active transfer at about `63%`.
+- Rerun `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/removed_setup_env/firmware.bin --wait-secs 1800` -> PASS. OTA reached `100%` and post-update telemetry recovered with `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"app_ota_reconnect_after_update",...}`.
 - `tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130` -> PASS with `app_manual_roundtrip`, zero-throttle `MANUAL_SET:0,0,1000`, and `[BLE] MANUAL_OFF accepted`.
 - `tools/android/build-app-apk.sh` -> PASS; installed the normal non-e2e debug
   APK on the nh02-attached phone with `adb install -r` after the e2e checks.
@@ -7320,25 +7320,25 @@ Self-review:
 
 Scope:
 - Stop maintaining separate normal/service app installs during active bench
-  bring-up, while keeping service controls hidden during normal use.
+  bring-up, while keeping setup controls hidden during normal use.
 
 Key outcomes:
-- Android and macOS app build wrappers now include `BOATLOCK_SERVICE_UI=true`
+- Android and macOS app build wrappers now include `setup UI enabled`
   by default.
-- Settings shows a `Debug` switch when service UI is compiled in.
-- Stepper tuning, compass service controls, firmware OTA, and BNO08x diagnostic
+- Settings shows a `Debug` switch when setup UI is compiled in.
+- Stepper tuning, compass setup controls, firmware OTA, and BNO08x diagnostic
   rows are visible only while `Debug` is enabled.
 - Updated BLE protocol, nh02 hardware notes, and BLE/UI reference docs to match
   the new runtime gate.
 
 Validation:
 - `cd boatlock_ui && flutter test test/settings_page_test.dart` -> PASS.
-- `cd boatlock_ui && flutter test --dart-define=BOATLOCK_SERVICE_UI=true test/settings_page_service_ui_test.dart` -> PASS.
+- `cd boatlock_ui && flutter test --removed-build-define=setup UI enabled test/settings_page_setup_ui_test.dart` -> PASS.
 - `pytest -q tools/ci/test_android_smoke_modes.py tools/ci/test_firmware_artifact_workflow.py` -> PASS (`20/20`).
 - `tools/android/build-app-apk.sh` -> PASS; the normal APK now includes service
   UI capability by default.
 - Installed the rebuilt APK on the nh02-attached phone through ADB Wi-Fi:
-  `adb install -r /opt/boatlock-hw/stage/android/app-debug.apk` -> `Success`.
+  `adb install -r /opt/boatlock-hw/stage/android/app-release.apk` -> `Success`.
 
 Self-review:
 - The Debug switch is an app UI gate, not a firmware authorization boundary.
@@ -7364,14 +7364,14 @@ Validation:
 - `git diff --check` -> PASS.
 - `cd boatlock_ui && flutter analyze` -> PASS (`No issues found`).
 - `cd boatlock_ui && flutter test` -> PASS (`121/121`).
-- `cd boatlock_ui && flutter test --dart-define=BOATLOCK_SERVICE_UI=true test/settings_page_service_ui_test.dart` -> PASS.
+- `cd boatlock_ui && flutter test --removed-build-define=setup UI enabled test/settings_page_setup_ui_test.dart` -> PASS.
 - `python3 tools/ci/check_config_schema_version.py` -> PASS (`0x1c`).
 - `pytest -q tools/ci/test_android_smoke_modes.py tools/ci/test_firmware_artifact_workflow.py` -> PASS (`20/20`).
 - `tools/android/build-app-apk.sh` -> PASS.
 - `cd boatlock && platformio test -e native -f test_settings -f test_runtime_ble_command_log -f test_ble_command_handler -f test_stepper_control -f test_runtime_motion` -> PASS (`92/92`).
-- `cd boatlock && pio run -e esp32s3_service` -> PASS.
+- `cd boatlock && pio run -e removed_setup_env` -> PASS.
 - Installed the rebuilt APK on the nh02-attached phone over ADB Wi-Fi with
-  `adb install -r /opt/boatlock-hw/stage/android/app-debug.apk` -> `Success`.
+  `adb install -r /opt/boatlock-hw/stage/android/app-release.apk` -> `Success`.
 
 Self-review:
 - README is now intentionally bench-current rather than a complete product
@@ -7409,12 +7409,12 @@ Validation:
 - `git diff --check` -> PASS.
 - `cd boatlock && platformio test -e native -f test_manual_control -f test_runtime_control_input_builder -f test_ble_command_handler -f test_ble_command_profile_gate -f test_runtime_ble_control_lease -f test_runtime_ble_command_log -f test_runtime_ble_command_scope -f test_ble_security -f test_runtime_motion -f test_stepper_control` -> PASS (`114/114`) after fixing the expected `MANUAL_TARGET` log truncation string.
 - `cd boatlock && platformio test -e native` -> PASS (`424/424`).
-- `cd boatlock && platformio run -e esp32s3_service` -> PASS.
+- `cd boatlock && platformio run -e removed_setup_env` -> PASS.
 - `cd boatlock_ui && flutter analyze` -> PASS.
 - `cd boatlock_ui && flutter test test/manual_control_sheet_test.dart test/ble_commands_test.dart test/ble_command_scope_test.dart test/ble_security_policy_test.dart test/ble_smoke_logic_test.dart test/app_e2e_probe_test.dart test/map_page_test.dart` -> PASS.
 - `cd boatlock_ui && flutter test` -> PASS (`121/121`).
 - `tools/android/build-app-apk.sh` -> PASS; built
-  `boatlock_ui/build/app/outputs/flutter-apk/app-debug.apk`.
+  `boatlock_ui/build/app/outputs/flutter-apk/app-release.apk`.
 - Post-push nh02 readiness check: `tools/hw/nh02/status.sh` reported the
   RFC2217 service active but the expected ESP32-S3 USB serial path missing;
   `tools/android/status.sh` saw no local Android device, while
@@ -7456,7 +7456,7 @@ Scope:
 
 Key outcome:
 - GitHub `CI` run `24989963480` passed `Build firmware (esp32s3)` and
-  `Build service firmware (esp32s3_service)`, then failed in
+  `Build setup firmware (removed_setup_env)`, then failed in
   `Pack firmware binary artifact` because
   `boatlock/.pio/build/esp32s3/firmware.bin` was missing at pack time.
 - Reordered `.github/workflows/ci.yml` so `firmware-esp32s3` is packed
@@ -7465,8 +7465,8 @@ Key outcome:
 Validation:
 - `pytest -q tools/ci/test_firmware_artifact_workflow.py` -> PASS (`11/11`).
 - Local emulation of the new sequence with clean `dist/`:
-  `pio run -e esp32s3`, pack `dist/firmware-esp32s3`, `pio run -e esp32s3_service`,
-  pack `dist/firmware-esp32s3-service` -> PASS; both artifact directories
+  `pio run -e esp32s3`, pack `dist/firmware-esp32s3`, `pio run -e removed_setup_env`,
+  pack `dist/firmware-esp32s3-removed-setup-env` -> PASS; both artifact directories
   contained `firmware.bin`, `bootloader.bin`, `partitions.bin`, `firmware.elf`,
   `BUILD_INFO.txt`, and `SHA256SUMS`.
 
@@ -7480,7 +7480,7 @@ Scope:
 - Promote the moved-hardware workflow: normal firmware updates now go through
   the phone BLE OTA path; ESP32 USB flashing is seed/recovery unless the task
   explicitly targets the USB bench.
-- Rebuild service firmware, Android service UI app, and macOS service UI app.
+- Rebuild setup firmware, Android setup UI app, and macOS setup UI app.
 - Try to update the boat hardware through the phone BLE OTA wrapper.
 
 Key outcome:
@@ -7496,7 +7496,7 @@ Key outcome:
   on `nh02` was absent, which is expected for the moved-hardware path.
 - OTA attempt 1 stopped before app launch because the old Wi-Fi helper made the
   already-connected phone appear `offline`.
-- OTA attempt 2 installed the OTA e2e app and started the HTTP firmware server,
+- OTA attempt 2 installed the OTA runtime-check app and started the HTTP firmware server,
   but did not start flashing: the app repeatedly logged `BoatLock not found,
   retry scan in 3s`. I stopped the wrapper before OTA upload because no BLE
   `BoatLock` advertisement was visible to the phone.
@@ -7509,9 +7509,9 @@ Validation:
   `192.168.88.33:5555`.
 - `tools/hw/nh02/status.sh` -> ESP32 USB serial missing, RFC2217 service active;
   treated as expected context for phone BLE OTA, not as a flash blocker.
-- `cd boatlock && pio run -e esp32s3_service` -> PASS.
+- `cd boatlock && pio run -e removed_setup_env` -> PASS.
 - `tools/android/build-app-apk.sh` -> PASS; rebuilt
-  `boatlock_ui/build/app/outputs/flutter-apk/app-debug.apk`.
+  `boatlock_ui/build/app/outputs/flutter-apk/app-release.apk`.
 - `tools/macos/build-app.sh --debug` -> PASS; rebuilt
   `boatlock_ui/build/macos/Build/Products/Debug/boatlock_ui.app`.
 - `bash -n tools/hw/nh02/android-install-app.sh tools/hw/nh02/remote/boatlock-enable-android-wifi-debug.sh tools/hw/nh02/android-run-app-e2e.sh tools/hw/nh02/android-run-smoke.sh`
@@ -7559,7 +7559,7 @@ Validation:
   `tools/hw/nh02/android-run-app-e2e.sh --wait-secs 300` -> PASS with
   `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"app_telemetry_received",...}`.
 - BLE OTA:
-  `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
+  `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/removed_setup_env/firmware.bin --wait-secs 1800`
   -> PASS. Progress reached `100%`, then wrapper reported
   `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"app_ota_reconnect_after_update",...}`.
 - `cd boatlock_ui && flutter analyze && flutter test` -> PASS.
@@ -7580,24 +7580,22 @@ Self-review:
 ### 2026-04-27 Stage 250: Single release app surface
 
 Scope:
-- Remove the Android/macOS app split between normal, service, and debug builds.
-- Keep service controls in the product app and hide them only behind the
-  Settings `Сервисный режим` switch.
+- Remove the Android/macOS app split between normal and alternate builds.
+- Keep setup controls in the product app and hide them only behind the
+  Settings `Настройка оборудования` switch.
 
 Decisions:
-- Removed the `BOATLOCK_SERVICE_UI` app gate. The release app always contains
-  the service UI, while service command helper calls still need explicit
-  `allowService: true`.
-- Android and smoke app wrappers now build `app-release.apk`; macOS wrapper and
+- Removed the alternate app UI gate. The release app always contains setup UI.
+- Android and app check wrappers now build `app-release.apk`; macOS wrapper and
   acceptance use `Build/Products/Release/boatlock_ui.app`.
 - CI now publishes one Android app artifact and one macOS app artifact instead
-  of separate service-app variants. Those artifacts carry the latest-release
+  of separate app variants. Those artifacts carry the latest-release
   firmware source configuration.
 - Captured the durable rule in `AGENTS.md` and the BoatLock skill references:
-  no debug/service app variants; one release app with runtime service-mode UI.
+  one release app with runtime setup UI.
 
 Validation:
-- `bash -n tools/android/build-app-apk.sh tools/android/build-smoke-apk.sh tools/android/common.sh tools/macos/build-app.sh tools/macos/acceptance.sh tools/hw/nh02/android-install-app.sh` -> PASS.
+- `bash -n tools/android/build-app-apk.sh tools/android/build-app-apk.sh tools/android/common.sh tools/macos/build-app.sh tools/macos/acceptance.sh tools/hw/nh02/android-install-app.sh` -> PASS.
 - `pytest -q tools/ci/test_android_smoke_modes.py tools/ci/test_firmware_artifact_workflow.py` -> PASS (`20/20`).
 - `cd boatlock_ui && flutter analyze` -> PASS.
 - `cd boatlock_ui && flutter test` -> PASS (`120/120`).
@@ -7614,5 +7612,89 @@ Validation:
 
 Self-review:
 - This fixes the real product packaging problem instead of renaming the old
-  debug/service split. Firmware command profiles are still separate safety
-  scopes; the change only removes app artifact fragmentation.
+  app split. Firmware command profiles are still separate safety scopes; the
+  change only removes app artifact fragmentation.
+
+### 2026-04-27 Stage 251: Single normal firmware path
+
+Scope:
+- Remove the alternate ESP32 firmware profile/artifact path from current
+  firmware, Flutter, CI, wrapper, README, docs, and repo skills.
+- Keep setup, BLE OTA, and tuning commands in the normal `esp32s3` release
+  command surface.
+
+Decisions:
+- Removed the extra PlatformIO profile and release asset naming. The shipped
+  firmware artifact is `firmware-esp32s3.bin`; OTA uses
+  `boatlock/.pio/build/esp32s3/firmware.bin`.
+- Release command scope now includes setup and OTA commands. The only broader
+  profile left is `esp32s3_acceptance` for dev/HIL sensor injection.
+- Renamed app-visible Settings gate to `Настройка оборудования` and renamed
+  related tests/wrappers to setup wording.
+
+Validation:
+- `dart format lib test` -> PASS.
+- `git diff --check` -> PASS.
+
+Self-review:
+- This captures the user correction: no product split by build/profile/artifact
+  name. USB flashing remains seed/recovery; phone BLE OTA is the normal update
+  path for moved hardware.
+
+### 2026-04-27 Stage 252: Runtime app checks, not app variants
+
+Scope:
+- Fold smoke, app-check, setup, and OTA verification into the one normal app
+  runtime surface.
+- Remove alternate Flutter entrypoints and build-time app-check defines.
+- Prove the phone BLE OTA and smoke paths through the ordinary release APK.
+
+Decisions:
+- The Android and macOS wrappers now build only the normal app entrypoint.
+- Check selection is a runtime command: wrappers and the Settings setup panel
+  pass the requested check mode into the already-shipped app surface.
+- Remote `nh02` Android helper installation is part of validation after helper
+  edits; otherwise the host can call a new local wrapper against a stale remote
+  runner.
+
+Validation:
+- `tools/hw/nh02/install.sh` -> PASS; refreshed the remote Android runner.
+- `tools/hw/nh02/android-run-app-check.sh --no-build --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
+  -> PASS. BLE OTA reached 100%, rebooted, reconnected, and reported
+  `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"app_ota_reconnect_after_update",...}`.
+- `tools/hw/nh02/android-run-smoke.sh --no-build --no-install --mode basic --wait-secs 120`
+  -> PASS with `reason=app_telemetry_received`.
+- `tools/hw/nh02/android-run-smoke.sh --no-build --no-install --mode status --wait-secs 120`
+  -> PASS with `reason=app_status_stop_alert_roundtrip`.
+- `cd boatlock && platformio test -e native` -> PASS (`423/423`).
+- `python3 tools/sim/test_sim_core.py` -> PASS (`38/38`).
+- `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json` -> PASS.
+- After renaming current app-check code/wrappers away from app-e2e wording:
+  - `cd boatlock_ui && flutter analyze` -> PASS.
+  - `cd boatlock_ui && flutter test` -> PASS (`120/120`).
+  - `pytest -q tools/ci/test_android_smoke_modes.py tools/ci/test_ble_ota_workflow.py tools/ci/test_firmware_artifact_workflow.py tools/ci/test_generate_firmware_update_manifest.py`
+    -> PASS (`26/26`).
+  - `bash -n tools/android/build-app-apk.sh tools/android/run-app-check.sh tools/android/run-smoke.sh tools/hw/nh02/android-run-app-check.sh tools/hw/nh02/android-run-smoke.sh tools/hw/nh02/remote/boatlock-run-android-smoke.sh tools/macos/build-app.sh tools/macos/acceptance.sh tools/hw/nh02/android-install-app.sh tools/hw/nh02/run-sim-suite.sh`
+    -> PASS.
+  - `tools/android/build-app-apk.sh` -> PASS.
+  - `tools/macos/build-app.sh` -> PASS.
+  - `tools/macos/acceptance.sh --no-build --static-only` -> PASS.
+  - Desktop `BoatLock App` alias resolves to
+    `boatlock_ui/build/macos/Build/Products/Release/boatlock_ui.app`.
+  - `tools/hw/nh02/android-run-app-check.sh --no-build --wait-secs 120`
+    -> PASS with `reason=app_telemetry_received`.
+  - First immediate repeat OTA after several install/check cycles failed at
+    `8784` bytes with Android GATT write timeout. The firmware remained in
+    safe `HOLD/STOP_CMD`; after force-stopping the app and cycling phone
+    Bluetooth, the same normal APK and current app-check wrapper passed:
+    `tools/hw/nh02/android-run-app-check.sh --no-build --no-install --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
+    -> PASS, progress `100%`, `reason=app_ota_reconnect_after_update`.
+  - `pytest -q tools/ci/test_*.py` -> PASS (`35/35`).
+  - `git diff --check` -> PASS.
+  - Current-source grep for removed app/firmware variant tokens and old
+    app-e2e wrapper/code names -> no matches outside `WORKLOG.md`.
+
+Self-review:
+- The earlier framing was too narrow: this is not a single special validation
+  path. Smoke, app-check, setup, and OTA all live in the same ordinary app now;
+  wrappers only select runtime actions.

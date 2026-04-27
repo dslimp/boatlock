@@ -21,8 +21,7 @@ void main() {
     expect(boatLockSmokeModeFromString(' manual '), BleSmokeMode.basic);
   });
 
-  test('smoke mode define name is stable', () {
-    expect(kBoatLockSmokeModeDefine, 'BOATLOCK_SMOKE_MODE');
+  test('default mode and wire names are stable', () {
     expect(kBoatLockDefaultSmokeModeName, 'basic');
     expect(BleSmokeMode.simSuite.wireName, 'sim_suite');
   });

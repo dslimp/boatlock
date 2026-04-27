@@ -42,7 +42,7 @@ void test_command_scope_classifies_release_prefix_commands_without_payload_valid
   }
 }
 
-void test_command_scope_classifies_service_exact_commands() {
+void test_command_scope_classifies_setup_exact_commands_as_release() {
   const char* commands[] = {
       "RESET_COMPASS_OFFSET",
       "SET_STEPPER_BOW",
@@ -57,11 +57,11 @@ void test_command_scope_classifies_service_exact_commands() {
       "OTA_ABORT",
   };
   for (const char* command : commands) {
-    assertScope(RuntimeBleCommandScope::SERVICE, command);
+    assertScope(RuntimeBleCommandScope::RELEASE, command);
   }
 }
 
-void test_command_scope_classifies_service_prefix_commands_without_payload_validation() {
+void test_command_scope_classifies_setup_prefix_commands_as_release() {
   const char* commands[] = {
       "SET_ANCHOR_PROFILE:quiet",
       "SET_COMPASS_OFFSET:not-a-number",
@@ -70,7 +70,7 @@ void test_command_scope_classifies_service_prefix_commands_without_payload_valid
       "OTA_BEGIN:bad",
   };
   for (const char* command : commands) {
-    assertScope(RuntimeBleCommandScope::SERVICE, command);
+    assertScope(RuntimeBleCommandScope::RELEASE, command);
   }
 }
 
@@ -115,9 +115,6 @@ void test_command_profile_names_are_stable_log_tokens() {
       "release",
       runtimeBleCommandProfileName(RuntimeBleCommandProfile::RELEASE));
   TEST_ASSERT_EQUAL_STRING(
-      "service",
-      runtimeBleCommandProfileName(RuntimeBleCommandProfile::SERVICE));
-  TEST_ASSERT_EQUAL_STRING(
       "acceptance",
       runtimeBleCommandProfileName(RuntimeBleCommandProfile::ACCEPTANCE));
   TEST_ASSERT_EQUAL_STRING(
@@ -130,23 +127,14 @@ void test_default_active_profile_is_release_compatible() {
                     (int)runtimeBleActiveCommandProfile());
 }
 
-void test_release_profile_accepts_sim_but_rejects_service_and_external_sensor_injection() {
+void test_release_profile_accepts_ota_setup_sim_and_rejects_external_sensor_injection() {
   assertAllowed(true, RuntimeBleCommandProfile::RELEASE, "ANCHOR_ON");
   assertAllowed(true, RuntimeBleCommandProfile::RELEASE, "SIM_RUN:S0,1");
   assertAllowed(true, RuntimeBleCommandProfile::RELEASE, "SIM_STATUS");
-  assertAllowed(false, RuntimeBleCommandProfile::RELEASE, "OTA_BEGIN:bad");
-  assertAllowed(false, RuntimeBleCommandProfile::RELEASE, "SET_ANCHOR_PROFILE:quiet");
+  assertAllowed(true, RuntimeBleCommandProfile::RELEASE, "OTA_BEGIN:bad");
+  assertAllowed(true, RuntimeBleCommandProfile::RELEASE, "SET_ANCHOR_PROFILE:quiet");
   assertAllowed(false, RuntimeBleCommandProfile::RELEASE, "SET_PHONE_GPS:59,30");
   assertAllowed(false, RuntimeBleCommandProfile::RELEASE, "SET_ROUTE:old");
-}
-
-void test_service_profile_accepts_release_service_sim_and_rejects_external_sensor_injection() {
-  assertAllowed(true, RuntimeBleCommandProfile::SERVICE, "ANCHOR_ON");
-  assertAllowed(true, RuntimeBleCommandProfile::SERVICE, "SIM_STATUS");
-  assertAllowed(true, RuntimeBleCommandProfile::SERVICE, "OTA_BEGIN:bad");
-  assertAllowed(true, RuntimeBleCommandProfile::SERVICE, "SET_ANCHOR_PROFILE:quiet");
-  assertAllowed(false, RuntimeBleCommandProfile::SERVICE, "SET_PHONE_GPS:59,30");
-  assertAllowed(false, RuntimeBleCommandProfile::SERVICE, "SET_ROUTE:old");
 }
 
 void test_acceptance_profile_accepts_all_known_command_scopes_and_rejects_unknown() {
@@ -163,15 +151,13 @@ int main() {
   RUN_TEST(test_command_scope_classifies_release_exact_commands);
   RUN_TEST(
       test_command_scope_classifies_release_prefix_commands_without_payload_validation);
-  RUN_TEST(test_command_scope_classifies_service_exact_commands);
-  RUN_TEST(
-      test_command_scope_classifies_service_prefix_commands_without_payload_validation);
+  RUN_TEST(test_command_scope_classifies_setup_exact_commands_as_release);
+  RUN_TEST(test_command_scope_classifies_setup_prefix_commands_as_release);
   RUN_TEST(test_command_scope_classifies_dev_hil_commands);
   RUN_TEST(test_command_scope_classifies_unknown_commands);
   RUN_TEST(test_command_profile_names_are_stable_log_tokens);
   RUN_TEST(test_default_active_profile_is_release_compatible);
-  RUN_TEST(test_release_profile_accepts_sim_but_rejects_service_and_external_sensor_injection);
-  RUN_TEST(test_service_profile_accepts_release_service_sim_and_rejects_external_sensor_injection);
+  RUN_TEST(test_release_profile_accepts_ota_setup_sim_and_rejects_external_sensor_injection);
   RUN_TEST(test_acceptance_profile_accepts_all_known_command_scopes_and_rejects_unknown);
   return UNITY_END();
 }

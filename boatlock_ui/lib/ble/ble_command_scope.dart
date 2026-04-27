@@ -1,4 +1,4 @@
-enum BoatLockCommandScope { release, service, devHil, unknown }
+enum BoatLockCommandScope { release, devHil, unknown }
 
 const bool kBoatLockDevHilCommandsEnabled = bool.fromEnvironment(
   'BOATLOCK_DEV_HIL_COMMANDS',
@@ -19,20 +19,6 @@ const Set<String> _releaseExactCommands = {
   'SIM_STATUS',
   'SIM_REPORT',
   'SIM_ABORT',
-};
-
-const List<String> _releaseCommandPrefixes = [
-  'SET_ANCHOR:',
-  'MANUAL_TARGET:',
-  'NUDGE_DIR:',
-  'NUDGE_BRG:',
-  'SET_HOLD_HEADING:',
-  'PAIR_SET:',
-  'AUTH_PROVE:',
-  'SIM_RUN:',
-];
-
-const Set<String> _serviceExactCommands = {
   'RESET_COMPASS_OFFSET',
   'SET_STEPPER_BOW',
   'COMPASS_CAL_START',
@@ -46,7 +32,15 @@ const Set<String> _serviceExactCommands = {
   'OTA_ABORT',
 };
 
-const List<String> _serviceCommandPrefixes = [
+const List<String> _releaseCommandPrefixes = [
+  'SET_ANCHOR:',
+  'MANUAL_TARGET:',
+  'NUDGE_DIR:',
+  'NUDGE_BRG:',
+  'SET_HOLD_HEADING:',
+  'PAIR_SET:',
+  'AUTH_PROVE:',
+  'SIM_RUN:',
   'SET_ANCHOR_PROFILE:',
   'SET_COMPASS_OFFSET:',
   'SET_STEP_MAXSPD:',
@@ -64,10 +58,6 @@ BoatLockCommandScope classifyBoatLockCommand(String command) {
   if (_releaseExactCommands.contains(cmd) ||
       _matchesPrefix(cmd, _releaseCommandPrefixes)) {
     return BoatLockCommandScope.release;
-  }
-  if (_serviceExactCommands.contains(cmd) ||
-      _matchesPrefix(cmd, _serviceCommandPrefixes)) {
-    return BoatLockCommandScope.service;
   }
   if (_devHilExactCommands.contains(cmd) ||
       _matchesPrefix(cmd, _devHilCommandPrefixes)) {

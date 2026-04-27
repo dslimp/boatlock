@@ -27,34 +27,34 @@ void main() {
     );
   });
 
-  test('classifies installer and update commands as service scope', () {
+  test('classifies setup and update commands as release scope', () {
     expect(
       classifyBoatLockCommand('SET_ANCHOR_PROFILE:quiet'),
-      BoatLockCommandScope.service,
+      BoatLockCommandScope.release,
     );
     expect(
       classifyBoatLockCommand('SET_COMPASS_OFFSET:12.5'),
-      BoatLockCommandScope.service,
+      BoatLockCommandScope.release,
     );
     expect(
       classifyBoatLockCommand('RESET_COMPASS_OFFSET'),
-      BoatLockCommandScope.service,
+      BoatLockCommandScope.release,
     );
     expect(
       classifyBoatLockCommand('SET_STEP_MAXSPD:1000'),
-      BoatLockCommandScope.service,
+      BoatLockCommandScope.release,
     );
     expect(
       classifyBoatLockCommand(
         'OTA_BEGIN:4096,00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff',
       ),
-      BoatLockCommandScope.service,
+      BoatLockCommandScope.release,
     );
-    expect(classifyBoatLockCommand('OTA_FINISH'), BoatLockCommandScope.service);
-    expect(classifyBoatLockCommand('OTA_ABORT'), BoatLockCommandScope.service);
+    expect(classifyBoatLockCommand('OTA_FINISH'), BoatLockCommandScope.release);
+    expect(classifyBoatLockCommand('OTA_ABORT'), BoatLockCommandScope.release);
     expect(
       classifyBoatLockCommand('COMPASS_DCD_SAVE'),
-      BoatLockCommandScope.service,
+      BoatLockCommandScope.release,
     );
   });
 

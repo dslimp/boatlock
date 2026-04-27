@@ -114,7 +114,7 @@ void main() {
     expect(ble.holdHeadingValue, true);
   });
 
-  testWidgets('service command controls are hidden until enabled', (
+  testWidgets('setup command controls are hidden until enabled', (
     WidgetTester tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(900, 1800));
@@ -126,7 +126,7 @@ void main() {
     expect(find.text('Офсет компаса'), findsNothing);
     expect(find.text('Firmware OTA'), findsNothing);
     expect(find.text('BNO08x quality'), findsNothing);
-    expect(find.text('Сервисный режим'), findsOneWidget);
+    expect(find.text('Настройка оборудования'), findsOneWidget);
     expect(find.text('Owner secret'), findsOneWidget);
   });
 
@@ -141,14 +141,16 @@ void main() {
       lastCommandRejection: const BleCommandRejection(
         reason: 'profile',
         profile: 'release',
-        scope: 'service',
-        command: 'OTA_BEGIN:4096,abcd',
+        scope: 'dev_hil',
+        command: 'SET_PHONE_GPS:59,30',
       ),
     );
     await tester.pump();
 
     expect(
-      find.text('Команда OTA_BEGIN отклонена профилем release: нужен service'),
+      find.text(
+        'Команда SET_PHONE_GPS отклонена профилем release: нужен acceptance',
+      ),
       findsOneWidget,
     );
   });

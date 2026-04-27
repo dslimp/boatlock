@@ -23,7 +23,7 @@ Use this skill when the task is about updating or validating the real ESP32-S3 h
 1. Refresh the bench runtime if tracked helpers or service units changed:
    - `tools/hw/nh02/install.sh`
 2. Update current firmware when needed:
-   - normal moved-hardware path: build `boatlock/.pio/build/esp32s3_service/firmware.bin` and run `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
+   - normal moved-hardware path: build `boatlock/.pio/build/esp32s3/firmware.bin` and run `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
    - manual field path: publish `firmware.bin` plus SHA-256 and upload from the phone app Settings screen
    - recovery/seed path only: `tools/hw/nh02/flash.sh` or `tools/hw/nh02/flash.sh --no-build`
 3. Run hardware acceptance:
@@ -42,23 +42,20 @@ Use this skill when the task is about updating or validating the real ESP32-S3 h
    - or `tools/hw/nh02/android-status.sh` when the phone is attached to `nh02`
 2. Optionally switch the phone to ADB Wi-Fi after USB proof:
    - `tools/hw/nh02/android-wifi-debug.sh`
-   - Android smoke/e2e wrappers auto-enable and use ADB Wi-Fi when no
+   - Android smoke/check wrappers auto-enable and use ADB Wi-Fi when no
      `--serial` is passed; set `BOATLOCK_NH02_ANDROID_WIFI_ADB=0` only when USB
      `adb` must be forced.
-3. Build the dedicated smoke APK:
-  - `tools/android/build-smoke-apk.sh`
-  - or build the production app with e2e hook:
-    `tools/android/build-app-apk.sh --e2e-mode basic`
-4. Install and run the phone smoke flow:
+3. Build the ordinary release app APK:
+  - `tools/android/build-app-apk.sh`
+4. Install and run the phone check flow through the same release app:
    - `tools/android/run-smoke.sh`
    - or `tools/hw/nh02/android-run-smoke.sh` when the phone is attached to `nh02`
-   - use `tools/hw/nh02/android-run-app-e2e.sh --wait-secs 130` when the acceptance target is the real `lib/main.dart` application rather than the dedicated smoke entrypoint
-   - use `tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130`, `--status`, `--anchor`, `--sim`, `--reconnect`, or `--esp-reset` for production-app command/recovery flows
-   - use `tools/hw/nh02/android-run-app-e2e.sh --sim-suite --wait-secs 1800` to run all listed on-device HIL scenarios through the production app on an already-flashed release profile
-   - use `tools/hw/nh02/run-sim-suite.sh` for the standard full bench gate; it installs helpers, proves targets, flashes release, runs boot acceptance and `sim_suite`
-   - use `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130` after compass BLE command changes; it sends safe DCD service commands and requires device-log acknowledgements
-   - use `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180` after GNSS live-telemetry changes or field GPS checks; it requires valid non-zero coordinates and `gnssQ > 0`
-   - use `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin` after BLE OTA/app-delivery changes; it serves `firmware.bin` from `nh02`, installs the production app with OTA e2e defines, uploads over BLE from the phone, and requires post-reboot telemetry recovery
+   - use `tools/hw/nh02/android-run-app-check.sh --manual --wait-secs 130`, `--status`, `--anchor`, `--sim`, `--reconnect`, or `--esp-reset` for production-app command/recovery flows
+   - use `tools/hw/nh02/android-run-app-check.sh --sim-suite --wait-secs 1800` to run all listed on-device HIL scenarios through the production app on an already-flashed release profile
+   - use `tools/hw/nh02/run-sim-suite.sh` for the standard full bench gate; it installs helpers, proves targets, flashes normal firmware, runs boot acceptance and `sim_suite`
+   - use `tools/hw/nh02/android-run-app-check.sh --compass --wait-secs 130` after compass BLE command changes; it sends safe DCD setup commands and requires device-log acknowledgements
+   - use `tools/hw/nh02/android-run-app-check.sh --gps --wait-secs 180` after GNSS live-telemetry changes or field GPS checks; it requires valid non-zero coordinates and `gnssQ > 0`
+   - use `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin` after BLE OTA/app-delivery changes; it serves `firmware.bin` from `nh02`, installs the same release app, starts its runtime OTA check, uploads over BLE from the phone, and requires post-reboot telemetry recovery
    - pass a longer OTA wait such as `--wait-secs 1800` when BLE discovery may
      be cold or intermittent; the wrapper timeout includes scan/reconnect time
      before upload starts and can otherwise expire during an active transfer
@@ -108,7 +105,7 @@ Use this skill when the task is about updating or validating the real ESP32-S3 h
 - ESP reset Android smoke proves exact APK install, first telemetry, ESP32 reset through the tracked reset helper, and telemetry recovery without app restart.
 - Compass Android smoke proves exact APK install, first telemetry, safe compass calibration command delivery, and device-log acknowledgement. On RVC wiring it proves routing only; it does not prove DCD success.
 - GPS Android smoke proves exact APK install, BLE scan/connect/telemetry, valid non-zero coordinates, and GNSS quality `>0`. It does not prove anchor-control GNSS gate readiness unless `gnssQ=2` and anchor-specific acceptance also passes.
-- OTA production-app e2e proves exact APK install, phone HTTP download via `adb reverse`, SHA-256 verification in the app, BLE OTA upload, ESP32 reboot, and telemetry recovery after the update. A post-`OTA_FINISH` disconnect plus reconnect/telemetry is acceptable even if the app misses the `[OTA] finish ok` notify before reboot. It does not prove bootloader or partition-table changes; those still need USB flash.
+- OTA production-app check proves exact APK install, phone HTTP download via `adb reverse`, SHA-256 verification in the app, BLE OTA upload, ESP32 reboot, and telemetry recovery after the update. A post-`OTA_FINISH` disconnect plus reconnect/telemetry is acceptable even if the app misses the `[OTA] finish ok` notify before reboot. It does not prove bootloader or partition-table changes; those still need USB flash.
 - Persistent bench wireless is Android ADB Wi-Fi to the phone plus BLE to ESP32.
   Direct ESP32 debug Wi-Fi OTA is a boot-window/debug path, not the normal
   persistent channel while BLE is active on the ESP32-S3 bench.
@@ -127,7 +124,7 @@ Use this skill when the task is about updating or validating the real ESP32-S3 h
 - Bench runtime refresh:
   - `tools/hw/nh02/install.sh`
 - BLE OTA flash, normal moved-hardware path:
-  - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
+  - `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
 - USB seed/recovery flash:
   - `tools/hw/nh02/flash.sh`
 - Acceptance:
@@ -139,18 +136,18 @@ Use this skill when the task is about updating or validating the real ESP32-S3 h
   - `tools/hw/nh02/monitor.sh`
 - Android:
   - `tools/hw/nh02/android-install-app.sh`
-  - `tools/hw/nh02/android-run-app-e2e.sh`
-  - `tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130`
-  - `tools/hw/nh02/android-run-app-e2e.sh --status --wait-secs 130`
-  - `tools/hw/nh02/android-run-app-e2e.sh --sim --wait-secs 130`
-  - `tools/hw/nh02/android-run-app-e2e.sh --sim-suite --wait-secs 1800`
-  - `tools/hw/nh02/android-run-app-e2e.sh --anchor --wait-secs 130`
-  - `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130`
-  - `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180`
-  - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin`
-  - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
-  - `tools/hw/nh02/android-run-app-e2e.sh --reconnect --wait-secs 130`
-  - `tools/hw/nh02/android-run-app-e2e.sh --esp-reset --wait-secs 130`
+  - `tools/hw/nh02/android-run-app-check.sh`
+  - `tools/hw/nh02/android-run-app-check.sh --manual --wait-secs 130`
+  - `tools/hw/nh02/android-run-app-check.sh --status --wait-secs 130`
+  - `tools/hw/nh02/android-run-app-check.sh --sim --wait-secs 130`
+  - `tools/hw/nh02/android-run-app-check.sh --sim-suite --wait-secs 1800`
+  - `tools/hw/nh02/android-run-app-check.sh --anchor --wait-secs 130`
+  - `tools/hw/nh02/android-run-app-check.sh --compass --wait-secs 130`
+  - `tools/hw/nh02/android-run-app-check.sh --gps --wait-secs 180`
+  - `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin`
+  - `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
+  - `tools/hw/nh02/android-run-app-check.sh --reconnect --wait-secs 130`
+  - `tools/hw/nh02/android-run-app-check.sh --esp-reset --wait-secs 130`
   - `tools/hw/nh02/android-install.sh`
   - `tools/hw/nh02/android-status.sh`
   - `tools/hw/nh02/android-wifi-debug.sh`
@@ -166,7 +163,7 @@ Use this skill when the task is about updating or validating the real ESP32-S3 h
   - `tools/hw/nh02/android-run-smoke.sh --no-install`
   - `tools/hw/nh02/run-sim-suite.sh`
   - `tools/android/status.sh`
-  - `tools/android/build-smoke-apk.sh`
+  - `tools/android/build-app-apk.sh`
   - `tools/android/run-smoke.sh`
 
 ## Working Rules
@@ -178,7 +175,7 @@ Use this skill when the task is about updating or validating the real ESP32-S3 h
 - Preserve the documented order for the chosen path. For normal moved hardware that means target proof, firmware build, phone BLE OTA, telemetry recovery, then Android BLE checks. For USB bench recovery that means `install -> flash -> acceptance -> monitor/debug`.
 - Do not treat a missing ESP32 USB serial path as a blocker for the normal phone BLE OTA path when the Android phone target is proven and BLE OTA can run.
 - For phones attached to `nh02`, use the tracked `android-install.sh` and `android-status.sh` path before falling back to local `adb` assumptions.
-- Use `tools/hw/nh02/android-install-app.sh` when the task is only to install the normal production app APK on the `nh02` phone without running a smoke/e2e probe.
+- Use `tools/hw/nh02/android-install-app.sh` when the task is only to install the normal production app APK on the `nh02` phone without running a smoke/check probe.
 - For Wi-Fi ADB acceptance, seed it from the tracked USB-visible phone with `android-wifi-debug.sh`, then run the same smoke wrapper with `--serial <ip>:5555`; `adb devices` alone is not enough.
 - Record whether failure is in first install policy, later `adb install -r` update, app launch, or BLE runtime; do not collapse those into one generic "Android smoke failed" verdict.
 - Treat `android-run-smoke.sh --no-install` as BLE-runtime proof only; it does not prove that the exact just-built APK was installed on the phone.

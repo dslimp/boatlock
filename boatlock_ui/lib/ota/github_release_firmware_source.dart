@@ -190,18 +190,16 @@ class GitHubFirmwareRelease {
       ]);
 
   GitHubFirmwareReleaseAsset? get firmwareAsset =>
-      _firstAssetNamed(const ['firmware-esp32s3-service.bin', 'firmware.bin']);
+      _firstAssetNamed(const ['firmware-esp32s3.bin', 'firmware.bin']);
 
   GitHubFirmwareReleaseAsset? get sha256SumsAsset => _firstAssetNamed(const [
-    'sha256sums-esp32s3-service.txt',
+    'sha256sums-esp32s3.txt',
     'sha256sums',
     'sha256sums.txt',
   ]);
 
-  GitHubFirmwareReleaseAsset? get buildInfoAsset => _firstAssetNamed(const [
-    'build_info-esp32s3-service.txt',
-    'build_info.txt',
-  ]);
+  GitHubFirmwareReleaseAsset? get buildInfoAsset =>
+      _firstAssetNamed(const ['build_info-esp32s3.txt', 'build_info.txt']);
 
   factory GitHubFirmwareRelease.fromJsonText(String text) {
     final decoded = jsonDecode(text);
@@ -396,8 +394,7 @@ String _firmwareVersion(
 }
 
 String _profileForEnv(String platformioEnv) {
-  if (platformioEnv == 'esp32s3_service') return 'service';
-  if (platformioEnv == 'esp32s3_release' || platformioEnv == 'esp32s3') {
+  if (platformioEnv == 'esp32s3') {
     return 'release';
   }
   return '';

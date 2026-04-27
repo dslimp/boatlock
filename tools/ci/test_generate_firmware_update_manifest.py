@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class FirmwareUpdateManifestTests(unittest.TestCase):
-    def test_generates_release_service_manifest(self) -> None:
+    def test_generates_release_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp = Path(td)
             firmware = tmp / "firmware.bin"
@@ -29,7 +29,7 @@ class FirmwareUpdateManifestTests(unittest.TestCase):
                     "--base-url",
                     "https://github.com/dslimp/boatlock/releases/download/v1.2.3",
                     "--binary-filename",
-                    "firmware-esp32s3-service.bin",
+                    "firmware-esp32s3.bin",
                     "--channel",
                     "release",
                     "--branch",
@@ -55,12 +55,12 @@ class FirmwareUpdateManifestTests(unittest.TestCase):
             self.assertEqual(manifest["gitSha"], "abc1234def5678")
             self.assertEqual(manifest["workflowRunId"], 42)
             self.assertEqual(manifest["firmwareVersion"], "1.2.3")
-            self.assertEqual(manifest["platformioEnv"], "esp32s3_service")
-            self.assertEqual(manifest["commandProfile"], "service")
-            self.assertEqual(manifest["artifactName"], "firmware-esp32s3-service")
+            self.assertEqual(manifest["platformioEnv"], "esp32s3")
+            self.assertEqual(manifest["commandProfile"], "release")
+            self.assertEqual(manifest["artifactName"], "firmware-esp32s3")
             self.assertEqual(
                 manifest["binaryUrl"],
-                "https://github.com/dslimp/boatlock/releases/download/v1.2.3/firmware-esp32s3-service.bin",
+                "https://github.com/dslimp/boatlock/releases/download/v1.2.3/firmware-esp32s3.bin",
             )
             self.assertEqual(manifest["size"], len(b"boatlock-firmware"))
             self.assertRegex(manifest["sha256"], r"^[0-9a-f]{64}$")
@@ -118,9 +118,9 @@ class FirmwareUpdateManifestTests(unittest.TestCase):
                 "\n".join(
                     [
                         "firmware_sha256=" + firmware_sha,
-                        "artifact_name=firmware-esp32s3-service",
-                        "platformio_env=esp32s3_service",
-                        "command_profile=service",
+                        "artifact_name=firmware-esp32s3",
+                        "platformio_env=esp32s3",
+                        "command_profile=release",
                     ]
                 )
                 + "\n"

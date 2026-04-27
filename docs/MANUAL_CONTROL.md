@@ -62,11 +62,11 @@ not authorize a remote session. `PAIR_CLEAR` remains accepted only from an owner
 session or while the hardware STOP pairing window is physically open.
 
 The phone app is the full product controller for anchor save/enable/disable,
-jog, hold-heading, manual, STOP, and allowed service flows in service builds. A
+jog, hold-heading, manual, STOP, and allowed settings and OTA flows. A
 future BLE remote is constrained by default to deadman manual control, ordinary
 Anchor off, owner heartbeat, and emergency STOP. It must not save or move the
 anchor point, change security state, change settings, start OTA, run HIL, inject
-sensors, or use service/dev commands unless a later product decision explicitly
+sensors, or use setup or dev/HIL commands unless a later product decision explicitly
 adds and tests those remote surfaces.
 
 Manual control is a sublease of the control owner. The first accepted
@@ -91,7 +91,7 @@ Before accepting an implementation, tests must cover:
 - per-client auth nonce/counter isolation and rejection of secondary-client
   `SEC_CMD` attempts signed with another session
 - owner acquisition, refresh, expiry, disconnect cleanup, and busy rejection for
-  Anchor, Manual, settings, OTA, service, and dev/HIL commands
+  Anchor, Manual, settings, OTA, and dev/HIL commands
 - remote role allowlist: manual, Anchor off, heartbeat, and STOP accepted;
   anchor save/jog/settings/security/OTA/HIL/sensor injection rejected
 - manual sublease behavior: same-owner refresh, non-owner refresh rejection,

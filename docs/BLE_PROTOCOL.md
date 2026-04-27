@@ -16,16 +16,15 @@ Control point payloads are application-level command byte strings, not a text st
 
 Command scopes are product boundaries, not wire-level security:
 
-- `release`: normal water UI, app security/session setup, app telemetry transport, and safe software simulation (`SIM_*`).
-- `service`: installer, calibration, firmware update, and tuning operations. The Android/macOS release app contains these controls, but the UI hides them until the operator enables Settings `Сервисный режим`; test/service harnesses must opt in explicitly.
-- `dev/HIL`: injected external sensor data. These commands are for validation harnesses only and must not appear in the normal water UI. Flutter custom-command callers must opt in explicitly or use `--dart-define=BOATLOCK_DEV_HIL_COMMANDS=true`.
+- `release`: normal water UI, app security/session setup, app telemetry
+  transport, hardware setup, BLE OTA, and safe software simulation (`SIM_*`).
+- `dev/HIL`: injected external sensor data. These commands are for validation harnesses only and must not appear in the normal water UI.
 
 `SEC_CMD` is the security envelope; the effective scope is the scope of the wrapped payload. The Flutter custom-command classifier does not accept raw `SEC_CMD` input; the BLE transport builds the envelope internally after classifying the unwrapped command.
 
 Current classification:
 
-- `release`: `STREAM_START`, `STREAM_STOP`, `SNAPSHOT`, `SET_ANCHOR`, `ANCHOR_ON`, `ANCHOR_OFF`, `STOP`, `HEARTBEAT`, `MANUAL_TARGET`, `MANUAL_OFF`, `NUDGE_DIR`, `NUDGE_BRG`, `SET_HOLD_HEADING`, `PAIR_SET`, `PAIR_CLEAR`, `AUTH_HELLO`, `AUTH_PROVE`, `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, `SIM_ABORT`.
-- `service`: `SET_ANCHOR_PROFILE`, `SET_COMPASS_OFFSET`, `RESET_COMPASS_OFFSET`, `COMPASS_CAL_START`, `COMPASS_DCD_SAVE`, `COMPASS_DCD_AUTOSAVE_ON`, `COMPASS_DCD_AUTOSAVE_OFF`, `COMPASS_TARE_Z`, `COMPASS_TARE_SAVE`, `COMPASS_TARE_CLEAR`, `SET_STEP_MAXSPD`, `SET_STEP_ACCEL`, `SET_STEPPER_BOW`, `OTA_BEGIN`, `OTA_FINISH`, `OTA_ABORT`.
+- `release`: `STREAM_START`, `STREAM_STOP`, `SNAPSHOT`, `SET_ANCHOR`, `ANCHOR_ON`, `ANCHOR_OFF`, `STOP`, `HEARTBEAT`, `MANUAL_TARGET`, `MANUAL_OFF`, `NUDGE_DIR`, `NUDGE_BRG`, `SET_HOLD_HEADING`, `SET_ANCHOR_PROFILE`, `SET_COMPASS_OFFSET`, `RESET_COMPASS_OFFSET`, `COMPASS_CAL_START`, `COMPASS_DCD_SAVE`, `COMPASS_DCD_AUTOSAVE_ON`, `COMPASS_DCD_AUTOSAVE_OFF`, `COMPASS_TARE_Z`, `COMPASS_TARE_SAVE`, `COMPASS_TARE_CLEAR`, `SET_STEP_MAXSPD`, `SET_STEP_ACCEL`, `SET_STEPPER_BOW`, `PAIR_SET`, `PAIR_CLEAR`, `AUTH_HELLO`, `AUTH_PROVE`, `OTA_BEGIN`, `OTA_FINISH`, `OTA_ABORT`, `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, `SIM_ABORT`.
 - `dev/HIL`: `SET_PHONE_GPS`.
 
 | Command | Parameters | Description |
@@ -137,12 +136,11 @@ the hardware STOP pairing window is physically open.
 
 Phone app and remote constraints are intentionally different. The phone app is
 the full product controller for anchor save/enable/disable, jog, hold-heading,
-manual, STOP, and service flows in service builds. A future BLE remote starts
-with a narrower allowlist: `MANUAL_TARGET`, `MANUAL_OFF`, `ANCHOR_OFF`,
-`HEARTBEAT`, and `STOP`. It must not save or jog anchor points, change security,
-change settings, start OTA, run HIL, inject sensors, or use service/dev commands
-unless those surfaces are explicitly added to the remote role and covered by the
-same ownership and security tests.
+manual, STOP, settings, and OTA. A future BLE remote starts with a narrower
+allowlist: `MANUAL_TARGET`, `MANUAL_OFF`, `ANCHOR_OFF`, `HEARTBEAT`, and
+`STOP`. It must not save or jog anchor points, change security, change settings,
+start OTA, run HIL, or inject sensors unless those surfaces are explicitly added
+to the remote role and covered by the same ownership and security tests.
 
 Manual control is nested under the control-owner lease. The first accepted
 `MANUAL_TARGET` may acquire control and enter Manual atomically when no owner
@@ -178,22 +176,30 @@ Required validation before implementation is accepted:
 
 ## Firmware Scope Gate
 
-Firmware builds enforce the command scope selected by the PlatformIO profile. The default `esp32s3` environment is release-compatible; explicit `esp32s3_release`, `esp32s3_service`, and `esp32s3_acceptance` environments select the same release, service, and acceptance command profiles used by the `nh02` flash wrapper.
+Firmware builds enforce the command scope selected by the PlatformIO profile.
+The default `esp32s3` environment is the normal release firmware and includes
+BLE OTA plus hardware setup commands. `esp32s3_acceptance` is the bench
+validation firmware that additionally accepts dev/HIL sensor injection.
 
 Profile rules:
 
-- `release`: normal water image. It accepts `release` commands, including `SIM_*`, plus the security envelope around allowed payloads. It rejects `service` and `dev/HIL` commands before they can mutate settings, start OTA, inject external sensor data, or actuate outputs.
-- `service`: maintenance image. It accepts `release` plus `service` commands, including BLE OTA, calibration, tuning, installer flows, and `SIM_*`. It rejects `dev/HIL`, including `SET_PHONE_GPS`.
-- `acceptance`: bench validation image. It accepts known `release`, `service`, and `dev/HIL` commands. Unknown commands remain rejected in every profile.
+- `release`: normal water image. It accepts release commands, including setup,
+  BLE OTA, and `SIM_*`. It rejects `dev/HIL` commands before they can inject
+  external sensor data.
+- `acceptance`: bench validation image. It accepts known `release` and
+  `dev/HIL` commands. Unknown commands remain rejected in every profile.
 
-`esp32s3_bno08x_sh2_uart` and `esp32s3_debug_wifi_ota` extend the service profile. Debug probe builds are not command-profile release artifacts.
+`esp32s3_bno08x_sh2_uart` uses the normal release command profile with
+SH2-UART compass support. Debug probe builds are not release artifacts.
 
 Gate behavior expectations:
 
 - Scope is evaluated on the unwrapped command payload. `SEC_CMD` must not become a bypass; the effective scope is the wrapped payload scope.
 - Rejected commands fail closed: no setting write, no OTA session, no simulation state change, no injected GNSS update, no motor or stepper output, and no transition out of the current safe runtime mode.
-- Rejections are observable in the log as `[BLE] command rejected reason=profile profile=<release|service|acceptance> scope=<service|dev_hil|unknown> command=<payload>` so wrappers can distinguish "command gated by profile" from "command parser bug" or "BLE link lost".
-- `OTA_BEGIN`, `OTA_FINISH`, and `OTA_ABORT` remain `service` commands. A release image that excludes service commands must document that BLE OTA is unavailable from that image, and the service update path must remain recoverable through USB seed flash.
+- Rejections are observable in the log as `[BLE] command rejected reason=profile profile=<release|acceptance> scope=<dev_hil|unknown> command=<payload>` so wrappers can distinguish "command gated by profile" from "command parser bug" or "BLE link lost".
+- `OTA_BEGIN`, `OTA_FINISH`, and `OTA_ABORT` are release commands. The normal
+  firmware must remain OTA-capable so moved hardware can be updated through the
+  phone BLE path.
 - `SIM_*` remains release scope and must run fail-quiet: the firmware enters `SIM`, ignores real sensors for telemetry/control, and keeps motor/stepper outputs quiet. `SET_PHONE_GPS` remains `dev/HIL` and must be absent from normal water command flow.
 - During active OTA, the existing OTA safety rule still applies inside any profile that allows OTA: firmware rejects runtime commands except `HEARTBEAT`, `OTA_FINISH`, and `OTA_ABORT`.
 
@@ -210,18 +216,17 @@ BLE OTA uses the phone as the bridge:
 
 During active OTA, firmware rejects all runtime commands except `HEARTBEAT`, `OTA_FINISH`, and `OTA_ABORT`. Chunk writes before a successful `OTA_BEGIN` are ignored. If the BLE link disconnects during an active transfer, firmware aborts the update and keeps the current boot partition.
 
-The release app uses `BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO` for one-button
-updates from the latest GitHub Release. A release should include `manifest.json`
-plus the service binary asset named `firmware-esp32s3-service.bin`; the manifest
-must describe a `release/vX.Y.x` branch `esp32s3_service` binary with
-`commandProfile=service`, positive size, HTTPS binary URL, and a 64-hex
-SHA-256. `BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL` remains available for local
-acceptance smokes and must point to a manifest with the same service-profile
-safety fields. If the release manifest is unavailable, the app can reconstruct a
-manifest from unambiguous service release assets: `firmware-esp32s3-service.bin`,
-`BUILD_INFO-esp32s3-service.txt`, and `SHA256SUMS-esp32s3-service.txt`. The app
-validates the resolved manifest, downloads the binary, verifies size and
-SHA-256, then reuses the same BLE OTA transport path.
+The release app uses the latest GitHub Release for one-button updates. A release
+should include `manifest.json` plus the firmware asset named
+`firmware-esp32s3.bin`; the manifest must describe a `release/vX.Y.x` branch
+`esp32s3` binary with `commandProfile=release`, positive size, HTTPS binary URL,
+and a 64-hex SHA-256. Local acceptance wrappers pass temporary manifest URLs as
+runtime app extras, not as separate app builds. If the release manifest is
+unavailable, the app can reconstruct a manifest from
+unambiguous release assets: `firmware-esp32s3.bin`,
+`BUILD_INFO-esp32s3.txt`, and `SHA256SUMS-esp32s3.txt`. The app validates the
+resolved manifest, downloads the binary, verifies size and SHA-256, then reuses
+the same BLE OTA transport path.
 
 The current phone bridge requests a larger MTU and uses write-without-response
 for OTA chunks when the platform and characteristic support it, with a small

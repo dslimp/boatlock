@@ -12,9 +12,9 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 - [x] Surface command/auth failures from map anchor actions.
 - [x] Fix manual sheet wording: red `STOP` must either send real emergency `STOP` or be renamed to manual off.
 - [x] Verify/fix that phone GPS fallback cannot update GPS-to-compass correction used by control heading.
-- [x] Classify BLE commands into release/service/dev surfaces and gate service/dev paths from normal water UI.
-- [x] Add explicit release/service/acceptance PlatformIO profiles and `nh02` flash-wrapper profile selection.
-- [x] Implement firmware-side service/dev/HIL command enforcement through those profiles while keeping `SIM_*` available as a safe release-mode simulation path.
+- [x] Classify BLE commands into release/dev surfaces and gate dev paths from normal water UI.
+- [x] Add explicit release/acceptance PlatformIO profiles and `nh02` flash-wrapper profile selection.
+- [x] Implement firmware-side release/dev/HIL command enforcement through those profiles while keeping `SIM_*` available as a safe release-mode simulation path.
 - [x] Remove confirmation from the app emergency STOP button: it must send `STOP` immediately, and the button should be visually separated to the left of normal controls.
 - [ ] Identify the exact brushed/collector motor driver with `docs/BRUSHED_MOTOR_DRIVER_INTAKE.md` and update firmware/docs if it is not the current `PWM+DIR1+DIR2` path.
 - [ ] Complete the DRV8825/Vanchor steering intake with current limit, enable/sleep/reset wiring, direction proof, and powered STOP behavior.

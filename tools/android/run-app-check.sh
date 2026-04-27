@@ -98,8 +98,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ "${MODE}" == "ota" ]]; then
-  if [[ "${BUILD_FIRST}" -eq 1 &&
-    "${OTA_LATEST_RELEASE}" -eq 0 &&
+  if [[ "${OTA_LATEST_RELEASE}" -eq 0 &&
     ( -z "${OTA_URL}" || -z "${OTA_SHA256}" ) ]]; then
     echo "--ota-url and --ota-sha256 are required for --ota" >&2
     exit 1
@@ -114,21 +113,20 @@ if [[ "${MODE}" == "sim_suite" && "${WAIT_SET}" -eq 0 ]]; then
 fi
 
 if [[ "${BUILD_FIRST}" -eq 1 ]]; then
-  build_args=(--e2e-mode "${MODE}")
-  if [[ "${MODE}" == "ota" ]]; then
-    if [[ "${OTA_LATEST_RELEASE}" -eq 1 ]]; then
-      build_args+=(--e2e-ota-latest-release)
-      if [[ -n "${FIRMWARE_MANIFEST_URL}" ]]; then
-        build_args+=(--firmware-manifest-url "${FIRMWARE_MANIFEST_URL}")
-      fi
-    else
-      build_args+=(--ota-url "${OTA_URL}" --ota-sha256 "${OTA_SHA256}")
-    fi
-  fi
-  "${SCRIPT_DIR}/build-app-apk.sh" "${build_args[@]}" >/dev/null
+  "${SCRIPT_DIR}/build-app-apk.sh" >/dev/null
 fi
 
-if [[ "${#PASS_ARGS[@]}" -eq 0 ]]; then
-  exec "${SCRIPT_DIR}/run-smoke.sh" --no-build
+run_args=(--no-build --mode "${MODE}")
+if [[ "${OTA_LATEST_RELEASE}" -eq 1 ]]; then
+  run_args+=(--ota-latest-release)
 fi
-exec "${SCRIPT_DIR}/run-smoke.sh" --no-build "${PASS_ARGS[@]}"
+if [[ -n "${FIRMWARE_MANIFEST_URL}" ]]; then
+  run_args+=(--firmware-manifest-url "${FIRMWARE_MANIFEST_URL}")
+fi
+if [[ -n "${OTA_URL}" ]]; then
+  run_args+=(--ota-url "${OTA_URL}")
+fi
+if [[ -n "${OTA_SHA256}" ]]; then
+  run_args+=(--ota-sha256 "${OTA_SHA256}")
+fi
+exec "${SCRIPT_DIR}/run-smoke.sh" "${run_args[@]}" "${PASS_ARGS[@]}"

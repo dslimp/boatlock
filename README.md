@@ -3,7 +3,7 @@
 BoatLock is an ESP32-S3 anchor-hold controller with a Flutter companion app.
 The current development target is a single bench board running the main anchor
 runtime, BLE phone control, onboard BNO08x heading, GNSS telemetry, manual
-deadman control, and service maintenance flows.
+deadman control, hardware setup, and BLE OTA firmware update flows.
 
 Current firmware release: `0.2.0`
 
@@ -18,7 +18,7 @@ Current firmware release: `0.2.0`
 - Drives steering through a DRV8825-compatible STEP/DIR driver.
 - Streams compact BLE telemetry to the app and mirrors firmware logs over the
   BLE log characteristic.
-- Supports service operations from the app: stepper tuning, compass service
+- Supports hardware setup operations from the app: stepper tuning, compass
   controls, and BLE OTA firmware update.
 - Provides deterministic on-device HIL scenarios (`SIM_*`, `S0..S19`) for
   regression checks without relying on live sensors.
@@ -78,18 +78,16 @@ Use PlatformIO from `boatlock/`.
 
 ```bash
 cd boatlock
-pio run -e esp32s3_service
+pio run -e esp32s3
 ```
 
 Useful environments:
 
-- `esp32s3` - release-compatible default build.
-- `esp32s3_service` - bench/service build with BLE OTA and service commands.
-- `esp32s3_release` - explicit release profile.
-- `esp32s3_acceptance` - broad bench acceptance profile.
-
-For active bench development we normally use `esp32s3_service`, because the app
-needs OTA and tuning commands while hardware is still being adjusted.
+- `esp32s3` - normal firmware. It includes BLE OTA and setup commands.
+- `esp32s3_acceptance` - bench acceptance firmware with dev/HIL sensor
+  injection enabled.
+- `esp32s3_bno08x_sh2_uart` - explicit SH2-UART compass target when that wiring
+  is under test.
 
 ## Flashing And OTA
 
@@ -98,11 +96,11 @@ the production app:
 
 ```bash
 cd boatlock
-pio run -e esp32s3_service
+pio run -e esp32s3
 cd ..
-tools/hw/nh02/android-run-app-e2e.sh \
+tools/hw/nh02/android-run-app-check.sh \
   --ota \
-  --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin \
+  --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin \
   --wait-secs 1800
 ```
 
@@ -112,14 +110,14 @@ starts before scan/connect and can otherwise expire during an active transfer.
 USB flash on the `nh02` bench is the seed/recovery path:
 
 ```bash
-tools/hw/nh02/flash.sh --profile service
+tools/hw/nh02/flash.sh
 ```
 
 ## Flutter App
 
-The app wrappers build one release app. Service controls are part of that app
-and stay hidden during normal use; open Settings and enable `Сервисный режим`
-to show stepper tuning, compass service rows, and firmware OTA.
+The app wrappers build one release app. Setup controls are part of that app and
+stay hidden during normal use; open Settings and enable `Настройка оборудования`
+to show stepper tuning, compass rows, and firmware OTA.
 
 Android build:
 
@@ -166,13 +164,13 @@ platformio test -e native -f test_settings -f test_runtime_ble_command_log -f te
 
 cd ../boatlock_ui
 flutter test test/settings_page_test.dart
-flutter test test/settings_page_service_ui_test.dart
+flutter test test/settings_page_setup_ui_test.dart
 ```
 
 Android production-app manual smoke on `nh02`:
 
 ```bash
-tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130
+tools/hw/nh02/android-run-app-check.sh --manual --wait-secs 130
 ```
 
 This sends zero-throttle `MANUAL_TARGET`, observes `MANUAL`, sends `MANUAL_OFF`,

@@ -70,7 +70,7 @@
   - production-exposed dev/diagnostic BLE surfaces not needed for anchor operation
   - broad tuning/calibration UI for non-essential runtime params
   - experimental profiles and convenience features that widen the command surface
-- If a feature is useful but not core, keep it behind a dedicated dev/service path or move it to a feature branch before cutting it from `main`.
+- If a feature is useful but not core, keep it behind a dedicated dev/acceptance path or move it to a feature branch before cutting it from `main`.
 
 ## Hardware And Runtime Invariants
 
@@ -89,8 +89,10 @@
 - Production firmware build compiles only top-level `boatlock/*.cpp`.
 - Files under `boatlock/debug/` are manual test sketches and must not silently replace production logic.
 - USB CDC is enabled in `boatlock/platformio.ini`; only one process can own `/dev/cu.usbmodem2101` at a time.
-- Current boat hardware may be away from the ESP32 USB bench link. The normal firmware update path is phone-bridged BLE OTA through the production app wrapper:
-  - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
+- Current boat hardware may be away from the ESP32 USB bench link. The normal firmware update path is phone-bridged BLE OTA through the ordinary release app Settings UI:
+  - build firmware with `cd boatlock && pio run -e esp32s3`
+  - serve or publish `boatlock/.pio/build/esp32s3/firmware.bin`
+  - use the installed release app Settings firmware OTA controls to download, verify SHA-256, upload over BLE, and wait for reconnect
   - USB flashing through `tools/hw/nh02/flash.sh` is seed/recovery only unless the task explicitly targets the USB bench path.
   - Do not block ordinary firmware update/app rebuild work only because the ESP32 USB serial path is absent, provided the Android phone target is proven and BLE OTA can run.
 
@@ -147,13 +149,22 @@
 - Flutter device match is true when:
   - advertised or platform name equals/contains `boatlock`, or
   - advertised service UUID contains `12ab`
-- Flutter BLE scan must not use an Android service-only scan filter because the
+- Flutter BLE scan must not use an Android UUID-only scan filter because the
   product contract allows name-only `BoatLock` advertisements as well as
   service UUID matches.
 - Flutter stops scanning before connect and retries scan/reconnect every `3 s`.
-- Android and macOS app builds are release builds only. Do not create separate
-  debug/service app variants; the release app always contains the service UI and
-  hides service controls behind the Settings `Сервисный режим` switch.
+- Android and macOS app builds are one release application only. Categorically
+  do not create, install, validate, or document separate debug, service, app-check,
+  smoke, setup, or OTA app variants or APK/macOS artifacts.
+- Do not use `dart-define`, alternate Flutter targets, or alternate entrypoints
+  to change app functionality for validation or firmware update. Test and
+  hardware automation must drive the exact same release app that the user runs;
+  wrappers may only pass runtime commands to that already-built app.
+- Firmware OTA is base product functionality: every normal app build must be
+  able to update ESP32 firmware over BLE from Settings. Do not move OTA behind
+  a special app build, hidden test app, or one-off validation APK.
+- The release app always contains setup controls and hides them only behind the
+  runtime Settings `Настройка оборудования` switch.
 - App heartbeat is sent every `1 s` once connected.
 - Security flow:
   - hardware STOP long-press `3 s` opens pairing window
@@ -213,7 +224,7 @@
 - Do not start module code changes from intuition alone. If no useful external source applies, explicitly record that conclusion before editing.
 - Default module cadence is batches of fifteen modules:
   - for each module: external baseline, smallest refactor, local tests, worklog/self-review, commit, and push
-  - after every fifteenth module: update the target firmware through the normal phone BLE OTA path when available; use USB flash only for seed/recovery, then run hardware acceptance, serial log scan where reachable, and Android BLE smokes
+  - after every fifteenth module: update the target firmware through the normal phone BLE OTA path when available; use USB flash only for seed/recovery, then run hardware acceptance, serial log scan where reachable, and Android BLE checks through the ordinary release app
   - run hardware earlier only for high-risk changes that touch hardware drivers, pinout, flashing/debug wrappers, actuator safety, BLE reconnect/install behavior, or any path where local tests cannot bound the risk
 - Fix blockers at the source before normalizing a workaround.
 - Do not continue through an alternate path, side probe, fallback data source, or partial workaround until the blocker is fixed or the user explicitly waives that fix.
@@ -254,16 +265,15 @@
   - `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json`
 - NH02 hardware bench:
   - `tools/hw/nh02/install.sh`
-  - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
+  - use the ordinary release app Settings firmware OTA controls for BLE firmware update
   - `tools/hw/nh02/flash.sh` (USB seed/recovery)
   - `tools/hw/nh02/acceptance.sh`
   - `tools/hw/nh02/monitor.sh`
   - `tools/hw/nh02/status.sh`
-- Android USB + BLE smoke:
+- Android app install/check:
   - `tools/android/status.sh`
-  - `tools/android/build-smoke-apk.sh`
-  - `tools/android/run-smoke.sh`
-  - `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130`
+  - `tools/android/build-app-apk.sh`
+  - `tools/hw/nh02/android-install-app.sh --no-build`
 - CI/version helpers:
   - `python3 tools/ci/check_firmware_version.py`
   - `python3 tools/ci/check_config_schema_version.py`

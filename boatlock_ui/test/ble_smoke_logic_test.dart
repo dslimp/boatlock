@@ -124,27 +124,15 @@ void main() {
   });
 
   test('smoke identifies firmware profile command rejections', () {
-    const serviceLine =
-        '[BLE] command rejected reason=profile profile=release '
-        'scope=service command=COMPASS_CAL_START';
     const hilLine =
-        '[BLE] command rejected reason=profile profile=service '
+        '[BLE] command rejected reason=profile profile=release '
         'scope=dev_hil command=SET_PHONE_GPS:59,30';
 
     expect(
       smokeCommandRejectedByProfile(
-        serviceLine,
-        commandPrefix: 'COMPASS_CAL_START',
-        profile: 'release',
-        scope: 'service',
-      ),
-      isTrue,
-    );
-    expect(
-      smokeCommandRejectedByProfile(
         hilLine,
         commandPrefix: 'SET_PHONE_GPS',
-        profile: 'service',
+        profile: 'release',
         scope: 'dev_hil',
       ),
       isTrue,
@@ -153,7 +141,7 @@ void main() {
       smokeCommandRejectedByProfile(
         hilLine,
         commandPrefix: 'SIM_RUN',
-        profile: 'service',
+        profile: 'release',
       ),
       isFalse,
     );
@@ -224,8 +212,8 @@ void main() {
     const rejection = BleCommandRejection(
       reason: 'profile',
       profile: 'release',
-      scope: 'service',
-      command: 'OTA_BEGIN:4096,abcd',
+      scope: 'dev_hil',
+      command: 'SET_PHONE_GPS:59,30',
     );
     final payload = buildSmokeResultPayload(
       pass: false,
@@ -234,15 +222,15 @@ void main() {
       deviceLogEvents: 2,
       commandRejection: rejection,
       lastDeviceLog:
-          '[BLE] command rejected reason=profile profile=release scope=service command=OTA_BEGIN:4096,abcd',
+          '[BLE] command rejected reason=profile profile=release scope=dev_hil command=SET_PHONE_GPS:59,30',
     );
 
     expect(payload['commandRejectReason'], 'profile');
     expect(payload['commandRejectProfile'], 'release');
-    expect(payload['commandRejectScope'], 'service');
-    expect(payload['commandRejectCommand'], 'OTA_BEGIN:4096,abcd');
-    expect(payload['commandRejectCommandName'], 'OTA_BEGIN');
-    expect(payload['commandRejectRequiredProfile'], 'service');
+    expect(payload['commandRejectScope'], 'dev_hil');
+    expect(payload['commandRejectCommand'], 'SET_PHONE_GPS:59,30');
+    expect(payload['commandRejectCommandName'], 'SET_PHONE_GPS');
+    expect(payload['commandRejectRequiredProfile'], 'acceptance');
   });
 
   test('encodeSmokeStageLine serializes stage marker', () {

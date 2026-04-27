@@ -154,9 +154,14 @@ PY")"
       --ota-firmware "${OTA_FIRMWARE}"
       --ota-manifest "${OTA_MANIFEST}"
       --ota-port "${OTA_PORT}"
+      --ota-latest-release
     )
   else
-    PASS_ARGS+=(--ota-firmware "${OTA_FIRMWARE}" --ota-port "${OTA_PORT}")
+    PASS_ARGS+=(
+      --ota-firmware "${OTA_FIRMWARE}"
+      --ota-port "${OTA_PORT}"
+      --ota-sha256 "${OTA_SHA256}"
+    )
   fi
   if [[ "${WAIT_SET}" -eq 0 ]]; then
     PASS_ARGS+=(--wait-secs 1800)
@@ -186,22 +191,10 @@ if [[ "${BOATLOCK_NH02_ANDROID_WIFI_ADB:-1}" -eq 1 ]]; then
 fi
 
 if [[ "${BUILD_FIRST}" -eq 1 ]]; then
-  build_args=(--e2e-mode "${MODE}")
-  if [[ "${MODE}" == "ota" ]]; then
-    if [[ "${OTA_LATEST_RELEASE}" -eq 1 ]]; then
-      build_args+=(
-        --e2e-ota-latest-release
-        --firmware-manifest-url "http://127.0.0.1:${OTA_PORT}/manifest.json"
-      )
-    else
-      build_args+=(
-        --ota-url "http://127.0.0.1:${OTA_PORT}/firmware.bin"
-        --ota-sha256 "${OTA_SHA256}"
-      )
-    fi
-  fi
-  "${REPO_ROOT}/tools/android/build-app-apk.sh" "${build_args[@]}" >/dev/null
+  "${REPO_ROOT}/tools/android/build-app-apk.sh" >/dev/null
 fi
+
+PASS_ARGS=(--mode "${MODE}" "${PASS_ARGS[@]}")
 
 if [[ "${#PASS_ARGS[@]}" -eq 0 ]]; then
   exec "${SCRIPT_DIR}/android-run-smoke.sh" --no-build

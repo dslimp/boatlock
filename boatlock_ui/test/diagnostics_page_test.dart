@@ -75,8 +75,8 @@ void main() {
       lastCommandRejection: const BleCommandRejection(
         reason: 'profile',
         profile: 'release',
-        scope: 'service',
-        command: 'OTA_BEGIN:4096,abcd',
+        scope: 'dev_hil',
+        command: 'SET_PHONE_GPS:59,30',
       ),
       deviceLogLines: const ['[OTA] finish ok size=711776'],
       appLogLines: const ['Connected to device'],
@@ -95,7 +95,9 @@ void main() {
     expect(find.text('NO_GPS'), findsOneWidget);
     expect(find.text('1'), findsOneWidget);
     expect(
-      find.text('OTA_BEGIN rejected by release scope=service needs=service'),
+      find.text(
+        'SET_PHONE_GPS rejected by release scope=dev_hil needs=acceptance',
+      ),
       findsOneWidget,
     );
     expect(find.textContaining('[OTA] finish ok'), findsOneWidget);

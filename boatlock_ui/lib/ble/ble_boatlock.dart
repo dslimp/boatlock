@@ -167,18 +167,10 @@ class BleBoatLock with WidgetsBindingObserver {
     );
   }
 
-  Future<bool> sendCustomCommand(
-    String cmd, {
-    bool allowService = false,
-    bool allowDevHil = false,
-  }) async {
+  Future<bool> sendCustomCommand(String cmd, {bool allowDevHil = false}) async {
     final scope = classifyBoatLockCommand(cmd);
     if (scope == BoatLockCommandScope.unknown) {
       _log('custom command rejected scope=unknown command="$cmd"');
-      return false;
-    }
-    if (scope == BoatLockCommandScope.service && !allowService) {
-      _log('custom command rejected scope=service command="$cmd"');
       return false;
     }
     if (scope == BoatLockCommandScope.devHil &&
@@ -777,7 +769,6 @@ class BleBoatLock with WidgetsBindingObserver {
       _otaFinishAck = null;
       final beginSent = await sendCustomCommand(
         'OTA_BEGIN:${firmware.length},$sha',
-        allowService: true,
       );
       if (!beginSent) return false;
       beginAccepted = await _waitForOtaAck(
@@ -826,10 +817,7 @@ class BleBoatLock with WidgetsBindingObserver {
       _otaFinishWriteAccepted = false;
       _otaFinishDisconnectSeen = false;
       _log('BLE OTA finish requested sent=$sent total=${firmware.length}');
-      finishRequested = await sendCustomCommand(
-        'OTA_FINISH',
-        allowService: true,
-      );
+      finishRequested = await sendCustomCommand('OTA_FINISH');
       _otaFinishWriteAccepted = finishRequested;
       if (!finishRequested) {
         _log('BLE OTA finish write returned false, waiting for firmware ack');
@@ -855,7 +843,7 @@ class BleBoatLock with WidgetsBindingObserver {
       if (beginAccepted && !finishRequested && _cmdChar != null) {
         try {
           _log('BLE OTA abort requested sent=$sent total=${firmware.length}');
-          await sendCustomCommand('OTA_ABORT', allowService: true);
+          await sendCustomCommand('OTA_ABORT');
         } catch (_) {}
       }
       if (transport.restoreBalancedPriority && !finishAccepted) {

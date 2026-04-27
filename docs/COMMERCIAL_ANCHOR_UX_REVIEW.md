@@ -33,7 +33,7 @@ separation and avoid shipping heading-hold as a hidden variant of anchor hold.
 Calibration and installation are product prerequisites. Garmin requires trolling
 motor calibration before anchor lock, and the setup surfaces include compass
 calibration plus anchor/navigation gain controls. BoatLock should make readiness
-and calibration blockers visible rather than treating them as service trivia.
+and calibration blockers visible rather than treating them as hidden trivia.
 
 Map/chart integration is common. Lowrance describes anchoring at the current
 location, a waypoint, or a map point. BoatLock now has current-position save and
@@ -60,15 +60,15 @@ Already aligned for first protected-water preparation:
 
 Still weak before powered or water confidence:
 
-- Quiet first-water defaults must be the actual default, not only a service
+- Quiet first-water defaults must be the actual default, not only a setup
   profile operators have to remember to apply.
 - Steering driver and mechanics are not yet identified against the real boat
   hardware.
 - Calibration/setup UX is not yet a first-class operator path. Bow zero,
-  compass readiness, and steering configuration still feel like service details.
+  compass readiness, and steering configuration still feel like hidden details.
 - Control ownership for a future remote/controller is not designed yet.
-- Firmware-side service/dev/HIL command gating is implemented, but release vs
-  service/acceptance rejection still needs powered bench and Android proof.
+- Firmware-side release/dev/HIL command gating is implemented, but release vs
+  acceptance rejection still needs powered bench and Android proof.
 - Simulation already has provenance/confidence, loaded mass, water drag, and
   windage baseline; remaining gaps are yaw/heading inertia, wake/chop
   transients, sensor-frame rocking effects, and hardware-calibrated
@@ -82,7 +82,7 @@ Keep in `main`:
   manual deadman control, fixed anchor jog, distance/bearing, app-side event
   history, simulation, tests, and acceptance tooling.
 
-Keep service-only:
+Keep setup-only:
 
 - Anchor profile selection, gain/tuning, compass offset/calibration, steering
   bow-zero, OTA, and HIL commands.
@@ -95,10 +95,10 @@ Do not add to `main` yet:
 Next autonomous work that does not require powered hardware:
 
 1. Prove the firmware command-profile gate on `nh02` with release rejection logs
-   and service/acceptance positive paths.
+   and setup/acceptance positive paths.
 2. Make first-water quiet values the default with a safe settings migration.
 3. Turn command-profile rejection into visible app/operator feedback where it
-   affects service or acceptance workflows.
+   affects setup or acceptance workflows.
 4. Implement the next simulator physics cut: yaw inertia, wake/chop events, and
    BNO08x/GNSS sensor-frame effects.
 5. Design multi-client control ownership before a second BLE controller exists.

@@ -19,7 +19,7 @@ Runs the standard on-device HIL simulation suite on nh02:
   2. prove nh02 + Android visibility
   3. flash the normal release firmware profile
   4. run boot acceptance
-  5. run Android production-app e2e mode sim_suite
+  5. run Android production-app check mode sim_suite
 USAGE
 }
 
@@ -80,4 +80,4 @@ if [[ -n "${ANDROID_SERIAL}" ]]; then
   app_args+=(--serial "${ANDROID_SERIAL}")
 fi
 
-"${SCRIPT_DIR}/android-run-app-e2e.sh" "${app_args[@]}"
+"${SCRIPT_DIR}/android-run-app-check.sh" "${app_args[@]}"

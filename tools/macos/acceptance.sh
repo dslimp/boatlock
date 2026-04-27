@@ -7,7 +7,6 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 FLUTTER_DIR="${REPO_ROOT}/boatlock_ui"
 BUILD_SCRIPT="${SCRIPT_DIR}/build-app.sh"
 
-LATEST_RELEASE_GITHUB_REPO="${BOATLOCK_LATEST_RELEASE_GITHUB_REPO:-dslimp/boatlock}"
 LOG_ROOT="${BOATLOCK_MACOS_ACCEPTANCE_LOG_DIR:-${TMPDIR:-/tmp}/boatlock-macos-acceptance}"
 LOG_DIR="${LOG_ROOT}/$(date +%Y%m%d-%H%M%S)"
 
@@ -18,8 +17,6 @@ ARTIFACT_ZIP=""
 STATIC_ONLY=0
 MANUAL=0
 LAUNCH_SECONDS=8
-FIRMWARE_MANIFEST_URL=""
-FIRMWARE_GITHUB_REPO=""
 EXECUTABLE_NAME=""
 
 usage() {
@@ -33,8 +30,6 @@ stays alive locally; a real BLE update still requires hardware acceptance.
 Options:
   --pub-get                         Run flutter pub get before building.
   --release                         Build/use the release output (default).
-  --firmware-manifest-url URL       Build with a custom firmware manifest URL.
-  --firmware-github-repo OWNER/REPO Build with latest release firmware source.
   --no-build                        Use the existing Flutter build output.
   --app-path PATH                   Validate this .app bundle instead of building.
   --artifact-zip PATH               Unpack a CI artifact zip such as
@@ -99,14 +94,6 @@ while [[ $# -gt 0 ]]; do
     --release)
       shift
       ;;
-    --firmware-manifest-url)
-      FIRMWARE_MANIFEST_URL="${2:?missing firmware manifest URL}"
-      shift 2
-      ;;
-    --firmware-github-repo)
-      FIRMWARE_GITHUB_REPO="${2:?missing GitHub repository}"
-      shift 2
-      ;;
     --no-build)
       RUN_BUILD=0
       shift
@@ -160,13 +147,6 @@ build_app() {
   if [[ "${RUN_PUB_GET}" -eq 1 ]]; then
     build_args+=(--pub-get)
   fi
-  if [[ -n "${FIRMWARE_MANIFEST_URL}" ]]; then
-    build_args+=(--firmware-manifest-url "${FIRMWARE_MANIFEST_URL}")
-  fi
-  if [[ -n "${FIRMWARE_GITHUB_REPO}" ]]; then
-    build_args+=(--firmware-github-repo "${FIRMWARE_GITHUB_REPO}")
-  fi
-
   "${BUILD_SCRIPT}" "${build_args[@]}" 2>&1 | tee "${build_log}"
   produced_path="$(tail -n 1 "${build_log}")"
   if [[ ! -d "${produced_path}" ]]; then
@@ -338,11 +318,10 @@ print_manual_checklist() {
   cat <<USAGE
 Manual macOS update acceptance:
 - App bundle: ${APP_PATH}
-- Build source: ${FIRMWARE_GITHUB_REPO:-${FIRMWARE_MANIFEST_URL:-${LATEST_RELEASE_GITHUB_REPO}}}
 - Confirm the app opens without a crash and macOS permission prompts are understandable.
-- Open Settings, enable Service mode, and confirm firmware update controls are visible.
+- Open Settings, enable `Настройка оборудования`, and confirm firmware update controls are visible.
 - Without BLE hardware, record this only as bundle/runtime smoke accepted.
-- With service-capable BoatLock hardware, connect, authenticate if paired, start the update, and require download, SHA verification, BLE OTA progress, reboot, reconnect, and telemetry recovery.
+- With BoatLock hardware, connect, authenticate if paired, start the update, and require download, SHA verification, BLE OTA progress, reboot, reconnect, and telemetry recovery.
 
 Logs: ${LOG_DIR}
 USAGE

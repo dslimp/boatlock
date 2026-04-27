@@ -209,7 +209,7 @@ change. Required decision points:
   mode is not the current `PWM + DIR1 + DIR2` H-bridge behavior.
 - Runtime safety: define safe idle, brake/coast, polarity, current/fault
   handling, ramp limits, and STOP/reset behavior.
-- Settings/schema: add service settings only if the hardware needs configurable
+- Settings/schema: add setup settings only if the hardware needs configurable
   inversion, limits, or fault pins; update `docs/CONFIG_SCHEMA.md` with any
   schema change.
 - BLE protocol/telemetry: update `docs/BLE_PROTOCOL.md` only if commands,

@@ -6,13 +6,11 @@
 enum class RuntimeBleCommandScope : uint8_t {
   UNKNOWN,
   RELEASE,
-  SERVICE,
   DEV_HIL,
 };
 
 enum class RuntimeBleCommandProfile : uint8_t {
   RELEASE,
-  SERVICE,
   ACCEPTANCE,
 };
 
@@ -34,30 +32,27 @@ inline RuntimeBleCommandScope runtimeBleClassifyCommand(
       command == "PAIR_CLEAR" || command == "AUTH_HELLO" ||
       command == "SIM_LIST" || command == "SIM_STATUS" ||
       command == "SIM_REPORT" || command == "SIM_ABORT" ||
-      runtimeBleCommandHasPrefix(command, "SET_ANCHOR:") ||
-      runtimeBleCommandHasPrefix(command, "MANUAL_TARGET:") ||
-      runtimeBleCommandHasPrefix(command, "NUDGE_DIR:") ||
-      runtimeBleCommandHasPrefix(command, "NUDGE_BRG:") ||
-      runtimeBleCommandHasPrefix(command, "SET_HOLD_HEADING:") ||
-      runtimeBleCommandHasPrefix(command, "PAIR_SET:") ||
-      runtimeBleCommandHasPrefix(command, "AUTH_PROVE:") ||
-      runtimeBleCommandHasPrefix(command, "SIM_RUN:")) {
-    return RuntimeBleCommandScope::RELEASE;
-  }
-
-  if (command == "RESET_COMPASS_OFFSET" || command == "SET_STEPPER_BOW" ||
+      command == "RESET_COMPASS_OFFSET" || command == "SET_STEPPER_BOW" ||
       command == "COMPASS_CAL_START" || command == "COMPASS_DCD_SAVE" ||
       command == "COMPASS_DCD_AUTOSAVE_ON" ||
       command == "COMPASS_DCD_AUTOSAVE_OFF" ||
       command == "COMPASS_TARE_Z" || command == "COMPASS_TARE_SAVE" ||
       command == "COMPASS_TARE_CLEAR" || command == "OTA_FINISH" ||
       command == "OTA_ABORT" ||
+      runtimeBleCommandHasPrefix(command, "SET_ANCHOR:") ||
       runtimeBleCommandHasPrefix(command, "SET_ANCHOR_PROFILE:") ||
       runtimeBleCommandHasPrefix(command, "SET_COMPASS_OFFSET:") ||
       runtimeBleCommandHasPrefix(command, "SET_STEP_MAXSPD:") ||
       runtimeBleCommandHasPrefix(command, "SET_STEP_ACCEL:") ||
+      runtimeBleCommandHasPrefix(command, "MANUAL_TARGET:") ||
+      runtimeBleCommandHasPrefix(command, "NUDGE_DIR:") ||
+      runtimeBleCommandHasPrefix(command, "NUDGE_BRG:") ||
+      runtimeBleCommandHasPrefix(command, "SET_HOLD_HEADING:") ||
+      runtimeBleCommandHasPrefix(command, "PAIR_SET:") ||
+      runtimeBleCommandHasPrefix(command, "AUTH_PROVE:") ||
+      runtimeBleCommandHasPrefix(command, "SIM_RUN:") ||
       runtimeBleCommandHasPrefix(command, "OTA_BEGIN:")) {
-    return RuntimeBleCommandScope::SERVICE;
+    return RuntimeBleCommandScope::RELEASE;
   }
 
   if (runtimeBleCommandHasPrefix(command, "SET_PHONE_GPS:")) {
@@ -71,8 +66,6 @@ inline const char* runtimeBleCommandScopeName(RuntimeBleCommandScope scope) {
   switch (scope) {
     case RuntimeBleCommandScope::RELEASE:
       return "release";
-    case RuntimeBleCommandScope::SERVICE:
-      return "service";
     case RuntimeBleCommandScope::DEV_HIL:
       return "dev_hil";
     case RuntimeBleCommandScope::UNKNOWN:
@@ -85,8 +78,6 @@ inline const char* runtimeBleCommandProfileName(RuntimeBleCommandProfile profile
   switch (profile) {
     case RuntimeBleCommandProfile::RELEASE:
       return "release";
-    case RuntimeBleCommandProfile::SERVICE:
-      return "service";
     case RuntimeBleCommandProfile::ACCEPTANCE:
       return "acceptance";
     default:
@@ -100,9 +91,6 @@ inline bool runtimeBleCommandScopeAllowedInProfile(
   switch (scope) {
     case RuntimeBleCommandScope::RELEASE:
       return true;
-    case RuntimeBleCommandScope::SERVICE:
-      return profile == RuntimeBleCommandProfile::SERVICE ||
-             profile == RuntimeBleCommandProfile::ACCEPTANCE;
     case RuntimeBleCommandScope::DEV_HIL:
       return profile == RuntimeBleCommandProfile::ACCEPTANCE;
     case RuntimeBleCommandScope::UNKNOWN:
@@ -118,19 +106,9 @@ inline bool runtimeBleCommandAllowedInProfile(
                                                profile);
 }
 
-#if defined(BOATLOCK_COMMAND_PROFILE_RELEASE) && \
-    (defined(BOATLOCK_COMMAND_PROFILE_SERVICE) || defined(BOATLOCK_COMMAND_PROFILE_ACCEPTANCE))
-#error "Only one BOATLOCK_COMMAND_PROFILE_* macro may be defined"
-#endif
-#if defined(BOATLOCK_COMMAND_PROFILE_SERVICE) && defined(BOATLOCK_COMMAND_PROFILE_ACCEPTANCE)
-#error "Only one BOATLOCK_COMMAND_PROFILE_* macro may be defined"
-#endif
-
 inline RuntimeBleCommandProfile runtimeBleActiveCommandProfile() {
 #if defined(BOATLOCK_COMMAND_PROFILE_ACCEPTANCE)
   return RuntimeBleCommandProfile::ACCEPTANCE;
-#elif defined(BOATLOCK_COMMAND_PROFILE_SERVICE)
-  return RuntimeBleCommandProfile::SERVICE;
 #else
   return RuntimeBleCommandProfile::RELEASE;
 #endif

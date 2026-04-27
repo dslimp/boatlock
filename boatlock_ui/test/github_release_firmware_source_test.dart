@@ -18,11 +18,11 @@ Map<String, dynamic> _manifestJson() {
     'gitSha': _gitSha,
     'workflowRunId': 123,
     'firmwareVersion': '0.2.0',
-    'platformioEnv': 'esp32s3_service',
-    'commandProfile': 'service',
-    'artifactName': 'firmware-esp32s3-service',
+    'platformioEnv': 'esp32s3',
+    'commandProfile': 'release',
+    'artifactName': 'firmware-esp32s3',
     'binaryUrl':
-        'https://github.com/dslimp/boatlock/releases/download/v0.2.0/firmware-esp32s3-service.bin',
+        'https://github.com/dslimp/boatlock/releases/download/v0.2.0/firmware-esp32s3.bin',
     'size': 711776,
     'sha256': _sha,
     'builtAt': '2026-04-26T12:00:00Z',
@@ -71,7 +71,7 @@ void main() {
         releaseUrl: jsonEncode(
           _releaseJson([
             _asset(
-              'firmware-esp32s3-service.bin',
+              'firmware-esp32s3.bin',
               size: 711776,
               digest: 'sha256:$_sha',
             ),
@@ -84,7 +84,7 @@ void main() {
 
     final manifest = await source.fetchLatestManifest();
 
-    expect(manifest.artifactName, 'firmware-esp32s3-service');
+    expect(manifest.artifactName, 'firmware-esp32s3');
     expect(manifest.binaryUrl.toString(), _manifestJson()['binaryUrl']);
     expect(manifest.sha256, _sha);
   });
@@ -104,7 +104,7 @@ void main() {
           return jsonEncode(
             _releaseJson([
               _asset(
-                'firmware-esp32s3-service.bin',
+                'firmware-esp32s3.bin',
                 size: 711776,
                 digest: 'sha256:$_sha',
               ),
@@ -127,20 +127,20 @@ void main() {
   });
 
   test(
-    'builds service manifest from firmware, checksums, and build info',
+    'builds release manifest from firmware, checksums, and build info',
     () async {
       final source = GitHubReleaseFirmwareSource(
         repository: 'dslimp/boatlock',
         textFetcher: _fetcher({
-          'https://github.com/dslimp/boatlock/releases/download/v0.2.0/SHA256SUMS-esp32s3-service.txt':
-              '$_sha  firmware-esp32s3-service.bin\n',
-          'https://github.com/dslimp/boatlock/releases/download/v0.2.0/BUILD_INFO-esp32s3-service.txt':
+          'https://github.com/dslimp/boatlock/releases/download/v0.2.0/SHA256SUMS-esp32s3.txt':
+              '$_sha  firmware-esp32s3.bin\n',
+          'https://github.com/dslimp/boatlock/releases/download/v0.2.0/BUILD_INFO-esp32s3.txt':
               [
                 'firmware_version=0.2.0',
                 'firmware_sha256=$_sha',
-                'artifact_name=firmware-esp32s3-service',
-                'platformio_env=esp32s3_service',
-                'command_profile=service',
+                'artifact_name=firmware-esp32s3',
+                'platformio_env=esp32s3',
+                'command_profile=release',
                 'release_branch=release/v0.2.x',
                 'github_ref=refs/tags/v0.2.0',
                 'github_sha=$_gitSha',
@@ -149,13 +149,9 @@ void main() {
       );
       final release = GitHubFirmwareRelease.fromJson(
         _releaseJson([
-          _asset(
-            'firmware-esp32s3-service.bin',
-            size: 711776,
-            digest: 'sha256:$_sha',
-          ),
-          _asset('BUILD_INFO-esp32s3-service.txt'),
-          _asset('SHA256SUMS-esp32s3-service.txt'),
+          _asset('firmware-esp32s3.bin', size: 711776, digest: 'sha256:$_sha'),
+          _asset('BUILD_INFO-esp32s3.txt'),
+          _asset('SHA256SUMS-esp32s3.txt'),
         ]),
       );
 
@@ -165,8 +161,8 @@ void main() {
       expect(manifest.branch, 'release/v0.2.x');
       expect(manifest.gitSha, _gitSha);
       expect(manifest.firmwareVersion, '0.2.0');
-      expect(manifest.platformioEnv, 'esp32s3_service');
-      expect(manifest.commandProfile, 'service');
+      expect(manifest.platformioEnv, 'esp32s3');
+      expect(manifest.commandProfile, 'release');
       expect(manifest.size, 711776);
       expect(manifest.sha256, _sha);
     },
@@ -183,33 +179,29 @@ void main() {
           requested.add(uri.toString());
           expect(headers['Authorization'], 'Bearer token-123');
           expect(headers['Accept'], 'application/octet-stream');
-          if (uri.toString().endsWith('/BUILD_INFO-esp32s3-service.txt')) {
+          if (uri.toString().endsWith('/BUILD_INFO-esp32s3.txt')) {
             return [
               'firmware_version=0.2.0',
               'firmware_sha256=$_sha',
-              'artifact_name=firmware-esp32s3-service',
-              'platformio_env=esp32s3_service',
-              'command_profile=service',
+              'artifact_name=firmware-esp32s3',
+              'platformio_env=esp32s3',
+              'command_profile=release',
               'release_branch=release/v0.2.x',
               'github_ref=refs/tags/v0.2.0',
               'github_sha=$_gitSha',
             ].join('\n');
           }
-          if (uri.toString().endsWith('/SHA256SUMS-esp32s3-service.txt')) {
-            return '$_sha  firmware-esp32s3-service.bin\n';
+          if (uri.toString().endsWith('/SHA256SUMS-esp32s3.txt')) {
+            return '$_sha  firmware-esp32s3.bin\n';
           }
           throw StateError('unexpected fetch $uri');
         },
       );
       final release = GitHubFirmwareRelease.fromJson(
         _releaseJson([
-          _asset(
-            'firmware-esp32s3-service.bin',
-            size: 711776,
-            digest: 'sha256:$_sha',
-          ),
-          _asset('BUILD_INFO-esp32s3-service.txt'),
-          _asset('SHA256SUMS-esp32s3-service.txt'),
+          _asset('firmware-esp32s3.bin', size: 711776, digest: 'sha256:$_sha'),
+          _asset('BUILD_INFO-esp32s3.txt'),
+          _asset('SHA256SUMS-esp32s3.txt'),
         ]),
       );
 
@@ -218,18 +210,18 @@ void main() {
       expect(
         requested,
         contains(
-          'https://api.github.com/repos/dslimp/boatlock/releases/assets/BUILD_INFO-esp32s3-service.txt',
+          'https://api.github.com/repos/dslimp/boatlock/releases/assets/BUILD_INFO-esp32s3.txt',
         ),
       );
       expect(
         requested,
         contains(
-          'https://api.github.com/repos/dslimp/boatlock/releases/assets/SHA256SUMS-esp32s3-service.txt',
+          'https://api.github.com/repos/dslimp/boatlock/releases/assets/SHA256SUMS-esp32s3.txt',
         ),
       );
       expect(
         manifest.binaryUrl.toString(),
-        'https://api.github.com/repos/dslimp/boatlock/releases/assets/firmware-esp32s3-service.bin',
+        'https://api.github.com/repos/dslimp/boatlock/releases/assets/firmware-esp32s3.bin',
       );
     },
   );
@@ -238,15 +230,15 @@ void main() {
     final source = GitHubReleaseFirmwareSource(
       repository: 'dslimp/boatlock',
       textFetcher: _fetcher({
-        'https://github.com/dslimp/boatlock/releases/download/v0.2.0/SHA256SUMS-esp32s3-service.txt':
-            '$_otherSha  firmware-esp32s3-service.bin\n',
-        'https://github.com/dslimp/boatlock/releases/download/v0.2.0/BUILD_INFO-esp32s3-service.txt':
+        'https://github.com/dslimp/boatlock/releases/download/v0.2.0/SHA256SUMS-esp32s3.txt':
+            '$_otherSha  firmware-esp32s3.bin\n',
+        'https://github.com/dslimp/boatlock/releases/download/v0.2.0/BUILD_INFO-esp32s3.txt':
             [
               'firmware_version=0.2.0',
               'firmware_sha256=$_sha',
-              'artifact_name=firmware-esp32s3-service',
-              'platformio_env=esp32s3_service',
-              'command_profile=service',
+              'artifact_name=firmware-esp32s3',
+              'platformio_env=esp32s3',
+              'command_profile=release',
               'release_branch=release/v0.2.x',
               'github_ref=refs/tags/v0.2.0',
               'github_sha=$_gitSha',
@@ -255,13 +247,9 @@ void main() {
     );
     final release = GitHubFirmwareRelease.fromJson(
       _releaseJson([
-        _asset(
-          'firmware-esp32s3-service.bin',
-          size: 711776,
-          digest: 'sha256:$_sha',
-        ),
-        _asset('BUILD_INFO-esp32s3-service.txt'),
-        _asset('SHA256SUMS-esp32s3-service.txt'),
+        _asset('firmware-esp32s3.bin', size: 711776, digest: 'sha256:$_sha'),
+        _asset('BUILD_INFO-esp32s3.txt'),
+        _asset('SHA256SUMS-esp32s3.txt'),
       ]),
     );
 
@@ -269,7 +257,7 @@ void main() {
   });
 
   test('client is configured by manifest URL or GitHub release repository', () {
-    expect(const FirmwareUpdateClient().configured, isFalse);
+    expect(const FirmwareUpdateClient().configured, isTrue);
     expect(
       const FirmwareUpdateClient(
         manifestUrl: 'https://example.com/m.json',
