@@ -109,10 +109,6 @@ jobs:
         working-directory: boatlock
         run: pio run -e esp32s3
 
-      - name: Build service firmware (esp32s3_service)
-        working-directory: boatlock
-        run: pio run -e esp32s3_service
-
       - name: Pack firmware binary artifact
         run: |
           set -euo pipefail
@@ -136,6 +132,10 @@ jobs:
           } > "${artifact_dir}/BUILD_INFO.txt"
 
           (cd "${artifact_dir}" && sha256sum firmware.bin bootloader.bin partitions.bin firmware.elf > SHA256SUMS)
+
+      - name: Build service firmware (esp32s3_service)
+        working-directory: boatlock
+        run: pio run -e esp32s3_service
 
       - name: Pack service firmware binary artifact
         run: |

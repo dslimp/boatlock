@@ -7448,3 +7448,28 @@ Validation:
 Self-review:
 - No runtime behavior changed; this is formatting-only fallout from not running
   the exact CI format gate after the first push.
+
+### 2026-04-27 Stage 247: GitHub firmware artifact pack order fix
+
+Scope:
+- Fix the second GitHub Actions failure on the manual target-angle branch.
+
+Key outcome:
+- GitHub `CI` run `24989963480` passed `Build firmware (esp32s3)` and
+  `Build service firmware (esp32s3_service)`, then failed in
+  `Pack firmware binary artifact` because
+  `boatlock/.pio/build/esp32s3/firmware.bin` was missing at pack time.
+- Reordered `.github/workflows/ci.yml` so `firmware-esp32s3` is packed
+  immediately after the `esp32s3` build, before the service build runs.
+
+Validation:
+- `pytest -q tools/ci/test_firmware_artifact_workflow.py` -> PASS (`11/11`).
+- Local emulation of the new sequence with clean `dist/`:
+  `pio run -e esp32s3`, pack `dist/firmware-esp32s3`, `pio run -e esp32s3_service`,
+  pack `dist/firmware-esp32s3-service` -> PASS; both artifact directories
+  contained `firmware.bin`, `bootloader.bin`, `partitions.bin`, `firmware.elf`,
+  `BUILD_INFO.txt`, and `SHA256SUMS`.
+
+Self-review:
+- This is workflow-only. It preserves both existing firmware artifact names and
+  does not change firmware code or release manifest semantics.
