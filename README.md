@@ -1,180 +1,196 @@
-# Boatlock
+# BoatLock
 
-This repository contains firmware for an ESP32-S3 based lock and a Flutter application used to control it.
-
-## Device Functions
-
-Boatlock combines the ESP32-S3 firmware with a companion mobile app to automate
-anchoring and thruster control. Major capabilities include:
-
-- saving the current location as an anchor point with heading
-- automatically holding position near the saved anchor
-- onboard BNO08x heading diagnostics and persistent heading offset
-- onboard microSD JSONL diagnostics with bounded queueing and file rotation
-- on-device deterministic HIL simulation scenarios (`SIM_*`, `S0..S19`) for regression checks without external sensors
-
-The app and firmware communicate through a simple text protocol; see
-[docs/BLE_PROTOCOL.md](docs/BLE_PROTOCOL.md) for the full command list.
+BoatLock is an ESP32-S3 anchor-hold controller with a Flutter companion app.
+The current development target is a single bench board running the main anchor
+runtime, BLE phone control, onboard BNO08x heading, GNSS telemetry, manual
+deadman control, and service maintenance flows.
 
 Current firmware release: `0.2.0`
 
-## Photos
+## What It Does
 
-No verified assembled-hardware photo is checked in yet. Add one only after the
-current bench wiring has been photographed and tied to the firmware commit or
-powered-bench log.
+- Saves the current GNSS position as an anchor point.
+- Holds position around the saved point using GNSS distance and onboard BNO08x
+  heading.
+- Supports phone manual control through the same deadman path planned for a
+  future external BLE controller.
+- Drives the thruster with PWM plus two direction pins.
+- Drives steering through a DRV8825-compatible STEP/DIR driver.
+- Streams compact BLE telemetry to the app and mirrors firmware logs over the
+  BLE log characteristic.
+- Supports service operations from the app: stepper tuning, compass service
+  controls, and BLE OTA firmware update.
+- Provides deterministic on-device HIL scenarios (`SIM_*`, `S0..S19`) for
+  regression checks without relying on live sensors.
 
-## Connection Diagram
+The BLE protocol is documented in [docs/BLE_PROTOCOL.md](docs/BLE_PROTOCOL.md).
 
-No verified wiring diagram is checked in yet. Until the real diagram is captured,
-use the firmware pinout below plus the powered-bench checklist as the source for
-wiring decisions.
+## Repository Layout
 
-## Typical Scenarios
+- `boatlock/` - ESP32-S3 firmware, built with PlatformIO.
+- `boatlock_ui/` - Flutter app for Android, macOS, and other Flutter targets.
+- `docs/` - protocol, hardware, release, and powered-bench notes.
+- `tools/hw/nh02/` - tracked hardware-bench wrappers for flashing, OTA, and
+  Android BLE smoke checks.
+- `tools/android/` - Android app build and smoke helpers.
+- `tools/sim/` - offline anchor simulation harness.
 
-### Anchoring
-1. Position the boat and select **Set Anchor** in the app.
-2. The firmware stores the coordinates and current heading.
+## Current Bench Hardware
 
-### Holding Position
-1. Enable heading hold in the app.
-2. The rudder and thruster adjust automatically to keep the boat near the saved point.
-3. Anchor thrust uses human-friendly control: hold radius (`DistTh`) + deadband, PWM ramp limiting, and anti-oscillation filtering to avoid constant motor twitching.
+`boatlock/main.cpp` is the source of truth for the active pinout.
 
-## Building the Firmware
+| Function | ESP32-S3 pin | Notes |
+| --- | ---: | --- |
+| GPS RX | GPIO17 | connect GPS TX |
+| GPS TX | GPIO18 | connect GPS RX |
+| BNO08x UART-RVC RX | GPIO12 | connect BNO08x RVC TX/SDA |
+| BNO08x reset | GPIO13 | firmware reset pulse |
+| BNO08x P0/PS0 | 3V3 | selects UART-RVC |
+| BNO08x P1/PS1 | GND | selects UART-RVC |
+| Thruster PWM | GPIO7 | PWM output |
+| Thruster direction | GPIO8, GPIO10 | H-bridge direction inputs |
+| Steering DRV8825 STEP | GPIO6 | STEP input |
+| Steering DRV8825 DIR | GPIO16 | DIR input |
+| BOOT anchor-save button | GPIO0 | debounced long-press |
+| STOP button | GPIO15 | hardware stop / pairing window |
 
-The `boatlock` directory is built with PlatformIO only.
+The steering geometry is set for the Vanchor gearbox:
 
-### Requirements
-- PlatformIO CLI
-- ESP32‑S3 development board
+- motor steps per revolution: `200`
+- gearbox ratio: `36:1`
+- output steps per steering revolution: `7200`
+- default `StepMaxSpd`: `1200`
+- default `StepAccel`: `800`
 
-### Build and Upload (PlatformIO)
+If the DRV8825 `MODE0/MODE1/MODE2` pins are strapped for microstepping, the
+mechanical speed is divided by that microstep factor unless the geometry and
+speed limits are intentionally retuned.
+
+Complete the powered checks before connecting real motor load:
+
+- [docs/POWERED_BENCH_CHECKLIST.md](docs/POWERED_BENCH_CHECKLIST.md)
+- [docs/STEERING_DRIVER_INTAKE.md](docs/STEERING_DRIVER_INTAKE.md)
+- [docs/BRUSHED_MOTOR_DRIVER_INTAKE.md](docs/BRUSHED_MOTOR_DRIVER_INTAKE.md)
+
+## Firmware Build
+
+Use PlatformIO from `boatlock/`.
+
 ```bash
 cd boatlock
-pio run -e esp32s3
-pio run -e esp32s3 -t upload
-pio device monitor -e esp32s3
+pio run -e esp32s3_service
 ```
 
-### Firmware Unit Tests
-`boatlock/test` uses Unity tests under PlatformIO native environment.
+Useful environments:
+
+- `esp32s3` - release-compatible default build.
+- `esp32s3_service` - bench/service build with BLE OTA and service commands.
+- `esp32s3_release` - explicit release profile.
+- `esp32s3_acceptance` - broad bench acceptance profile.
+
+For active bench development we normally use `esp32s3_service`, because the app
+needs OTA and tuning commands while hardware is still being adjusted.
+
+## Flashing And OTA
+
+USB flash on the `nh02` bench:
+
+```bash
+tools/hw/nh02/flash.sh --profile service
+```
+
+Phone-bridged BLE OTA after a seed flash:
+
+```bash
+cd boatlock
+pio run -e esp32s3_service
+cd ..
+tools/hw/nh02/android-run-app-e2e.sh \
+  --ota \
+  --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin \
+  --wait-secs 1800
+```
+
+Use the longer OTA wait when BLE discovery may be cold. The wrapper timeout
+starts before scan/connect and can otherwise expire during an active transfer.
+
+## Flutter App
+
+The app wrappers now build one service-capable app by default. Service controls
+are still hidden during normal use; open Settings and enable `Debug` to show
+stepper tuning, compass service rows, and firmware OTA.
+
+Android build:
+
+```bash
+tools/android/build-app-apk.sh
+```
+
+macOS build:
+
+```bash
+tools/macos/build-app.sh --debug
+```
+
+Run from source:
+
+```bash
+cd boatlock_ui
+flutter pub get
+flutter run --dart-define=BOATLOCK_SERVICE_UI=true
+```
+
+## Validation
+
+Firmware tests:
 
 ```bash
 cd boatlock
 platformio test -e native
 ```
 
-## Running the Flutter App
+Flutter checks:
 
-The `boatlock_ui` directory contains a Flutter project.
-
-### Requirements
-- [Flutter](https://flutter.dev/) SDK version 3.8 or newer
-- A connected device or emulator (Android, iOS, or desktop)
-
-### Run
 ```bash
 cd boatlock_ui
-flutter pub get
-flutter run
+flutter test
+flutter analyze
 ```
-Use `flutter build <platform>` to create release builds.
 
-## Required Tools and Dependencies
+High-signal targeted checks used during bench work:
 
-| Component        | Purpose                                |
-|------------------|----------------------------------------|
-| PlatformIO CLI   | Building and flashing the ESP32 firmware |
-| Flutter SDK      | Running the cross‑platform UI           |
-| Git              | Cloning and updating this repository    |
+```bash
+cd boatlock
+platformio test -e native -f test_settings -f test_runtime_ble_command_log -f test_ble_command_handler -f test_stepper_control -f test_runtime_motion
 
-Ensure these tools are installed and available in your `PATH` before attempting to build or run the project.
+cd ../boatlock_ui
+flutter test test/settings_page_test.dart
+flutter test --dart-define=BOATLOCK_SERVICE_UI=true test/settings_page_service_ui_test.dart
+```
 
-## Quick Start: ReadyToSky NEO-M8N GPS Module
+Android production-app manual smoke on `nh02`:
 
-The firmware is preconfigured for a hardware GPS receiver on UART1. Connect the
-GPS side of the module to the ESP32-S3 board as follows:
+```bash
+tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130
+```
 
-- **GPS module TX** → **ESP32 GPIO17** (`GPS RX`)
-- **GPS module RX** → **ESP32 GPIO18** (`GPS TX`)
-- **VCC** → 5 V (or 3.3 V if your module supports it)
-- **GND** → **GND**
+This sends zero-throttle `MANUAL_SET`, observes `MANUAL`, sends `MANUAL_OFF`,
+and verifies the firmware returns to a quiet mode. It is not a powered thrust
+test.
 
-After wiring, build and flash the firmware with PlatformIO
-(see the build section above). Open the serial monitor to verify
-that GPS data is being received.
+## Runtime Rules
 
-## Compass (BNO08x)
-
-The firmware trusts onboard BNO08x UART-RVC heading frames only. The old I2C/SH2
-path is not part of production firmware.
-
-Current default wiring:
-
-- **BNO08x RVC TX/SDA** → **ESP32 GPIO12** (`BNO08x RX`)
-- **BNO08x RST** → **GPIO13**
-- **BNO08x P0/PS0** → **3V3**
-- **BNO08x P1/PS1** → **GND**
-
-Acceptance requires `[COMPASS] ready=1 source=BNO08x-RVC rx=12 baud=115200` and
-fresh `[COMPASS] heading events ready` logs. See
-[docs/COMPASS_BNO08X.md](docs/COMPASS_BNO08X.md).
-
-If mounting angle needs adjustment, use the compass offset controls in app
-settings (`SET_COMPASS_OFFSET` / `RESET_COMPASS_OFFSET`).
-
-See [CHANGELOG.md](CHANGELOG.md) for recent changes and firmware versions.
-
-## Hardware Wiring Summary
-
-`boatlock/main.cpp` is the source of truth for the default ESP32-S3 bench
-pinout. Current wiring:
-
-- **ESP32 GPS RX** = **GPIO17**; connect the GPS module TX here
-- **ESP32 GPS TX** = **GPIO18**; connect the GPS module RX here
-- **ESP32 BNO08x UART-RVC RX** = **GPIO12**; connect the BNO08x RVC TX/SDA here
-- **BNO08x RST** → **GPIO13**
-- **BNO08x P0/PS0** → **3V3**
-- **BNO08x P1/PS1** → **GND**
-- **Thruster PWM** → **GPIO7**
-- **Thruster direction** → **GPIO8** and **GPIO10**
-- **Steering DRV8825 STEP/DIR** → **STEP GPIO6**, **DIR GPIO16**
-- **BOOT anchor-save button** → **GPIO0**
-- **STOP button** → **GPIO15**
-
-Do not treat old HC 160A snippets or direction-pin examples as current wiring
-authority. The present release path only documents the two thruster direction
-outputs above and the current DRV8825 STEP/DIR steering path.
-
-Before powering the thruster driver, complete
-[docs/BRUSHED_MOTOR_DRIVER_INTAKE.md](docs/BRUSHED_MOTOR_DRIVER_INTAKE.md).
-The current firmware command shape is only `PWM=7` plus `DIR=8/10`; the actual
-driver's brake/coast, enable, fault, current-limit, polarity, and safe-idle
-behavior must be captured before powered tests.
-
-The steering firmware now assumes a DRV8825-compatible STEP/DIR driver on
-`GPIO6/GPIO16` with `7200` output steps per steering revolution (`200` motor
-steps/rev through the Vanchor `36:1` gearbox). Complete
-[docs/STEERING_DRIVER_INTAKE.md](docs/STEERING_DRIVER_INTAKE.md) before powered
-steering tests so current limit, enable/sleep/reset wiring, idle behavior, and
-STOP behavior are captured.
-
-Before connecting powered motor or steering hardware, pass the no-load and
-low-power gates in
-[docs/POWERED_BENCH_CHECKLIST.md](docs/POWERED_BENCH_CHECKLIST.md).
-
-## Emergency STOP Button (Hardware)
-
-Firmware supports a dedicated hardware STOP input:
-
-- **GPIO15** (configured as `INPUT_PULLUP`)
-- connect a **momentary button between GPIO15 and GND**
-- pressing the button triggers the same action as BLE `STOP`:
-  - disables Anchor mode
-  - exits manual mode
-  - cancels stepper movement
-  - stops thruster PWM
+- Heading comes only from onboard BNO08x UART-RVC frames.
+- Control GNSS is hardware GPS only; phone GPS is telemetry/UI fallback and does
+  not pass the anchor-control quality gate.
+- `ANCHOR_ON` requires a saved anchor point, fresh onboard heading, and GNSS
+  quality.
+- Manual control uses atomic `MANUAL_SET:<steer>,<throttlePct>,<ttlMs>` plus
+  `MANUAL_OFF`.
+- Runtime faults and STOP enter safe quiet output; they do not automatically
+  resume Anchor or Manual.
+- BLE security is owner-secret based; paired devices must wrap control commands
+  in `SEC_CMD`.
 
 ## License
 

@@ -230,8 +230,10 @@ class _BleSmokePageState extends State<BleSmokePage> {
         return;
       }
       if (data.mode == 'MANUAL') {
-        _statusManualModeSeen = true;
-        _appendEvent(encodeSmokeStageLine('status_manual_mode_seen'));
+        if (!_statusManualModeSeen) {
+          _statusManualModeSeen = true;
+          _appendEvent(encodeSmokeStageLine('status_manual_mode_seen'));
+        }
       } else if (!smokeStatusRecoveredAfterStop(data)) {
         return;
       }

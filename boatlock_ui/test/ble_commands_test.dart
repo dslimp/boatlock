@@ -108,15 +108,15 @@ void main() {
 
   test('buildManualSetCommand validates atomic deadman payload', () {
     expect(
-      buildManualSetCommand(steer: -1, throttlePct: 45, ttlMs: 500),
-      'MANUAL_SET:-1,45,500',
+      buildManualSetCommand(steer: -1, throttlePct: 45, ttlMs: 1000),
+      'MANUAL_SET:-1,45,1000',
     );
     expect(
-      buildManualSetCommand(steer: 2, throttlePct: 45, ttlMs: 500),
+      buildManualSetCommand(steer: 2, throttlePct: 45, ttlMs: 1000),
       isNull,
     );
     expect(
-      buildManualSetCommand(steer: 0, throttlePct: 101, ttlMs: 500),
+      buildManualSetCommand(steer: 0, throttlePct: 101, ttlMs: 1000),
       isNull,
     );
     expect(buildManualSetCommand(steer: 0, throttlePct: 10, ttlMs: 50), isNull);

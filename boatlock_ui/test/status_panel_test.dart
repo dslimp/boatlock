@@ -16,7 +16,7 @@ BoatData _data({
   String statusReasons = '',
   String mode = 'IDLE',
   int rssi = -63,
-  int stepSpr = 200,
+  int stepSpr = 7200,
   double stepMaxSpd = 1000,
   double stepAccel = 500,
   int compassQ = 3,

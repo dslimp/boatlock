@@ -69,8 +69,8 @@ const SettingEntry defaultEntries[] = {
     {"MagScaleX",    "Compass scale X",   TYPE_FLOAT, 1.0, 1.0, 0.1, 5.0, 0.01, "", false},
     {"MagScaleY",    "Compass scale Y",   TYPE_FLOAT, 1.0, 1.0, 0.1, 5.0, 0.01, "", false},
     {"MagScaleZ",    "Compass scale Z",   TYPE_FLOAT, 1.0, 1.0, 0.1, 5.0, 0.01, "", false},
-    {"StepMaxSpd",   "Stepper max speed", TYPE_FLOAT, 700.0, 700.0, 100.0, 1500.0, 10.0, "", true},
-    {"StepAccel",    "Stepper accel",     TYPE_FLOAT, 250.0, 250.0,  50.0, 1200.0, 10.0, "", true},
+    {"StepMaxSpd",   "Stepper max speed", TYPE_FLOAT, 1200.0, 1200.0, 100.0, 1500.0, 10.0, "", true},
+    {"StepAccel",    "Stepper accel",     TYPE_FLOAT, 800.0, 800.0,  50.0, 1200.0, 10.0, "", true},
     {"StepSpr",      "Stepper steps/rev", TYPE_INT,   7200, 7200,  7200,  7200,   1, "", false},
 };
 
@@ -81,7 +81,7 @@ const char* imuTypeNames[] = { "BNO055", "MPU9250", "BNO085", "LSM9DS1", "None" 
 
 class Settings {
 public:
-    static constexpr uint8_t VERSION = 0x1B;
+    static constexpr uint8_t VERSION = 0x1C;
     static constexpr const char* NVS_NAMESPACE = "boatlock_cfg";
     static constexpr const char* NVS_SCHEMA_KEY = "schema";
     // Keeps the existing BleSecurity EEPROM offset stable while settings live in NVS.
@@ -462,6 +462,27 @@ private:
                    VERSION);
     }
 
+    void migrateOldStepperDefaults(uint8_t storedVersion, const bool loadedKeys[count]) {
+        if (storedVersion >= 0x1C) {
+            return;
+        }
+
+        const int speedIdx = idxByKey("StepMaxSpd");
+        const int accelIdx = idxByKey("StepAccel");
+        if (speedIdx < 0 || accelIdx < 0 || !loadedKeys[speedIdx] || !loadedKeys[accelIdx]) {
+            return;
+        }
+        if (entries[speedIdx].value != 700.0f || entries[accelIdx].value != 250.0f) {
+            return;
+        }
+
+        assignValue(speedIdx, 1200.0f);
+        assignValue(accelIdx, 800.0f);
+        logMessage("[EVENT] CONFIG_MIGRATION_STEPPER_DEFAULTS from_ver=%d to_ver=%d\n",
+                   storedVersion,
+                   VERSION);
+    }
+
     void applyMigrations(nvs_handle_t handle, uint8_t storedVersion, const bool loadedKeys[count]) {
         migrateLegacyFloatKey(handle,
                               storedVersion,
@@ -471,6 +492,7 @@ private:
                               0,
                               0x18);
         migrateOldAnchorDefaults(storedVersion, loadedKeys);
+        migrateOldStepperDefaults(storedVersion, loadedKeys);
     }
 
 };

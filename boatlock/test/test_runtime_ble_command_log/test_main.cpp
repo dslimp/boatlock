@@ -11,8 +11,11 @@ void test_runtime_ble_command_log_skips_heartbeat() {
 
 void test_runtime_ble_command_log_keeps_operator_commands() {
   TEST_ASSERT_TRUE(runtimeBleShouldLogCommand("STREAM_START"));
-  TEST_ASSERT_TRUE(runtimeBleShouldLogCommand("MANUAL_SET:0.00,0,300"));
   TEST_ASSERT_TRUE(runtimeBleShouldLogCommand("STOP"));
+}
+
+void test_runtime_ble_command_log_skips_high_rate_manual_refreshes() {
+  TEST_ASSERT_FALSE(runtimeBleShouldLogCommand("MANUAL_SET:0,35,1000"));
 }
 
 void test_runtime_ble_command_log_redacts_sensitive_commands() {
@@ -39,6 +42,7 @@ int main() {
   UNITY_BEGIN();
   RUN_TEST(test_runtime_ble_command_log_skips_heartbeat);
   RUN_TEST(test_runtime_ble_command_log_keeps_operator_commands);
+  RUN_TEST(test_runtime_ble_command_log_skips_high_rate_manual_refreshes);
   RUN_TEST(test_runtime_ble_command_log_redacts_sensitive_commands);
   RUN_TEST(test_runtime_ble_command_log_sanitizes_control_bytes);
   RUN_TEST(test_runtime_ble_command_log_bounds_long_commands);

@@ -14,6 +14,11 @@ static constexpr float kOldHoldRadius = 2.5f;
 static constexpr float kOldDeadband = 1.5f;
 static constexpr float kOldMaxThrust = 60.0f;
 static constexpr float kOldRamp = 35.0f;
+static constexpr uint8_t kSchemaBeforeStepperDefaults = 0x1B;
+static constexpr float kOldStepMaxSpd = 700.0f;
+static constexpr float kOldStepAccel = 250.0f;
+static constexpr float kCurrentStepMaxSpd = 1200.0f;
+static constexpr float kCurrentStepAccel = 800.0f;
 
 void setUp() {
   nvs_mock_clear();
@@ -94,6 +99,8 @@ void test_constructor_provides_safe_defaults_without_load_or_reset() {
 
   assertQuietAnchorDefaults(s);
   TEST_ASSERT_EQUAL_FLOAT(7200.0f, s.get("StepSpr"));
+  TEST_ASSERT_EQUAL_FLOAT(kCurrentStepMaxSpd, s.get("StepMaxSpd"));
+  TEST_ASSERT_EQUAL_FLOAT(kCurrentStepAccel, s.get("StepAccel"));
   TEST_ASSERT_TRUE(s.set("HoldRadius", 4.0f));
   TEST_ASSERT_EQUAL_FLOAT(4.0f, s.get("HoldRadius"));
 }
@@ -280,6 +287,42 @@ void test_load_old_default_migration_preserves_custom_anchor_values() {
   TEST_ASSERT_EQUAL_UINT8(Settings::VERSION, persistedSchema());
 }
 
+void test_load_old_stepper_defaults_migrates_for_drv8825_vanchor() {
+  float values[count];
+  fillDefaultValues(values);
+  values[defaultIdxByKey("StepMaxSpd")] = kOldStepMaxSpd;
+  values[defaultIdxByKey("StepAccel")] = kOldStepAccel;
+  storeNvsValues(values, kSchemaBeforeStepperDefaults);
+
+  Settings s;
+  s.load();
+
+  TEST_ASSERT_EQUAL_INT(1, nvs_mock_commit_count());
+  TEST_ASSERT_EQUAL_FLOAT(kCurrentStepMaxSpd, s.get("StepMaxSpd"));
+  TEST_ASSERT_EQUAL_FLOAT(kCurrentStepAccel, s.get("StepAccel"));
+  TEST_ASSERT_EQUAL_FLOAT(kCurrentStepMaxSpd, persistedFloat("StepMaxSpd"));
+  TEST_ASSERT_EQUAL_FLOAT(kCurrentStepAccel, persistedFloat("StepAccel"));
+  TEST_ASSERT_EQUAL_UINT8(Settings::VERSION, persistedSchema());
+}
+
+void test_load_old_stepper_defaults_preserves_custom_values() {
+  float values[count];
+  fillDefaultValues(values);
+  values[defaultIdxByKey("StepMaxSpd")] = 900.0f;
+  values[defaultIdxByKey("StepAccel")] = kOldStepAccel;
+  storeNvsValues(values, kSchemaBeforeStepperDefaults);
+
+  Settings s;
+  s.load();
+
+  TEST_ASSERT_EQUAL_INT(1, nvs_mock_commit_count());
+  TEST_ASSERT_EQUAL_FLOAT(900.0f, s.get("StepMaxSpd"));
+  TEST_ASSERT_EQUAL_FLOAT(kOldStepAccel, s.get("StepAccel"));
+  TEST_ASSERT_EQUAL_FLOAT(900.0f, persistedFloat("StepMaxSpd"));
+  TEST_ASSERT_EQUAL_FLOAT(kOldStepAccel, persistedFloat("StepAccel"));
+  TEST_ASSERT_EQUAL_UINT8(Settings::VERSION, persistedSchema());
+}
+
 void test_load_old_schema_migrates_legacy_key_when_current_key_missing() {
   float values[count];
   fillDefaultValues(values);
@@ -443,6 +486,8 @@ int main(int argc, char **argv) {
   RUN_TEST(test_load_schema_mismatch_preserves_keyed_values);
   RUN_TEST(test_load_old_default_bundle_migrates_to_quiet_defaults);
   RUN_TEST(test_load_old_default_migration_preserves_custom_anchor_values);
+  RUN_TEST(test_load_old_stepper_defaults_migrates_for_drv8825_vanchor);
+  RUN_TEST(test_load_old_stepper_defaults_preserves_custom_values);
   RUN_TEST(test_load_old_schema_migrates_legacy_key_when_current_key_missing);
   RUN_TEST(test_load_missing_schema_migrates_legacy_key);
   RUN_TEST(test_load_old_schema_keeps_current_key_over_legacy_key);

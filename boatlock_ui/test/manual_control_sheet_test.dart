@@ -17,7 +17,7 @@ void main() {
                 ({
                   required int steer,
                   required int throttlePct,
-                  int ttlMs = 500,
+                  int ttlMs = 1000,
                 }) async {
                   sent.add('set:$steer,$throttlePct,$ttlMs');
                   return true;
@@ -36,8 +36,11 @@ void main() {
     await gesture.up();
     await tester.pump();
 
-    expect(sent.first, 'set:0,35,500');
-    expect(sent.where((line) => line == 'set:0,35,500').length, greaterThan(1));
+    expect(sent.first, 'set:0,35,1000');
+    expect(
+      sent.where((line) => line == 'set:0,35,1000').length,
+      greaterThan(1),
+    );
     expect(sent.last, 'off');
   });
 
@@ -53,7 +56,7 @@ void main() {
                 ({
                   required int steer,
                   required int throttlePct,
-                  int ttlMs = 500,
+                  int ttlMs = 1000,
                 }) async {
                   sent.add('set');
                   return true;
@@ -88,7 +91,7 @@ void main() {
                 ({
                   required int steer,
                   required int throttlePct,
-                  int ttlMs = 500,
+                  int ttlMs = 1000,
                 }) async {
                   sent.add('set');
                   return true;

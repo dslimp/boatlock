@@ -10,6 +10,8 @@ lease command plus `MANUAL_OFF`. Each accepted `MANUAL_SET` belongs to one
 controller source, disables Anchor mode on entry, and refreshes that source's
 manual deadman TTL. A competing source cannot replace a live manual lease until
 the lease expires or `MANUAL_OFF`/`STOP` clears it.
+The shipped phone UI uses `ttlMs=1000` and refreshes while a direction/throttle
+button is held.
 
 If manual updates stop, the TTL expires, Manual mode exits, and the normal
 quiet-output path stops stepper and thruster output.

@@ -31,7 +31,7 @@ BoatData _data({
     mode: mode,
     rssi: rssi,
     holdHeading: false,
-    stepSpr: 4096,
+    stepSpr: 7200,
     stepMaxSpd: 700,
     stepAccel: 250,
     headingRaw: 0,

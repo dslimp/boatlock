@@ -83,7 +83,7 @@ String? appE2eProfileRejectionReason(
   final profile = rejection.profile;
   switch (mode) {
     case BleSmokeMode.sim:
-    case BleSmokeMode.sim_suite:
+    case BleSmokeMode.simSuite:
       return null;
     case BleSmokeMode.compass:
       if (rejection.matchesCommandPrefix('COMPASS_CAL_START') ||
@@ -113,16 +113,16 @@ class BoatLockAppE2eProbe {
   BoatLockAppE2eProbe._({required BleBoatLock ble, required BleSmokeMode mode})
     : _ble = ble,
       _mode = mode {
-    _log('starting_app_e2e mode=${_mode.name}');
+    _log('starting_app_e2e mode=${_mode.wireName}');
     final timeout = switch (_mode) {
       BleSmokeMode.reconnect => const Duration(seconds: 150),
       BleSmokeMode.gps => const Duration(seconds: 180),
-      BleSmokeMode.sim_suite => const Duration(minutes: 25),
+      BleSmokeMode.simSuite => const Duration(minutes: 25),
       BleSmokeMode.ota => const Duration(minutes: 25),
       _ => const Duration(seconds: 75),
     };
     _timeoutTimer = Timer(timeout, () {
-      _finish(false, 'app_${_mode.name}_timeout');
+      _finish(false, 'app_${_mode.wireName}_timeout');
     });
     if (_mode == BleSmokeMode.reconnect || _mode == BleSmokeMode.ota) {
       _gapTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -222,7 +222,7 @@ class BoatLockAppE2eProbe {
         _handleStatusData(data);
       case BleSmokeMode.sim:
         _handleSimData(data);
-      case BleSmokeMode.sim_suite:
+      case BleSmokeMode.simSuite:
         _handleSimSuiteData(data);
       case BleSmokeMode.anchor:
         _handleAnchorData(data);
@@ -260,7 +260,7 @@ class BoatLockAppE2eProbe {
       _anchorDeniedSeen = true;
       _stage('anchor_denied_seen');
     }
-    if (_mode == BleSmokeMode.sim_suite) {
+    if (_mode == BleSmokeMode.simSuite) {
       _handleSimSuiteDeviceLog(_lastDeviceLog!);
     }
     if (_mode == BleSmokeMode.compass) {
@@ -340,8 +340,10 @@ class BoatLockAppE2eProbe {
         return;
       }
       if (data.mode == 'MANUAL') {
-        _statusManualModeSeen = true;
-        _stage('status_manual_mode_seen');
+        if (!_statusManualModeSeen) {
+          _statusManualModeSeen = true;
+          _stage('status_manual_mode_seen');
+        }
       } else if (!smokeStatusRecoveredAfterStop(data)) {
         return;
       }

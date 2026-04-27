@@ -8,7 +8,7 @@ void main() {
     expect(boatLockSmokeModeFromString('manual'), BleSmokeMode.manual);
     expect(boatLockSmokeModeFromString('status'), BleSmokeMode.status);
     expect(boatLockSmokeModeFromString('sim'), BleSmokeMode.sim);
-    expect(boatLockSmokeModeFromString('sim_suite'), BleSmokeMode.sim_suite);
+    expect(boatLockSmokeModeFromString('sim_suite'), BleSmokeMode.simSuite);
     expect(boatLockSmokeModeFromString('anchor'), BleSmokeMode.anchor);
     expect(boatLockSmokeModeFromString('compass'), BleSmokeMode.compass);
     expect(boatLockSmokeModeFromString('gps'), BleSmokeMode.gps);
@@ -24,5 +24,6 @@ void main() {
   test('smoke mode define name is stable', () {
     expect(kBoatLockSmokeModeDefine, 'BOATLOCK_SMOKE_MODE');
     expect(kBoatLockDefaultSmokeModeName, 'basic');
+    expect(BleSmokeMode.simSuite.wireName, 'sim_suite');
   });
 }

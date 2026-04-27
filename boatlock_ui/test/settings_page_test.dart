@@ -124,6 +124,7 @@ void main() {
     expect(find.text('Офсет компаса'), findsNothing);
     expect(find.text('Firmware OTA'), findsNothing);
     expect(find.text('BNO08x quality'), findsNothing);
+    expect(find.text('Debug'), findsNothing);
     expect(find.text('Owner secret'), findsOneWidget);
   });
 

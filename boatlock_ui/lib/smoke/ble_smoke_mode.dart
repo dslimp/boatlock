@@ -4,7 +4,7 @@ enum BleSmokeMode {
   manual,
   status,
   sim,
-  sim_suite,
+  simSuite,
   anchor,
   compass,
   gps,
@@ -13,6 +13,15 @@ enum BleSmokeMode {
 
 const kBoatLockSmokeModeDefine = 'BOATLOCK_SMOKE_MODE';
 const kBoatLockDefaultSmokeModeName = 'basic';
+
+extension BleSmokeModeWireName on BleSmokeMode {
+  String get wireName {
+    return switch (this) {
+      BleSmokeMode.simSuite => 'sim_suite',
+      _ => name,
+    };
+  }
+}
 
 BleSmokeMode boatLockSmokeModeFromString(String value) {
   switch (value) {
@@ -25,7 +34,7 @@ BleSmokeMode boatLockSmokeModeFromString(String value) {
     case 'sim':
       return BleSmokeMode.sim;
     case 'sim_suite':
-      return BleSmokeMode.sim_suite;
+      return BleSmokeMode.simSuite;
     case 'anchor':
       return BleSmokeMode.anchor;
     case 'compass':

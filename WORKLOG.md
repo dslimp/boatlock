@@ -7272,3 +7272,108 @@ Self-review:
   service-capable firmware and proved reconnect/telemetry after update. If
   DRV8825 MODE pins are wired for microstepping instead of full-step, multiply
   `7200` by that microstep factor before powered steering acceptance.
+
+### 2026-04-27 Stage 242: Manual BLE lease stability and DRV8825 speed defaults
+
+Scope:
+- Fix bench-observed manual control dropouts where holding the app button made
+  the motor pause and `MANUAL` disappeared from telemetry.
+- Raise the Vanchor/DRV8825 steering defaults after the 36:1 gearbox made the
+  old ULN-era speed and acceleration feel too slow.
+
+Key outcomes:
+- Raised phone manual TTL from `500 ms` to the firmware maximum `1000 ms`.
+- Send manual refresh writes with BLE write-without-response when the
+  characteristic and MTU make that safe, and request a small Android control
+  MTU after connect so secure `SEC_CMD:MANUAL_SET...` payloads do not fall back
+  to 20-byte ATT packets.
+- Suppressed high-rate `MANUAL_SET` command/accepted logs while keeping
+  rejection and `MANUAL_OFF` logs, reducing BLE log-characteristic traffic
+  during press-and-hold steering.
+- Bumped settings schema to `0x1C`, changed default `StepMaxSpd` from `700` to
+  `1200` and `StepAccel` from `250` to `800`, and migrated only devices that
+  still had the exact old default pair.
+- Updated BLE/manual/config docs and the firmware validation references. The
+  OTA workflow notes now call out that the wrapper timeout includes cold
+  scan/reconnect time before upload starts.
+
+Validation:
+- `git diff --check` -> PASS.
+- `python3 tools/ci/check_config_schema_version.py` -> PASS (`0x1c`).
+- `cd boatlock && platformio test -e native -f test_settings -f test_runtime_ble_command_log -f test_ble_command_handler -f test_stepper_control -f test_runtime_motion` -> PASS (`92/92`).
+- `cd boatlock_ui && flutter test test/manual_control_sheet_test.dart test/ble_commands_test.dart test/ble_command_scope_test.dart test/status_panel_test.dart test/anchor_preflight_test.dart test/map_page_test.dart` -> PASS (`36/36`).
+- `cd boatlock && platformio run -e esp32s3_service` -> PASS.
+- First `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 900` -> FAIL: cold BLE scan consumed the wait budget and the wrapper timed out during an active transfer at about `63%`.
+- Rerun `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800` -> PASS. OTA reached `100%` and post-update telemetry recovered with `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"app_ota_reconnect_after_update",...}`.
+- `tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130` -> PASS with `app_manual_roundtrip`, zero-throttle `MANUAL_SET:0,0,1000`, and `[BLE] MANUAL_OFF accepted`.
+- `tools/android/build-app-apk.sh` -> PASS; installed the normal non-e2e debug
+  APK on the nh02-attached phone with `adb install -r` after the e2e checks.
+- `cd boatlock_ui && flutter analyze` -> FAIL on pre-existing warnings in `lib/e2e/app_e2e_probe.dart`, `lib/smoke/ble_smoke_mode.dart`, and `lib/smoke/ble_smoke_page.dart`.
+
+Self-review:
+- The bench proof covered safe zero-throttle manual lease roundtrip and BLE OTA,
+  not powered steering under load. If the DRV8825 MODE pins are strapped for
+  microstepping, the mechanical speed will still be divided by that microstep
+  factor unless `StepSpr`/speed limits are intentionally retuned for that mode.
+
+### 2026-04-27 Stage 243: Single service-capable app with runtime Debug gate
+
+Scope:
+- Stop maintaining separate normal/service app installs during active bench
+  bring-up, while keeping service controls hidden during normal use.
+
+Key outcomes:
+- Android and macOS app build wrappers now include `BOATLOCK_SERVICE_UI=true`
+  by default.
+- Settings shows a `Debug` switch when service UI is compiled in.
+- Stepper tuning, compass service controls, firmware OTA, and BNO08x diagnostic
+  rows are visible only while `Debug` is enabled.
+- Updated BLE protocol, nh02 hardware notes, and BLE/UI reference docs to match
+  the new runtime gate.
+
+Validation:
+- `cd boatlock_ui && flutter test test/settings_page_test.dart` -> PASS.
+- `cd boatlock_ui && flutter test --dart-define=BOATLOCK_SERVICE_UI=true test/settings_page_service_ui_test.dart` -> PASS.
+- `pytest -q tools/ci/test_android_smoke_modes.py tools/ci/test_firmware_artifact_workflow.py` -> PASS (`20/20`).
+- `tools/android/build-app-apk.sh` -> PASS; the normal APK now includes service
+  UI capability by default.
+- Installed the rebuilt APK on the nh02-attached phone through ADB Wi-Fi:
+  `adb install -r /opt/boatlock-hw/stage/android/app-debug.apk` -> `Success`.
+
+Self-review:
+- The Debug switch is an app UI gate, not a firmware authorization boundary.
+  Firmware profile/auth still decide whether service commands are accepted.
+
+### 2026-04-27 Stage 244: Flutter cleanup, README refresh, and main push prep
+
+Scope:
+- Make Flutter analysis clean before pushing the bench/service changes.
+- Refresh README so it matches the current single service-capable app workflow,
+  DRV8825/Vanchor steering setup, phone BLE OTA path, and validation commands.
+
+Key outcomes:
+- Renamed the Dart smoke enum value from `sim_suite` to `simSuite` while keeping
+  the public wrapper/logcat mode string `sim_suite` through `wireName`.
+- Used the status manual-mode tracking flags so status smoke/e2e stages are not
+  repeatedly emitted while waiting for manual recovery.
+- Updated the Android smoke-mode CI parser to compare wrapper modes against the
+  Dart wire names.
+- Replaced the stale README with a current operator/developer overview.
+
+Validation:
+- `git diff --check` -> PASS.
+- `cd boatlock_ui && flutter analyze` -> PASS (`No issues found`).
+- `cd boatlock_ui && flutter test` -> PASS (`121/121`).
+- `cd boatlock_ui && flutter test --dart-define=BOATLOCK_SERVICE_UI=true test/settings_page_service_ui_test.dart` -> PASS.
+- `python3 tools/ci/check_config_schema_version.py` -> PASS (`0x1c`).
+- `pytest -q tools/ci/test_android_smoke_modes.py tools/ci/test_firmware_artifact_workflow.py` -> PASS (`20/20`).
+- `tools/android/build-app-apk.sh` -> PASS.
+- `cd boatlock && platformio test -e native -f test_settings -f test_runtime_ble_command_log -f test_ble_command_handler -f test_stepper_control -f test_runtime_motion` -> PASS (`92/92`).
+- `cd boatlock && pio run -e esp32s3_service` -> PASS.
+- Installed the rebuilt APK on the nh02-attached phone over ADB Wi-Fi with
+  `adb install -r /opt/boatlock-hw/stage/android/app-debug.apk` -> `Success`.
+
+Self-review:
+- README is now intentionally bench-current rather than a complete product
+  manual. Deep protocol, hardware acceptance, and release details remain in
+  `docs/` and repo skills.

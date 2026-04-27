@@ -28,6 +28,7 @@ typedef LogCallback = void Function(String line);
 typedef OtaProgressCallback = void Function(int sentBytes, int totalBytes);
 
 const int _boatLockOtaDesiredMtu = 247;
+const int _boatLockControlDesiredMtu = 96;
 const int _boatLockOtaBackpressureWindowChunks = 8;
 const Duration _boatLockOtaBackpressurePause = Duration(milliseconds: 12);
 
@@ -334,6 +335,7 @@ class BleBoatLock with WidgetsBindingObserver {
         hasOtaChar: discovery.otaFound,
         mtu: _device?.mtuNow ?? diagnostics.value.mtu,
       );
+      await _prepareControlTransport();
       await _setStreamEnabled(true);
       await requestSnapshot();
       _startHeartbeat();
@@ -691,7 +693,7 @@ class BleBoatLock with WidgetsBindingObserver {
   Future<bool> sendManualControl({
     required int steer,
     required int throttlePct,
-    int ttlMs = 500,
+    int ttlMs = 1000,
   }) async {
     final cmd = buildManualSetCommand(
       steer: steer,
@@ -699,11 +701,30 @@ class BleBoatLock with WidgetsBindingObserver {
       ttlMs: ttlMs,
     );
     if (cmd == null) return false;
-    return _writeCommand(cmd);
+    return _writeCommand(cmd, withoutResponse: true);
   }
 
   Future<bool> manualOff() async {
     return _writeCommand('MANUAL_OFF');
+  }
+
+  Future<void> _prepareControlTransport() async {
+    if (kIsWeb || !Platform.isAndroid || _device == null) return;
+    final mtuNow = _device!.mtuNow;
+    if (mtuNow >= _boatLockControlDesiredMtu) return;
+    try {
+      final mtu = await _device!.requestMtu(
+        _boatLockControlDesiredMtu,
+        predelay: 0,
+        timeout: 5,
+      );
+      _setDiagnostics(mtu: mtu);
+      _log('BLE control MTU negotiated=$mtu');
+    } catch (e) {
+      final mtu = _device?.mtuNow ?? mtuNow;
+      _setDiagnostics(mtu: mtu, lastError: e.toString());
+      _log('BLE control MTU request failed, using mtu=$mtu: $e');
+    }
   }
 
   Future<bool> setHoldHeading(bool enabled) async {
@@ -1002,10 +1023,10 @@ class BleBoatLock with WidgetsBindingObserver {
     return true;
   }
 
-  Future<bool> _writeCommand(String cmd) async {
+  Future<bool> _writeCommand(String cmd, {bool withoutResponse = false}) async {
     if (_cmdChar == null) return false;
     if (_isPlainAllowed(cmd)) {
-      return _writeControlPoint(cmd);
+      return _writeControlPoint(cmd, withoutResponse: withoutResponse);
     }
 
     final ok = await _ensureSecuritySession();
@@ -1024,7 +1045,7 @@ class BleBoatLock with WidgetsBindingObserver {
       payload: cmd,
       counter: _secCounter,
     );
-    return _writeControlPoint(secure);
+    return _writeControlPoint(secure, withoutResponse: withoutResponse);
   }
 
   Future<bool> _writeControlPoint(
@@ -1039,7 +1060,12 @@ class BleBoatLock with WidgetsBindingObserver {
       );
       return false;
     }
-    await _cmdChar!.write(bytes, withoutResponse: withoutResponse);
+    final mtu = _device?.mtuNow ?? 23;
+    final safeWithoutResponse =
+        withoutResponse &&
+        _cmdChar!.properties.writeWithoutResponse &&
+        bytes.length <= mtu - 3;
+    await _cmdChar!.write(bytes, withoutResponse: safeWithoutResponse);
     return true;
   }
 

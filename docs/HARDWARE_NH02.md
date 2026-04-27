@@ -218,12 +218,12 @@ If `OTA_BEGIN` or `SIM_RUN` appears broken, check the printed profile first; the
 - If the monitor path fails, inspect `status.sh` before touching the USB device manually.
 - BLE OTA is the preferred no-USB firmware update path after the first seed flash.
 - Keep the expected SHA-256 from the build output or CI artifact metadata; do not let the phone trust an arbitrary downloaded binary without comparing the expected hash first.
-- The one-button service app path resolves firmware through the latest GitHub
-  Release. Build service Android/macOS app variants with
-  `--dart-define=BOATLOCK_SERVICE_UI=true` and
-  `--dart-define=BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=dslimp/boatlock`. Local
-  wrapper shortcuts: `tools/android/build-app-apk.sh --latest-release-service`
-  and `tools/macos/build-app.sh --latest-release-service`.
+- The app wrappers build service-capable Android/macOS apps by default and hide
+  service controls behind the Settings `Debug` switch. The one-button release
+  OTA path additionally resolves firmware through the latest GitHub Release via
+  `BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=dslimp/boatlock`. Local wrapper
+  shortcuts: `tools/android/build-app-apk.sh --latest-release-service` and
+  `tools/macos/build-app.sh --latest-release-service`.
 - CI publishes ready-to-install latest-release service variants as
   `flutter-android-service-apk/boatlock-service-release.apk` and
   `flutter-macos-service-app/boatlock-macos-service-release.zip` alongside the

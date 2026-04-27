@@ -13,11 +13,12 @@ def _dart_smoke_modes() -> list[str]:
     text = _read("boatlock_ui/lib/smoke/ble_smoke_mode.dart")
     match = re.search(r"enum\s+BleSmokeMode\s*\{([^}]*)\}", text)
     assert match is not None
-    return [
+    modes = [
         value.strip()
         for value in match.group(1).split(",")
         if value.strip()
     ]
+    return ["sim_suite" if mode == "simSuite" else mode for mode in modes]
 
 
 def _shell_modes(var_name: str) -> list[str]:

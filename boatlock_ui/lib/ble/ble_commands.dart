@@ -55,7 +55,7 @@ String? buildSetAnchorProfileCommand(String profile) {
 String? buildManualSetCommand({
   required int steer,
   required int throttlePct,
-  int ttlMs = 500,
+  int ttlMs = 1000,
 }) {
   if (steer < -1 || steer > 1) return null;
   if (throttlePct < -100 || throttlePct > 100) return null;

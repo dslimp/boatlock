@@ -98,8 +98,8 @@ Record each check with command, expected output, measured output, and pass/fail:
 | BLE connected, `IDLE` | `PWM=0` | idle |
 | `STOP` command | `PWM=0`, no pulse after STOP | idle, any active move cancelled |
 | Hardware STOP press | same as `STOP` command | same as `STOP` command |
-| `MANUAL_SET:0,0,500` | `PWM=0` | no steering move |
-| `MANUAL_SET:0,20,500` | bounded PWM pulse only while lease is fresh | no steering move unless steer non-zero |
+| `MANUAL_SET:0,0,1000` | `PWM=0` | no steering move |
+| `MANUAL_SET:0,20,1000` | bounded PWM pulse only while lease is fresh | no steering move unless steer non-zero |
 | Manual lease expiry | `PWM=0` after TTL | idle |
 | `MANUAL_OFF` | `PWM=0` | idle |
 | `ANCHOR_ON` denied on bench | `PWM=0` | idle |

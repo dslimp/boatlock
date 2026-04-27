@@ -63,7 +63,10 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  static bool _debugMenuSessionEnabled = false;
+
   late bool holdHeading;
+  late bool debugMenuEnabled;
   late double stepMaxSpd;
   late double stepAccel;
   late double compassOffset;
@@ -99,6 +102,7 @@ class _SettingsPageState extends State<SettingsPage> {
   void initState() {
     super.initState();
     holdHeading = widget.holdHeading;
+    debugMenuEnabled = _debugMenuSessionEnabled;
     stepMaxSpd = widget.stepMaxSpd;
     stepAccel = widget.stepAccel;
     compassOffset = widget.compassOffset;
@@ -269,6 +273,15 @@ class _SettingsPageState extends State<SettingsPage> {
 
   void _syncOwnerSecret() {
     widget.ble.setOwnerSecret(_ownerSecretCtrl.text);
+  }
+
+  bool get _serviceMenuVisible => kBoatLockServiceUiEnabled && debugMenuEnabled;
+
+  void _toggleDebugMenu(bool value) {
+    setState(() {
+      debugMenuEnabled = value;
+      _debugMenuSessionEnabled = value;
+    });
   }
 
   Future<void> _toggleHoldHeading(bool value) async {
@@ -746,7 +759,13 @@ class _SettingsPageState extends State<SettingsPage> {
             value: holdHeading,
             onChanged: isConnected ? _toggleHoldHeading : null,
           ),
-          if (kBoatLockServiceUiEnabled) ...[
+          if (kBoatLockServiceUiEnabled)
+            SwitchListTile(
+              title: const Text('Debug'),
+              value: debugMenuEnabled,
+              onChanged: _toggleDebugMenu,
+            ),
+          if (_serviceMenuVisible) ...[
             ListTile(
               title: const Text('Макс. скорость'),
               subtitle: Text(stepMaxSpd.round().toString()),
@@ -829,7 +848,7 @@ class _SettingsPageState extends State<SettingsPage> {
           _securityTile('Auth', secAuth ? 'YES' : 'NO'),
           _securityTile('Pair window', secPairWindowOpen ? 'OPEN' : 'CLOSED'),
           _securityTile('Last reject', secReject),
-          if (kBoatLockServiceUiEnabled) ...[
+          if (_serviceMenuVisible) ...[
             const Divider(),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),

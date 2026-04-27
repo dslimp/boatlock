@@ -59,6 +59,9 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
    - use `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130` after compass BLE command changes; it sends safe DCD service commands and requires device-log acknowledgements
    - use `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180` after GNSS live-telemetry changes or field GPS checks; it requires valid non-zero coordinates and `gnssQ > 0`
    - use `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin` after BLE OTA/app-delivery changes; it serves `firmware.bin` from `nh02`, installs the production app with OTA e2e defines, uploads over BLE from the phone, and requires post-reboot telemetry recovery
+   - pass a longer OTA wait such as `--wait-secs 1800` when BLE discovery may
+     be cold or intermittent; the wrapper timeout includes scan/reconnect time
+     before upload starts and can otherwise expire during an active transfer
    - use `tools/hw/nh02/android-run-smoke.sh --manual --wait-secs 130` after manual BLE protocol changes; this sends zero-throttle `MANUAL_SET`, verifies `MANUAL`, sends `MANUAL_OFF`, and verifies mode exit
    - use `tools/hw/nh02/android-run-smoke.sh --status --wait-secs 130` after phone-visible status/severity changes; this sends `STOP`, verifies `ALERT/STOP_CMD`, then clears through zero-throttle manual roundtrip
    - use `tools/hw/nh02/android-run-smoke.sh --sim --wait-secs 130` after `SIM_*` BLE/HIL changes; this starts realtime `S0`, verifies `SIM` mode, sends `SIM_ABORT`, then clears the safe hold through zero-throttle manual recovery
@@ -142,6 +145,7 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
   - `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130`
   - `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180`
   - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin`
+  - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
   - `tools/hw/nh02/android-run-app-e2e.sh --reconnect --wait-secs 130`
   - `tools/hw/nh02/android-run-app-e2e.sh --esp-reset --wait-secs 130`
   - `tools/hw/nh02/android-install.sh`

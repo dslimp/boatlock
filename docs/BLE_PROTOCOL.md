@@ -17,7 +17,7 @@ Control point payloads are application-level command byte strings, not a text st
 Command scopes are product boundaries, not wire-level security:
 
 - `release`: normal water UI, app security/session setup, app telemetry transport, and safe software simulation (`SIM_*`).
-- `service`: installer, calibration, firmware update, and tuning operations. The normal Flutter app hides these controls unless built with `--dart-define=BOATLOCK_SERVICE_UI=true`; test/service harnesses must opt in explicitly.
+- `service`: installer, calibration, firmware update, and tuning operations. The Android/macOS app wrappers build a service-capable app by default, but the UI hides these controls until the operator enables Settings `Debug`; raw Flutter builds still need `--dart-define=BOATLOCK_SERVICE_UI=true`, and test/service harnesses must opt in explicitly.
 - `dev/HIL`: injected external sensor data. These commands are for validation harnesses only and must not appear in the normal water UI. Flutter custom-command callers must opt in explicitly or use `--dart-define=BOATLOCK_DEV_HIL_COMMANDS=true`.
 
 `SEC_CMD` is the security envelope; the effective scope is the scope of the wrapped payload. The Flutter custom-command classifier does not accept raw `SEC_CMD` input; the BLE transport builds the envelope internally after classifying the unwrapped command.
@@ -38,7 +38,7 @@ Current classification:
 | `ANCHOR_OFF` | none | Disable anchor mode immediately, stop current actuation, and clear any latched `HOLD` state |
 | `STOP` | none | Emergency stop: disable anchor/manual control, stop all motors, and latch runtime `HOLD` mode (highest priority) |
 | `HEARTBEAT` | none | Keep-alive command from controller/app; missing heartbeat while Anchor is active triggers failsafe |
-| `MANUAL_SET:<steer>,<throttlePct>,<ttlMs>` | `steer=-1..1`, `throttlePct=-100..100`, `ttlMs=100..1000` | Atomically enter/refresh Manual mode from the active controller; this disables Anchor mode and acts as a deadman lease |
+| `MANUAL_SET:<steer>,<throttlePct>,<ttlMs>` | `steer=-1..1`, `throttlePct=-100..100`, `ttlMs=100..1000`; app default `1000` | Atomically enter/refresh Manual mode from the active controller; this disables Anchor mode and acts as a deadman lease |
 | `MANUAL_OFF` | none | Stop Manual mode and zero manual stepper/thruster output |
 | `NUDGE_DIR:<FWD\|BACK\|LEFT\|RIGHT>` | direction | Shift anchor point by the fixed 1.5 m jog step in boat frame (allowed only while Anchor is active and safety checks pass) |
 | `NUDGE_BRG:<bearingDeg>` | absolute bearing | Shift anchor point by the fixed 1.5 m jog step on the given bearing (allowed only while Anchor is active and safety checks pass) |

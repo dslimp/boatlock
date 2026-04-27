@@ -41,6 +41,9 @@
   - publish/serve the binary from a trusted URL and copy its SHA-256
   - in the app Settings screen, use Firmware OTA URL + SHA-256 to upload over BLE
   - bench automation: `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin`
+  - if BLE discovery may take time, add `--wait-secs 1800`; the wrapper wait
+    starts before scan/connect and can expire during upload when advertising
+    appears late
 - Latest-release phone bridge:
   - service app builds use `BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=dslimp/boatlock`
   - local shortcuts: `tools/android/build-app-apk.sh --latest-release-service` and `tools/macos/build-app.sh --latest-release-service`
@@ -91,6 +94,7 @@
   - `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130`
   - `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180`
   - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin`
+  - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
   - `tools/hw/nh02/android-run-app-e2e.sh --sim-suite --wait-secs 1800`
   - `tools/hw/nh02/run-sim-suite.sh`
   - `tools/hw/nh02/android-run-app-e2e.sh --reconnect --wait-secs 130`

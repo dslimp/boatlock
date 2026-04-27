@@ -270,10 +270,6 @@ inline void handleBleCommand(const std::string& cmd) {
         unsigned long ttlMs = 0;
         if (sscanf(command.c_str() + 11, "%d,%d,%lu", &steer, &throttlePct, &ttlMs) == 3 &&
             setManualControlFromBle(steer, throttlePct, ttlMs)) {
-            logMessage("[BLE] MANUAL_SET accepted steer=%d throttle=%d ttl=%lu\n",
-                       steer,
-                       throttlePct,
-                       ttlMs);
         } else {
             logMessage("[BLE] MANUAL_SET rejected: %s\n", command.c_str());
         }

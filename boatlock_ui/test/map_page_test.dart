@@ -268,7 +268,7 @@ BoatData _boatData({
   String secReject = 'NONE',
   int compassQ = 3,
   int gnssQ = 2,
-  int stepSpr = 4096,
+  int stepSpr = 7200,
   double stepMaxSpd = 1000,
   double stepAccel = 500,
 }) {

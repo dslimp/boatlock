@@ -32,7 +32,7 @@ BoatData _data() => BoatData(
   mode: 'IDLE',
   rssi: -47,
   holdHeading: false,
-  stepSpr: 4096,
+  stepSpr: 7200,
   stepMaxSpd: 700,
   stepAccel: 250,
   headingRaw: 12,

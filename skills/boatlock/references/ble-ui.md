@@ -111,8 +111,12 @@
   - release: stream/control point, explicit anchor save/enable/disable, manual deadman, STOP/heartbeat, anchor jog, hold-heading, pairing/auth commands, and `SIM_*`.
   - service: anchor tuning profiles, heading offset/reset, SH2 compass calibration/DCD/tare, stepper bow/tuning, and BLE OTA.
   - dev/HIL: `SET_PHONE_GPS`.
-- The normal Flutter water UI must expose only release commands.
-- Service UI is hidden unless the app is built with `--dart-define=BOATLOCK_SERVICE_UI=true` or a test/service harness passes `allowService: true` to `sendCustomCommand()`.
+- The normal Flutter water UI must expose only release commands until the
+  operator enables the Settings `Debug` switch.
+- Android/macOS app wrappers build with `BOATLOCK_SERVICE_UI=true` by default
+  so the same installed app can expose service controls when `Debug` is on.
+  Raw Flutter builds still need the dart define, and test/service harnesses
+  must pass `allowService: true` to `sendCustomCommand()`.
 - Dev/HIL commands are hidden unless the app is built with `--dart-define=BOATLOCK_DEV_HIL_COMMANDS=true` or a validation harness passes `allowDevHil: true` to `sendCustomCommand()`. `SIM_*` is not dev/HIL; it must run fail-quiet in the normal firmware and provide simulated live telemetry for map views.
 - `SEC_CMD` is the security envelope; the effective scope is the scope of the wrapped payload. Flutter custom-command callers should pass the unwrapped command and let `BleBoatLock` build the envelope after classification.
 - Do not keep compatibility-only BLE commands in firmware or Flutter. If a command is obsolete, remove it from command handling, UI, tests, and docs in the same change.

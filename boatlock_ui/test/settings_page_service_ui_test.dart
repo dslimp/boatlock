@@ -96,6 +96,15 @@ class FakeFirmwareUpdateClient extends FirmwareUpdateClient {
 
 Widget _wrap(Widget child) => MaterialApp(home: child);
 
+Future<void> _setDebugMenu(WidgetTester tester, bool enabled) async {
+  final debugSwitch = find.widgetWithText(SwitchListTile, 'Debug');
+  expect(debugSwitch, findsOneWidget);
+  final visible = find.text('Макс. скорость').evaluate().isNotEmpty;
+  if (visible == enabled) return;
+  await tester.tap(debugSwitch);
+  await tester.pumpAndSettle();
+}
+
 SettingsPage _page(
   ServiceFakeBleBoatLock ble, {
   FirmwareUpdateClient firmwareUpdateClient = const FirmwareUpdateClient(),
@@ -124,6 +133,28 @@ SettingsPage _page(
 }
 
 void main() {
+  testWidgets('debug switch gates service controls', (
+    WidgetTester tester,
+  ) async {
+    if (!kBoatLockServiceUiEnabled) {
+      expect(kBoatLockServiceUiEnabled, isFalse);
+      return;
+    }
+
+    await tester.binding.setSurfaceSize(const Size(900, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final ble = ServiceFakeBleBoatLock();
+    await tester.pumpWidget(_wrap(_page(ble)));
+
+    await _setDebugMenu(tester, false);
+    expect(find.text('Макс. скорость'), findsNothing);
+    expect(find.text('Firmware OTA'), findsNothing);
+
+    await _setDebugMenu(tester, true);
+    expect(find.text('Макс. скорость'), findsOneWidget);
+    expect(find.text('Firmware OTA'), findsOneWidget);
+  });
+
   testWidgets('rolls back service setting when profile rejection arrives', (
     WidgetTester tester,
   ) async {
@@ -136,6 +167,7 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final ble = ServiceFakeBleBoatLock()..rejectNextStepMaxSpeed = true;
     await tester.pumpWidget(_wrap(_page(ble)));
+    await _setDebugMenu(tester, true);
 
     await tester.tap(find.text('Макс. скорость'));
     await tester.pumpAndSettle();
@@ -201,6 +233,7 @@ void main() {
         ),
       ),
     );
+    await _setDebugMenu(tester, true);
 
     await tester.tap(find.text('Обновить до релиза'));
     await tester.pump(const Duration(milliseconds: 50));

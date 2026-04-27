@@ -29,7 +29,7 @@ class ManualControlSheet extends StatefulWidget {
 }
 
 class _ManualControlSheetState extends State<ManualControlSheet> {
-  static const int _ttlMs = 500;
+  static const int _ttlMs = 1000;
   static const Duration _sendEvery = Duration(milliseconds: 250);
   static const int _forwardPct = 35;
   static const int _reversePct = -25;

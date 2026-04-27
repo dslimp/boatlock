@@ -76,7 +76,7 @@
 - Settings are stored in ESP32 NVS namespace `boatlock_cfg` as:
   - `schema` marker
   - one raw `float` blob per setting key
-- Current schema version is `Settings::VERSION = 0x1B`.
+- Current schema version is `Settings::VERSION = 0x1C`.
 - Missing NVS keys keep current defaults and are persisted on boot writeback; removed keys are ignored.
 - Older schemas keep existing values by current key, apply explicit versioned migration rules, and update the schema marker plus normalized/missing keys.
 - Future schemas are loaded read-only on boot: known current keys may be used in RAM, but firmware must not downgrade the schema marker or write missing/default keys just because an older image booted after OTA rollback.
@@ -220,6 +220,9 @@
   and its Arduino/config baseline uses a `200` step/rev motor.
   If DRV8825 microstepping is wired active, multiply this by the microstep
   factor and update firmware/docs together.
+- Current default steering tuning is `StepMaxSpd=1200` and `StepAccel=800`;
+  schema migration preserves custom values but updates the untouched old
+  `700/250` pair.
 - Stepper control must fail closed on neutral/invalid manual input, use bounded angle normalization, and release coils after idle/cancel through a deterministic timer.
 - Stepper idle release timing must use explicit active state; `idleSinceMs == 0` is a valid timestamp, not a sentinel.
 - Random `fallbackHeading` and `fallbackBearing` are UI placeholders only.
