@@ -22,13 +22,13 @@ void main() {
   test('maps dev HIL scope to acceptance profile', () {
     final rejection = parseBleCommandRejectionLog(
       '[BLE] command rejected reason=profile profile=service '
-      'scope=dev_hil command=SIM_RUN:S0,1',
+      'scope=dev_hil command=SET_PHONE_GPS:59,30',
     );
 
     expect(rejection, isNotNull);
-    expect(rejection!.commandName, 'SIM_RUN');
+    expect(rejection!.commandName, 'SET_PHONE_GPS');
     expect(rejection.requiredProfile, 'acceptance');
-    expect(rejection.matchesCommandPrefix('SIM_RUN'), isTrue);
+    expect(rejection.matchesCommandPrefix('SET_PHONE_GPS'), isTrue);
   });
 
   test('parses unknown-scope profile rejection as fail-closed feedback', () {

@@ -52,6 +52,8 @@ void main() {
       'ANCHOR_OFF',
       'ANCHOR_ON',
       'MANUAL_SET:0,0,500',
+      'SIM_RUN:S0,1',
+      'SIM_ABORT',
       'OTA_BEGIN:4096,abcd',
     ]) {
       expect(

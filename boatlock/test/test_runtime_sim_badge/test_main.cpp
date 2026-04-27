@@ -8,15 +8,15 @@ void tearDown() {}
 void test_running_state_has_no_badge() {
   RuntimeSimBadge badge;
 
-  TEST_ASSERT_NULL(badge.update(true, "S1_current_0p4_good", 1, 1000, 15000));
+  TEST_ASSERT_NULL(badge.update(true, "S1", 1, 1000, 15000));
   TEST_ASSERT_NULL(badge.current(1000));
 }
 
 void test_completion_creates_trimmed_badge() {
   RuntimeSimBadge badge;
 
-  badge.update(true, "S1_current_0p4_good", 1, 1000, 15000);
-  const char* shown = badge.update(false, "S1_current_0p4_good", 1, 2000, 15000);
+  badge.update(true, "S1", 1, 1000, 15000);
+  const char* shown = badge.update(false, "S1", 1, 2000, 15000);
 
   TEST_ASSERT_NOT_NULL(shown);
   TEST_ASSERT_EQUAL_STRING("SIM S1 PASS", shown);

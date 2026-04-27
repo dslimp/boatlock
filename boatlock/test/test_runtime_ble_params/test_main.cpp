@@ -127,6 +127,54 @@ void test_anchor_range_telemetry_clears_without_fix_or_anchor() {
   TEST_ASSERT_EQUAL_FLOAT(0.0f, telemetry.anchorBearingDeg);
 }
 
+void test_hil_sim_telemetry_projects_live_world_to_map_frame() {
+  RuntimeBleLiveTelemetry telemetry;
+  hilsim::HilScenarioRunner::LiveTelemetry live;
+  live.valid = true;
+  live.gnss.valid = true;
+  live.gnss.sats = 11;
+  live.heading.valid = true;
+  live.heading.headingDeg = 42.0f;
+  live.world.xM = 12.0f;
+  live.world.yM = -6.0f;
+  live.anchorXM = 2.0f;
+  live.anchorYM = 1.0f;
+  live.errTrueM = 14.0f;
+  live.bearingDeg = 315.0f;
+
+  TEST_ASSERT_TRUE(applyRuntimeBleHilSimTelemetry(&telemetry, live));
+
+  TEST_ASSERT_TRUE(telemetry.lat != 0.0);
+  TEST_ASSERT_TRUE(telemetry.lon != 0.0);
+  TEST_ASSERT_TRUE(telemetry.anchorLat != 0.0);
+  TEST_ASSERT_TRUE(telemetry.anchorLon != 0.0);
+  TEST_ASSERT_TRUE(telemetry.lat < telemetry.anchorLat);
+  TEST_ASSERT_TRUE(telemetry.lon > telemetry.anchorLon);
+  TEST_ASSERT_EQUAL_FLOAT(14.0f, telemetry.distanceM);
+  TEST_ASSERT_EQUAL_FLOAT(315.0f, telemetry.anchorBearingDeg);
+  TEST_ASSERT_EQUAL_FLOAT(42.0f, telemetry.headingDeg);
+  TEST_ASSERT_EQUAL_UINT8(3, telemetry.compassQ);
+  TEST_ASSERT_EQUAL_UINT8(2, telemetry.gnssQ);
+}
+
+void test_hil_sim_telemetry_fails_closed_without_live_fix() {
+  RuntimeBleLiveTelemetry telemetry;
+  telemetry.lat = 1.0;
+  telemetry.lon = 2.0;
+  hilsim::HilScenarioRunner::LiveTelemetry live;
+
+  TEST_ASSERT_FALSE(applyRuntimeBleHilSimTelemetry(&telemetry, live));
+
+  live.valid = true;
+  live.gnss.valid = false;
+  live.heading.valid = false;
+  TEST_ASSERT_TRUE(applyRuntimeBleHilSimTelemetry(&telemetry, live));
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, (float)telemetry.lat);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, (float)telemetry.lon);
+  TEST_ASSERT_EQUAL_UINT8(0, telemetry.compassQ);
+  TEST_ASSERT_EQUAL_UINT8(0, telemetry.gnssQ);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_anchor_telemetry_accepts_valid_anchor_and_normalizes_heading);
@@ -136,5 +184,7 @@ int main() {
   RUN_TEST(test_runtime_ble_telemetry_quality_rejects_invalid_ordinals);
   RUN_TEST(test_anchor_range_telemetry_uses_current_fix_to_anchor);
   RUN_TEST(test_anchor_range_telemetry_clears_without_fix_or_anchor);
+  RUN_TEST(test_hil_sim_telemetry_projects_live_world_to_map_frame);
+  RUN_TEST(test_hil_sim_telemetry_fails_closed_without_live_fix);
   return UNITY_END();
 }

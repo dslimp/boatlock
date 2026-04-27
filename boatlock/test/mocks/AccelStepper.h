@@ -4,13 +4,15 @@
 
 class AccelStepper {
 public:
+  static const uint8_t DRIVER = 1;
   static const uint8_t HALF4WIRE = 8;
 
-  AccelStepper(uint8_t, int, int, int, int) {}
+  AccelStepper(uint8_t, int, int, int = 0, int = 0, bool = true) {}
 
   void setMaxSpeed(float v) { maxSpeed_ = v; }
   void setAcceleration(float v) { accel_ = v; }
   void setSpeed(float v) { speed_ = v; }
+  void setMinPulseWidth(unsigned int v) { minPulseWidth_ = v; }
 
   long currentPosition() const { return currentPos_; }
   long distanceToGo() const { return targetPos_ - currentPos_; }
@@ -38,6 +40,7 @@ public:
   bool outputsEnabled() const { return outputsEnabled_; }
   float maxSpeed() const { return maxSpeed_; }
   float accel() const { return accel_; }
+  unsigned int minPulseWidth() const { return minPulseWidth_; }
 
 private:
   long currentPos_ = 0;
@@ -45,5 +48,6 @@ private:
   float speed_ = 0.0f;
   float maxSpeed_ = 0.0f;
   float accel_ = 0.0f;
+  unsigned int minPulseWidth_ = 0;
   bool outputsEnabled_ = true;
 };

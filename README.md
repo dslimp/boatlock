@@ -10,6 +10,7 @@ anchoring and thruster control. Major capabilities include:
 - saving the current location as an anchor point with heading
 - automatically holding position near the saved anchor
 - onboard BNO08x heading diagnostics and persistent heading offset
+- onboard microSD JSONL diagnostics with bounded queueing and file rotation
 - on-device deterministic HIL simulation scenarios (`SIM_*`, `S0..S19`) for regression checks without external sensors
 
 The app and firmware communicate through a simple text protocol; see
@@ -137,26 +138,27 @@ pinout. Current wiring:
 - **BNO08x P0/PS0** → **3V3**
 - **BNO08x P1/PS1** → **GND**
 - **Thruster PWM** → **GPIO7**
-- **Thruster direction** → **GPIO5** and **GPIO10**
-- **Steering 28BYJ-48 + ULN2003 HALF4WIRE inputs** → **GPIO2**, **GPIO4**,
-  **GPIO6**, and **GPIO16**
+- **Thruster direction** → **GPIO8** and **GPIO10**
+- **Steering DRV8825 STEP/DIR** → **STEP GPIO6**, **DIR GPIO16**
 - **BOOT anchor-save button** → **GPIO0**
 - **STOP button** → **GPIO15**
 
 Do not treat old HC 160A snippets or direction-pin examples as current wiring
 authority. The present release path only documents the two thruster direction
-outputs above and the current 28BYJ-48 + ULN2003-style steering path.
+outputs above and the current DRV8825 STEP/DIR steering path.
 
 Before powering the thruster driver, complete
 [docs/BRUSHED_MOTOR_DRIVER_INTAKE.md](docs/BRUSHED_MOTOR_DRIVER_INTAKE.md).
-The current firmware command shape is only `PWM=7` plus `DIR=5/10`; the actual
+The current firmware command shape is only `PWM=7` plus `DIR=8/10`; the actual
 driver's brake/coast, enable, fault, current-limit, polarity, and safe-idle
 behavior must be captured before powered tests.
 
-If the installed steering driver is not the documented 28BYJ-48 + ULN2003 path,
-complete [docs/STEERING_DRIVER_INTAKE.md](docs/STEERING_DRIVER_INTAKE.md) first.
-The real driver identity, pinout, limits, idle behavior, and STOP behavior must
-be captured before powered steering tests or firmware changes.
+The steering firmware now assumes a DRV8825-compatible STEP/DIR driver on
+`GPIO6/GPIO16` with `7200` output steps per steering revolution (`200` motor
+steps/rev through the Vanchor `36:1` gearbox). Complete
+[docs/STEERING_DRIVER_INTAKE.md](docs/STEERING_DRIVER_INTAKE.md) before powered
+steering tests so current limit, enable/sleep/reset wiring, idle behavior, and
+STOP behavior are captured.
 
 Before connecting powered motor or steering hardware, pass the no-load and
 low-power gates in

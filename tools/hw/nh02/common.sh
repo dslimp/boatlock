@@ -33,3 +33,10 @@ RSYNC_BASE=(rsync -a -e "ssh -p ${BOATLOCK_NH02_SSH_PORT}")
 remote_shell() {
   "${SSH_BASE[@]}" "$@"
 }
+
+boatlock_nh02_android_wifi_serial() {
+  local output
+  output="$(remote_shell "'${BOATLOCK_NH02_REMOTE_ANDROID_WIFI_DEBUG_BIN}'" 2>&1)"
+  printf '%s\n' "${output}" >&2
+  printf '%s\n' "${output}" | awk -F= '/^android_wifi_serial=/ { print $2; exit }'
+}

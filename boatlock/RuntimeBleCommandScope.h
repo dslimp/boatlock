@@ -32,13 +32,16 @@ inline RuntimeBleCommandScope runtimeBleClassifyCommand(
       command == "ANCHOR_OFF" || command == "STOP" ||
       command == "HEARTBEAT" || command == "MANUAL_OFF" ||
       command == "PAIR_CLEAR" || command == "AUTH_HELLO" ||
+      command == "SIM_LIST" || command == "SIM_STATUS" ||
+      command == "SIM_REPORT" || command == "SIM_ABORT" ||
       runtimeBleCommandHasPrefix(command, "SET_ANCHOR:") ||
       runtimeBleCommandHasPrefix(command, "MANUAL_SET:") ||
       runtimeBleCommandHasPrefix(command, "NUDGE_DIR:") ||
       runtimeBleCommandHasPrefix(command, "NUDGE_BRG:") ||
       runtimeBleCommandHasPrefix(command, "SET_HOLD_HEADING:") ||
       runtimeBleCommandHasPrefix(command, "PAIR_SET:") ||
-      runtimeBleCommandHasPrefix(command, "AUTH_PROVE:")) {
+      runtimeBleCommandHasPrefix(command, "AUTH_PROVE:") ||
+      runtimeBleCommandHasPrefix(command, "SIM_RUN:")) {
     return RuntimeBleCommandScope::RELEASE;
   }
 
@@ -57,10 +60,7 @@ inline RuntimeBleCommandScope runtimeBleClassifyCommand(
     return RuntimeBleCommandScope::SERVICE;
   }
 
-  if (command == "SIM_LIST" || command == "SIM_STATUS" || command == "SIM_REPORT" ||
-      command == "SIM_ABORT" ||
-      runtimeBleCommandHasPrefix(command, "SIM_RUN:") ||
-      runtimeBleCommandHasPrefix(command, "SET_PHONE_GPS:")) {
+  if (runtimeBleCommandHasPrefix(command, "SET_PHONE_GPS:")) {
     return RuntimeBleCommandScope::DEV_HIL;
   }
 

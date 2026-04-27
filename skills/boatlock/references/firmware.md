@@ -23,6 +23,7 @@
 - `boatlock/BNO08xCompass.h`: BNO08x UART-RVC init, frame freshness, heading offset, and inertial telemetry
 - `boatlock/BnoRvcFrame.h`: UART-RVC frame checksum, decode, and stream resync parser
 - `boatlock/display.cpp`: on-device UI math and sign conventions
+- `boatlock/SdCardLogger.cpp`: onboard microSD JSONL diagnostics, queueing, and rotation
 - `boatlock/Settings.h`: persisted settings, defaults, ranges, schema version
 - `boatlock/AnchorControl.h`: persisted anchor-point writes
 - `boatlock/MotorControl.h`: anchor thrust output limiting, ramping, anti-hunt timing, and manual motor output
@@ -49,9 +50,25 @@
   - GPS `RX=17`, `TX=18`
   - BNO08x UART-RVC `RX=12`, `TX=11` reserved for SH2 UART, `RST=13`, `baud=115200`
   - BNO08x protocol select wiring: `P0/PS0=3V3`, `P1/PS1=GND`
-  - motor `PWM=7`, direction pins `5/10`
+  - motor `PWM=7`, direction pins `8/10`
+  - steering DRV8825 `STEP=6`, `DIR=16`
   - BOOT button `0`
   - STOP button `15`
+- The bench board is the Waveshare `ESP32-S3-LCD-2` class board. Vendor demos
+  show the onboard TF/microSD slot on SDSPI `SCLK=39`, `MOSI=38`, `MISO=40`,
+  `CS=41`. The ST7789 LCD shares `SCLK=39`, `MOSI=38`, `MISO=40` and uses
+  `CS=45`, `DC=42`, `BL=1`.
+- Current `display.cpp` keeps the already proven LCD write-only config with
+  `MISO=-1`. Do not change it just for SD logging unless hardware testing shows
+  the shared-bus display path needs it.
+- The production SD logger writes JSONL files under `/boatlock/blNNNNN.jsonl`,
+  rotates each file at approximately `8 MiB`, and deletes older BoatLock log
+  files when free space falls below approximately `8 MiB`. It must remain
+  bounded and nonblocking: dropped lines are preferable to blocking control.
+- The user-supplied ESP32-S3-LCD-2 header pinout exposes current steering, GPS,
+  BNO08x, STOP, motor `PWM=7`, motor `DIR1=8`, and motor `DIR2=10` pins.
+  `GPIO5` is not exposed in that pinout, so do not reuse it for powered actuator
+  wiring without a separate board-level proof.
 - `README.md` may lag current motor-pin assignments; trust `boatlock/main.cpp`.
 
 ## Settings And Persistence
@@ -59,7 +76,7 @@
 - Settings are stored in ESP32 NVS namespace `boatlock_cfg` as:
   - `schema` marker
   - one raw `float` blob per setting key
-- Current schema version is `Settings::VERSION = 0x18`.
+- Current schema version is `Settings::VERSION = 0x1B`.
 - Missing NVS keys keep current defaults and are persisted on boot writeback; removed keys are ignored.
 - Older schemas keep existing values by current key, apply explicit versioned migration rules, and update the schema marker plus normalized/missing keys.
 - Future schemas are loaded read-only on boot: known current keys may be used in RAM, but firmware must not downgrade the schema marker or write missing/default keys just because an older image booted after OTA rollback.
@@ -196,6 +213,13 @@
 - Runtime motion must validate auto-control settings as finite before using them for heading alignment, thrust limits, or ramp policy.
 - Runtime supervisor config must clamp/fail closed before timeout or command-limit values enter failsafe decisions.
 - Manual control is a source-owned deadman lease. Same-source updates may refresh it; competing sources wait until TTL expiry or explicit manual stop.
+- Stepper control uses `AccelStepper::DRIVER` for the DRV8825-compatible
+  STEP/DIR path. `GPIO6` is STEP and `GPIO16` is DIR for the current bench
+  wiring, using the two former ULN2003 header positions closest to board center.
+- Steering geometry is `7200` output steps/rev: Vanchor uses a `36:1` gearbox
+  and its Arduino/config baseline uses a `200` step/rev motor.
+  If DRV8825 microstepping is wired active, multiply this by the microstep
+  factor and update firmware/docs together.
 - Stepper control must fail closed on neutral/invalid manual input, use bounded angle normalization, and release coils after idle/cancel through a deterministic timer.
 - Stepper idle release timing must use explicit active state; `idleSinceMs == 0` is a valid timestamp, not a sentinel.
 - Random `fallbackHeading` and `fallbackBearing` are UI placeholders only.

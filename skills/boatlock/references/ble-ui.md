@@ -108,12 +108,12 @@
 ## Command Surface
 
 - Command scope groups:
-  - release: stream/control point, explicit anchor save/enable/disable, manual deadman, STOP/heartbeat, anchor jog, hold-heading, and pairing/auth commands.
+  - release: stream/control point, explicit anchor save/enable/disable, manual deadman, STOP/heartbeat, anchor jog, hold-heading, pairing/auth commands, and `SIM_*`.
   - service: anchor tuning profiles, heading offset/reset, SH2 compass calibration/DCD/tare, stepper bow/tuning, and BLE OTA.
-  - dev/HIL: `SET_PHONE_GPS` and `SIM_*`.
+  - dev/HIL: `SET_PHONE_GPS`.
 - The normal Flutter water UI must expose only release commands.
 - Service UI is hidden unless the app is built with `--dart-define=BOATLOCK_SERVICE_UI=true` or a test/service harness passes `allowService: true` to `sendCustomCommand()`.
-- Dev/HIL commands are hidden unless the app is built with `--dart-define=BOATLOCK_DEV_HIL_COMMANDS=true` or a validation harness passes `allowDevHil: true` to `sendCustomCommand()`.
+- Dev/HIL commands are hidden unless the app is built with `--dart-define=BOATLOCK_DEV_HIL_COMMANDS=true` or a validation harness passes `allowDevHil: true` to `sendCustomCommand()`. `SIM_*` is not dev/HIL; it must run fail-quiet in the normal firmware and provide simulated live telemetry for map views.
 - `SEC_CMD` is the security envelope; the effective scope is the scope of the wrapped payload. Flutter custom-command callers should pass the unwrapped command and let `BleBoatLock` build the envelope after classification.
 - Do not keep compatibility-only BLE commands in firmware or Flutter. If a command is obsolete, remove it from command handling, UI, tests, and docs in the same change.
 - Route commands, phone-heading commands, and log-export commands are removed and should stay no-op unless intentionally restored.
@@ -188,4 +188,5 @@
 - `MANUAL_OFF` stops Manual output explicitly.
 - Do not reintroduce split legacy commands such as `MANUAL`, `MANUAL_DIR`, or `MANUAL_SPEED`.
 - `SET_STEPPER_BOW` stores the current stepper position as bow zero.
-- Stepper geometry is fixed to `4096` steps per revolution.
+- Stepper geometry is fixed to `7200` output steps per steering revolution
+  (`200` motor steps/rev times the Vanchor `36:1` gearbox).

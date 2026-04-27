@@ -58,12 +58,18 @@ void main() {
     );
   });
 
-  test('classifies simulation and injected GPS commands as dev HIL scope', () {
-    expect(classifyBoatLockCommand('SIM_LIST'), BoatLockCommandScope.devHil);
+  test('classifies simulation commands as release scope', () {
+    expect(classifyBoatLockCommand('SIM_LIST'), BoatLockCommandScope.release);
     expect(
-      classifyBoatLockCommand('SIM_RUN:S0_hold_still_good,1'),
-      BoatLockCommandScope.devHil,
+      classifyBoatLockCommand('SIM_RUN:S0,1'),
+      BoatLockCommandScope.release,
     );
+    expect(classifyBoatLockCommand('SIM_STATUS'), BoatLockCommandScope.release);
+    expect(classifyBoatLockCommand('SIM_REPORT'), BoatLockCommandScope.release);
+    expect(classifyBoatLockCommand('SIM_ABORT'), BoatLockCommandScope.release);
+  });
+
+  test('classifies injected GPS commands as dev HIL scope', () {
     expect(
       classifyBoatLockCommand('SET_PHONE_GPS:59.100000,30.200000,0.0'),
       BoatLockCommandScope.devHil,

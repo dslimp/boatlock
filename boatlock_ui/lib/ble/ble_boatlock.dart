@@ -117,6 +117,8 @@ class BleBoatLock with WidgetsBindingObserver {
   Completer<bool>? _otaBeginAck;
   Completer<bool>? _otaFinishAck;
   bool _otaFinishRequested = false;
+  bool _otaFinishWriteAccepted = false;
+  bool _otaFinishDisconnectSeen = false;
 
   BleBoatLock({required this.onData, this.onLog});
 
@@ -305,6 +307,7 @@ class BleBoatLock with WidgetsBindingObserver {
         _log('BLE state: $state');
         _setDiagnostics(connectionState: state.name);
         if (state == BluetoothConnectionState.disconnected) {
+          _handleOtaFinishDisconnect();
           unawaited(_applyReconnectDecision(_reconnectPolicy.disconnected()));
         }
       });
@@ -621,6 +624,17 @@ class BleBoatLock with WidgetsBindingObserver {
     }
   }
 
+  void _handleOtaFinishDisconnect() {
+    if (!_otaFinishRequested) return;
+    _otaFinishDisconnectSeen = true;
+    if (_otaFinishWriteAccepted &&
+        _otaFinishAck != null &&
+        !_otaFinishAck!.isCompleted) {
+      _log('BLE OTA finish accepted by post-finish disconnect');
+      _otaFinishAck!.complete(true);
+    }
+  }
+
   Future<bool> setAnchor() async {
     if (_cmdChar == null) return false;
     final cmd = buildSetAnchorCommand(_lastData);
@@ -792,13 +806,21 @@ class BleBoatLock with WidgetsBindingObserver {
 
       _otaFinishAck = Completer<bool>();
       _otaFinishRequested = true;
+      _otaFinishWriteAccepted = false;
+      _otaFinishDisconnectSeen = false;
       _log('BLE OTA finish requested sent=$sent total=${firmware.length}');
       finishRequested = await sendCustomCommand(
         'OTA_FINISH',
         allowService: true,
       );
+      _otaFinishWriteAccepted = finishRequested;
       if (!finishRequested) {
         _log('BLE OTA finish write returned false, waiting for firmware ack');
+      } else if (_otaFinishDisconnectSeen &&
+          _otaFinishAck != null &&
+          !_otaFinishAck!.isCompleted) {
+        _log('BLE OTA finish accepted by earlier post-finish disconnect');
+        _otaFinishAck!.complete(true);
       }
       finishAccepted = await _waitForOtaAck(
         _otaFinishAck!,
@@ -825,6 +847,8 @@ class BleBoatLock with WidgetsBindingObserver {
       _otaBeginAck = null;
       _otaFinishAck = null;
       _otaFinishRequested = false;
+      _otaFinishWriteAccepted = false;
+      _otaFinishDisconnectSeen = false;
       if (!_isDisposed && _cmdChar != null) {
         _startHeartbeat();
       }
@@ -1068,14 +1092,19 @@ class BleBoatLock with WidgetsBindingObserver {
     if (_otaBeginAck != null && !_otaBeginAck!.isCompleted) {
       _otaBeginAck!.complete(false);
     }
-    if (_otaFinishAck != null &&
-        !_otaFinishAck!.isCompleted &&
-        !_otaFinishRequested) {
-      _otaFinishAck!.complete(false);
+    if (_otaFinishAck != null && !_otaFinishAck!.isCompleted) {
+      if (_otaFinishRequested) {
+        _handleOtaFinishDisconnect();
+      } else {
+        _otaFinishAck!.complete(false);
+      }
     }
     _otaBeginAck = null;
-    _otaFinishAck = null;
-    _otaFinishRequested = false;
+    if (!_otaFinishRequested) {
+      _otaFinishAck = null;
+      _otaFinishWriteAccepted = false;
+      _otaFinishDisconnectSeen = false;
+    }
     _rssiThrottle.reset();
   }
 

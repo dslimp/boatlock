@@ -209,6 +209,16 @@ void test_default_release_allows_release_command_path() {
   TEST_ASSERT_EQUAL_FLOAT(1.0f, settings.get("HoldHeading"));
 }
 
+void test_default_release_allows_sim_command_path() {
+  simHandlerConsumes = true;
+
+  handleBleCommand("SIM_STATUS");
+
+  TEST_ASSERT_EQUAL(1, controlActivityNotes);
+  TEST_ASSERT_EQUAL(1, simHandlerCalls);
+  TEST_ASSERT_EQUAL_STRING("SIM_STATUS", simLastCommand.c_str());
+}
+
 void test_default_release_rejects_ota_before_safe_state_side_effects() {
   settings.set("AnchorEnabled", 1.0f);
   manualControl.apply(ManualControlSource::BLE_PHONE, 1, 50, 500, 1000);
@@ -241,10 +251,7 @@ void test_default_release_rejects_service_tuning_before_side_effects() {
   TEST_ASSERT_FALSE(stepperBowCaptured);
 }
 
-void test_default_release_rejects_dev_hil_before_side_effects() {
-  simHandlerConsumes = true;
-
-  handleBleCommand("SIM_STATUS");
+void test_default_release_rejects_external_sensor_injection_before_side_effects() {
   handleBleCommand("SET_PHONE_GPS:59.9386,30.3141,12.7,9");
 
   TEST_ASSERT_EQUAL(0, controlActivityNotes);
@@ -273,9 +280,10 @@ void test_default_release_gates_unwrapped_secure_payload_scope() {
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_default_release_allows_release_command_path);
+  RUN_TEST(test_default_release_allows_sim_command_path);
   RUN_TEST(test_default_release_rejects_ota_before_safe_state_side_effects);
   RUN_TEST(test_default_release_rejects_service_tuning_before_side_effects);
-  RUN_TEST(test_default_release_rejects_dev_hil_before_side_effects);
+  RUN_TEST(test_default_release_rejects_external_sensor_injection_before_side_effects);
   RUN_TEST(test_default_release_gates_unwrapped_secure_payload_scope);
   return UNITY_END();
 }

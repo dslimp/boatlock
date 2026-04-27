@@ -89,7 +89,16 @@ Use this skill for any code, review, debugging, test, or docs task in the BoatLo
 - Anchor point saving must be explicit and validated; never add default arguments or helper paths that arm Anchor as a side effect of storing coordinates.
 - BLE identity and UUIDs are fixed: `BoatLock`, `12ab`, `34cd`, `56ef`, `78ab`.
 - When `secPaired=1`, control and write commands must go through `SEC_CMD`; pairing opens only from the hardware STOP long-press flow.
-- On-device HIL scenarios `S0..S19` plus RF water scenarios `RF0..RF4` are part of the regression surface.
+- On-device HIL scenarios `S0..S19` plus RF water scenarios `RF0..RF4` are release-scope simulation commands. Active `SIM` mode must ignore real sensor values for telemetry/control and keep motor/stepper outputs quiet while BLE live frames expose simulated map movement.
+- The current bench board is the Waveshare ESP32-S3-LCD-2 class board. Keep its
+  reference images under `docs/assets/hardware/` and use
+  `skills/boatlock/references/firmware.md` before changing pins.
+- Persistent bench wireless means Android ADB Wi-Fi to the phone plus BLE to the
+  ESP32. Do not treat direct ESP32 Wi-Fi OTA as the normal always-on debug path
+  while BLE is active.
+- Water-debug logs belong on the onboard microSD JSONL logger. Keep SD writes
+  bounded/nonblocking and require real-card proof before relying on logs for
+  protected-water sessions.
 
 ## Working Pattern
 

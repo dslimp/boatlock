@@ -84,15 +84,7 @@ String? appE2eProfileRejectionReason(
   switch (mode) {
     case BleSmokeMode.sim:
     case BleSmokeMode.sim_suite:
-      if (rejection.matchesCommandPrefix('SIM_RUN') ||
-          rejection.matchesCommandPrefix('SIM_ABORT') ||
-          rejection.matchesCommandPrefix('SIM_LIST') ||
-          rejection.matchesCommandPrefix('SIM_STATUS') ||
-          rejection.matchesCommandPrefix('SIM_REPORT')) {
-        return mode == BleSmokeMode.sim_suite
-            ? 'app_sim_suite_rejected_by_profile_$profile'
-            : 'app_sim_rejected_by_profile_$profile';
-      }
+      return null;
     case BleSmokeMode.compass:
       if (rejection.matchesCommandPrefix('COMPASS_CAL_START') ||
           rejection.matchesCommandPrefix('COMPASS_DCD_AUTOSAVE_OFF') ||
@@ -343,16 +335,20 @@ class BoatLockAppE2eProbe {
       unawaited(_sendStatusManualSet());
       return;
     }
-    if (!_statusManualModeSeen) {
-      if (!_statusManualSetSent || data.mode != 'MANUAL') {
+    if (!_statusManualOffSent) {
+      if (!_statusManualSetSent) {
         return;
       }
-      _statusManualModeSeen = true;
-      _stage('status_manual_mode_seen');
+      if (data.mode == 'MANUAL') {
+        _statusManualModeSeen = true;
+        _stage('status_manual_mode_seen');
+      } else if (!smokeStatusRecoveredAfterStop(data)) {
+        return;
+      }
       unawaited(_sendStatusManualOff());
       return;
     }
-    if (!_statusManualOffSent || !smokeStatusRecoveredAfterStop(data)) {
+    if (!smokeStatusRecoveredAfterStop(data)) {
       return;
     }
     _finish(true, 'app_status_stop_alert_roundtrip');
@@ -557,10 +553,7 @@ class BoatLockAppE2eProbe {
     _simSuiteReportBuffer = '';
     _simSuitePhase = _SimSuitePhase.starting;
     _stage('sim_suite_run_${_simSuiteIndex + 1}');
-    final ok = await _ble.sendCustomCommand(
-      'SIM_RUN:$scenarioId,0',
-      allowDevHil: true,
-    );
+    final ok = await _ble.sendCustomCommand('SIM_RUN:$scenarioId,0');
     _log('sim_suite_run id=$scenarioId ok=$ok');
     if (!ok) {
       _finish(false, 'app_sim_suite_run_write_failed');
@@ -760,10 +753,7 @@ class BoatLockAppE2eProbe {
   }
 
   Future<void> _sendSimRun() async {
-    final ok = await _ble.sendCustomCommand(
-      'SIM_RUN:S0_hold_still_good,1',
-      allowDevHil: true,
-    );
+    final ok = await _ble.sendCustomCommand('SIM_RUN:S0,1');
     _log('sim_run ok=$ok');
     if (!ok) {
       _finish(false, 'app_sim_run_failed');
@@ -771,7 +761,7 @@ class BoatLockAppE2eProbe {
   }
 
   Future<void> _sendSimAbort() async {
-    final ok = await _ble.sendCustomCommand('SIM_ABORT', allowDevHil: true);
+    final ok = await _ble.sendCustomCommand('SIM_ABORT');
     _simAbortSent = ok;
     _log('sim_abort ok=$ok');
     if (!ok) {
@@ -780,7 +770,7 @@ class BoatLockAppE2eProbe {
   }
 
   Future<void> _sendSimSuiteList() async {
-    final ok = await _ble.sendCustomCommand('SIM_LIST', allowDevHil: true);
+    final ok = await _ble.sendCustomCommand('SIM_LIST');
     _log('sim_suite_list ok=$ok');
     if (!ok) {
       _finish(false, 'app_sim_suite_list_failed');
@@ -807,7 +797,7 @@ class BoatLockAppE2eProbe {
   }
 
   Future<void> _sendSimSuiteStatus() async {
-    final ok = await _ble.sendCustomCommand('SIM_STATUS', allowDevHil: true);
+    final ok = await _ble.sendCustomCommand('SIM_STATUS');
     if (!ok) {
       _finish(false, 'app_sim_suite_status_failed');
     }
@@ -821,7 +811,7 @@ class BoatLockAppE2eProbe {
     _simSuitePhase = _SimSuitePhase.reporting;
     _simSuiteReportBuffer = '';
     _stopSimSuitePolling();
-    final ok = await _ble.sendCustomCommand('SIM_REPORT', allowDevHil: true);
+    final ok = await _ble.sendCustomCommand('SIM_REPORT');
     _log('sim_suite_report_request ok=$ok');
     if (!ok) {
       _finish(false, 'app_sim_suite_report_failed');

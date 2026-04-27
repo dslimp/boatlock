@@ -129,7 +129,7 @@ void main() {
         'scope=service command=COMPASS_CAL_START';
     const hilLine =
         '[BLE] command rejected reason=profile profile=service '
-        'scope=dev_hil command=SIM_RUN:S0_hold_still_good,1';
+        'scope=dev_hil command=SET_PHONE_GPS:59,30';
 
     expect(
       smokeCommandRejectedByProfile(
@@ -143,7 +143,7 @@ void main() {
     expect(
       smokeCommandRejectedByProfile(
         hilLine,
-        commandPrefix: 'SIM_RUN',
+        commandPrefix: 'SET_PHONE_GPS',
         profile: 'service',
         scope: 'dev_hil',
       ),
@@ -152,7 +152,7 @@ void main() {
     expect(
       smokeCommandRejectedByProfile(
         hilLine,
-        commandPrefix: 'SIM_ABORT',
+        commandPrefix: 'SIM_RUN',
         profile: 'service',
       ),
       isFalse,

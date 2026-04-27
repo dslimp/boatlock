@@ -225,12 +225,16 @@ class _BleSmokePageState extends State<BleSmokePage> {
       }
       return;
     }
-    if (!_statusManualModeSeen) {
-      if (!_statusManualSetSent || data.mode != 'MANUAL') {
+    if (!_statusManualOffSent) {
+      if (!_statusManualSetSent) {
         return;
       }
-      _statusManualModeSeen = true;
-      _appendEvent(encodeSmokeStageLine('status_manual_mode_seen'));
+      if (data.mode == 'MANUAL') {
+        _statusManualModeSeen = true;
+        _appendEvent(encodeSmokeStageLine('status_manual_mode_seen'));
+      } else if (!smokeStatusRecoveredAfterStop(data)) {
+        return;
+      }
       _sendStatusManualOff();
       if (mounted) {
         setState(() {
@@ -240,7 +244,7 @@ class _BleSmokePageState extends State<BleSmokePage> {
       }
       return;
     }
-    if (!_statusManualOffSent || !smokeStatusRecoveredAfterStop(data)) {
+    if (!smokeStatusRecoveredAfterStop(data)) {
       return;
     }
     _finish(true, 'status_stop_alert_roundtrip');
@@ -425,10 +429,7 @@ class _BleSmokePageState extends State<BleSmokePage> {
   }
 
   Future<void> _sendSimRun() async {
-    final ok = await _ble.sendCustomCommand(
-      'SIM_RUN:S0_hold_still_good,1',
-      allowDevHil: true,
-    );
+    final ok = await _ble.sendCustomCommand('SIM_RUN:S0,1');
     _appendEvent('sim_run ok=$ok');
     if (!ok) {
       _finish(false, 'sim_run_failed');
@@ -436,7 +437,7 @@ class _BleSmokePageState extends State<BleSmokePage> {
   }
 
   Future<void> _sendSimAbort() async {
-    final ok = await _ble.sendCustomCommand('SIM_ABORT', allowDevHil: true);
+    final ok = await _ble.sendCustomCommand('SIM_ABORT');
     _simAbortSent = ok;
     _appendEvent('sim_abort ok=$ok');
     if (!ok) {

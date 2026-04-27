@@ -333,6 +333,25 @@ Implication for BoatLock:
 - Keep USB flashing through `tools/hw/nh02/flash.sh` as the recovery path for failed OTA, bad hashes, or partition/bootloader changes.
 - For Android, prove Wi-Fi ADB by installing/running a smoke or e2e APK through `--serial <ip>:5555`; `adb devices` alone is only discovery proof.
 
+## What STEP/DIR Steering Driver Guidance Gets Right
+
+- AccelStepper's `DRIVER` interface is the two-pin stepper-driver mode: pin 1 is
+  STEP and pin 2 is DIR. If an enable line is needed, use an explicit enable pin
+  instead of treating STEP/DIR as a power-disable path.
+- DRV8825-compatible carriers treat each STEP pulse as one microstep in the DIR
+  direction. RESET and SLEEP must be held high for the driver to operate, and
+  current limit must be set for the motor before powered tests.
+- The Vanchor reference gearbox uses `Ratio: 36`, documented as `36` stepper
+  rotations for one trolling-motor rotation, with `StepsPerRevolution: 200`.
+
+Implication for BoatLock:
+- Use `AccelStepper::DRIVER` for the DRV8825 path and set a DRV8825-safe STEP
+  pulse width.
+- Count steering geometry at the output shaft, not just the motor shaft:
+  `200 * 36 = 7200` output steps/rev before any microstepping multiplier.
+- Do not assume software idle disables DRV8825 coil current unless an enable,
+  sleep, or reset line is explicitly wired and proven.
+
 ## What Flutter And GitHub Release Delivery Guidance Gets Right
 
 - Flutter's CLI is the canonical build entry point for platform artifacts; use `flutter build apk` and `flutter build macos` with explicit `--dart-define` values for service-only variants.

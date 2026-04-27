@@ -116,12 +116,80 @@ inline uint8_t runtimeBleTelemetryQuality(int value, uint8_t maxValue) {
   return (uint8_t)value;
 }
 
+inline bool projectRuntimeBleSimMeters(double baseLat,
+                                       double baseLon,
+                                       float eastM,
+                                       float northM,
+                                       double* lat,
+                                       double* lon) {
+  if (!lat || !lon || !isfinite(baseLat) || !isfinite(baseLon) ||
+      !isfinite(eastM) || !isfinite(northM)) {
+    return false;
+  }
+
+  static constexpr double kMetersPerDegLat = 111320.0;
+  static constexpr double kDegToRad = 3.14159265358979323846 / 180.0;
+  const double cosLat = cos(baseLat * kDegToRad);
+  if (!isfinite(cosLat) || fabs(cosLat) < 0.01) {
+    return false;
+  }
+  *lat = baseLat + ((double)northM / kMetersPerDegLat);
+  *lon = baseLon + ((double)eastM / (kMetersPerDegLat * cosLat));
+  return isfinite(*lat) && isfinite(*lon);
+}
+
+inline bool applyRuntimeBleHilSimTelemetry(
+    RuntimeBleLiveTelemetry* telemetry,
+    const hilsim::HilScenarioRunner::LiveTelemetry& live) {
+  if (!telemetry || !live.valid) {
+    return false;
+  }
+
+  static constexpr double kSimBaseLat = 59.938630;
+  static constexpr double kSimBaseLon = 30.314130;
+  double boatLat = 0.0;
+  double boatLon = 0.0;
+  double anchorLat = 0.0;
+  double anchorLon = 0.0;
+  if (!projectRuntimeBleSimMeters(kSimBaseLat,
+                                  kSimBaseLon,
+                                  live.world.xM,
+                                  live.world.yM,
+                                  &boatLat,
+                                  &boatLon) ||
+      !projectRuntimeBleSimMeters(kSimBaseLat,
+                                  kSimBaseLon,
+                                  live.anchorXM,
+                                  live.anchorYM,
+                                  &anchorLat,
+                                  &anchorLon)) {
+    return false;
+  }
+
+  telemetry->lat = live.gnss.valid ? boatLat : 0.0;
+  telemetry->lon = live.gnss.valid ? boatLon : 0.0;
+  telemetry->anchorLat = anchorLat;
+  telemetry->anchorLon = anchorLon;
+  telemetry->distanceM = live.errTrueM;
+  telemetry->anchorBearingDeg = isfinite(live.bearingDeg) ? live.bearingDeg : 0.0f;
+  telemetry->headingDeg =
+      (live.heading.valid && isfinite(live.heading.headingDeg)) ? live.heading.headingDeg : 0.0f;
+  telemetry->headingRawDeg = telemetry->headingDeg;
+  telemetry->compassQ = live.heading.valid ? 3 : 0;
+  telemetry->magQ = live.heading.valid ? 3 : 0;
+  telemetry->gyroQ = live.heading.valid ? 3 : 0;
+  telemetry->rvAccDeg = live.heading.valid ? 2.0f : 0.0f;
+  telemetry->gnssQ = live.gnss.valid ? 2 : 0;
+  return true;
+}
+
 inline void registerRuntimeBleParams(const RuntimeBleParamContext& context) {
   BLEBoatLock* ble = &context.ble;
   Settings* settings = &context.settings;
   RuntimeGnss* gnss = &context.gnss;
   AnchorControl* anchor = &context.anchor;
   BNO08xCompass* compass = &context.compass;
+  hilsim::HilSimManager* hilSim = &context.hilSim;
   BleSecurity* security = &context.security;
   const BLEBoatLock::CommandHandler commandHandler = context.commandHandler;
   const auto compassReady = context.compassReady;
@@ -170,6 +238,10 @@ inline void registerRuntimeBleParams(const RuntimeBleParamContext& context) {
     telemetry.statusReasons = statusSnapshot.reasons;
     telemetry.secReject = std::string(security->lastRejectString());
     telemetry.gnssQ = runtimeBleTelemetryQuality(gnssQualityLevel(), 2);
+    hilsim::HilScenarioRunner::LiveTelemetry simLive;
+    if (hilSim->isRunning() && hilSim->liveTelemetry(&simLive)) {
+      applyRuntimeBleHilSimTelemetry(&telemetry, simLive);
+    }
     return telemetry;
   });
 }

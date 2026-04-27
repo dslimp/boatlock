@@ -71,7 +71,7 @@ const SettingEntry defaultEntries[] = {
     {"MagScaleZ",    "Compass scale Z",   TYPE_FLOAT, 1.0, 1.0, 0.1, 5.0, 0.01, "", false},
     {"StepMaxSpd",   "Stepper max speed", TYPE_FLOAT, 700.0, 700.0, 100.0, 1500.0, 10.0, "", true},
     {"StepAccel",    "Stepper accel",     TYPE_FLOAT, 250.0, 250.0,  50.0, 1200.0, 10.0, "", true},
-    {"StepSpr",      "Stepper steps/rev", TYPE_INT,   4096, 4096,  4096,  4096,   1, "", false},
+    {"StepSpr",      "Stepper steps/rev", TYPE_INT,   7200, 7200,  7200,  7200,   1, "", false},
 };
 
 static const int count = sizeof(defaultEntries) / sizeof(defaultEntries[0]);
@@ -81,7 +81,7 @@ const char* imuTypeNames[] = { "BNO055", "MPU9250", "BNO085", "LSM9DS1", "None" 
 
 class Settings {
 public:
-    static constexpr uint8_t VERSION = 0x1A;
+    static constexpr uint8_t VERSION = 0x1B;
     static constexpr const char* NVS_NAMESPACE = "boatlock_cfg";
     static constexpr const char* NVS_SCHEMA_KEY = "schema";
     // Keeps the existing BleSecurity EEPROM offset stable while settings live in NVS.

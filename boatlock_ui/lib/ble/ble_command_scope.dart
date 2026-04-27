@@ -19,6 +19,10 @@ const Set<String> _releaseExactCommands = {
   'MANUAL_OFF',
   'PAIR_CLEAR',
   'AUTH_HELLO',
+  'SIM_LIST',
+  'SIM_STATUS',
+  'SIM_REPORT',
+  'SIM_ABORT',
 };
 
 const List<String> _releaseCommandPrefixes = [
@@ -29,6 +33,7 @@ const List<String> _releaseCommandPrefixes = [
   'SET_HOLD_HEADING:',
   'PAIR_SET:',
   'AUTH_PROVE:',
+  'SIM_RUN:',
 ];
 
 const Set<String> _serviceExactCommands = {
@@ -53,14 +58,9 @@ const List<String> _serviceCommandPrefixes = [
   'OTA_BEGIN:',
 ];
 
-const Set<String> _devHilExactCommands = {
-  'SIM_LIST',
-  'SIM_STATUS',
-  'SIM_REPORT',
-  'SIM_ABORT',
-};
+const Set<String> _devHilExactCommands = {};
 
-const List<String> _devHilCommandPrefixes = ['SIM_RUN:', 'SET_PHONE_GPS:'];
+const List<String> _devHilCommandPrefixes = ['SET_PHONE_GPS:'];
 
 BoatLockCommandScope classifyBoatLockCommand(String command) {
   final cmd = command;

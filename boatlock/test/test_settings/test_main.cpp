@@ -93,7 +93,7 @@ void test_constructor_provides_safe_defaults_without_load_or_reset() {
   Settings s;
 
   assertQuietAnchorDefaults(s);
-  TEST_ASSERT_EQUAL_FLOAT(4096.0f, s.get("StepSpr"));
+  TEST_ASSERT_EQUAL_FLOAT(7200.0f, s.get("StepSpr"));
   TEST_ASSERT_TRUE(s.set("HoldRadius", 4.0f));
   TEST_ASSERT_EQUAL_FLOAT(4.0f, s.get("HoldRadius"));
 }

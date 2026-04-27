@@ -30,12 +30,13 @@ real battery/current/power telemetry.
 | `nh02` acceptance passed after flash |  |  |
 | Android status/manual/reconnect smokes passed after flash |  |  |
 | No-load output instrumentation passed |  |  |
-| Steering intake complete if steering driver is not proven ULN2003 |  |  |
+| DRV8825/Vanchor steering intake complete |  |  |
 | Prop/load safe for current phase |  |  |
 | STOP command tested before launch |  |  |
 | Hardware STOP tested before launch |  |  |
 | Manual release-to-stop tested before launch |  |  |
 | BLE reconnect tested before launch |  |  |
+| microSD inserted and `[SD] logger ready=1` seen after boot |  |  |
 | GNSS fix visible |  |  |
 | Heading fresh |  |  |
 | Anchor preflight blocks/accepts as expected |  |  |
@@ -64,7 +65,8 @@ session.
   steering driver before power is applied.
 - Screenshot or exported app state before each phase: readiness, auth, GNSS,
   heading, anchor, failsafe, manual lease, and motor readiness.
-- Serial/BLE logs for the whole session, including boot markers and STOP tests.
+- microSD `/boatlock/*.jsonl` logs for the whole session, plus Serial/BLE logs
+  for boot markers, connection state, and STOP tests.
 - External voltage/current readings for idle, pulse, peak, and post-run states.
 - Track/drift notes for every anchor phase, even if the run is aborted early.
 - Weather and water notes: wind estimate, current estimate, wave/wake exposure,

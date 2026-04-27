@@ -2,7 +2,7 @@
 
 Use this checklist before connecting or commanding the real brushed/collector
 thruster motor driver. The current firmware path assumes one PWM output on
-`GPIO7` and two direction outputs on `GPIO5` and `GPIO10`. Idle in the current
+`GPIO7` and two direction outputs on `GPIO8` and `GPIO10`. Idle in the current
 code is `PWM=0` with both direction outputs `LOW`.
 
 This document captures hardware facts. It does not approve powered motor tests
@@ -203,7 +203,7 @@ firmware handles the fault mode explicitly.
 Once the real hardware facts are known, update the release path in one coherent
 change. Required decision points:
 
-- `boatlock/main.cpp`: confirm or replace `PWM=7`, `DIR=5`, `DIR=10`, and any
+- `boatlock/main.cpp`: confirm or replace `PWM=7`, `DIR=8`, `DIR=10`, and any
   new enable/fault/current pins.
 - `boatlock/MotorControl.h`: add an explicit driver profile if the actual input
   mode is not the current `PWM + DIR1 + DIR2` H-bridge behavior.

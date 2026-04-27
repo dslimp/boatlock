@@ -6941,3 +6941,334 @@ Self-review:
 - This proves local firmware/app/wrapper readiness for the full hardware suite.
   It still needs an actual `nh02` `tools/hw/nh02/run-sim-suite.sh` run to call
   the RF packet suite hardware-proven.
+
+### 2026-04-26 Stage 235: Release-firmware HIL sim path and nh02 RF proof
+
+Scope:
+- Correct the on-device HIL model so simulation is not tied to a separate
+  acceptance firmware image.
+- Keep `SIM_*` usable from the normal phone/app BLE path while real sensors are
+  ignored and real outputs stay quiet during active SIM mode.
+- Prove the full `S0..S19` plus `RF0..RF4` suite on `nh02`.
+
+Key outcomes:
+- Moved `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, and `SIM_ABORT` into
+  release command scope in firmware and Flutter command guards.
+- Left external sensor injection (`SET_PHONE_GPS`) in dev/HIL scope.
+- During active SIM mode, the normal firmware loop skips GPS UART reads, BOOT
+  anchor handling, BNO08x read/retry/health updates, and builds runtime status
+  from live sim samples. The STOP button still runs.
+- BLE live telemetry now projects simulated world meters into lat/lon and
+  anchor lat/lon so the phone/laptop map sees simulated boat movement through
+  the normal live frame.
+- Updated the production-app e2e and smoke paths to send SIM commands without a
+  dev/HIL override.
+- Changed `tools/hw/nh02/run-sim-suite.sh` to flash the release profile, run
+  boot acceptance, and then run production-app `sim_suite`; it no longer flashes
+  an acceptance image for SIM.
+- Updated protocol, nh02 docs, repo skills, and CI wrapper tests to document
+  release-scope SIM.
+
+Validation:
+- `cd boatlock && platformio test -e native` -> PASS (`420/420`).
+- `cd boatlock_ui && flutter test` -> PASS (`120/120`).
+- `cd boatlock && platformio run -e esp32s3_release` -> PASS.
+- `cd boatlock && platformio run -e esp32s3_service` -> PASS.
+- `cd boatlock && platformio run -e esp32s3_acceptance` -> PASS.
+- `cd boatlock && platformio test -e native -f test_ble_security` -> PASS
+  (`6/6`) after adding SIM paired-mode auth assertions.
+- `cd boatlock_ui && flutter test test/ble_security_policy_test.dart` -> PASS
+  (`4/4`) after adding SIM paired-mode plain-command assertions.
+- `pytest -q tools/ci/test_android_smoke_modes.py` -> PASS (`9/9`).
+- `bash -n tools/hw/nh02/run-sim-suite.sh tools/android/run-app-e2e.sh tools/hw/nh02/android-run-app-e2e.sh tools/android/run-smoke.sh tools/hw/nh02/android-run-smoke.sh` -> PASS.
+- `git diff --check` -> PASS.
+- `tools/hw/nh02/run-sim-suite.sh --serial 68b657f0` -> PASS:
+  release flash, boot acceptance PASS, Android production-app `sim_suite`
+  result `pass=true reason=app_sim_suite_all_passed`, `25` scenarios.
+
+Self-review:
+- The hardware proof is now on ordinary release firmware and includes the RF
+  packet scenarios. The remaining gap is true runtime loading of arbitrary
+  scenario files over BLE; this slice keeps the standard catalog in firmware,
+  with the phone/app selecting and reporting scenarios through normal commands.
+
+### 2026-04-27 Stage 236: Wi-Fi-controlled OTA and diagnostic bench proof
+
+Scope:
+- Prove the strongest no-local-USB firmware/diagnostic path available for the
+  current `nh02` bench before powered stepper work.
+- Distinguish direct ESP debug Wi-Fi OTA from the production phone-bridged BLE
+  OTA path controlled over Android ADB Wi-Fi.
+
+Key outcomes:
+- Confirmed `nh02` target before mutation: expected ESP32-S3 USB serial
+  `98:88:E0:03:BA:5C`, RFC2217 active on port `4000`, Android phone
+  `68b657f0`, and ADB Wi-Fi serial `192.168.88.33:5555`.
+- `BOATLOCK_WIFI_SSID`, `BOATLOCK_WIFI_PASS`, and `BOATLOCK_OTA_PASS` were not
+  set locally, so real direct ESP `esp32s3_debug_wifi_ota` flashing was not run.
+  The env still compiles with placeholder defines; actual AP proof needs real
+  credentials.
+- Seed-flashed the service profile on `nh02` and kept the bench on a
+  service-capable image so BLE OTA remains available for the next iteration.
+- Found and fixed an app-side OTA race: after a successful `OTA_FINISH` write,
+  ESP32 may reboot before the app receives the `[OTA] finish ok` notify. The app
+  now accepts the post-finish disconnect as success and the e2e wrapper still
+  requires reconnect plus telemetry recovery.
+- Found and fixed status smoke cleanup: STOP recovery can clear directly to
+  `IDLE/WARN` after zero-throttle manual recovery without an observable
+  intermediate `MANUAL` frame. The wrappers now still send `MANUAL_OFF` cleanup
+  and accept the recovered non-alert state.
+- Promoted both durable acceptance rules into `docs/HARDWARE_NH02.md` and
+  `skills/boatlock-hardware-acceptance/SKILL.md`.
+
+Validation:
+- `pytest -q tools/ci/test_ble_ota_workflow.py tools/ci/test_android_smoke_modes.py`
+  -> PASS (`12/12`).
+- `cd boatlock && BOATLOCK_WIFI_SSID=BoatLockTest BOATLOCK_WIFI_PASS=BoatLockTestPass BOATLOCK_OTA_PASS=BoatLockOtaTestPass pio run -e esp32s3_debug_wifi_ota`
+  -> PASS.
+- `bash -n tools/hw/nh02/android-wifi-debug.sh tools/hw/nh02/android-run-app-e2e.sh tools/hw/nh02/android-run-smoke.sh tools/hw/nh02/remote/boatlock-enable-android-wifi-debug.sh tools/hw/nh02/remote/boatlock-run-android-smoke.sh tools/hw/nh02/flash.sh`
+  -> PASS.
+- `tools/hw/nh02/flash.sh --profile service` -> PASS, flashed ESP32-S3
+  `98:88:E0:03:BA:5C`.
+- `tools/hw/nh02/acceptance.sh` -> PASS after service flash.
+- `tools/hw/nh02/android-wifi-debug.sh --serial 68b657f0` -> PASS,
+  `android_wifi_serial=192.168.88.33:5555`.
+- `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --serial 192.168.88.33:5555`
+  -> PASS, `app_ota_reconnect_after_update`, `size=724784`, RSSI `-43`.
+- Initial `--ota-latest-release` run exposed the post-finish notify race:
+  app-side send reached `100%`, then failed `app_ota_upload_failed` despite
+  reconnect telemetry. Fixed in `BleBoatLock`.
+- Re-run `tools/hw/nh02/android-run-app-e2e.sh --ota-latest-release --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --serial 192.168.88.33:5555`
+  -> PASS, `app_ota_reconnect_after_update`, `size=724784`, RSSI `-44`.
+- `tools/hw/nh02/android-run-app-e2e.sh --reconnect --wait-secs 130 --serial 192.168.88.33:5555`
+  -> PASS, `app_telemetry_after_reconnect`, RSSI `-46`.
+- `tools/hw/nh02/android-run-app-e2e.sh --esp-reset --wait-secs 130 --serial 192.168.88.33:5555`
+  -> PASS, `app_telemetry_after_reconnect`, RSSI `-44`.
+- `tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130 --serial 192.168.88.33:5555`
+  -> PASS, `app_manual_roundtrip`, RSSI `-44`.
+- Initial `--status` run exposed the visible-`MANUAL` assumption in status
+  cleanup and failed `app_status_timeout` after STOP delivery and safe recovery.
+  Fixed in production-app e2e and smoke page.
+- Re-run `tools/hw/nh02/android-run-app-e2e.sh --status --wait-secs 130 --serial 192.168.88.33:5555`
+  -> PASS, `app_status_stop_alert_roundtrip`, RSSI `-45`.
+- `cd boatlock_ui && flutter test` -> PASS (`120/120`) after each app fix.
+- `tools/hw/nh02/acceptance.sh --no-reset --seconds 15` -> PASS after the
+  wireless OTA/recovery/command runs.
+- `tools/hw/nh02/android-status.sh` -> PASS, USB and Wi-Fi ADB targets visible.
+- `git diff --check` -> PASS.
+
+Self-review:
+- The production phone-bridged path is now proven for firmware upload and
+  diagnostics with the phone controlled over Wi-Fi ADB. Direct ESP debug Wi-Fi
+  OTA still needs real Wi-Fi credentials before it can be called proven; the
+  compile-only check is not a wireless RF proof. The bench remains on the
+  service profile intentionally so OTA is available for the next hardware slice.
+
+### 2026-04-27 Stage 237: Persistent bench wireless decision
+
+Scope:
+- Keep the bench wireless path usable until release without relying on the ESP32
+  direct Wi-Fi stack during BLE operation.
+- Prove phone-controlled BLE OTA with Android ADB over Wi-Fi selected by the
+  wrappers automatically.
+
+Key outcomes:
+- Android ADB Wi-Fi is the persistent host-control channel for the phone.
+  `tools/hw/nh02/android-run-smoke.sh` and
+  `tools/hw/nh02/android-run-app-e2e.sh` now auto-enable/use ADB Wi-Fi when no
+  `--serial` is passed.
+- BLE remains the ESP32 diagnostic/control/update channel. Firmware updates are
+  performed through the phone using BLE OTA (`OTA_BEGIN`, chunks on `9abc`,
+  `OTA_FINISH`).
+- Direct ESP32 debug Wi-Fi OTA was tested with the bench AP credentials supplied
+  at runtime only. It works before BLE starts, but keeping ESP Wi-Fi alive while
+  BLE is active was rejected: one attempt aborted in `coex_core_enable` with
+  Wi-Fi sleep disabled; the compliant modem-sleep variant let BLE start but the
+  ESP dropped off the LAN after BLE start. The bench was restored to service
+  firmware.
+- BLE log forwarding now includes `[BLE]` lines, so firmware `logMessage()`
+  output generated while the phone is connected/subscribed mirrors to the phone
+  log characteristic `78ab`. Pre-BLE boot logs still require RFC2217/USB serial.
+- Updated nh02 docs and the hardware-acceptance skill with the durable bench
+  rule: persistent wireless means Android ADB Wi-Fi to phone plus BLE to ESP32,
+  not permanent ESP Wi-Fi plus BLE.
+
+Validation:
+- `tools/hw/nh02/status.sh` -> PASS, expected ESP32-S3 serial
+  `98:88:E0:03:BA:5C`, RFC2217 active.
+- `cd boatlock && BOATLOCK_WIFI_SSID=<bench-ap> BOATLOCK_WIFI_PASS=<redacted> BOATLOCK_OTA_PASS=<redacted> pio run -e esp32s3_debug_wifi_ota`
+  -> PASS.
+- `tools/hw/nh02/flash.sh --env esp32s3_debug_wifi_ota` with credentials passed
+  through environment only -> PASS, but persistent Wi-Fi+BLE validation failed
+  as described above.
+- `bash -n tools/hw/nh02/common.sh tools/hw/nh02/android-run-smoke.sh tools/hw/nh02/android-run-app-e2e.sh`
+  -> PASS.
+- `pytest -q tools/ci/test_android_smoke_modes.py` -> PASS (`9/9`).
+- `cd boatlock && platformio test -e native -f test_runtime_log_text` -> PASS.
+- `cd boatlock && pio run -e esp32s3_service` -> PASS, `firmware.bin` size
+  `724752` bytes after BLE-log forwarding change.
+- `tools/hw/nh02/android-wifi-debug.sh` -> PASS,
+  `android_wifi_serial=192.168.88.33:5555`.
+- `tools/hw/nh02/flash.sh --profile service` -> PASS, bench restored to service
+  firmware before app OTA proof.
+- `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
+  -> PASS without explicit `--serial`; wrapper selected `192.168.88.33:5555`,
+  BLE OTA reached `100%`, result `app_ota_reconnect_after_update`, RSSI `-45`,
+  device log events included `[BLE] subscribe log=1 sub=0x0001`.
+- `tools/hw/nh02/acceptance.sh --seconds 15` -> PASS after BLE OTA reboot.
+
+Self-review:
+- The reliable release-direction path is now clear: keep USB/RFC2217 for early
+  boot and recovery, keep Android ADB Wi-Fi for phone automation, and use BLE
+  for ESP telemetry/logs/OTA. Direct ESP Wi-Fi OTA stays a debug boot-window
+  tool unless the stack or hardware changes enough to revalidate Wi-Fi+BLE
+  coexistence.
+
+### 2026-04-27 Stage 238: ESP32-S3-LCD-2 SD logging pin baseline
+
+Scope:
+- Compare the user-supplied ESP32-S3-LCD-2 pinout/resource images with the
+  current BoatLock firmware pin assignments before adding water-debug logging.
+
+Key outcomes:
+- The board image and Waveshare reference match the current default-board shape
+  for stepper, GPS, BNO08x, STOP, motor `PWM=7`, and motor `DIR2=10`.
+- One current firmware pin does not match the supplied header pinout: motor
+  `DIR1=GPIO5` is not exposed on the image. Before powering actuator hardware,
+  revalidate whether GPIO5 is available elsewhere on the board or remap DIR1 to
+  a free exposed GPIO.
+- Current firmware uses external pins `2/4/6/16` for stepper, `17/18` for GPS,
+  `12/11/13` for BNO08x, `7/5/10` for motor, and `15` for STOP.
+- The Waveshare demo confirms the onboard TF/microSD slot uses SDSPI
+  `SCLK=39`, `MOSI=38`, `MISO=40`, `CS=41`. The LCD uses the same SPI clock/data
+  pins with `CS=45`, `DC=42`, `BL=1`.
+- Updated `skills/boatlock/references/firmware.md` with this SD/LCD pin
+  baseline and the current `display.cpp` caveat: it uses `MISO=-1`, so the
+  shared SPI bus must be enabled/tested before production SD logging.
+
+Validation:
+- Compared official Waveshare wiki/demo archive pin definitions with local
+  `boatlock/main.cpp` and `boatlock/display.cpp`.
+
+Self-review:
+- SD logging is feasible on this board without consuming the already assigned
+  external GPS/BNO/motor/stepper pins, but the implementation must be nonblocking
+  and must validate shared LCD/SD SPI behavior on hardware before water tests.
+
+### 2026-04-27 Stage 239: Motor DIR1 exposed-pin remap
+
+Scope:
+- Move the brushed motor `DIR1` output away from non-exposed `GPIO5` on the
+  ESP32-S3-LCD-2 header pinout.
+- Keep local copies of the supplied/vendor board reference images in the repo.
+
+Key outcomes:
+- Remapped `kMotorDirPin1` from `GPIO5` to exposed free `GPIO8`.
+- Left motor `PWM=7` and `DIR2=10` unchanged.
+- Added local hardware reference images under `docs/assets/hardware/` and linked
+  them from `docs/HARDWARE_NH02.md`.
+- Updated README, powered-bench checklist, brushed motor intake, product
+  readiness plan, and firmware reference docs to use `PWM=7`, `DIR=8/10`.
+
+Validation:
+- `cd boatlock && pio run -e esp32s3_service` -> PASS.
+- `git diff --check` -> PASS.
+
+Self-review:
+- `GPIO8` is on the supplied header pinout and is not used by the current GPS,
+  BNO08x, stepper, STOP, LCD SPI, SD SPI, or onboard QMI8658 demo paths. The
+  powered bench still must prove idle polarity and STOP behavior with a meter or
+  logic analyzer before motor power is connected.
+
+### 2026-04-27 Stage 240: Onboard microSD logging and rotation
+
+Scope:
+- Add protected-water diagnostics logging to the onboard ESP32-S3-LCD-2
+  microSD slot.
+- Keep the logger bounded so a missing, slow, or full card cannot block runtime
+  control.
+
+Key outcomes:
+- Added `SdCardLogger` on the Waveshare-confirmed SDSPI pins
+  `SCLK=39`, `MISO=40`, `MOSI=38`, `CS=41`.
+- Left the LCD SPI config as the already working write-only path with
+  `MISO=-1`; microSD config still uses the board SD `MISO=40`.
+- All firmware `logMessage()` output now queues to SD as JSONL `type=log`
+  records in addition to Serial/BLE forwarding.
+- Runtime writes 5 Hz `type=nav` records with GNSS, heading, speed,
+  acceleration, anchor state, mode/status, motor PWM, stepper position/target,
+  BLE connection, and `sd_dropped`.
+- Logs are stored as `/boatlock/blNNNNN.jsonl`, rotate at approximately
+  `8 MiB`, and delete older BoatLock log files when free space falls below
+  approximately `8 MiB` until approximately `16 MiB` is free or only the active
+  file remains.
+- Updated README, `docs/HARDWARE_NH02.md`, `docs/PROTECTED_WATER_TEST_LOG.md`,
+  and the firmware reference with the SD logging behavior and water-test
+  collection requirement.
+
+Validation:
+- `cd boatlock && pio run -e esp32s3_service` -> PASS.
+- `cd boatlock && pio run -e esp32s3_release` -> PASS.
+- `git diff --check` -> PASS.
+
+Self-review:
+- The implementation is compile-proven only. The next hardware slice must flash
+  the board with a FAT-formatted microSD inserted and verify `[SD] logger
+  ready=1`, display redraws still work with the existing LCD write-only config,
+  actual `/boatlock/*.jsonl` growth, and rotation or low-space deletion on real
+  media before relying on this for water tests.
+
+### 2026-04-27 Stage 241: DRV8825 steering driver and Vanchor gearbox geometry
+
+Scope:
+- Switch steering from the former four-wire ULN2003 path to DRV8825-compatible
+  STEP/DIR on the two former ULN header positions closest to board center.
+- Account for the Vanchor gearbox ratio before flashing the bench hardware.
+
+External baseline:
+- AccelStepper documents `DRIVER` as the two-pin stepper-driver interface where
+  pin 1 is STEP and pin 2 is DIR; enable needs an explicit enable pin:
+  https://www.airspayce.com/mikem/arduino/AccelStepper/classAccelStepper.html.
+- Pololu's DRV8825 carrier reference documents one microstep per STEP pulse in
+  the DIR-selected direction, RESET/SLEEP high for operation, and current-limit
+  setup before powered use: https://www.pololu.com/product/2133/.
+- Vanchor's `src/config.yml` sets `Stepper.Ratio: 36` and
+  `StepsPerRevolution: 200`; its config docs define ratio `36` as 36 stepper
+  rotations per one trolling-motor rotation.
+
+Key outcomes:
+- Changed production steering construction to `AccelStepper::DRIVER` with
+  `STEP=GPIO6`, `DIR=GPIO16`.
+- Set DRV8825 minimum STEP pulse width to `2 us`.
+- Changed steering geometry from `4096` to `7200` output steps/rev
+  (`200 * 36`) and bumped settings schema to `0x1B`.
+- Updated telemetry default, settings tests, hardware acceptance fixtures,
+  README, config schema, steering intake, powered-bench checklist, product plan,
+  and repo references.
+
+Validation:
+- `git diff --check` -> PASS.
+- `python3 tools/ci/check_config_schema_version.py` -> PASS (`0x1b`).
+- `pytest tools/hw/nh02/test_acceptance.py tools/ci/test_check_config_schema_version.py` -> PASS (`8/8`).
+- `cd boatlock && platformio test -e native -f test_stepper_control -f test_runtime_motion -f test_settings` -> PASS (`46/46`).
+- `cd boatlock && platformio run -e esp32s3` -> PASS.
+- `cd boatlock && platformio run -e esp32s3_service` -> PASS.
+- `tools/hw/nh02/status.sh` -> blocked for flashing: service active and port
+  `4000` listening, but expected ESP32 USB device
+  `/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_98:88:E0:03:BA:5C-if00`
+  is absent.
+- Local macOS USB probe found no `/dev/cu.usbmodem*`, `/dev/tty.usbmodem*`,
+  `/dev/cu.usbserial*`, or `/dev/tty.usbserial*` device.
+- `tools/hw/nh02/android-status.sh` -> PASS: Xiaomi `220333QNY` visible over
+  USB and ADB Wi-Fi at `192.168.88.33:5555`.
+- `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 900`
+  -> PASS. BLE OTA sent `779440` bytes and the post-update app observed
+  `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"app_ota_reconnect_after_update",...}`
+  with telemetry recovered in `IDLE/WARN` and `statusReasons=GPS_SATS_TOO_LOW`.
+
+Self-review:
+- USB flash/serial acceptance remained unavailable because the ESP32 USB device
+  was absent on `nh02` and locally. Phone-bridged BLE OTA did flash the
+  service-capable firmware and proved reconnect/telemetry after update. If
+  DRV8825 MODE pins are wired for microstepping instead of full-step, multiply
+  `7200` by that microstep factor before powered steering acceptance.

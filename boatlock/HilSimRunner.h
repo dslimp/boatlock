@@ -119,6 +119,8 @@ public:
     ActuatorCmd command;
     bool anchorActive = false;
     bool gnssGood = false;
+    float anchorXM = 0.0f;
+    float anchorYM = 0.0f;
     float errTrueM = 0.0f;
     float bearingDeg = 0.0f;
     float speedMps = 0.0f;
@@ -191,6 +193,8 @@ public:
       live_.command = actuator_.last();
       live_.anchorActive = false;
       live_.gnssGood = fix.valid;
+      live_.anchorXM = scenario_.anchorXM;
+      live_.anchorYM = scenario_.anchorYM;
       live_.errTrueM = hypotf(st.xM - scenario_.anchorXM, st.yM - scenario_.anchorYM);
       live_.bearingDeg = simctl::bearingDeg(st.xM, st.yM, scenario_.anchorXM, scenario_.anchorYM);
       live_.speedMps = hypotf(st.vxBody + current.x, st.vyBody + current.y);
@@ -352,6 +356,8 @@ public:
     live_.command = cmd;
     live_.anchorActive = tele.anchorActive;
     live_.gnssGood = tele.gnssGood;
+    live_.anchorXM = scenario_.anchorXM;
+    live_.anchorYM = scenario_.anchorYM;
     live_.errTrueM = errTrue;
     live_.bearingDeg = simctl::bearingDeg(st.xM, st.yM, scenario_.anchorXM, scenario_.anchorYM);
     live_.speedMps = hypotf(st.vxBody + current.x, st.vyBody + current.y);
@@ -678,7 +684,7 @@ inline SimScenario makeBaseScenario(const char* id, float currentX, float posSig
 inline void appendRussianWaterScenarios(std::vector<SimScenario>* v) {
   if (!v) return;
 
-  SimScenario rf0 = makeBaseScenario("RF0_oka_normal_55lb", 0.35f, 0.91f);
+  SimScenario rf0 = makeBaseScenario("RF0", 0.35f, 0.91f);
   rf0.seed = 200001;
   rf0.durationMs = 300000;
   rf0.initialXM = 12.0f;
@@ -709,7 +715,7 @@ inline void appendRussianWaterScenarios(std::vector<SimScenario>* v) {
   rf0.expect.dirChangesPerMinMax = 90.0f;
   v->push_back(rf0);
 
-  SimScenario rf1 = makeBaseScenario("RF1_volga_spring_flow_80lb", 1.2f, 1.08f);
+  SimScenario rf1 = makeBaseScenario("RF1", 1.2f, 1.08f);
   rf1.seed = 200002;
   rf1.durationMs = 300000;
   rf1.initialXM = 16.0f;
@@ -723,7 +729,7 @@ inline void appendRussianWaterScenarios(std::vector<SimScenario>* v) {
   rf1.expect.timeSaturatedMaxPct = 100.0f;
   v->push_back(rf1);
 
-  SimScenario rf2 = makeBaseScenario("RF2_rybinsk_fetch_55lb", 0.10f, 1.63f);
+  SimScenario rf2 = makeBaseScenario("RF2", 0.10f, 1.63f);
   rf2.seed = 200003;
   rf2.durationMs = 300000;
   rf2.initialXM = 14.0f;
@@ -769,7 +775,7 @@ inline void appendRussianWaterScenarios(std::vector<SimScenario>* v) {
   rf2.expect.dirChangesPerMinMax = 120.0f;
   v->push_back(rf2);
 
-  SimScenario rf3 = makeBaseScenario("RF3_ladoga_storm_abort", 0.40f, 2.45f);
+  SimScenario rf3 = makeBaseScenario("RF3", 0.40f, 2.45f);
   rf3.seed = 200004;
   rf3.durationMs = 180000;
   rf3.initialXM = 14.0f;
@@ -805,7 +811,7 @@ inline void appendRussianWaterScenarios(std::vector<SimScenario>* v) {
   rf3.expect.timeInDeadbandMinPct = -1.0f;
   v->push_back(rf3);
 
-  SimScenario rf4 = makeBaseScenario("RF4_baltic_gulf_drift", 0.15f, 1.46f);
+  SimScenario rf4 = makeBaseScenario("RF4", 0.15f, 1.46f);
   rf4.seed = 200005;
   rf4.durationMs = 300000;
   rf4.initialXM = 12.0f;
@@ -847,7 +853,7 @@ inline void appendRussianWaterScenarios(std::vector<SimScenario>* v) {
 inline std::vector<SimScenario> defaultScenarios() {
   std::vector<SimScenario> v;
 
-  SimScenario s0 = makeBaseScenario("S0_hold_still_good", 0.0f, 0.8f);
+  SimScenario s0 = makeBaseScenario("S0", 0.0f, 0.8f);
   // "Hold still" baseline should start close to anchor; otherwise max_error<=5m
   // is impossible with the shared base init point (~6.32m from anchor).
   s0.initialXM = 0.8f;
@@ -859,13 +865,13 @@ inline std::vector<SimScenario> defaultScenarios() {
   s0.expect.dirChangesPerMinMax = 25.0f;
   v.push_back(s0);
 
-  SimScenario s1 = makeBaseScenario("S1_current_0p4_good", 0.4f, 0.9f);
+  SimScenario s1 = makeBaseScenario("S1", 0.4f, 0.9f);
   s1.expect.p95ErrorMaxM = 3.5f;
   s1.expect.maxErrorMaxM = 8.0f;
   s1.expect.timeInDeadbandMinPct = 60.0f;
   v.push_back(s1);
 
-  SimScenario s2 = makeBaseScenario("S2_current_0p8_hard", 0.8f, 1.1f);
+  SimScenario s2 = makeBaseScenario("S2", 0.8f, 1.1f);
   // Hard-current case needs higher authority than default 0.60 to be physically
   // holdable against 0.8 m/s current with this world model.
   s2.maxThrustOverride = 0.70f;
@@ -875,7 +881,7 @@ inline std::vector<SimScenario> defaultScenarios() {
   s2.expect.timeSaturatedMaxPct = 75.0f;
   v.push_back(s2);
 
-  SimScenario s3 = makeBaseScenario("S3_gusts", 0.3f, 1.0f);
+  SimScenario s3 = makeBaseScenario("S3", 0.3f, 1.0f);
   {
     TimedCurrent g;
     g.atMs = 120000;
@@ -890,7 +896,7 @@ inline std::vector<SimScenario> defaultScenarios() {
   s3.expect.p95ErrorMaxM = -1.0f;
   v.push_back(s3);
 
-  SimScenario s4 = makeBaseScenario("S4_gnss_dropout_3s", 0.4f, 0.9f);
+  SimScenario s4 = makeBaseScenario("S4", 0.4f, 0.9f);
   {
     TimedDropout d;
     d.atMs = 240000;
@@ -904,7 +910,7 @@ inline std::vector<SimScenario> defaultScenarios() {
   s4.expect.timeInDeadbandMinPct = -1.0f;
   v.push_back(s4);
 
-  SimScenario s5 = makeBaseScenario("S5_position_jump_12m_once", 0.4f, 0.9f);
+  SimScenario s5 = makeBaseScenario("S5", 0.4f, 0.9f);
   {
     TimedJump j;
     j.atMs = 300000;
@@ -919,7 +925,7 @@ inline std::vector<SimScenario> defaultScenarios() {
   s5.expect.p95ErrorMaxM = -1.0f;
   v.push_back(s5);
 
-  SimScenario s6 = makeBaseScenario("S6_hdop_degrade_then_recover", 0.4f, 1.0f);
+  SimScenario s6 = makeBaseScenario("S6", 0.4f, 1.0f);
   {
     TimedHdop h;
     h.atMs = 180000;
@@ -934,7 +940,7 @@ inline std::vector<SimScenario> defaultScenarios() {
   s6.expect.timeInDeadbandMinPct = -1.0f;
   v.push_back(s6);
 
-  SimScenario s7 = makeBaseScenario("S7_sats_drop", 0.4f, 1.0f);
+  SimScenario s7 = makeBaseScenario("S7", 0.4f, 1.0f);
   {
     TimedSats s;
     s.atMs = 180000;
@@ -949,7 +955,7 @@ inline std::vector<SimScenario> defaultScenarios() {
   s7.expect.timeInDeadbandMinPct = -1.0f;
   v.push_back(s7);
 
-  SimScenario s8 = makeBaseScenario("S8_control_loop_stall", 0.4f, 0.9f);
+  SimScenario s8 = makeBaseScenario("S8", 0.4f, 0.9f);
   {
     TimedLoopStall stall;
     stall.atMs = 100000;
@@ -964,7 +970,7 @@ inline std::vector<SimScenario> defaultScenarios() {
   s8.expect.timeInDeadbandMinPct = -1.0f;
   v.push_back(s8);
 
-  SimScenario s9 = makeBaseScenario("S9_nan_heading_injection", 0.4f, 0.9f);
+  SimScenario s9 = makeBaseScenario("S9", 0.4f, 0.9f);
   {
     TimedNanHeading h;
     h.atMs = 80000;
@@ -978,7 +984,7 @@ inline std::vector<SimScenario> defaultScenarios() {
   s9.expect.timeInDeadbandMinPct = -1.0f;
   v.push_back(s9);
 
-  SimScenario s10 = makeBaseScenario("S10_random_1hz_noisy_hold", 0.42f, 1.5f);
+  SimScenario s10 = makeBaseScenario("S10", 0.42f, 1.5f);
   s10.seed = 420101;
   s10.durationMs = 360000;
   s10.sensors.gnssHz = 1;
@@ -1005,7 +1011,7 @@ inline std::vector<SimScenario> defaultScenarios() {
   s10.expect.dirChangesPerMinMax = 90.0f;
   v.push_back(s10);
 
-  SimScenario s11 = makeBaseScenario("S11_random_cross_current_hold", 0.55f, 1.2f);
+  SimScenario s11 = makeBaseScenario("S11", 0.55f, 1.2f);
   s11.seed = 112233;
   s11.durationMs = 360000;
   s11.env.baseCurrentMps.y = -0.22f;
@@ -1022,7 +1028,7 @@ inline std::vector<SimScenario> defaultScenarios() {
   s11.expect.timeInDeadbandMinPct = 35.0f;
   v.push_back(s11);
 
-  SimScenario s12 = makeBaseScenario("S12_compass_dropout_5s", 0.4f, 0.9f);
+  SimScenario s12 = makeBaseScenario("S12", 0.4f, 0.9f);
   s12.seed = 120012;
   s12.durationMs = 240000;
   {
@@ -1039,7 +1045,7 @@ inline std::vector<SimScenario> defaultScenarios() {
   s12.expect.timeInDeadbandMinPct = -1.0f;
   v.push_back(s12);
 
-  SimScenario s13 = makeBaseScenario("S13_compass_flap_then_timeout", 0.4f, 0.9f);
+  SimScenario s13 = makeBaseScenario("S13", 0.4f, 0.9f);
   s13.seed = 130013;
   s13.durationMs = 240000;
   {
@@ -1059,7 +1065,7 @@ inline std::vector<SimScenario> defaultScenarios() {
   s13.expect.timeInDeadbandMinPct = -1.0f;
   v.push_back(s13);
 
-  SimScenario s14 = makeBaseScenario("S14_power_loss_recover", 0.4f, 1.0f);
+  SimScenario s14 = makeBaseScenario("S14", 0.4f, 1.0f);
   s14.seed = 140014;
   s14.durationMs = 240000;
   {
@@ -1075,7 +1081,7 @@ inline std::vector<SimScenario> defaultScenarios() {
   s14.expect.timeInDeadbandMinPct = -1.0f;
   v.push_back(s14);
 
-  SimScenario s15 = makeBaseScenario("S15_power_loss_double", 0.45f, 1.0f);
+  SimScenario s15 = makeBaseScenario("S15", 0.45f, 1.0f);
   s15.seed = 150015;
   s15.durationMs = 280000;
   {
@@ -1095,7 +1101,7 @@ inline std::vector<SimScenario> defaultScenarios() {
   s15.expect.timeInDeadbandMinPct = -1.0f;
   v.push_back(s15);
 
-  SimScenario s16 = makeBaseScenario("S16_display_loss_transient", 0.3f, 1.0f);
+  SimScenario s16 = makeBaseScenario("S16", 0.3f, 1.0f);
   s16.seed = 160016;
   s16.durationMs = 300000;
   {
@@ -1110,7 +1116,7 @@ inline std::vector<SimScenario> defaultScenarios() {
   s16.expect.timeInDeadbandMinPct = 45.0f;
   v.push_back(s16);
 
-  SimScenario s17 = makeBaseScenario("S17_actuator_derate_45pct", 0.45f, 1.0f);
+  SimScenario s17 = makeBaseScenario("S17", 0.45f, 1.0f);
   s17.seed = 170017;
   s17.durationMs = 360000;
   {
@@ -1126,7 +1132,7 @@ inline std::vector<SimScenario> defaultScenarios() {
   s17.expect.timeInDeadbandMinPct = 20.0f;
   v.push_back(s17);
 
-  SimScenario s18 = makeBaseScenario("S18_compass_loss_with_display_off", 0.4f, 0.95f);
+  SimScenario s18 = makeBaseScenario("S18", 0.4f, 0.95f);
   s18.seed = 180018;
   s18.durationMs = 260000;
   {
@@ -1147,7 +1153,7 @@ inline std::vector<SimScenario> defaultScenarios() {
   s18.expect.timeInDeadbandMinPct = -1.0f;
   v.push_back(s18);
 
-  SimScenario s19 = makeBaseScenario("S19_random_emergency_mix", 0.6f, 1.4f);
+  SimScenario s19 = makeBaseScenario("S19", 0.6f, 1.4f);
   s19.seed = 191919;
   s19.durationMs = 360000;
   s19.sensors.gnssHz = 1;

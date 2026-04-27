@@ -16,17 +16,17 @@ Control point payloads are application-level command byte strings, not a text st
 
 Command scopes are product boundaries, not wire-level security:
 
-- `release`: normal water UI, app security/session setup, and app telemetry transport.
+- `release`: normal water UI, app security/session setup, app telemetry transport, and safe software simulation (`SIM_*`).
 - `service`: installer, calibration, firmware update, and tuning operations. The normal Flutter app hides these controls unless built with `--dart-define=BOATLOCK_SERVICE_UI=true`; test/service harnesses must opt in explicitly.
-- `dev/HIL`: injected sensor data and on-device simulation. These commands are for validation harnesses only and must not appear in the normal water UI. Flutter custom-command callers must opt in explicitly or use `--dart-define=BOATLOCK_DEV_HIL_COMMANDS=true`.
+- `dev/HIL`: injected external sensor data. These commands are for validation harnesses only and must not appear in the normal water UI. Flutter custom-command callers must opt in explicitly or use `--dart-define=BOATLOCK_DEV_HIL_COMMANDS=true`.
 
 `SEC_CMD` is the security envelope; the effective scope is the scope of the wrapped payload. The Flutter custom-command classifier does not accept raw `SEC_CMD` input; the BLE transport builds the envelope internally after classifying the unwrapped command.
 
 Current classification:
 
-- `release`: `STREAM_START`, `STREAM_STOP`, `SNAPSHOT`, `SET_ANCHOR`, `ANCHOR_ON`, `ANCHOR_OFF`, `STOP`, `HEARTBEAT`, `MANUAL_SET`, `MANUAL_OFF`, `NUDGE_DIR`, `NUDGE_BRG`, `SET_HOLD_HEADING`, `PAIR_SET`, `PAIR_CLEAR`, `AUTH_HELLO`, `AUTH_PROVE`.
+- `release`: `STREAM_START`, `STREAM_STOP`, `SNAPSHOT`, `SET_ANCHOR`, `ANCHOR_ON`, `ANCHOR_OFF`, `STOP`, `HEARTBEAT`, `MANUAL_SET`, `MANUAL_OFF`, `NUDGE_DIR`, `NUDGE_BRG`, `SET_HOLD_HEADING`, `PAIR_SET`, `PAIR_CLEAR`, `AUTH_HELLO`, `AUTH_PROVE`, `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, `SIM_ABORT`.
 - `service`: `SET_ANCHOR_PROFILE`, `SET_COMPASS_OFFSET`, `RESET_COMPASS_OFFSET`, `COMPASS_CAL_START`, `COMPASS_DCD_SAVE`, `COMPASS_DCD_AUTOSAVE_ON`, `COMPASS_DCD_AUTOSAVE_OFF`, `COMPASS_TARE_Z`, `COMPASS_TARE_SAVE`, `COMPASS_TARE_CLEAR`, `SET_STEP_MAXSPD`, `SET_STEP_ACCEL`, `SET_STEPPER_BOW`, `OTA_BEGIN`, `OTA_FINISH`, `OTA_ABORT`.
-- `dev/HIL`: `SET_PHONE_GPS`, `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, `SIM_ABORT`.
+- `dev/HIL`: `SET_PHONE_GPS`.
 
 | Command | Parameters | Description |
 |--------|------------|-------------|
@@ -77,7 +77,7 @@ Current built-in HIL groups:
 - `S10..S19`: randomized + hardware-failure emulation (compass/power/display/actuator)
 - `RF0..RF4`: RF water-body profiles derived from the offline Russian scenario set; ESP HIL includes current/gust, wave/wake packet, drift, and fail-closed approximations that are visible in `SIM_REPORT` events such as `WAKE_PACKET_EMU` and `CHOP_PACKET_EMU`
 
-These commands correspond to the implementation in [`boatlock/BleCommandHandler.h`](../boatlock/BleCommandHandler.h). The normal mobile application exposes the release subset; service and dev/HIL commands are accepted only through explicit service/test paths on the app side.
+These commands correspond to the implementation in [`boatlock/BleCommandHandler.h`](../boatlock/BleCommandHandler.h). `SIM_*` is part of the normal release command surface because simulation runs as a safe software mode inside the ordinary firmware: real sensor values are ignored for control/display while the scenario is active, actuator outputs are quieted, and live BLE telemetry carries the simulated boat position/heading for the phone and laptop map. `SET_PHONE_GPS` remains a dev/HIL injection command and is accepted only through explicit test paths.
 
 Manual control is intentionally a single atomic command instead of separate mode/direction/speed writes. Each accepted `MANUAL_SET` refreshes the deadman TTL for the current controller source; a different source cannot take over until the lease expires or `MANUAL_OFF`/`STOP` clears it. If updates stop, firmware exits Manual mode and the normal quiet-output path stops motion. `MANUAL_SET` is a control command and must be wrapped in `SEC_CMD` when pairing/auth is enabled.
 
@@ -182,9 +182,9 @@ Firmware builds enforce the command scope selected by the PlatformIO profile. Th
 
 Profile rules:
 
-- `release`: normal water image. It accepts only `release` commands plus the security envelope around allowed payloads. It rejects `service` and `dev/HIL` commands before they can mutate settings, start OTA, inject sensor data, start simulation, or actuate outputs.
-- `service`: maintenance image. It accepts `release` plus `service` commands, including BLE OTA, calibration, tuning, and installer flows. It rejects `dev/HIL`, including `SET_PHONE_GPS` and all `SIM_*` commands.
-- `acceptance`: bench validation image. It accepts known `release`, `service`, and `dev/HIL` commands so `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, and `SIM_ABORT` remain available to the on-device HIL and Android smoke wrappers. Unknown commands remain rejected in every profile.
+- `release`: normal water image. It accepts `release` commands, including `SIM_*`, plus the security envelope around allowed payloads. It rejects `service` and `dev/HIL` commands before they can mutate settings, start OTA, inject external sensor data, or actuate outputs.
+- `service`: maintenance image. It accepts `release` plus `service` commands, including BLE OTA, calibration, tuning, installer flows, and `SIM_*`. It rejects `dev/HIL`, including `SET_PHONE_GPS`.
+- `acceptance`: bench validation image. It accepts known `release`, `service`, and `dev/HIL` commands. Unknown commands remain rejected in every profile.
 
 `esp32s3_bno08x_sh2_uart` and `esp32s3_debug_wifi_ota` extend the service profile. Debug probe builds are not command-profile release artifacts.
 
@@ -194,7 +194,7 @@ Gate behavior expectations:
 - Rejected commands fail closed: no setting write, no OTA session, no simulation state change, no injected GNSS update, no motor or stepper output, and no transition out of the current safe runtime mode.
 - Rejections are observable in the log as `[BLE] command rejected reason=profile profile=<release|service|acceptance> scope=<service|dev_hil|unknown> command=<payload>` so wrappers can distinguish "command gated by profile" from "command parser bug" or "BLE link lost".
 - `OTA_BEGIN`, `OTA_FINISH`, and `OTA_ABORT` remain `service` commands. A release image that excludes service commands must document that BLE OTA is unavailable from that image, and the service update path must remain recoverable through USB seed flash.
-- `SIM_*` and `SET_PHONE_GPS` remain `dev/HIL` commands. They must be absent from normal water firmware unless the explicit acceptance profile is flashed.
+- `SIM_*` remains release scope and must run fail-quiet: the firmware enters `SIM`, ignores real sensors for telemetry/control, and keeps motor/stepper outputs quiet. `SET_PHONE_GPS` remains `dev/HIL` and must be absent from normal water command flow.
 - During active OTA, the existing OTA safety rule still applies inside any profile that allows OTA: firmware rejects runtime commands except `HEARTBEAT`, `OTA_FINISH`, and `OTA_ABORT`.
 
 ## BLE Firmware OTA

@@ -106,16 +106,15 @@ Important mismatch:
   logs, service positive paths, and acceptance HIL positive paths.
 - Identify the exact brushed/collector motor driver with
   `docs/BRUSHED_MOTOR_DRIVER_INTAKE.md`. Current firmware only proves a simple
-  `PWM=7` plus `DIR=5/10` command shape; it does not prove the real driver's
+  `PWM=7` plus `DIR=8/10` command shape; it does not prove the real driver's
   brake/coast, enable, fault, current-limit, thermal, polarity, or safe-idle
   behavior.
-- Decide the exact steering stepper driver and mechanics. Current firmware is
-  fixed to 28BYJ-48 + ULN2003 HALF4WIRE. If the real steering drive is not that
-  stack and is also not A4988 STEP/DIR, add an explicit supported driver path with
-  pinout, steps/rev, gear ratio, torque/current limits, stop behavior, and tests.
-  Use `docs/STEERING_DRIVER_INTAKE.md` to capture the facts without assuming the
-  driver type.
-- Build a powered-bench acceptance procedure for `PWM=7`, `DIR=5/10`, the actual
+- Finish the steering stepper driver and mechanics capture. Current firmware is
+  fixed to a DRV8825-compatible STEP/DIR path on `STEP=GPIO6`, `DIR=GPIO16`.
+  Geometry uses `7200` output steps/rev from the Vanchor `36:1` gearbox and
+  `200` motor steps/rev. Use `docs/STEERING_DRIVER_INTAKE.md` to capture
+  torque/current limits, enable/sleep/reset wiring, stop behavior, and tests.
+- Build a powered-bench acceptance procedure for `PWM=7`, `DIR=8/10`, the actual
   brushed motor driver, and the actual steering drive. Before connecting the
   prop/motor load, prove boot/STOP/HOLD/reconnect/anchor-denial keep outputs at
   safe idle.
@@ -164,7 +163,7 @@ Keep two layers:
 
 - Offline Python sim for fast environmental sweeps and research-backed scenario
   generation.
-- On-device HIL for firmware-visible `SIM_*` acceptance and BLE/app smoke.
+- On-device HIL for release-firmware `SIM_*` acceptance, simulated BLE map telemetry, and BLE/app smoke.
 
 Next simulation work:
 
@@ -202,12 +201,12 @@ Next simulation work:
    Android `--status`, `--sim`, `--anchor`, `--manual`, `--reconnect`,
    `--esp-reset`, plus GPS smoke when hardware GPS is visible.
 3. Output-instrumented gate:
-   motor physically disconnected, logic analyzer or meter on `PWM=7`, `DIR=5/10`,
+   motor physically disconnected, logic analyzer or meter on `PWM=7`, `DIR=8/10`,
    steering driver outputs observed, prove idle on boot, STOP, HOLD, reconnect,
    anchor denial, SIM start/abort, and OTA begin.
 4. Low-power powered gate:
-   complete `docs/STEERING_DRIVER_INTAKE.md` if the steering driver is not the
-   current 28BYJ-48 + ULN2003 path, then use current-limited supply,
+   complete `docs/STEERING_DRIVER_INTAKE.md` for the current DRV8825 steering
+   path, then use current-limited supply,
    fuse/breaker, prop removed or safe test load, real driver connected, short
    manual pulses, direction proof, STOP proof, thermal check, no auto anchor.
 5. Integrated dry steering gate:

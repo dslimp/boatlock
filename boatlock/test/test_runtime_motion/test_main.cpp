@@ -38,7 +38,7 @@ struct RuntimeMotionFixture {
 
   RuntimeMotionFixture()
       : settings(),
-        stepper(1, 2, 3, 4),
+        stepper(6, 16),
         motor(),
         driftMonitor(),
         motion(settings, stepper, motor, driftMonitor) {
@@ -85,7 +85,7 @@ void test_stop_all_motion_disarms_and_clears_manual() {
   settings.reset();
   settings.set("AnchorEnabled", 1.0f);
 
-  StepperControl stepper(1, 2, 3, 4);
+  StepperControl stepper(6, 16);
   stepper.attachSettings(&settings);
   stepper.loadFromSettings();
 
@@ -133,7 +133,7 @@ void test_apply_control_in_manual_mode_runs_manual_outputs() {
   settings.reset();
   settings.set("StepMaxSpd", 800.0f);
 
-  StepperControl stepper(1, 2, 3, 4);
+  StepperControl stepper(6, 16);
   stepper.attachSettings(&settings);
   stepper.loadFromSettings();
 
@@ -196,7 +196,7 @@ void test_supervisor_stop_failsafe_latches_safe_hold() {
   settings.reset();
   settings.set("AnchorEnabled", 1.0f);
 
-  StepperControl stepper(1, 2, 3, 4);
+  StepperControl stepper(6, 16);
   stepper.attachSettings(&settings);
   stepper.loadFromSettings();
 
@@ -229,7 +229,7 @@ void test_supervisor_containment_breach_exits_anchor() {
   settings.reset();
   settings.set("AnchorEnabled", 1.0f);
 
-  StepperControl stepper(1, 2, 3, 4);
+  StepperControl stepper(6, 16);
   stepper.attachSettings(&settings);
   stepper.loadFromSettings();
 
@@ -258,7 +258,7 @@ void test_supervisor_containment_breach_exits_anchor() {
 void test_clear_safe_hold_returns_to_idle_state() {
   Settings settings;
   settings.reset();
-  StepperControl stepper(1, 2, 3, 4);
+  StepperControl stepper(6, 16);
   MotorControl motor;
   DriftMonitor driftMonitor;
   RuntimeMotion motion(settings, stepper, motor, driftMonitor);
@@ -273,7 +273,7 @@ void test_clear_safe_hold_returns_to_idle_state() {
 void test_safety_reason_expires() {
   Settings settings;
   settings.reset();
-  StepperControl stepper(1, 2, 3, 4);
+  StepperControl stepper(6, 16);
   MotorControl motor;
   DriftMonitor driftMonitor;
   RuntimeMotion motion(settings, stepper, motor, driftMonitor);
@@ -288,7 +288,7 @@ void test_anchor_without_control_gps_clears_auto_thrust_state() {
   settings.reset();
   settings.set("AnchorEnabled", 1.0f);
 
-  StepperControl stepper(1, 2, 3, 4);
+  StepperControl stepper(6, 16);
   stepper.attachSettings(&settings);
   stepper.loadFromSettings();
 
@@ -348,7 +348,7 @@ void test_anchor_with_nonfinite_runtime_tuning_quiets_outputs() {
   settings.reset();
   settings.set("AnchorEnabled", 1.0f);
 
-  StepperControl stepper(1, 2, 3, 4);
+  StepperControl stepper(6, 16);
   stepper.attachSettings(&settings);
   stepper.loadFromSettings();
 

@@ -9,9 +9,10 @@ use the tracked wrappers there for flash, acceptance, and Android BLE smokes.
 Firmware source of truth is `boatlock/main.cpp`.
 
 - Brushed motor PWM: `GPIO7`
-- Brushed motor direction: `GPIO5` and `GPIO10`
-- Current steering firmware path: 28BYJ-48 + ULN2003 style `HALF4WIRE`
-  through AccelStepper pins `GPIO2`, `GPIO4`, `GPIO6`, `GPIO16`
+- Brushed motor direction: `GPIO8` and `GPIO10`
+- Current steering firmware path: DRV8825-compatible `STEP/DIR` through
+  AccelStepper `DRIVER` pins `STEP=GPIO6`, `DIR=GPIO16`
+  with `7200` output steps/rev from the Vanchor `36:1` gearbox.
 - Hardware STOP button: `GPIO15`, `INPUT_PULLUP`, momentary to `GND`
 - BOOT anchor-save button: `GPIO0`
 
@@ -21,9 +22,9 @@ idle behavior, and STOP behavior are documented and tested. Use
 `docs/BRUSHED_MOTOR_DRIVER_INTAKE.md` to capture those facts before any powered
 thruster connection.
 
-Do not connect a powered steering driver that is not this ULN2003-style path
-until its driver type, pinout, steps/rev, gear ratio, current limit, torque
-limit, idle behavior, and stop behavior are documented and tested. Use
+Do not connect powered steering until the DRV8825 pinout, steps/rev, gear ratio,
+current limit, torque limit, enable/sleep/reset wiring, idle behavior, and stop
+behavior are documented and tested. Use
 `docs/STEERING_DRIVER_INTAKE.md` to capture those facts before any powered
 steering connection.
 
@@ -32,7 +33,7 @@ steering connection.
 - Current-limited DC supply for motor testing.
 - Fuse or breaker sized below the weakest wire/driver element.
 - Physical kill switch or removable power link reachable by the operator.
-- Meter or logic analyzer for `PWM=7`, `DIR=5`, `DIR=10`, and steering outputs.
+- Meter or logic analyzer for `PWM=7`, `DIR=8`, `DIR=10`, and steering outputs.
 - Separate low-current logic supply proof before motor power is applied.
 - Strain relief on battery/motor/driver wires.
 - Insulated terminals; no exposed high-current contacts.
@@ -116,8 +117,8 @@ survives STOP is a blocker. Fix firmware/wiring before applying motor power.
 
 Only after Gate 1 passes:
 
-1. Complete `docs/STEERING_DRIVER_INTAKE.md` for any steering driver that is not
-   already proven to match the current 28BYJ-48 + ULN2003 firmware path.
+1. Complete `docs/STEERING_DRIVER_INTAKE.md` for the current DRV8825 steering
+   wiring and motor/mechanics.
 2. Complete `docs/BRUSHED_MOTOR_DRIVER_INTAKE.md` for the actual brushed motor
    driver unless it has already been captured against this firmware commit.
 3. Connect the driver with current-limited supply and no prop/load.
@@ -147,8 +148,8 @@ mechanism cannot hit a hard stop at speed.
 - Check cable wrap, mechanical limits, and jam behavior manually before powered
   steering.
 
-If the steering hardware is not 28BYJ-48 + ULN2003, stop here and add the real
-driver support before continuing.
+If the steering hardware is not the current DRV8825-compatible STEP/DIR path,
+stop here and add the real driver support before continuing.
 
 ## Gate 4: Wet Or Tethered Low-Power Test
 
@@ -168,7 +169,7 @@ Every powered-bench run should record:
   photo reference.
 - Motor and steering driver temperatures before/after each phase.
 - Exact BLE/e2e command or wrapper used.
-- Measured `PWM=7`, `DIR=5`, `DIR=10`, and steering output behavior.
+- Measured `PWM=7`, `DIR=8`, `DIR=10`, and steering output behavior.
 - Any reset, brownout, latch, STOP, or unexpected motion.
 
 Use `docs/PROTECTED_WATER_TEST_LOG.md` for powered bench, tank, tether, and

@@ -40,9 +40,12 @@ bool mdnsStarted = false;
 bool httpOtaStarted = false;
 bool bleDelayClosed = false;
 bool wifiClosedForBle = false;
+TaskHandle_t wifiOtaTaskHandle = nullptr;
 char ipBuffer[16] = "0.0.0.0";
 char hostnameBuffer[32] = "";
 WebServer httpServer(kHttpOtaPort);
+
+void wifiOtaTask(void*);
 
 void updateIpBuffer() {
   const IPAddress ip = WiFi.localIP();
@@ -366,6 +369,13 @@ void begin(OtaStartCallback onStart) {
   logMessage("[NET] wifi begin ssid=%s ota=1 ble_delay_ms=%lu\n",
              BOATLOCK_DEBUG_WIFI_SSID,
              kBleDelayMs);
+  if (!wifiOtaTaskHandle) {
+    const BaseType_t taskOk =
+        xTaskCreatePinnedToCore(wifiOtaTask, "wifiOta", 8192, nullptr, 1, &wifiOtaTaskHandle, 0);
+    if (taskOk != pdPASS) {
+      logMessage("[NET] wifi ota task failed\n");
+    }
+  }
 }
 
 void loop() {
@@ -399,6 +409,17 @@ void loop() {
   }
   reconnectWifi(now);
 }
+
+namespace {
+
+void wifiOtaTask(void*) {
+  for (;;) {
+    DebugWifiOta::loop();
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
+}
+
+} // namespace
 
 bool enabled() {
   return true;

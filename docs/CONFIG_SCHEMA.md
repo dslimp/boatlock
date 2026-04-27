@@ -1,6 +1,6 @@
 # Config Schema
 
-Schema version: `0x1A` (`Settings::VERSION`).
+Schema version: `0x1B` (`Settings::VERSION`).
 
 Settings are stored in ESP32 NVS namespace `boatlock_cfg` as:
 
@@ -34,6 +34,8 @@ Migration rules:
 - schemas before `0x1A` migrate the exact untouched anchor default bundle
   `HoldRadius=2.5`, `DeadbandM=1.5`, `MaxThrustA=60`, `ThrRampA=35`
   to quiet defaults `3.0/2.2/45/20`; any custom/profile value preserves the stored bundle
+- schemas before `0x1B` normalize `StepSpr` to the current DRV8825/Vanchor
+  steering geometry when boot writeback is allowed
 
 ## Groups
 
@@ -81,3 +83,12 @@ Runtime failsafes always stop motion and latch `HOLD`. They do not automatically
 - `DriftFail` (`5..500`)
 - `GpsWeakHys` (`0.5..60`)
 - `EventRateMs` (`100..10000`)
+
+### Steering
+
+- `StepMaxSpd` (`100..1500`)
+- `StepAccel` (`50..1200`)
+- `StepSpr` (`7200..7200`)
+
+Current steering geometry is fixed to `7200` output steps per revolution:
+`200` motor steps/rev through the Vanchor `36:1` gearbox.

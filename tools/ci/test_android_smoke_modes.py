@@ -117,6 +117,6 @@ def test_android_app_e2e_supports_full_sim_suite() -> None:
     assert "app_sim_suite_all_passed" in app_e2e
     assert "--sim-suite" in local_wrapper
     assert "--sim-suite" in nh02_wrapper
-    assert "flash.sh\" --profile acceptance" in nh02_suite
-    assert "android-run-app-e2e.sh\" \"${app_args[@]}\"" in nh02_suite
     assert "flash.sh\" --profile release" in nh02_suite
+    assert "android-run-app-e2e.sh\" \"${app_args[@]}\"" in nh02_suite
+    assert "flash.sh\" --profile acceptance" not in nh02_suite

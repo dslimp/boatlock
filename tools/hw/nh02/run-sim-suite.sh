@@ -8,20 +8,18 @@ WAIT_SECS=1800
 ANDROID_SERIAL=""
 INSTALL_HELPERS=1
 RUN_BOOT_ACCEPTANCE=1
-RESTORE_RELEASE=1
-ACCEPTANCE_FLASHED=0
+FLASH_RELEASE=1
 
 usage() {
   cat >&2 <<'USAGE'
-usage: tools/hw/nh02/run-sim-suite.sh [--serial ANDROID_SERIAL] [--wait-secs SECONDS] [--skip-helper-install] [--skip-boot-acceptance] [--no-restore-release]
+usage: tools/hw/nh02/run-sim-suite.sh [--serial ANDROID_SERIAL] [--wait-secs SECONDS] [--skip-helper-install] [--skip-boot-acceptance] [--skip-release-flash]
 
 Runs the standard on-device HIL simulation suite on nh02:
   1. install/refresh tracked nh02 helpers
   2. prove nh02 + Android visibility
-  3. flash the acceptance firmware profile
+  3. flash the normal release firmware profile
   4. run boot acceptance
   5. run Android production-app e2e mode sim_suite
-  6. restore the release firmware profile and run boot acceptance again
 USAGE
 }
 
@@ -47,8 +45,11 @@ while [[ $# -gt 0 ]]; do
       RUN_BOOT_ACCEPTANCE=0
       shift
       ;;
+    --skip-release-flash)
+      FLASH_RELEASE=0
+      shift
+      ;;
     --no-restore-release)
-      RESTORE_RELEASE=0
       shift
       ;;
     *)
@@ -59,26 +60,6 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-restore_release() {
-  if [[ "${RESTORE_RELEASE}" -eq 0 || "${ACCEPTANCE_FLASHED}" -eq 0 ]]; then
-    return 0
-  fi
-  printf 'Restoring release firmware profile after sim suite...\n'
-  "${SCRIPT_DIR}/flash.sh" --profile release
-  if [[ "${RUN_BOOT_ACCEPTANCE}" -eq 1 ]]; then
-    "${SCRIPT_DIR}/acceptance.sh" --seconds 20
-  fi
-}
-
-cleanup() {
-  status=$?
-  if ! restore_release; then
-    status=1
-  fi
-  exit "${status}"
-}
-trap cleanup EXIT
-
 if [[ "${INSTALL_HELPERS}" -eq 1 ]]; then
   "${SCRIPT_DIR}/install.sh"
 fi
@@ -86,8 +67,9 @@ fi
 "${SCRIPT_DIR}/status.sh"
 "${SCRIPT_DIR}/android-status.sh"
 
-"${SCRIPT_DIR}/flash.sh" --profile acceptance
-ACCEPTANCE_FLASHED=1
+if [[ "${FLASH_RELEASE}" -eq 1 ]]; then
+  "${SCRIPT_DIR}/flash.sh" --profile release
+fi
 
 if [[ "${RUN_BOOT_ACCEPTANCE}" -eq 1 ]]; then
   "${SCRIPT_DIR}/acceptance.sh" --seconds 20

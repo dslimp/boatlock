@@ -82,7 +82,8 @@ Status after the 2026-04-26 autonomous pass.
   current behavior, hard-stop/jam handling, and direction inversion.
 - Do not change firmware motor/steering profiles for the real boat until those
   facts are captured. The current firmware assumes PWM plus two direction pins
-  for the brushed motor and 28BYJ-48 plus ULN2003-style `HALF4WIRE` steering.
+  for the brushed motor and DRV8825-compatible STEP/DIR steering on the Vanchor
+  `36:1` gearbox.
 - After the next GitHub Release is published, run a service-app OTA proof
   against the public release manifest instead of the local wrapper-served
   manifest.

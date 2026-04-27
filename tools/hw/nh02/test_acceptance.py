@@ -14,7 +14,7 @@ GOOD_LOG = [
     "[SEC] paired=0",
     "[BLE] init name=BoatLock service=12ab data=34cd cmd=56ef log=78ab",
     "[BLE] advertising started",
-    "[STEP] cfg maxSpd=700 accel=250 spr=4096",
+    "[STEP] cfg maxSpd=700 accel=250 spr=7200",
     "[STOP] button pin=15 active=LOW",
     "[GPS] UART data detected RX=17 TX=18 baud=9600",
 ]
@@ -49,7 +49,7 @@ def test_acceptance_fails_on_missing_ble_and_error_log():
             "[NVS] settings loaded (ver=24)",
             "[SEC] paired=1",
             "[BLE] advertising failed",
-            "[STEP] cfg maxSpd=700 accel=250 spr=4096",
+            "[STEP] cfg maxSpd=700 accel=250 spr=7200",
             "[STOP] button pin=15 active=LOW",
         ]
     )

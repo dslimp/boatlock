@@ -167,6 +167,24 @@ if [[ "${MODE}" == "sim_suite" && "${WAIT_SET}" -eq 0 ]]; then
   PASS_ARGS+=(--wait-secs 1800)
 fi
 
+if [[ "${BOATLOCK_NH02_ANDROID_WIFI_ADB:-1}" -eq 1 ]]; then
+  has_serial=0
+  for ((i = 0; i < ${#PASS_ARGS[@]}; i++)); do
+    if [[ "${PASS_ARGS[$i]}" == "--serial" ]]; then
+      has_serial=1
+      break
+    fi
+  done
+  if [[ "${has_serial}" -eq 0 ]]; then
+    wifi_serial="$(boatlock_nh02_android_wifi_serial)"
+    if [[ -z "${wifi_serial}" ]]; then
+      echo "could not enable Android ADB Wi-Fi" >&2
+      exit 1
+    fi
+    PASS_ARGS+=(--serial "${wifi_serial}")
+  fi
+fi
+
 if [[ "${BUILD_FIRST}" -eq 1 ]]; then
   build_args=(--e2e-mode "${MODE}")
   if [[ "${MODE}" == "ota" ]]; then

@@ -42,7 +42,7 @@ static bool hasEvent(const HilScenarioRunner::Result& r, const char* token) {
 
 void test_deterministic_repeatable_for_same_seed() {
   SimScenario s;
-  TEST_ASSERT_TRUE(findScenario("S1_current_0p4_good", &s));
+  TEST_ASSERT_TRUE(findScenario("S1", &s));
 
   const auto r1 = runScenario(s);
   const auto r2 = runScenario(s);
@@ -55,7 +55,7 @@ void test_deterministic_repeatable_for_same_seed() {
 
 void test_dropout_produces_stale_and_failsafe_events() {
   SimScenario s;
-  TEST_ASSERT_TRUE(findScenario("S4_gnss_dropout_3s", &s));
+  TEST_ASSERT_TRUE(findScenario("S4", &s));
   const auto r = runScenario(s);
 
   bool hasStale = false;
@@ -75,7 +75,7 @@ void test_dropout_produces_stale_and_failsafe_events() {
 
 void test_control_loop_stall_produces_timeout_event() {
   SimScenario s;
-  TEST_ASSERT_TRUE(findScenario("S8_control_loop_stall", &s));
+  TEST_ASSERT_TRUE(findScenario("S8", &s));
   const auto r = runScenario(s);
 
   bool hasLoopTimeout = false;
@@ -90,7 +90,7 @@ void test_control_loop_stall_produces_timeout_event() {
 
 void test_s0_hold_still_good_passes_expectations() {
   SimScenario s;
-  TEST_ASSERT_TRUE(findScenario("S0_hold_still_good", &s));
+  TEST_ASSERT_TRUE(findScenario("S0", &s));
   const auto r = runScenario(s);
   printf("S0 metrics: pass=%d reason=%s p95=%.3f max=%.3f deadband=%.2f sat=%.2f\n",
          (int)r.pass,
@@ -107,7 +107,7 @@ void test_s0_hold_still_good_passes_expectations() {
 
 void test_s1_current_0p4_good_passes_expectations() {
   SimScenario s;
-  TEST_ASSERT_TRUE(findScenario("S1_current_0p4_good", &s));
+  TEST_ASSERT_TRUE(findScenario("S1", &s));
   const auto r = runScenario(s);
   printf("S1 metrics: pass=%d reason=%s p95=%.3f max=%.3f deadband=%.2f sat=%.2f\n",
          (int)r.pass,
@@ -124,7 +124,7 @@ void test_s1_current_0p4_good_passes_expectations() {
 
 void test_s2_current_0p8_hard_passes_expectations() {
   SimScenario s;
-  TEST_ASSERT_TRUE(findScenario("S2_current_0p8_hard", &s));
+  TEST_ASSERT_TRUE(findScenario("S2", &s));
   const auto r = runScenario(s);
   printf("S2 metrics: pass=%d reason=%s p95=%.3f max=%.3f deadband=%.2f sat=%.2f\n",
          (int)r.pass,
@@ -142,7 +142,7 @@ void test_s2_current_0p8_hard_passes_expectations() {
 
 void test_s9_nan_heading_injection_passes_as_expected_failsafe() {
   SimScenario s;
-  TEST_ASSERT_TRUE(findScenario("S9_nan_heading_injection", &s));
+  TEST_ASSERT_TRUE(findScenario("S9", &s));
   const auto r = runScenario(s);
 
   bool hasNanEvent = false;
@@ -164,7 +164,7 @@ void test_s9_nan_heading_injection_passes_as_expected_failsafe() {
 
 void test_s12_compass_dropout_triggers_sensor_timeout_failsafe() {
   SimScenario s;
-  TEST_ASSERT_TRUE(findScenario("S12_compass_dropout_5s", &s));
+  TEST_ASSERT_TRUE(findScenario("S12", &s));
   const auto r = runScenario(s);
   TEST_ASSERT_TRUE_MESSAGE(r.pass, "S12 should pass expected failsafe path");
   TEST_ASSERT_TRUE(hasEvent(r, "COMPASS_LOST_EMU"));
@@ -174,7 +174,7 @@ void test_s12_compass_dropout_triggers_sensor_timeout_failsafe() {
 
 void test_s14_power_loss_emits_loss_restore_and_failsafe() {
   SimScenario s;
-  TEST_ASSERT_TRUE(findScenario("S14_power_loss_recover", &s));
+  TEST_ASSERT_TRUE(findScenario("S14", &s));
   const auto r = runScenario(s);
   TEST_ASSERT_TRUE_MESSAGE(r.pass, "S14 should pass expected power-loss failsafe path");
   TEST_ASSERT_TRUE(hasEvent(r, "POWER_LOSS_EMU"));
@@ -184,7 +184,7 @@ void test_s14_power_loss_emits_loss_restore_and_failsafe() {
 
 void test_s16_display_loss_events_without_control_failure() {
   SimScenario s;
-  TEST_ASSERT_TRUE(findScenario("S16_display_loss_transient", &s));
+  TEST_ASSERT_TRUE(findScenario("S16", &s));
   const auto r = runScenario(s);
   TEST_ASSERT_TRUE_MESSAGE(r.pass, "S16 should stay pass with display-only outage");
   TEST_ASSERT_TRUE(hasEvent(r, "DISPLAY_LOST_EMU"));
@@ -193,25 +193,34 @@ void test_s16_display_loss_events_without_control_failure() {
 
 void test_rf_water_scenarios_are_in_default_catalog() {
   SimScenario s;
-  TEST_ASSERT_TRUE(findScenario("RF0_oka_normal_55lb", &s));
-  TEST_ASSERT_TRUE(findScenario("RF1_volga_spring_flow_80lb", &s));
-  TEST_ASSERT_TRUE(findScenario("RF2_rybinsk_fetch_55lb", &s));
-  TEST_ASSERT_TRUE(findScenario("RF3_ladoga_storm_abort", &s));
-  TEST_ASSERT_TRUE(findScenario("RF4_baltic_gulf_drift", &s));
+  TEST_ASSERT_TRUE(findScenario("RF0", &s));
+  TEST_ASSERT_TRUE(findScenario("RF1", &s));
+  TEST_ASSERT_TRUE(findScenario("RF2", &s));
+  TEST_ASSERT_TRUE(findScenario("RF3", &s));
+  TEST_ASSERT_TRUE(findScenario("RF4", &s));
 }
 
 void test_rf_wave_wake_packets_emit_events() {
   SimScenario oka;
-  TEST_ASSERT_TRUE(findScenario("RF0_oka_normal_55lb", &oka));
+  TEST_ASSERT_TRUE(findScenario("RF0", &oka));
   const auto okaResult = runScenario(oka);
   TEST_ASSERT_TRUE_MESSAGE(okaResult.pass, "RF0 should pass with wake packet event");
   TEST_ASSERT_TRUE(hasEvent(okaResult, "WAKE_PACKET_EMU"));
 
   SimScenario rybinsk;
-  TEST_ASSERT_TRUE(findScenario("RF2_rybinsk_fetch_55lb", &rybinsk));
+  TEST_ASSERT_TRUE(findScenario("RF2", &rybinsk));
   const auto rybinskResult = runScenario(rybinsk);
   TEST_ASSERT_TRUE_MESSAGE(rybinskResult.pass, "RF2 should pass with chop packet events");
   TEST_ASSERT_TRUE(hasEvent(rybinskResult, "CHOP_PACKET_EMU"));
+}
+
+void test_default_scenario_catalog_fits_single_sim_list_log() {
+  hilsim::HilSimManager manager;
+  const std::string list = manager.listCsv();
+  TEST_ASSERT_TRUE_MESSAGE(list.size() <= 220, "SIM_LIST text must fit RuntimeSimLog sanitizer limit");
+  TEST_ASSERT_TRUE(list.find("S0") != std::string::npos);
+  TEST_ASSERT_TRUE(list.find("S19") != std::string::npos);
+  TEST_ASSERT_TRUE(list.find("RF4") != std::string::npos);
 }
 
 void test_all_default_scenarios_pass() {
@@ -241,6 +250,7 @@ int main() {
   RUN_TEST(test_s16_display_loss_events_without_control_failure);
   RUN_TEST(test_rf_water_scenarios_are_in_default_catalog);
   RUN_TEST(test_rf_wave_wake_packets_emit_events);
+  RUN_TEST(test_default_scenario_catalog_fits_single_sim_list_log);
   RUN_TEST(test_all_default_scenarios_pass);
   return UNITY_END();
 }

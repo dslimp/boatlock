@@ -19,7 +19,7 @@ struct RuntimeBleLiveTelemetry {
   float headingDeg = 0.0f;
   uint8_t batteryPct = 0;
   bool holdHeading = false;
-  uint16_t stepSpr = 4096;
+  uint16_t stepSpr = 7200;
   uint16_t stepMaxSpd = 0;
   uint16_t stepAccel = 0;
   float headingRawDeg = 0.0f;

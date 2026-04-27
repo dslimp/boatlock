@@ -17,13 +17,13 @@ void test_normalize180_wraps_into_signed_range() {
 }
 
 void test_point_to_bearing_uses_shortest_path() {
-  StepperControl c(2, 4, 6, 16);
-  c.stepsPerRev = 4096;
-  c.stepper.moveTo(4000);
+  StepperControl c(6, 16);
+  c.stepsPerRev = StepperControl::STEPS_PER_REV;
+  c.stepper.moveTo(StepperControl::STEPS_PER_REV - 96);
   while (c.stepper.distanceToGo() != 0) {
     c.stepper.run();
   }
-  TEST_ASSERT_EQUAL_INT(4000, c.stepper.currentPosition());
+  TEST_ASSERT_EQUAL_INT(StepperControl::STEPS_PER_REV - 96, c.stepper.currentPosition());
 
   c.pointToBearing(0.0f, 350.0f);
   long d = c.stepper.distanceToGo();
@@ -33,8 +33,8 @@ void test_point_to_bearing_uses_shortest_path() {
 }
 
 void test_direction_flip_preempts_old_target() {
-  StepperControl c(2, 4, 6, 16);
-  c.stepsPerRev = 4096;
+  StepperControl c(6, 16);
+  c.stepsPerRev = StepperControl::STEPS_PER_REV;
 
   c.pointToBearing(90.0f, 0.0f);
   const long first = c.stepper.distanceToGo();
@@ -46,7 +46,7 @@ void test_direction_flip_preempts_old_target() {
 }
 
 void test_run_releases_coils_after_idle_timeout() {
-  StepperControl c(2, 4, 6, 16);
+  StepperControl c(6, 16);
   c.outputsEnabled = true;
 
   c.run();
@@ -58,7 +58,7 @@ void test_run_releases_coils_after_idle_timeout() {
 }
 
 void test_run_releases_coils_when_idle_starts_at_zero() {
-  StepperControl c(2, 4, 6, 16);
+  StepperControl c(6, 16);
   c.outputsEnabled = true;
 
   mockSetMillis(0);
@@ -72,7 +72,7 @@ void test_run_releases_coils_when_idle_starts_at_zero() {
 }
 
 void test_cancel_move_starts_idle_release_timer() {
-  StepperControl c(2, 4, 6, 16);
+  StepperControl c(6, 16);
   c.outputsEnabled = true;
   c.idleSinceMs = 0;
 
@@ -86,7 +86,7 @@ void test_cancel_move_starts_idle_release_timer() {
 }
 
 void test_cancel_move_idle_timer_accepts_zero_timestamp() {
-  StepperControl c(2, 4, 6, 16);
+  StepperControl c(6, 16);
   c.outputsEnabled = true;
 
   mockSetMillis(0);
@@ -100,13 +100,20 @@ void test_cancel_move_idle_timer_accepts_zero_timestamp() {
 }
 
 void test_start_manual_zero_does_not_enable_outputs() {
-  StepperControl c(2, 4, 6, 16);
+  StepperControl c(6, 16);
   c.outputsEnabled = false;
 
   c.startManual(0);
 
   TEST_ASSERT_FALSE(c.manual);
   TEST_ASSERT_FALSE(c.outputsEnabled);
+}
+
+void test_drv8825_driver_uses_minimum_step_pulse_width() {
+  StepperControl c(6, 16);
+
+  TEST_ASSERT_EQUAL(StepperControl::STEPS_PER_REV, c.stepsPerRev);
+  TEST_ASSERT_EQUAL_UINT(StepperControl::DRV8825_MIN_PULSE_WIDTH_US, c.stepper.minPulseWidth());
 }
 
 int main() {
@@ -119,5 +126,6 @@ int main() {
   RUN_TEST(test_cancel_move_starts_idle_release_timer);
   RUN_TEST(test_cancel_move_idle_timer_accepts_zero_timestamp);
   RUN_TEST(test_start_manual_zero_does_not_enable_outputs);
+  RUN_TEST(test_drv8825_driver_uses_minimum_step_pulse_width);
   return UNITY_END();
 }

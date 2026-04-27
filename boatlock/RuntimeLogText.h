@@ -13,5 +13,5 @@ inline size_t runtimeLogFormattedLength(int formatResult, size_t bufferSize) {
 }
 
 inline bool runtimeLogShouldForwardToBle(const char* value) {
-  return value && strncmp(value, "[BLE]", 5) != 0;
+  return value && value[0] != '\0';
 }

@@ -19,6 +19,7 @@ void test_command_scope_classifies_release_exact_commands() {
   const char* commands[] = {
       "STREAM_START", "STREAM_STOP", "SNAPSHOT", "ANCHOR_ON", "ANCHOR_OFF",
       "STOP", "HEARTBEAT", "MANUAL_OFF", "PAIR_CLEAR", "AUTH_HELLO",
+      "SIM_LIST", "SIM_STATUS", "SIM_REPORT", "SIM_ABORT",
   };
   for (const char* command : commands) {
     assertScope(RuntimeBleCommandScope::RELEASE, command);
@@ -34,6 +35,7 @@ void test_command_scope_classifies_release_prefix_commands_without_payload_valid
       "SET_HOLD_HEADING:1",
       "PAIR_SET:not-hex",
       "AUTH_PROVE:short",
+      "SIM_RUN:S0,1",
   };
   for (const char* command : commands) {
     assertScope(RuntimeBleCommandScope::RELEASE, command);
@@ -74,11 +76,6 @@ void test_command_scope_classifies_service_prefix_commands_without_payload_valid
 
 void test_command_scope_classifies_dev_hil_commands() {
   const char* commands[] = {
-      "SIM_LIST",
-      "SIM_STATUS",
-      "SIM_REPORT",
-      "SIM_ABORT",
-      "SIM_RUN:S0,1",
       "SET_PHONE_GPS:not,a,fix",
   };
   for (const char* command : commands) {
@@ -133,21 +130,22 @@ void test_default_active_profile_is_release_compatible() {
                     (int)runtimeBleActiveCommandProfile());
 }
 
-void test_release_profile_rejects_service_and_dev_hil_commands() {
+void test_release_profile_accepts_sim_but_rejects_service_and_external_sensor_injection() {
   assertAllowed(true, RuntimeBleCommandProfile::RELEASE, "ANCHOR_ON");
+  assertAllowed(true, RuntimeBleCommandProfile::RELEASE, "SIM_RUN:S0,1");
+  assertAllowed(true, RuntimeBleCommandProfile::RELEASE, "SIM_STATUS");
   assertAllowed(false, RuntimeBleCommandProfile::RELEASE, "OTA_BEGIN:bad");
   assertAllowed(false, RuntimeBleCommandProfile::RELEASE, "SET_ANCHOR_PROFILE:quiet");
   assertAllowed(false, RuntimeBleCommandProfile::RELEASE, "SET_PHONE_GPS:59,30");
-  assertAllowed(false, RuntimeBleCommandProfile::RELEASE, "SIM_RUN:S0,1");
   assertAllowed(false, RuntimeBleCommandProfile::RELEASE, "SET_ROUTE:old");
 }
 
-void test_service_profile_accepts_release_service_and_rejects_dev_hil() {
+void test_service_profile_accepts_release_service_sim_and_rejects_external_sensor_injection() {
   assertAllowed(true, RuntimeBleCommandProfile::SERVICE, "ANCHOR_ON");
+  assertAllowed(true, RuntimeBleCommandProfile::SERVICE, "SIM_STATUS");
   assertAllowed(true, RuntimeBleCommandProfile::SERVICE, "OTA_BEGIN:bad");
   assertAllowed(true, RuntimeBleCommandProfile::SERVICE, "SET_ANCHOR_PROFILE:quiet");
   assertAllowed(false, RuntimeBleCommandProfile::SERVICE, "SET_PHONE_GPS:59,30");
-  assertAllowed(false, RuntimeBleCommandProfile::SERVICE, "SIM_STATUS");
   assertAllowed(false, RuntimeBleCommandProfile::SERVICE, "SET_ROUTE:old");
 }
 
@@ -172,8 +170,8 @@ int main() {
   RUN_TEST(test_command_scope_classifies_unknown_commands);
   RUN_TEST(test_command_profile_names_are_stable_log_tokens);
   RUN_TEST(test_default_active_profile_is_release_compatible);
-  RUN_TEST(test_release_profile_rejects_service_and_dev_hil_commands);
-  RUN_TEST(test_service_profile_accepts_release_service_and_rejects_dev_hil);
+  RUN_TEST(test_release_profile_accepts_sim_but_rejects_service_and_external_sensor_injection);
+  RUN_TEST(test_service_profile_accepts_release_service_sim_and_rejects_external_sensor_injection);
   RUN_TEST(test_acceptance_profile_accepts_all_known_command_scopes_and_rejects_unknown);
   return UNITY_END();
 }

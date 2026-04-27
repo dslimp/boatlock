@@ -1,10 +1,12 @@
 # BoatLock Steering Driver Intake
 
 Use this checklist before connecting or commanding the real steering drive. The
-current firmware path assumes a 28BYJ-48 stepper through a ULN2003-style
-`HALF4WIRE` driver on `GPIO2`, `GPIO4`, `GPIO6`, and `GPIO16`. The real driver
-has been reported as not A4988; do not infer the replacement type from that
-negative fact. Capture the hardware facts first.
+current firmware path assumes a DRV8825-compatible STEP/DIR driver on
+`STEP=GPIO6` and `DIR=GPIO16`, with `7200` output steps per steering revolution
+from the Vanchor `36:1` gearbox and `200` motor steps/rev. Capture the remaining
+hardware facts before powered steering.
+If DRV8825 MODE pins are set for microstepping instead of full-step, multiply
+`7200` by the active microstep factor before accepting steering geometry.
 
 This intake is hardware-independent. It should produce enough evidence to decide
 whether firmware can safely support the installed driver and mechanics, but it
@@ -18,8 +20,9 @@ does not by itself approve powered steering tests.
 - Photo/video folder or ticket:
 - Driver status: `unknown` until all identity, pinout, power, direction, idle,
   limit, and jam checks below are complete.
-- Firmware status: unsupported unless the captured facts match the current
-  28BYJ-48 + ULN2003 path or a new explicit firmware path is added and tested.
+- Firmware status: STEP/DIR support exists for DRV8825 on `GPIO6/GPIO16` with
+  `7200` output steps/rev; powered use remains blocked until the remaining
+  driver and mechanics facts are captured.
 
 ## Ground Rules
 
@@ -261,7 +264,7 @@ change. Required decision points:
 - `boatlock/main.cpp`: replace or confirm the steering pin map and any driver
   construction constants.
 - Steering driver abstraction: add an explicit path if the driver is not the
-  current ULN2003-style `HALF4WIRE` stack.
+  current DRV8825-compatible STEP/DIR stack.
 - Motion/runtime logic: apply measured steps-per-degree, max speed,
   acceleration, travel limits, idle/hold-current policy, and fault/limit
   handling.

@@ -47,6 +47,7 @@
 #include "BleCommandHandler.h"
 #include "BLEBoatLock.h"
 #include "DebugWifiOta.h"
+#include "SdCardLogger.h"
 
 Settings settings;
 constexpr size_t EEPROM_SIZE =
@@ -62,10 +63,8 @@ bool bleStarted = false;
 namespace cfg {
 constexpr char kFirmwareVersion[] = "0.2.0";
 
-constexpr int kStepIn1Pin = 2;
-constexpr int kStepIn2Pin = 4;
-constexpr int kStepIn3Pin = 6;
-constexpr int kStepIn4Pin = 16;
+constexpr int kStepperStepPin = 6;
+constexpr int kStepperDirPin = 16;
 constexpr int kGpsRxPin = 17;
 constexpr int kGpsTxPin = 18;
 constexpr int kCompassRxPin = 12;
@@ -77,7 +76,7 @@ constexpr uint32_t kCompassBaud = 3000000;
 constexpr uint32_t kCompassBaud = 115200;
 #endif
 constexpr int kMotorPwmPin = 7;
-constexpr int kMotorDirPin1 = 5;
+constexpr int kMotorDirPin1 = 8;
 constexpr int kMotorDirPin2 = 10;
 constexpr int kBootPin = 0;
 constexpr int kStopButtonPin = 15;
@@ -99,15 +98,13 @@ constexpr unsigned long kGpsNoDataWarnMs = 6000;
 constexpr unsigned long kGpsUartStaleRestartMs = 6000;
 constexpr unsigned long kGpsUartRestartCooldownMs = 4000;
 constexpr unsigned long kSimResultBannerMs = 15000;
+constexpr unsigned long kSdTelemetryIntervalMs = 200;
 } // namespace cfg
 
 HardwareSerial gpsSerial(1);
 HardwareSerial compassSerial(2);
 TinyGPSPlus gps;
-StepperControl stepperControl(cfg::kStepIn1Pin,
-                              cfg::kStepIn2Pin,
-                              cfg::kStepIn3Pin,
-                              cfg::kStepIn4Pin);
+StepperControl stepperControl(cfg::kStepperStepPin, cfg::kStepperDirPin);
 
 BNO08xCompass compass;
 AnchorControl anchor;
@@ -129,6 +126,7 @@ enum class FixTypeSource : uint8_t {
 FixTypeSource fixTypeSource = FixTypeSource::NONE;
 bool minFixTypeIgnoredLogged = false;
 unsigned long lastLoopMs = 0;
+unsigned long lastSdTelemetryMs = 0;
 BleSecurity bleSecurity;
 
 ManualControl manualControl;
@@ -208,6 +206,25 @@ std::string activeSafetyReason(unsigned long now) {
 
 RuntimeStatusInput currentRuntimeStatusInput(unsigned long now, std::string* safetyReason) {
   RuntimeStatusInput input;
+  if (hilSim.isRunning()) {
+    hilsim::HilScenarioRunner::LiveTelemetry live;
+    const bool liveOk = hilSim.liveTelemetry(&live);
+    input.gpsUnavailable = !(liveOk && live.gnss.valid);
+    input.gnssWeak = false;
+    input.gnssWeakReason = nullptr;
+    input.headingAvailable = liveOk && live.heading.valid;
+    input.driftFail = false;
+    input.driftAlert = false;
+    input.anchorActive = false;
+    input.anchorDeniedReason = nullptr;
+    input.failsafeReason = nullptr;
+    input.holdMode = false;
+    if (safetyReason) {
+      safetyReason->clear();
+      input.safetyReason = safetyReason->c_str();
+    }
+    return input;
+  }
   input.gpsUnavailable = !gps.location.isValid() && !runtimeGnss.fix();
   input.gnssWeak = !input.gpsUnavailable && !gpsQualityGoodForAnchorOn();
   input.gnssWeakReason = input.gnssWeak ? currentGnssFailReason() : nullptr;
@@ -517,6 +534,51 @@ void publishBleAndUi(unsigned long now,
   }
 }
 
+void enqueueSdTelemetry(unsigned long now, const RuntimeControlState& controlState) {
+  if (now - lastSdTelemetryMs < cfg::kSdTelemetryIntervalMs) {
+    return;
+  }
+  lastSdTelemetryMs = now;
+
+  const RuntimeStatusSnapshot status = buildCurrentStatusSnapshot(now);
+  SdLogTelemetrySnapshot snapshot;
+  snapshot.ms = now;
+  snapshot.mode = currentModeLabel();
+  snapshot.status = status.summary.c_str();
+  snapshot.reasons = status.reasons.c_str();
+  snapshot.gpsFix = runtimeGnss.fix();
+  snapshot.gpsSourcePhone = runtimeGnss.gpsSourcePhone();
+  snapshot.lat = runtimeGnss.lastLat();
+  snapshot.lon = runtimeGnss.lastLon();
+  snapshot.gpsAgeMs = runtimeGnss.currentGpsAgeMs();
+  snapshot.satellites = runtimeGnss.currentSatellites();
+  snapshot.hdop = runtimeGnss.currentGpsHdop();
+  snapshot.speedKmh = runtimeGnss.currentSpeedKmh();
+  snapshot.accelValid = runtimeGnss.currentAccelValid();
+  snapshot.accelMps2 = runtimeGnss.currentAccelMps2();
+  snapshot.headingValid = controlState.hasHeading;
+  snapshot.headingDeg = controlState.headingDeg;
+  snapshot.headingRawDeg = compassReady ? compass.getRawAzimuth() : NAN;
+  snapshot.headingCorrDeg = runtimeGnss.headingCorrectionDeg(now);
+  snapshot.pitchDeg = compassReady ? compass.getPitchDeg() : NAN;
+  snapshot.rollDeg = compassReady ? compass.getRollDeg() : NAN;
+  snapshot.rvAccuracyDeg = compassReady ? compass.getRvAccuracyDeg() : NAN;
+  snapshot.compassQuality = compassReady ? compass.getHeadingQuality() : 0;
+  snapshot.anchorConfigured = anchorPointConfigured();
+  snapshot.anchorEnabled = settings.get("AnchorEnabled") == 1;
+  snapshot.anchorLat = anchor.anchorLat;
+  snapshot.anchorLon = anchor.anchorLon;
+  snapshot.distanceM = runtimeGnss.distanceM();
+  snapshot.bearingValid = controlState.hasBearing;
+  snapshot.bearingDeg = runtimeGnss.bearingDeg();
+  snapshot.diffDeg = controlState.diffDeg;
+  snapshot.motorPwmPct = motor.pwmPercent();
+  snapshot.stepperPosition = stepperControl.stepper.currentPosition();
+  snapshot.stepperTarget = stepperControl.stepper.targetPosition();
+  snapshot.bleConnected = bleBoatLock.bleStatus == BLEBoatLock::CONNECTED;
+  sdCardLogger.enqueueTelemetry(snapshot);
+}
+
 } // namespace
 
 void setPhoneGpsFix(float lat, float lon, float speedKmh, int satellites) {
@@ -787,6 +849,12 @@ void setup() {
 
   const bool displayReady = display_init();
   logMessage("[DISPLAY] ready=%d\n", (int)displayReady);
+  sdCardLogger.begin(cfg::kFirmwareVersion, bootMs);
+  logMessage("[SD] logger ready=%d path=%s total_mb=%llu free_mb=%llu\n",
+             sdCardLogger.ready() ? 1 : 0,
+             sdCardLogger.currentPath(),
+             static_cast<unsigned long long>(sdCardLogger.totalBytes() / (1024ULL * 1024ULL)),
+             static_cast<unsigned long long>(sdCardLogger.freeBytes() / (1024ULL * 1024ULL)));
 
   randomSeed(micros());
   fallbackHeading = random(0, 360);
@@ -833,11 +901,10 @@ void setup() {
 
   stepperControl.attachSettings(&settings);
   stepperControl.loadFromSettings();
-  logMessage("[STEP] pins IN1=%d IN2=%d IN3=%d IN4=%d\n",
-             cfg::kStepIn1Pin,
-             cfg::kStepIn2Pin,
-             cfg::kStepIn3Pin,
-             cfg::kStepIn4Pin);
+  logMessage("[STEP] driver=DRV8825 mode=STEP_DIR step=%d dir=%d minPulseUs=%u\n",
+             cfg::kStepperStepPin,
+             cfg::kStepperDirPin,
+             StepperControl::DRV8825_MIN_PULSE_WIDTH_US);
   logMessage("[STOP] button pin=%d active=LOW\n", cfg::kStopButtonPin);
   simLastWallMs = millis();
 
@@ -851,7 +918,6 @@ void loop() {
   simLastWallMs = wallNowMs;
   hilSim.loop(wallDtMs);
 #if BOATLOCK_DEBUG_WIFI_OTA
-  DebugWifiOta::loop();
   if (DebugWifiOta::bleMayStart()) {
     startBleRuntime();
   }
@@ -859,12 +925,16 @@ void loop() {
   serviceBleRuntime();
   bleOta.loop();
 
-  updateGpsFromSerial();
-  handleBootButton();
+  const bool simRunningNow = hilSim.isRunning();
+  if (!simRunningNow) {
+    updateGpsFromSerial();
+    handleBootButton();
+  }
   handleStopButton();
 
   const unsigned long now = millis();
-  if (compassRetry.shouldRetry(compassReady, now, cfg::kCompassRetryIntervalMs)) {
+  if (!simRunningNow &&
+      compassRetry.shouldRetry(compassReady, now, cfg::kCompassRetryIntervalMs)) {
     const bool resetPulse = compass.hardwareReset();
     compassReady =
         compass.begin(compassSerial, cfg::kCompassRxPin, cfg::kCompassTxPin, cfg::kCompassBaud);
@@ -883,7 +953,8 @@ void loop() {
     }
   }
 
-  if (compassReady && telemetryCadence.shouldPollCompass(now, cfg::kCompassReadIntervalMs)) {
+  if (!simRunningNow && compassReady &&
+      telemetryCadence.shouldPollCompass(now, cfg::kCompassReadIntervalMs)) {
     const BNO08xCompassReadResult compassRead = compass.read();
     if (compassRead.headingEvent && !compassHeadingEventsReadyLogged) {
       compassHeadingEventsReadyLogged = true;
@@ -891,7 +962,7 @@ void loop() {
     }
   }
 
-  if (compassReady) {
+  if (!simRunningNow && compassReady) {
     const unsigned long compassHealthNow = millis();
     RuntimeCompassHealthInput compassHealth;
     compassHealth.compassReady = compassReady;
@@ -956,7 +1027,6 @@ void loop() {
       headingOk ? compass.getHeadingQuality() : 0,
       runtimeGnss.distanceM());
 
-  const bool simRunningNow = hilSim.isRunning();
   const char* stickyBadge = runtimeSimBadge.update(
       simRunningNow, hilSim.currentScenarioId(), hilSim.lastPass(), now, cfg::kSimResultBannerMs);
 
@@ -980,6 +1050,8 @@ void loop() {
   }
   publishBleAndUi(
       now, controlState.hasHeading, controlState.hasBearing, controlState.headingDeg, controlState.diffDeg, stickyBadge);
+  enqueueSdTelemetry(now, controlState);
+  sdCardLogger.service(now);
 
   serviceBleRuntime();
 }

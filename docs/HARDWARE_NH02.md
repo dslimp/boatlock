@@ -2,6 +2,31 @@
 
 `nh02` (`192.168.88.61`) is the hardware bench host for the ESP32-S3 stand with GPS, display, compass, and stepper connected over USB.
 
+## Board Reference
+
+The current bench board is the Waveshare ESP32-S3-LCD-2 class board. Local
+copies of the vendor pinout/resource images are kept under
+`docs/assets/hardware/` so hardware checks do not depend on finding the product
+page again.
+
+![ESP32-S3-LCD-2 pin definition](assets/hardware/esp32-s3-lcd-2-pin-definition.png)
+
+![ESP32-S3-LCD-2 resource introduction](assets/hardware/esp32-s3-lcd-2-resource-introduction.png)
+
+## MicroSD runtime logging
+
+- The onboard microSD slot is used for water-debug capture when a FAT-formatted
+  card is inserted.
+- Firmware writes JSONL files under `/boatlock/blNNNNN.jsonl`.
+- Each file rotates at approximately `8 MiB`.
+- If free space drops below approximately `8 MiB`, older BoatLock log files are
+  deleted until approximately `16 MiB` is free or only the active file remains.
+- Records include `type=session`, `type=log`, and 5 Hz `type=nav` snapshots with
+  GNSS, heading, speed, anchor state, mode/status, motor, stepper, BLE, and
+  `sd_dropped` counters.
+- SD failure must not block control. The logger uses a bounded RAM queue and
+  drops old lines when the card is absent, slow, or full.
+
 ## Remote runtime
 
 - Remote USB device:
@@ -57,6 +82,9 @@
   - `tools/hw/nh02/android-status.sh`
 - Enable Android ADB over Wi-Fi after initial USB discovery:
   - `tools/hw/nh02/android-wifi-debug.sh`
+- Android smoke/e2e wrappers use ADB Wi-Fi by default when no `--serial` is
+  passed. Set `BOATLOCK_NH02_ANDROID_WIFI_ADB=0` to force the default `adb`
+  target selection.
 - Build, install/update, and run the Android BLE smoke app through `nh02`:
   - `tools/hw/nh02/android-run-smoke.sh`
 - Build, install/update, and run the Android BLE reconnect smoke app through `nh02`:
@@ -67,24 +95,24 @@
   - `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130`
 - Build, install/update, and prove BLE-visible hardware GPS fix:
   - `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180`
-- Run the full standard on-device HIL suite on the bench, with automatic
-  acceptance-profile flash and release-profile restore:
+- Run the full standard on-device HIL suite on the bench using the normal
+  release firmware profile:
   - `tools/hw/nh02/run-sim-suite.sh`
 - Run the smoke app without reinstalling the APK:
   - `tools/hw/nh02/android-run-smoke.sh --no-install`
 
 ## Profile-Aware Gate
 
-Firmware command-scope enforcement is implemented in the shared BLE command path. PlatformIO profile aliases and `tools/hw/nh02/flash.sh` profile reporting select whether the flashed firmware accepts only release commands, service commands, or acceptance/HIL commands.
+Firmware command-scope enforcement is implemented in the shared BLE command path. PlatformIO profile aliases and `tools/hw/nh02/flash.sh` profile reporting select whether the flashed firmware accepts only release commands, service commands, or service/test commands. `SIM_*` is release scope and runs as a safe software simulation mode in the ordinary firmware.
 
 The effective firmware profile must stay visible at every bench entry point:
 
 - USB flash wrappers must print the effective PlatformIO environment and whether it is a `release`, `service`, or `acceptance` command-scope profile.
 - `tools/hw/nh02/flash.sh` may keep `BOATLOCK_PIO_ENV` as the override, but the accepted values must be documented and must not silently fall back from a requested service or acceptance profile to release.
-- `tools/hw/nh02/acceptance.sh` must know which profile is flashed. Release acceptance must prove `SIM_*` rejection; acceptance-profile validation must run `SIM_*` through the normal BLE command path.
+- `tools/hw/nh02/acceptance.sh` must know which profile is flashed. Release acceptance must keep `SIM_*` available through the normal BLE command path while service-only and external sensor-injection commands stay gated.
 - `tools/hw/nh02/android-run-app-e2e.sh --ota` must require a service-capable target firmware before sending `OTA_BEGIN`. If the OTA candidate is a release image that intentionally disables BLE OTA after reboot, the wrapper output must say so.
-- `tools/hw/nh02/android-run-app-e2e.sh --sim`, `--sim-suite`, and the smoke `sim` mode must require the acceptance profile before sending `SIM_*`.
-- `tools/hw/nh02/run-sim-suite.sh` is the standard full on-device HIL bench gate. It flashes `acceptance`, runs boot acceptance, runs production-app `sim_suite`, then restores `release`.
+- `tools/hw/nh02/android-run-app-e2e.sh --sim`, `--sim-suite`, and the smoke `sim` mode run against the release profile.
+- `tools/hw/nh02/run-sim-suite.sh` is the standard full on-device HIL bench gate. It flashes `release`, runs boot acceptance, then runs production-app `sim_suite`.
 - `tools/hw/nh02/install.sh` must be rerun after changing any tracked remote helper that enforces or reports the selected profile.
 
 Accepted flash profile selectors:
@@ -98,22 +126,22 @@ Accepted direct PlatformIO environments:
 - `esp32s3`: release-compatible legacy environment kept for existing local and CI workflows.
 - `esp32s3_release`: explicit release profile.
 - `esp32s3_service`: explicit service profile for BLE OTA and calibration/service flows.
-- `esp32s3_acceptance`: explicit acceptance profile for on-device HIL and `SIM_*` validation.
+- `esp32s3_acceptance`: explicit broad bench profile for service/test command validation.
 - `esp32s3_bno08x_sh2_uart`: service profile with SH2-UART compass support.
 - `esp32s3_debug_wifi_ota`: service profile with debug Wi-Fi/OTA flags; this is not proof that BLE OTA works.
 - `gpio_probe` and `uart_rvc_probe_rx12`: debug probe builds, not release/service/acceptance command-scope firmware.
 
 `BOATLOCK_PIO_ENV` must name one of the accepted selectors above. An empty or unknown value is a wrapper error and must not fall back to the default release-compatible build.
 
-Expected operator flow after the gate lands:
+Expected operator flow:
 
-1. Flash the release profile for normal water-readiness checks and verify service/dev/HIL commands are rejected without actuation.
+1. Flash the release profile for normal water-readiness checks and verify service/external-injection commands are rejected without actuation.
 2. Flash the service profile for BLE OTA acceptance, then run `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware ...`.
-3. Flash the acceptance profile for quick on-device HIL, then run the normal `nh02` acceptance plus Android `sim` smoke/e2e path.
-4. For the standard full on-device HIL suite, run `tools/hw/nh02/run-sim-suite.sh`; it handles acceptance-profile flash and release restore.
+3. Run quick on-device HIL on the release profile with the normal `nh02` acceptance plus Android `sim` smoke/e2e path.
+4. For the standard full on-device HIL suite, run `tools/hw/nh02/run-sim-suite.sh`; it flashes and validates the release profile before the suite.
 5. Return the bench to the release profile after HIL or service work unless the next task explicitly needs another profile.
 
-Do not merge the firmware gate until the rest of this wrapper contract is implemented and documented. Otherwise `OTA_BEGIN` or `SIM_RUN` can appear broken even though the wrong profile was flashed.
+If `OTA_BEGIN` or `SIM_RUN` appears broken, check the printed profile first; the wrappers are expected to fail loudly instead of silently running the wrong profile.
 
 ## Deploy path
 
@@ -131,10 +159,25 @@ Do not merge the firmware gate until the rest of this wrapper contract is implem
 5. The app downloads the binary, verifies SHA-256 before transfer, sends authenticated `OTA_BEGIN`, writes chunks to BLE characteristic `9abc`, then sends `OTA_FINISH`.
 6. ESP32 validates byte count and SHA-256 before finalizing the OTA partition and rebooting. Disconnect or failed validation aborts without changing the active boot partition.
 7. Bench automation can run the same path with `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin`; the wrapper serves `firmware.bin` on `nh02`, exposes it to the phone with `adb reverse`, installs the production app with OTA e2e defines, and waits for post-reboot telemetry.
+   When `--serial` is omitted, the wrapper enables and uses Android ADB Wi-Fi
+   automatically.
 8. Current BLE upload requests high connection priority, a larger MTU, and
    write-without-response for OTA chunks when Android and the characteristic
    support it; otherwise it falls back to acknowledged writes. Keep the wrapper
    timeout long enough for the slower fallback path.
+9. After a successful `OTA_FINISH` write, ESP32 may reboot before the phone
+   receives the `[OTA] finish ok` notify line. Treat the post-finish disconnect
+   plus reconnect/telemetry recovery as the bench verdict; the log line is useful
+   evidence when present, not the only success signal.
+10. Do not keep ESP32 debug Wi-Fi OTA running as the normal persistent bench
+    channel while BLE is active. On this ESP32-S3/Arduino/NimBLE stack,
+    Wi-Fi+BLE coexistence requires Wi-Fi modem sleep and was not reliable enough
+    for service flashing. Use Android ADB Wi-Fi to control the phone and BLE OTA
+    from the phone to flash the ESP32.
+11. The BLE log characteristic `78ab` mirrors firmware `logMessage()` serial
+    lines generated while the phone is connected and subscribed, including
+    `[BLE]` lines. Boot logs before a BLE connection still require RFC2217/USB
+    serial capture.
 
 ## Android USB Path
 
@@ -142,16 +185,25 @@ Do not merge the firmware gate until the rest of this wrapper contract is implem
 2. `tools/hw/nh02/android-install.sh` ensures `adb` exists on `nh02`.
 3. `tools/hw/nh02/android-status.sh` checks whether the phone is visible over USB and whether `adb devices -l` sees it.
 4. `tools/hw/nh02/android-wifi-debug.sh` can switch the same phone to ADB TCP/IP and prints `android_wifi_serial=<ip>:5555`.
-5. Any Android smoke wrapper can then use `--serial <ip>:5555` to prove install/logcat/debug control over Wi-Fi instead of USB.
-6. `tools/hw/nh02/android-run-smoke.sh` copies the smoke APK to `nh02`, installs or updates it with remote `adb`, launches the app, and waits for the `BOATLOCK_SMOKE_RESULT` log line.
-7. `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` additionally waits for first telemetry, cycles phone Bluetooth through ADB, and requires telemetry recovery without restarting the app.
-8. `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` waits for first telemetry, resets the ESP32-S3 with the tracked remote reset helper, and requires telemetry recovery without restarting the app.
-9. `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130` sends safe compass-service commands (`COMPASS_CAL_START`, `COMPASS_DCD_AUTOSAVE_OFF`, `COMPASS_DCD_SAVE`) and requires device log acknowledgements.
-10. `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180` waits for production-app BLE telemetry with non-zero valid coordinates and GNSS quality `>0`; this can run while ESP32 is powered away from USB if BLE remains reachable.
-11. `tools/hw/nh02/android-run-app-e2e.sh --sim-suite --wait-secs 1800` runs `SIM_LIST`, every listed scenario through `SIM_RUN:<id>,0`, polls `SIM_STATUS`, collects `SIM_REPORT`, and fails on any `pass:false`.
-12. `tools/hw/nh02/run-sim-suite.sh` wraps the full bench flow around `--sim-suite`: helper install, target proof, acceptance flash, boot acceptance, production-app suite run, release restore, and release boot acceptance.
-13. `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin` verifies phone download, SHA-256 check, BLE upload, ESP32 reboot, and app telemetry recovery.
-14. If the phone appears only as `MTP` or a vendor USB device and not in `adb devices`, the cable path is alive but USB debugging is still off on the phone.
+5. `tools/hw/nh02/android-run-smoke.sh` and
+   `tools/hw/nh02/android-run-app-e2e.sh` call the Wi-Fi ADB helper
+   automatically unless `BOATLOCK_NH02_ANDROID_WIFI_ADB=0` is set or an explicit
+   `--serial` is passed.
+6. Any Android smoke wrapper can still use explicit `--serial <ip>:5555` to
+   prove install/logcat/debug control over Wi-Fi instead of USB.
+7. `tools/hw/nh02/android-run-smoke.sh` copies the smoke APK to `nh02`, installs or updates it with remote `adb`, launches the app, and waits for the `BOATLOCK_SMOKE_RESULT` log line.
+8. `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` additionally waits for first telemetry, cycles phone Bluetooth through ADB, and requires telemetry recovery without restarting the app.
+9. `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` waits for first telemetry, resets the ESP32-S3 with the tracked remote reset helper, and requires telemetry recovery without restarting the app.
+10. `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130` sends safe compass-service commands (`COMPASS_CAL_START`, `COMPASS_DCD_AUTOSAVE_OFF`, `COMPASS_DCD_SAVE`) and requires device log acknowledgements.
+11. `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180` waits for production-app BLE telemetry with non-zero valid coordinates and GNSS quality `>0`; this can run while ESP32 is powered away from USB if BLE remains reachable.
+12. `tools/hw/nh02/android-run-app-e2e.sh --sim-suite --wait-secs 1800` runs `SIM_LIST`, every listed scenario through `SIM_RUN:<id>,0`, polls `SIM_STATUS`, collects `SIM_REPORT`, and fails on any `pass:false`.
+13. `tools/hw/nh02/run-sim-suite.sh` wraps the full bench flow around `--sim-suite`: helper install, target proof, release flash, boot acceptance, and production-app suite run.
+14. `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin` verifies phone download, SHA-256 check, BLE upload, ESP32 reboot, and app telemetry recovery.
+15. If the phone appears only as `MTP` or a vendor USB device and not in `adb devices`, the cable path is alive but USB debugging is still off on the phone.
+16. Status smoke recovery may clear `STOP_CMD` directly to `IDLE/WARN` after a
+    zero-throttle manual recovery command without exposing a visible `MANUAL`
+    telemetry frame. The wrapper must still send `MANUAL_OFF` cleanup and accept
+    the recovered non-alert state.
 
 ## Xiaomi Install Note
 

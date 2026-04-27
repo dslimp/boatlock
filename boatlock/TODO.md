@@ -14,10 +14,10 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 - [x] Verify/fix that phone GPS fallback cannot update GPS-to-compass correction used by control heading.
 - [x] Classify BLE commands into release/service/dev surfaces and gate service/dev paths from normal water UI.
 - [x] Add explicit release/service/acceptance PlatformIO profiles and `nh02` flash-wrapper profile selection.
-- [x] Implement firmware-side service/dev/HIL command enforcement through those profiles so BLE OTA and `SIM_*` acceptance are not silently broken.
+- [x] Implement firmware-side service/dev/HIL command enforcement through those profiles while keeping `SIM_*` available as a safe release-mode simulation path.
 - [x] Remove confirmation from the app emergency STOP button: it must send `STOP` immediately, and the button should be visually separated to the left of normal controls.
 - [ ] Identify the exact brushed/collector motor driver with `docs/BRUSHED_MOTOR_DRIVER_INTAKE.md` and update firmware/docs if it is not the current `PWM+DIR1+DIR2` path.
-- [ ] Identify the exact steering stepper driver/mechanics with `docs/STEERING_DRIVER_INTAKE.md` and update firmware/docs if it is not the current 28BYJ-48 + ULN2003 path.
+- [ ] Complete the DRV8825/Vanchor steering intake with current limit, enable/sleep/reset wiring, direction proof, and powered STOP behavior.
 - [x] Build a no-load motor output acceptance checklist for `PWM=7`, `DIR=5/10`, boot, STOP, HOLD, reconnect, anchor denial, SIM, and OTA begin.
 - [x] Add powered-bench wiring requirements: current-limited supply, fuse/breaker, physical kill path, polarity proof, strain relief, and thermal check.
 - [ ] Update README wiring diagrams/photos from real hardware.

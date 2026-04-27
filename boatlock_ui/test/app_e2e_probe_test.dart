@@ -15,12 +15,6 @@ void main() {
   });
 
   test('maps firmware profile rejections to app e2e stages and reasons', () {
-    const simRejection = BleCommandRejection(
-      reason: 'profile',
-      profile: 'release',
-      scope: 'dev_hil',
-      command: 'SIM_RUN:S0_hold_still_good,1',
-    );
     const compassRejection = BleCommandRejection(
       reason: 'profile',
       profile: 'release',
@@ -41,18 +35,6 @@ void main() {
     );
 
     expect(
-      appE2eProfileRejectionStage(simRejection),
-      'command_rejected_SIM_RUN_release',
-    );
-    expect(
-      appE2eProfileRejectionReason(BleSmokeMode.sim, simRejection),
-      'app_sim_rejected_by_profile_release',
-    );
-    expect(
-      appE2eProfileRejectionReason(BleSmokeMode.sim_suite, simRejection),
-      'app_sim_suite_rejected_by_profile_release',
-    );
-    expect(
       appE2eProfileRejectionReason(BleSmokeMode.compass, compassRejection),
       'app_compass_rejected_by_profile_release',
     );
@@ -65,16 +47,17 @@ void main() {
       'app_ota_finish_rejected_by_profile_release',
     );
     expect(
-      appE2eProfileRejectionReason(BleSmokeMode.anchor, simRejection),
+      appE2eProfileRejectionStage(compassRejection),
+      'command_rejected_COMPASS_CAL_START_release',
+    );
+    expect(
+      appE2eProfileRejectionReason(BleSmokeMode.sim, compassRejection),
       isNull,
     );
   });
 
   test('parses on-device SIM suite logs', () {
-    expect(parseAppE2eSimListLog('[SIM] LIST S0_hold_still_good,S1_current'), [
-      'S0_hold_still_good',
-      'S1_current',
-    ]);
+    expect(parseAppE2eSimListLog('[SIM] LIST S0,S1,RF0'), ['S0', 'S1', 'RF0']);
     expect(parseAppE2eSimListLog('[SIM] STATUS {}'), isEmpty);
 
     expect(

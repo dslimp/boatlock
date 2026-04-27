@@ -7,10 +7,13 @@
 
 class StepperControl {
 public:
-    static constexpr int STEPS_PER_REV_28BYJ = 4096;
+    static constexpr int MOTOR_STEPS_PER_REV = 200;
+    static constexpr int GEAR_RATIO = 36;
+    static constexpr int STEPS_PER_REV = MOTOR_STEPS_PER_REV * GEAR_RATIO;
     static constexpr int DIRECTION_SIGN = -1;
     static constexpr unsigned long COIL_RELEASE_DELAY_MS = 1200;
     static constexpr long MIN_COMMAND_STEPS = 4;
+    static constexpr unsigned int DRV8825_MIN_PULSE_WIDTH_US = 2;
     AccelStepper stepper;
     Settings* settings;
     int stepsPerRev;
@@ -22,11 +25,12 @@ public:
     unsigned long idleSinceMs = 0;
     bool idleTimerActive = false;
 
-    // 28BYJ-48 + ULN2003 (HALF4WIRE). Pin order IN1, IN3, IN2, IN4 for AccelStepper.
-    StepperControl(int in1Pin, int in2Pin, int in3Pin, int in4Pin)
-        : stepper(AccelStepper::HALF4WIRE, in1Pin, in3Pin, in2Pin, in4Pin),
+    StepperControl(int stepPin, int dirPin)
+        : stepper(AccelStepper::DRIVER, stepPin, dirPin),
           settings(nullptr),
-          stepsPerRev(STEPS_PER_REV_28BYJ) {}
+          stepsPerRev(STEPS_PER_REV) {
+        stepper.setMinPulseWidth(DRV8825_MIN_PULSE_WIDTH_US);
+    }
 
     void attachSettings(Settings* s) { settings = s; }
 
@@ -56,8 +60,7 @@ public:
         if (!settings) return;
         stepper.setMaxSpeed(settings->get("StepMaxSpd"));
         stepper.setAcceleration(settings->get("StepAccel"));
-        // Legacy STEP/DIR support removed: 28BYJ is fixed at 4096 steps/rev.
-        stepsPerRev = STEPS_PER_REV_28BYJ;
+        stepsPerRev = STEPS_PER_REV;
         ensureOutputsEnabled();
         clearIdleTimer();
 

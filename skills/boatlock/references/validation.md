@@ -75,6 +75,12 @@
   - `tools/hw/nh02/android-status.sh`
   - `tools/hw/nh02/android-wifi-debug.sh`
   - rerun `install.sh` after changing the tracked service unit or remote flash helper
+- microSD logger hardware proof:
+  - flash a build with a FAT-formatted microSD inserted
+  - require `[SD] logger ready=1`
+  - verify display redraws still work
+  - verify `/boatlock/*.jsonl` grows on the card
+  - for rotation/low-space work, test file rotation or low-space deletion on real media before water use
 - Android USB + BLE smoke:
   - `tools/android/status.sh`
   - `tools/android/build-app-apk.sh`
@@ -109,9 +115,9 @@ Firmware command enforcement is implemented in the shared BLE command path. Plat
 
 Profile rules:
 
-- `release` profile: accepts only release commands and rejects service plus dev/HIL commands before side effects.
-- `service` profile: accepts release plus service commands, including BLE OTA, and rejects dev/HIL.
-- `acceptance` profile: accepts release, service, and dev/HIL so on-device `SIM_*` remains available for bench acceptance.
+- `release` profile: accepts release commands, including `SIM_*`, and rejects service plus dev/HIL commands before side effects.
+- `service` profile: accepts release plus service commands, including BLE OTA and `SIM_*`, and rejects dev/HIL such as `SET_PHONE_GPS`.
+- `acceptance` profile: accepts release, service, and dev/HIL for broad bench validation.
 - `esp32s3_release`, `esp32s3_service`, and `esp32s3_acceptance` are the explicit profile aliases.
 - `tools/hw/nh02/flash.sh --profile release|service|acceptance` maps to those explicit aliases.
 - `BOATLOCK_PIO_ENV=release|service|acceptance` maps to those explicit aliases; an empty or unknown `BOATLOCK_PIO_ENV` is an error.
@@ -127,21 +133,19 @@ Minimum validation order after profile-gate changes:
    - `rg -n "esp32s3_release|esp32s3_service|esp32s3_acceptance|release|service|dev/HIL|SIM_|OTA|BOATLOCK_PIO_ENV|PlatformIO|nh02" boatlock/platformio.ini tools/hw/nh02/flash.sh docs/BLE_PROTOCOL.md docs/HARDWARE_NH02.md skills/boatlock/references/validation.md boatlock/TODO.md`
 2. Local firmware/unit checks, run sequentially in one build directory:
    - native BLE command/security tests cover each profile's allow/deny matrix
-   - native HIL tests cover `SIM_*` only for the acceptance profile
+   - native HIL tests cover `SIM_*` as a release-scope safe simulation mode
    - each PlatformIO firmware profile builds without relying on stale `.pio` artifacts
 3. Release-profile bench checks:
    - flash the release profile through `tools/hw/nh02/flash.sh --profile release`
    - run `tools/hw/nh02/acceptance.sh`
-   - prove a representative service command, `OTA_BEGIN`, and `SIM_RUN` are rejected with stable gate logs and no output motion
+   - prove a representative service command and `OTA_BEGIN` are rejected with stable gate logs and no output motion
+   - run Android `sim` smoke/e2e and verify `SIM` telemetry without motor/stepper output
 4. Service-profile bench checks:
    - flash the service profile through `tools/hw/nh02/flash.sh --profile service`
    - run `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin`
-   - prove `SIM_*` is rejected with stable gate logs
-5. Acceptance-profile bench checks:
-   - flash the acceptance profile through `tools/hw/nh02/flash.sh --profile acceptance`
-   - run `tools/hw/nh02/acceptance.sh`
-   - run Android `sim` smoke/e2e for quick `SIM_RUN`/`SIM_ABORT` delivery proof
-   - run `tools/hw/nh02/run-sim-suite.sh` when the standard full on-device HIL suite is required; it runs `SIM_LIST`, every listed scenario through `SIM_RUN:<id>,0`, `SIM_STATUS`, and `SIM_REPORT`, then restores the release profile
+   - prove `SET_PHONE_GPS` is rejected with stable gate logs
+5. Release-profile full HIL bench checks:
+   - run `tools/hw/nh02/run-sim-suite.sh` when the standard full on-device HIL suite is required; it runs `SIM_LIST`, every listed scenario through `SIM_RUN:<id>,0`, `SIM_STATUS`, and `SIM_REPORT` on the release profile
 6. Recovery check:
    - flash the release profile again through `tools/hw/nh02/flash.sh --profile release` and confirm the normal BLE reconnect/manual/anchor readiness smoke still uses the release surface only
 

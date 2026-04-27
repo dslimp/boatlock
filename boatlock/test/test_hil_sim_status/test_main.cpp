@@ -7,10 +7,10 @@ void tearDown() {}
 
 void test_status_json_preserves_current_shape() {
   const std::string json =
-      hilsim::buildSimStatusJson("S0_hold_still_good", "RUNNING", 12.345f, 50, 1000, 25);
+      hilsim::buildSimStatusJson("S0", "RUNNING", 12.345f, 50, 1000, 25);
 
   TEST_ASSERT_EQUAL_STRING(
-      "{\"id\":\"S0_hold_still_good\",\"state\":\"RUNNING\",\"progress_pct\":12.35,"
+      "{\"id\":\"S0\",\"state\":\"RUNNING\",\"progress_pct\":12.35,"
       "\"sim_ms\":50,\"duration_ms\":1000,\"dt_ms\":25}",
       json.c_str());
 }

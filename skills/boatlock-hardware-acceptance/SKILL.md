@@ -28,7 +28,10 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
    - or, after a BLE OTA seed, publish `firmware.bin` plus SHA-256 and upload from the phone app Settings screen
 3. Run hardware acceptance:
    - `tools/hw/nh02/acceptance.sh`
-4. If acceptance fails, inspect:
+4. For microSD logger acceptance, insert a FAT-formatted card before boot and
+   verify `[SD] logger ready=1`, display redraws, `/boatlock/*.jsonl` growth,
+   and `sd_dropped` stays bounded under the expected log rate.
+5. If acceptance fails, inspect:
    - `tools/hw/nh02/status.sh`
    - `tools/hw/nh02/monitor.sh`
 
@@ -39,7 +42,9 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
    - or `tools/hw/nh02/android-status.sh` when the phone is attached to `nh02`
 2. Optionally switch the phone to ADB Wi-Fi after USB proof:
    - `tools/hw/nh02/android-wifi-debug.sh`
-   - then pass `--serial <ip>:5555` to the Android smoke/e2e wrappers to prove debug/install/logcat over Wi-Fi
+   - Android smoke/e2e wrappers auto-enable and use ADB Wi-Fi when no
+     `--serial` is passed; set `BOATLOCK_NH02_ANDROID_WIFI_ADB=0` only when USB
+     `adb` must be forced.
 3. Build the dedicated smoke APK:
   - `tools/android/build-smoke-apk.sh`
   - or build the production app with e2e hook:
@@ -49,8 +54,8 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
    - or `tools/hw/nh02/android-run-smoke.sh` when the phone is attached to `nh02`
    - use `tools/hw/nh02/android-run-app-e2e.sh --wait-secs 130` when the acceptance target is the real `lib/main.dart` application rather than the dedicated smoke entrypoint
    - use `tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130`, `--status`, `--anchor`, `--sim`, `--reconnect`, or `--esp-reset` for production-app command/recovery flows
-   - use `tools/hw/nh02/android-run-app-e2e.sh --sim-suite --wait-secs 1800` to run all listed on-device HIL scenarios through the production app on an already-flashed acceptance profile
-   - use `tools/hw/nh02/run-sim-suite.sh` for the standard full bench gate; it installs helpers, proves targets, flashes acceptance, runs boot acceptance and `sim_suite`, then restores release
+   - use `tools/hw/nh02/android-run-app-e2e.sh --sim-suite --wait-secs 1800` to run all listed on-device HIL scenarios through the production app on an already-flashed release profile
+   - use `tools/hw/nh02/run-sim-suite.sh` for the standard full bench gate; it installs helpers, proves targets, flashes release, runs boot acceptance and `sim_suite`
    - use `tools/hw/nh02/android-run-app-e2e.sh --compass --wait-secs 130` after compass BLE command changes; it sends safe DCD service commands and requires device-log acknowledgements
    - use `tools/hw/nh02/android-run-app-e2e.sh --gps --wait-secs 180` after GNSS live-telemetry changes or field GPS checks; it requires valid non-zero coordinates and `gnssQ > 0`
    - use `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin` after BLE OTA/app-delivery changes; it serves `firmware.bin` from `nh02`, installs the production app with OTA e2e defines, uploads over BLE from the phone, and requires post-reboot telemetry recovery
@@ -84,24 +89,35 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
 - Compass acceptance requires `[COMPASS] heading events ready`; `[COMPASS] ready=1 source=BNO08x-RVC ...` alone is not sufficient.
 - Do not count `[COMPASS] reset ... pulse=1` as recovery proof. Recovery is proven only by fresh heading frames after the pulse and a clean long acceptance capture.
 - For compass-focused changes, use a longer capture such as `--seconds 180`; a short boot-only pass can miss delayed wiring or frame-loss failures.
+- microSD logger acceptance requires real media proof. Compile success and a
+  boot log alone do not prove `/boatlock/*.jsonl` creation, write cadence,
+  rotation, or low-space deletion.
 
 ## What Acceptance Does Not Prove
 
 - It does not prove BLE control flow end to end.
 - Basic Android smoke proves BLE scan/connect and telemetry with known current protocol mode/status values only; it does not intentionally send actuation commands.
 - Manual Android smoke proves exact APK install, BLE scan/connect/telemetry, zero-throttle `MANUAL_SET`, observed `MANUAL` mode, `MANUAL_OFF`, and observed mode exit. It is not a powered thrust test.
-- Status Android smoke proves exact APK install, BLE scan/connect/telemetry, safe `STOP` command delivery, observed `ALERT/STOP_CMD`, and alert recovery through zero-throttle manual roundtrip. It is not a powered thrust test.
-- SIM Android smoke proves exact APK install, BLE scan/connect/telemetry, `SIM_RUN:S0_hold_still_good,1`, observed `SIM` mode, `SIM_ABORT`, observed mode exit, and alert recovery through zero-throttle manual roundtrip. It is not a powered thrust test.
+- Status Android smoke proves exact APK install, BLE scan/connect/telemetry, safe `STOP` command delivery, observed `ALERT/STOP_CMD`, and alert recovery through zero-throttle manual roundtrip. Recovery may clear directly to a non-alert `IDLE/WARN` frame without an observed intermediate `MANUAL` frame; still require `MANUAL_OFF` cleanup. It is not a powered thrust test.
+- SIM Android smoke proves exact APK install, BLE scan/connect/telemetry, `SIM_RUN:S0,1`, observed `SIM` mode, `SIM_ABORT`, observed mode exit, and alert recovery through zero-throttle manual roundtrip. It is not a powered thrust test.
 - Anchor Android smoke proves exact APK install, BLE scan/connect/telemetry, `ANCHOR_ON` delivery, observed `[EVENT] ANCHOR_DENIED` from the bench safety gate, `ANCHOR_OFF` cleanup, and no transition into `ANCHOR`. It is not a real anchor-hold quality test.
 - Reconnect Android smoke proves exact APK install, first telemetry, host-triggered Bluetooth outage, and telemetry recovery without app restart.
 - ESP reset Android smoke proves exact APK install, first telemetry, ESP32 reset through the tracked reset helper, and telemetry recovery without app restart.
 - Compass Android smoke proves exact APK install, first telemetry, safe compass calibration command delivery, and device-log acknowledgement. On RVC wiring it proves routing only; it does not prove DCD success.
 - GPS Android smoke proves exact APK install, BLE scan/connect/telemetry, valid non-zero coordinates, and GNSS quality `>0`. It does not prove anchor-control GNSS gate readiness unless `gnssQ=2` and anchor-specific acceptance also passes.
-- OTA production-app e2e proves exact APK install, phone HTTP download via `adb reverse`, SHA-256 verification in the app, BLE OTA upload, ESP32 reboot, and telemetry recovery after the update. It does not prove bootloader or partition-table changes; those still need USB flash.
+- OTA production-app e2e proves exact APK install, phone HTTP download via `adb reverse`, SHA-256 verification in the app, BLE OTA upload, ESP32 reboot, and telemetry recovery after the update. A post-`OTA_FINISH` disconnect plus reconnect/telemetry is acceptable even if the app misses the `[OTA] finish ok` notify before reboot. It does not prove bootloader or partition-table changes; those still need USB flash.
+- Persistent bench wireless is Android ADB Wi-Fi to the phone plus BLE to ESP32.
+  Direct ESP32 debug Wi-Fi OTA is a boot-window/debug path, not the normal
+  persistent channel while BLE is active on the ESP32-S3 bench.
+- BLE log characteristic `78ab` mirrors firmware serial log lines generated
+  after the phone is connected/subscribed, including `[BLE]` lines. Use
+  RFC2217/USB serial for pre-BLE boot logs.
 - Android smoke does not prove auth behavior.
 - Full BNO08x DCD/tare acceptance requires the explicit `esp32s3_bno08x_sh2_uart` target plus SH2-UART wiring; do not count current RVC acceptance as DCD proof.
 - It does not prove real anchor hold quality on water.
 - It does not replace on-device `SIM_*` checks or offline simulation.
+- It does not prove durable water-debug logging unless the FAT microSD card is
+  inserted and checked after runtime.
 
 ## Current Commands
 

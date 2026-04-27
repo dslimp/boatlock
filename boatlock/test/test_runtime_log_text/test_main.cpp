@@ -19,7 +19,8 @@ void test_runtime_log_formatted_length_uses_vsnprintf_contract() {
 
 void test_runtime_log_ble_forward_filter() {
   TEST_ASSERT_FALSE(runtimeLogShouldForwardToBle(nullptr));
-  TEST_ASSERT_FALSE(runtimeLogShouldForwardToBle("[BLE] advertising started"));
+  TEST_ASSERT_FALSE(runtimeLogShouldForwardToBle(""));
+  TEST_ASSERT_TRUE(runtimeLogShouldForwardToBle("[BLE] advertising started"));
   TEST_ASSERT_TRUE(runtimeLogShouldForwardToBle("[EVENT] STOP"));
   TEST_ASSERT_TRUE(runtimeLogShouldForwardToBle("BLE without bracket"));
 }

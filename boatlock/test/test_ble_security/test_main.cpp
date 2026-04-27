@@ -139,6 +139,8 @@ void test_paired_mode_requires_secure_control_and_safety_commands() {
   TEST_ASSERT_TRUE(s.commandNeedsAuth("ANCHOR_OFF"));
   TEST_ASSERT_TRUE(s.commandNeedsAuth("ANCHOR_ON"));
   TEST_ASSERT_TRUE(s.commandNeedsAuth("MANUAL_SET:0,0,500"));
+  TEST_ASSERT_TRUE(s.commandNeedsAuth("SIM_RUN:S0,1"));
+  TEST_ASSERT_TRUE(s.commandNeedsAuth("SIM_ABORT"));
 }
 
 int main() {

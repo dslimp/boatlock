@@ -1,6 +1,7 @@
 #include "Logger.h"
 #include "BLEBoatLock.h"
 #include "RuntimeLogText.h"
+#include "SdCardLogger.h"
 #include <stdarg.h>
 
 extern BLEBoatLock bleBoatLock;
@@ -15,6 +16,7 @@ void logMessage(const char* fmt, ...) {
     if (len == 0) {
         return;
     }
+    sdCardLogger.enqueueLog(buf, len);
     Serial.write(reinterpret_cast<const uint8_t*>(buf), len);
     if (bleBoatLock.bleStatus == BLEBoatLock::CONNECTED &&
         runtimeLogShouldForwardToBle(buf)) {
