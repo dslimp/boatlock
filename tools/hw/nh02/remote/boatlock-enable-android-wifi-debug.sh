@@ -39,9 +39,18 @@ if [[ -z "${SERIAL}" ]]; then
   fi
 fi
 
+serial_line=""
+if [[ -n "${SERIAL}" ]]; then
+  serial_line="$(adb devices -l | awk -v serial="${SERIAL}" '$1 == serial { print; exit }')"
+fi
+serial_is_wifi=0
+if [[ "${SERIAL}" == *:* || ( -n "${serial_line}" && "${serial_line}" != *" usb:"* ) ]]; then
+  serial_is_wifi=1
+fi
+
 state="$("${ADB_USB[@]}" get-state 2>/dev/null || true)"
 if [[ "${state}" != "device" ]]; then
-  echo "adb USB target is not ready: state='${state:-missing}'" >&2
+  echo "adb target is not ready: state='${state:-missing}'" >&2
   adb devices -l >&2 || true
   exit 1
 fi
@@ -68,8 +77,10 @@ printf 'android_model=%s\n' "${model:-unknown}"
 printf 'android_device=%s\n' "${device:-unknown}"
 printf 'android_wifi_ip=%s\n' "${ip_addr}"
 
-"${ADB_USB[@]}" tcpip "${PORT}" >/dev/null
-sleep 3
+if [[ "${serial_is_wifi}" -eq 0 ]]; then
+  "${ADB_USB[@]}" tcpip "${PORT}" >/dev/null
+  sleep 3
+fi
 
 connect_output="$(adb connect "${ip_addr}:${PORT}" 2>&1 || true)"
 printf '%s\n' "${connect_output}"

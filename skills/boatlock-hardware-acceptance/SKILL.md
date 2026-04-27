@@ -1,11 +1,11 @@
 ---
 name: boatlock-hardware-acceptance
-description: "Use for BoatLock real-hardware acceptance on nh02 after flashing firmware, reading serial boot logs, checking sensor/bridge readiness, or preparing Android USB/BLE smoke tests against the hardware bench."
+description: "Use for BoatLock real-hardware acceptance on nh02 after phone BLE OTA or recovery USB flashing, reading serial boot logs, checking sensor/bridge readiness, or preparing Android USB/BLE smoke tests against the hardware bench."
 ---
 
 # BoatLock Hardware Acceptance
 
-Use this skill when the task is about validating the real ESP32-S3 bench on `nh02` after a flash, or when planning/running Android USB + BLE smoke against the bench.
+Use this skill when the task is about updating or validating the real ESP32-S3 hardware through phone BLE OTA, recovery USB flashing on `nh02`, or Android USB + BLE smoke against the bench.
 
 ## Read Only What You Need
 
@@ -22,10 +22,10 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
 
 1. Refresh the bench runtime if tracked helpers or service units changed:
    - `tools/hw/nh02/install.sh`
-2. Flash current firmware when needed:
-   - `tools/hw/nh02/flash.sh`
-   - or `tools/hw/nh02/flash.sh --no-build`
-   - or, after a BLE OTA seed, publish `firmware.bin` plus SHA-256 and upload from the phone app Settings screen
+2. Update current firmware when needed:
+   - normal moved-hardware path: build `boatlock/.pio/build/esp32s3_service/firmware.bin` and run `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
+   - manual field path: publish `firmware.bin` plus SHA-256 and upload from the phone app Settings screen
+   - recovery/seed path only: `tools/hw/nh02/flash.sh` or `tools/hw/nh02/flash.sh --no-build`
 3. Run hardware acceptance:
    - `tools/hw/nh02/acceptance.sh`
 4. For microSD logger acceptance, insert a FAT-formatted card before boot and
@@ -126,7 +126,9 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
 
 - Bench runtime refresh:
   - `tools/hw/nh02/install.sh`
-- Flash:
+- BLE OTA flash, normal moved-hardware path:
+  - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
+- USB seed/recovery flash:
   - `tools/hw/nh02/flash.sh`
 - Acceptance:
   - `tools/hw/nh02/acceptance.sh`
@@ -136,6 +138,7 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
   - `tools/hw/nh02/status.sh`
   - `tools/hw/nh02/monitor.sh`
 - Android:
+  - `tools/hw/nh02/android-install-app.sh`
   - `tools/hw/nh02/android-run-app-e2e.sh`
   - `tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130`
   - `tools/hw/nh02/android-run-app-e2e.sh --status --wait-secs 130`
@@ -171,9 +174,11 @@ Use this skill when the task is about validating the real ESP32-S3 bench on `nh0
 - Keep host-side ownership limited to `/opt/boatlock-hw` and the tracked RFC2217 service.
 - Default refactor cadence runs hardware acceptance after every fifteenth module, not after every low-risk module.
 - Run acceptance immediately when the module touches hardware drivers, pinout, deploy/debug wrappers, actuator safety, BLE reconnect/install behavior, or another path where local tests cannot bound the risk.
-- When acceptance is due, run it right after flashing so the boot path stays part of the same validation slice.
-- Preserve the documented order `install -> flash -> acceptance -> monitor/debug`; do not skip to a later step just because an earlier prerequisite is broken.
+- When acceptance is due on the USB bench path, run it right after the seed/recovery flash so the boot path stays part of the same validation slice.
+- Preserve the documented order for the chosen path. For normal moved hardware that means target proof, firmware build, phone BLE OTA, telemetry recovery, then Android BLE checks. For USB bench recovery that means `install -> flash -> acceptance -> monitor/debug`.
+- Do not treat a missing ESP32 USB serial path as a blocker for the normal phone BLE OTA path when the Android phone target is proven and BLE OTA can run.
 - For phones attached to `nh02`, use the tracked `android-install.sh` and `android-status.sh` path before falling back to local `adb` assumptions.
+- Use `tools/hw/nh02/android-install-app.sh` when the task is only to install the normal production app APK on the `nh02` phone without running a smoke/e2e probe.
 - For Wi-Fi ADB acceptance, seed it from the tracked USB-visible phone with `android-wifi-debug.sh`, then run the same smoke wrapper with `--serial <ip>:5555`; `adb devices` alone is not enough.
 - Record whether failure is in first install policy, later `adb install -r` update, app launch, or BLE runtime; do not collapse those into one generic "Android smoke failed" verdict.
 - Treat `android-run-smoke.sh --no-install` as BLE-runtime proof only; it does not prove that the exact just-built APK was installed on the phone.

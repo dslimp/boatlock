@@ -7473,3 +7473,56 @@ Validation:
 Self-review:
 - This is workflow-only. It preserves both existing firmware artifact names and
   does not change firmware code or release manifest semantics.
+
+### 2026-04-27 Stage 248: Phone BLE OTA workflow update and app rebuilds
+
+Scope:
+- Promote the moved-hardware workflow: normal firmware updates now go through
+  the phone BLE OTA path; ESP32 USB flashing is seed/recovery unless the task
+  explicitly targets the USB bench.
+- Rebuild service firmware, Android service UI app, and macOS service UI app.
+- Try to update the boat hardware through the phone BLE OTA wrapper.
+
+Key outcome:
+- Updated AGENTS, README, NH02 hardware docs, validation references, and the
+  hardware acceptance skill so future work does not block on missing ESP32 USB
+  when phone BLE OTA is the intended path.
+- Fixed `boatlock-enable-android-wifi-debug.sh`: when the phone is already
+  reachable as an ADB Wi-Fi serial, the helper now reuses it instead of sending
+  `adb tcpip` to the Wi-Fi target and making it go `offline`.
+- Added `tools/hw/nh02/android-install-app.sh` for installing the normal
+  production APK on the `nh02` phone without running an e2e/smoke probe.
+- The phone target was proven over ADB Wi-Fi as `192.168.88.33:5555`; ESP32 USB
+  on `nh02` was absent, which is expected for the moved-hardware path.
+- OTA attempt 1 stopped before app launch because the old Wi-Fi helper made the
+  already-connected phone appear `offline`.
+- OTA attempt 2 installed the OTA e2e app and started the HTTP firmware server,
+  but did not start flashing: the app repeatedly logged `BoatLock not found,
+  retry scan in 3s`. I stopped the wrapper before OTA upload because no BLE
+  `BoatLock` advertisement was visible to the phone.
+- Rebuilt the normal Android APK afterward and installed it back to the phone
+  with `tools/hw/nh02/android-install-app.sh --no-build`; remote `adb install -r`
+  returned `Success`.
+
+Validation:
+- `tools/hw/nh02/android-status.sh` -> PASS; phone visible as
+  `192.168.88.33:5555`.
+- `tools/hw/nh02/status.sh` -> ESP32 USB serial missing, RFC2217 service active;
+  treated as expected context for phone BLE OTA, not as a flash blocker.
+- `cd boatlock && pio run -e esp32s3_service` -> PASS.
+- `tools/android/build-app-apk.sh` -> PASS; rebuilt
+  `boatlock_ui/build/app/outputs/flutter-apk/app-debug.apk`.
+- `tools/macos/build-app.sh --debug` -> PASS; rebuilt
+  `boatlock_ui/build/macos/Build/Products/Debug/boatlock_ui.app`.
+- `bash -n tools/hw/nh02/android-install-app.sh tools/hw/nh02/remote/boatlock-enable-android-wifi-debug.sh tools/hw/nh02/android-run-app-e2e.sh tools/hw/nh02/android-run-smoke.sh`
+  -> PASS.
+- `tools/hw/nh02/install.sh` -> PASS after the ADB Wi-Fi helper fix.
+- `tools/hw/nh02/android-wifi-debug.sh` -> PASS; returned
+  `android_wifi_serial=192.168.88.33:5555`.
+- `tools/macos/acceptance.sh --debug --no-build --static-only` -> PASS.
+- `pytest -q tools/ci/test_android_smoke_modes.py` -> PASS (`9/9`).
+
+Self-review:
+- Firmware was built but not flashed because the phone did not see the BLE
+  `BoatLock` advertiser. The next proof should start with boat power/BLE
+  advertising visibility near the phone, then rerun the same OTA wrapper.

@@ -3,7 +3,7 @@
 ## Repo Skill
 
 - Use the repo-local skill at `skills/boatlock/SKILL.md` for any BoatLock task.
-- Use `skills/boatlock-hardware-acceptance/SKILL.md` for `nh02` bench acceptance, serial log validation, and Android USB/BLE smoke planning.
+- Use `skills/boatlock-hardware-acceptance/SKILL.md` for `nh02` bench acceptance, phone BLE OTA flashing, serial log validation, and Android USB/BLE smoke planning.
 - Load only the reference file you need:
   - firmware/runtime/hardware: `skills/boatlock/references/firmware.md`
   - BLE/UI/security: `skills/boatlock/references/ble-ui.md`
@@ -89,6 +89,10 @@
 - Production firmware build compiles only top-level `boatlock/*.cpp`.
 - Files under `boatlock/debug/` are manual test sketches and must not silently replace production logic.
 - USB CDC is enabled in `boatlock/platformio.ini`; only one process can own `/dev/cu.usbmodem2101` at a time.
+- Current boat hardware may be away from the ESP32 USB bench link. The normal firmware update path is phone-bridged BLE OTA through the production app wrapper:
+  - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
+  - USB flashing through `tools/hw/nh02/flash.sh` is seed/recovery only unless the task explicitly targets the USB bench path.
+  - Do not block ordinary firmware update/app rebuild work only because the ESP32 USB serial path is absent, provided the Android phone target is proven and BLE OTA can run.
 
 ## GPS, Heading, And Control Rules
 
@@ -203,7 +207,7 @@
 - Do not start module code changes from intuition alone. If no useful external source applies, explicitly record that conclusion before editing.
 - Default module cadence is batches of fifteen modules:
   - for each module: external baseline, smallest refactor, local tests, worklog/self-review, commit, and push
-  - after every fifteenth module: run `nh02` flash, hardware acceptance, serial log scan, and Android BLE smokes
+  - after every fifteenth module: update the target firmware through the normal phone BLE OTA path when available; use USB flash only for seed/recovery, then run hardware acceptance, serial log scan where reachable, and Android BLE smokes
   - run hardware earlier only for high-risk changes that touch hardware drivers, pinout, flashing/debug wrappers, actuator safety, BLE reconnect/install behavior, or any path where local tests cannot bound the risk
 - Fix blockers at the source before normalizing a workaround.
 - Do not continue through an alternate path, side probe, fallback data source, or partial workaround until the blocker is fixed or the user explicitly waives that fix.
@@ -244,7 +248,8 @@
   - `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json`
 - NH02 hardware bench:
   - `tools/hw/nh02/install.sh`
-  - `tools/hw/nh02/flash.sh`
+  - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
+  - `tools/hw/nh02/flash.sh` (USB seed/recovery)
   - `tools/hw/nh02/acceptance.sh`
   - `tools/hw/nh02/monitor.sh`
   - `tools/hw/nh02/status.sh`

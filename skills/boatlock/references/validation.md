@@ -36,11 +36,12 @@
   - `cd boatlock && pio run -e esp32s3_acceptance`
 - Debug Wi-Fi/OTA firmware build:
   - `cd boatlock && BOATLOCK_WIFI_SSID=... BOATLOCK_WIFI_PASS=... BOATLOCK_OTA_PASS=... pio run -e esp32s3_debug_wifi_ota`
-- BLE OTA phone bridge after a USB seed flash:
+- Normal phone BLE OTA firmware update:
   - build `boatlock/.pio/build/esp32s3_service/firmware.bin`
   - publish/serve the binary from a trusted URL and copy its SHA-256
   - in the app Settings screen, use Firmware OTA URL + SHA-256 to upload over BLE
-  - bench automation: `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin`
+  - bench automation: `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
+  - USB flash is only the seed/recovery path when the target lacks an OTA-capable image or cannot reconnect over BLE
   - if BLE discovery may take time, add `--wait-secs 1800`; the wrapper wait
     starts before scan/connect and can expire during upload when advertising
     appears late
@@ -66,7 +67,8 @@
   - `python3 tools/sim/run_soak.py --hours 6 --check --json-out tools/sim/soak_report.json`
 - NH02 hardware bench:
   - `tools/hw/nh02/install.sh`
-  - `tools/hw/nh02/flash.sh`
+  - `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
+  - `tools/hw/nh02/flash.sh` (USB seed/recovery)
   - `tools/hw/nh02/flash.sh --profile release`
   - `tools/hw/nh02/flash.sh --profile service`
   - `tools/hw/nh02/flash.sh --profile acceptance`
@@ -75,6 +77,7 @@
   - `tools/hw/nh02/monitor.sh`
   - `tools/hw/nh02/status.sh`
   - `tools/hw/nh02/android-install.sh`
+  - `tools/hw/nh02/android-install-app.sh`
   - `tools/hw/nh02/android-status.sh`
   - `tools/hw/nh02/android-wifi-debug.sh`
   - rerun `install.sh` after changing the tracked service unit or remote flash helper
@@ -145,8 +148,8 @@ Minimum validation order after profile-gate changes:
    - prove a representative service command and `OTA_BEGIN` are rejected with stable gate logs and no output motion
    - run Android `sim` smoke/e2e and verify `SIM` telemetry without motor/stepper output
 4. Service-profile bench checks:
-   - flash the service profile through `tools/hw/nh02/flash.sh --profile service`
-   - run `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin`
+   - build the service profile and update the target through phone BLE OTA when the OTA-capable image is already present; use `tools/hw/nh02/flash.sh --profile service` only as seed/recovery
+   - run `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
    - prove `SET_PHONE_GPS` is rejected with stable gate logs
 5. Release-profile full HIL bench checks:
    - run `tools/hw/nh02/run-sim-suite.sh` when the standard full on-device HIL suite is required; it runs `SIM_LIST`, every listed scenario through `SIM_RUN:<id>,0`, `SIM_STATUS`, and `SIM_REPORT` on the release profile
@@ -156,7 +159,7 @@ Minimum validation order after profile-gate changes:
 Risk review items for the rollout:
 
 - `SEC_CMD` must classify and gate the wrapped payload, not the raw envelope.
-- A release image without service commands removes BLE OTA from that image; the USB seed and service-profile update path must remain documented.
+- A release image without service commands removes BLE OTA from that image; the USB seed/recovery and service-profile update path must remain documented.
 - A service image must not accidentally expose `SIM_*` or phone-GPS injection.
 - An acceptance image must not be left on the boat for water use because it exposes injected sensor and HIL commands.
 - Wrapper output must distinguish profile-gated rejection from BLE timeout, auth failure, and parser failure.

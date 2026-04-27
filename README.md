@@ -93,13 +93,8 @@ needs OTA and tuning commands while hardware is still being adjusted.
 
 ## Flashing And OTA
 
-USB flash on the `nh02` bench:
-
-```bash
-tools/hw/nh02/flash.sh --profile service
-```
-
-Phone-bridged BLE OTA after a seed flash:
+Normal firmware update for the moved hardware is phone-bridged BLE OTA through
+the production app:
 
 ```bash
 cd boatlock
@@ -113,6 +108,12 @@ tools/hw/nh02/android-run-app-e2e.sh \
 
 Use the longer OTA wait when BLE discovery may be cold. The wrapper timeout
 starts before scan/connect and can otherwise expire during an active transfer.
+
+USB flash on the `nh02` bench is the seed/recovery path:
+
+```bash
+tools/hw/nh02/flash.sh --profile service
+```
 
 ## Flutter App
 
