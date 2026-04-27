@@ -20,6 +20,7 @@ class SettingsPage extends StatefulWidget {
   final bool holdHeading;
   final double stepMaxSpd;
   final double stepAccel;
+  final double stepSpr;
   final double compassOffset;
   final int compassQ;
   final int magQ;
@@ -72,6 +73,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late bool setupMenuEnabled;
   late double stepMaxSpd;
   late double stepAccel;
+  late double stepSpr;
   late double compassOffset;
   late int compassQ;
   late int magQ;
@@ -109,6 +111,7 @@ class _SettingsPageState extends State<SettingsPage> {
     setupMenuEnabled = _setupMenuSessionEnabled;
     stepMaxSpd = widget.stepMaxSpd;
     stepAccel = widget.stepAccel;
+    stepSpr = widget.stepSpr;
     compassOffset = widget.compassOffset;
     compassQ = widget.compassQ;
     magQ = widget.magQ;
@@ -406,6 +409,39 @@ class _SettingsPageState extends State<SettingsPage> {
       commandPrefix: 'SET_STEP_ACCEL',
       write: () => widget.ble.setStepAccel(val),
       rollback: () => stepAccel = previous,
+    );
+  }
+
+  Future<void> _editStepSpr() async {
+    if (!isConnected) return;
+    final ctrl = TextEditingController(text: stepSpr.round().toString());
+    final val = await showDialog<double>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Шагов на оборот'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, double.tryParse(ctrl.text)),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+    if (val == null || val == stepSpr) return;
+    final previous = stepSpr;
+    setState(() => stepSpr = val);
+    await _commitSetupSetting(
+      commandPrefix: 'SET_STEP_SPR',
+      write: () => widget.ble.setStepSpr(val),
+      rollback: () => stepSpr = previous,
     );
   }
 
@@ -808,6 +844,13 @@ class _SettingsPageState extends State<SettingsPage> {
               trailing: const Icon(Icons.chevron_right),
               enabled: isConnected,
               onTap: isConnected ? _editStepAccel : null,
+            ),
+            ListTile(
+              title: const Text('Шагов на оборот'),
+              subtitle: Text(stepSpr.round().toString()),
+              trailing: const Icon(Icons.chevron_right),
+              enabled: isConnected,
+              onTap: isConnected ? _editStepSpr : null,
             ),
             const Divider(),
             ListTile(

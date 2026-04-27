@@ -10,6 +10,8 @@ public:
     static constexpr int MOTOR_STEPS_PER_REV = 200;
     static constexpr int GEAR_RATIO = 36;
     static constexpr int STEPS_PER_REV = MOTOR_STEPS_PER_REV * GEAR_RATIO;
+    static constexpr int MIN_STEPS_PER_REV = STEPS_PER_REV;
+    static constexpr int MAX_STEPS_PER_REV = STEPS_PER_REV * 32;
     static constexpr int DIRECTION_SIGN = -1;
     static constexpr unsigned long COIL_RELEASE_DELAY_MS = 1200;
     static constexpr long MIN_COMMAND_STEPS = 4;
@@ -60,7 +62,20 @@ public:
         if (!settings) return;
         stepper.setMaxSpeed(settings->get("StepMaxSpd"));
         stepper.setAcceleration(settings->get("StepAccel"));
-        stepsPerRev = STEPS_PER_REV;
+        const float configuredStepsPerRev = settings->get("StepSpr");
+        if (isfinite(configuredStepsPerRev)) {
+            const long normalized = lroundf(configuredStepsPerRev);
+            if (normalized >= MIN_STEPS_PER_REV && normalized <= MAX_STEPS_PER_REV) {
+                stepsPerRev = static_cast<int>(normalized);
+            } else {
+                logMessage("[STEP] invalid StepSpr=%.3f, using default=%d\n",
+                           configuredStepsPerRev,
+                           STEPS_PER_REV);
+                stepsPerRev = STEPS_PER_REV;
+            }
+        } else {
+            stepsPerRev = STEPS_PER_REV;
+        }
         ensureOutputsEnabled();
         clearIdleTimer();
 

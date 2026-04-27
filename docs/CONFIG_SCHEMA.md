@@ -91,9 +91,10 @@ Runtime failsafes always stop motion and latch `HOLD`. They do not automatically
 
 - `StepMaxSpd` (`100..1500`)
 - `StepAccel` (`50..1200`)
-- `StepSpr` (`7200..7200`)
+- `StepSpr` (`7200..230400`)
 
-Current steering geometry is fixed to `7200` output steps per revolution:
+Current steering geometry default is `7200` output steps per revolution:
 `200` motor steps/rev through the Vanchor `36:1` gearbox.
+For DRV8825 microstepping, set `StepSpr` to `7200 × microstep factor`.
 Default steering tuning is `StepMaxSpd=1200` steps/s and `StepAccel=800`
 steps/s2.

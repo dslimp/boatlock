@@ -67,6 +67,7 @@ void test_command_scope_classifies_setup_prefix_commands_as_release() {
       "SET_COMPASS_OFFSET:not-a-number",
       "SET_STEP_MAXSPD:fast",
       "SET_STEP_ACCEL:fast",
+      "SET_STEP_SPR:fast",
       "OTA_BEGIN:bad",
   };
   for (const char* command : commands) {

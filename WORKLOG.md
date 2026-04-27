@@ -21,6 +21,32 @@ This file records the actual execution stages for BoatLock work so the repo keep
 
 ## Stages
 
+### 2026-04-27 Stage 35: Stepper geometry now sourced from StepSpr setting
+
+Scope:
+- Apply steering geometry from `StepSpr` setting in `StepperControl` instead of hardcoding `7200`.
+- Expand `StepSpr` setting range so microstep geometry changes are representable.
+- Update schema docs/repo docs to describe configurable steering geometry for DRV8825 microstepping.
+
+External baseline:
+- `skills/boatlock/references/firmware.md` and `docs/STEERING_DRIVER_INTAKE.md` already require microstep-factor geometry updates for DRV8825 mode settings.
+- `docs/CONFIG_SCHEMA.md` is the canonical setting-range source for settings edits in this repo.
+
+Key outcomes:
+- `boatlock/StepperControl.cpp` (header implementation) now loads `stepsPerRev` from `settings->get("StepSpr")` with bounded validation and logs fallback if it is invalid.
+- `boatlock/Settings.h` widens `StepSpr` min/max to `7200..230400` to support 1/16–1/32 microstep scaling.
+- `docs/CONFIG_SCHEMA.md` and `README.md` now state `StepSpr` as configurable (default still `7200`).
+- Added unit coverage in `boatlock/test/test_stepper_control/test_main.cpp` for loading configured `StepSpr`.
+
+Validation:
+- `cd boatlock && platformio test -e native -f test_stepper_control -f test_settings` -> PASS (`37/37`).
+- `cd boatlock && pio run -e esp32s3` -> PASS, firmware `779205` bytes.
+
+Self-review:
+- Remaining weakness: `StepSpr` is not yet exposed in the normal setup UI; firmware/config path can be updated via `boatlock_ui` tools or future setup command.
+- Next simplification: if microstep mode is fixed in hardware, prefer documenting exact DIP/pin setup and keep default geometry as-is.
+- Promote to reference: keep firmware+docs sync when any steering-driver mode factor changes.
+
 ### 2026-04-26 Stage app emergency STOP immediate action
 
 Scope:

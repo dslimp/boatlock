@@ -58,9 +58,11 @@ The steering geometry is set for the Vanchor gearbox:
 
 - motor steps per revolution: `200`
 - gearbox ratio: `36:1`
-- output steps per steering revolution: `7200`
+- output steps per steering revolution: `7200` (default)
 - default `StepMaxSpd`: `1200`
 - default `StepAccel`: `800`
+
+Adjust `StepSpr` in firmware settings for DRV8825 microstepping (`7200 × microstep factor`).
 
 If the DRV8825 `MODE0/MODE1/MODE2` pins are strapped for microstepping, the
 mechanical speed is divided by that microstep factor unless the geometry and

@@ -17,6 +17,7 @@ class SetupFakeBleBoatLock extends BleBoatLock {
   bool rejectNextOtaBegin = false;
   String? ownerSecretValue;
   double? stepMaxSpeedValue;
+  double? stepSprValue;
 
   @override
   void setOwnerSecret(String? secret) {
@@ -31,6 +32,12 @@ class SetupFakeBleBoatLock extends BleBoatLock {
         _emitProfileRejection('SET_STEP_MAXSPD:${value.round()}');
       });
     }
+    return true;
+  }
+
+  @override
+  Future<bool> setStepSpr(double value) async {
+    stepSprValue = value;
     return true;
   }
 
@@ -114,6 +121,7 @@ SettingsPage _page(
     holdHeading: false,
     stepMaxSpd: 1000,
     stepAccel: 500,
+    stepSpr: 7200,
     compassOffset: 0,
     compassQ: 0,
     magQ: 0,

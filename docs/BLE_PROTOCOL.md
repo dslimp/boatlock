@@ -24,7 +24,7 @@ Command scopes are product boundaries, not wire-level security:
 
 Current classification:
 
-- `release`: `STREAM_START`, `STREAM_STOP`, `SNAPSHOT`, `SET_ANCHOR`, `ANCHOR_ON`, `ANCHOR_OFF`, `STOP`, `HEARTBEAT`, `MANUAL_TARGET`, `MANUAL_OFF`, `NUDGE_DIR`, `NUDGE_BRG`, `SET_HOLD_HEADING`, `SET_ANCHOR_PROFILE`, `SET_COMPASS_OFFSET`, `RESET_COMPASS_OFFSET`, `COMPASS_CAL_START`, `COMPASS_DCD_SAVE`, `COMPASS_DCD_AUTOSAVE_ON`, `COMPASS_DCD_AUTOSAVE_OFF`, `COMPASS_TARE_Z`, `COMPASS_TARE_SAVE`, `COMPASS_TARE_CLEAR`, `SET_STEP_MAXSPD`, `SET_STEP_ACCEL`, `SET_STEPPER_BOW`, `PAIR_SET`, `PAIR_CLEAR`, `AUTH_HELLO`, `AUTH_PROVE`, `OTA_BEGIN`, `OTA_FINISH`, `OTA_ABORT`, `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, `SIM_ABORT`.
+- `release`: `STREAM_START`, `STREAM_STOP`, `SNAPSHOT`, `SET_ANCHOR`, `ANCHOR_ON`, `ANCHOR_OFF`, `STOP`, `HEARTBEAT`, `MANUAL_TARGET`, `MANUAL_OFF`, `NUDGE_DIR`, `NUDGE_BRG`, `SET_HOLD_HEADING`, `SET_ANCHOR_PROFILE`, `SET_COMPASS_OFFSET`, `RESET_COMPASS_OFFSET`, `COMPASS_CAL_START`, `COMPASS_DCD_SAVE`, `COMPASS_DCD_AUTOSAVE_ON`, `COMPASS_DCD_AUTOSAVE_OFF`, `COMPASS_TARE_Z`, `COMPASS_TARE_SAVE`, `COMPASS_TARE_CLEAR`, `SET_STEP_MAXSPD`, `SET_STEP_ACCEL`, `SET_STEP_SPR`, `SET_STEPPER_BOW`, `PAIR_SET`, `PAIR_CLEAR`, `AUTH_HELLO`, `AUTH_PROVE`, `OTA_BEGIN`, `OTA_FINISH`, `OTA_ABORT`, `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, `SIM_ABORT`.
 - `dev/HIL`: `SET_PHONE_GPS`.
 
 | Command | Parameters | Description |
@@ -60,6 +60,7 @@ Current classification:
 | `COMPASS_TARE_CLEAR` | none | SH2-UART build only: clear the persisted tare |
 | `SET_STEP_MAXSPD:<float>` | float | Maximum stepper speed (steps/s) |
 | `SET_STEP_ACCEL:<float>` | float | Stepper acceleration (steps/s²) |
+| `SET_STEP_SPR:<int>` | int | Stepper output steps/rev |
 | `SET_STEPPER_BOW` | none | Save current stepper position as boat-bow zero for anchor pointing |
 | `OTA_BEGIN:<size>,<sha256>` | firmware size in bytes and 64-hex SHA-256 | Enter safe stopped state, start writing a new firmware image to the inactive OTA partition, and arm binary chunk writes on `9abc` |
 | `OTA_FINISH` | none | Validate byte count and SHA-256, finalize the OTA image, then reboot into the new partition |

@@ -239,11 +239,13 @@ void test_default_release_accepts_ota_after_safe_state_side_effects() {
 void test_default_release_accepts_setup_commands() {
   handleBleCommand("SET_COMPASS_OFFSET:12.5");
   handleBleCommand("SET_STEP_MAXSPD:1234");
+  handleBleCommand("SET_STEP_SPR:14400");
   handleBleCommand("SET_STEPPER_BOW");
 
-  TEST_ASSERT_EQUAL(3, controlActivityNotes);
+  TEST_ASSERT_EQUAL(4, controlActivityNotes);
   TEST_ASSERT_EQUAL_FLOAT(12.5f, compass.getHeadingOffsetDeg());
   TEST_ASSERT_EQUAL_FLOAT(1234.0f, settings.get("StepMaxSpd"));
+  TEST_ASSERT_EQUAL_FLOAT(14400.0f, settings.get("StepSpr"));
   TEST_ASSERT_TRUE(stepperControl.loadCalled);
   TEST_ASSERT_TRUE(stepperBowCaptured);
 }

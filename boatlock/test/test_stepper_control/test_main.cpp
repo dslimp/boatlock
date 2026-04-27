@@ -116,6 +116,18 @@ void test_drv8825_driver_uses_minimum_step_pulse_width() {
   TEST_ASSERT_EQUAL_UINT(StepperControl::DRV8825_MIN_PULSE_WIDTH_US, c.stepper.minPulseWidth());
 }
 
+void test_load_from_settings_uses_configured_steps_per_rev() {
+  Settings s;
+  s.reset();
+  s.set("StepSpr", 14400);
+  StepperControl c(6, 16);
+  c.attachSettings(&s);
+
+  c.loadFromSettings();
+
+  TEST_ASSERT_EQUAL_INT(14400, c.stepsPerRev);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_normalize180_wraps_into_signed_range);
@@ -127,5 +139,6 @@ int main() {
   RUN_TEST(test_cancel_move_idle_timer_accepts_zero_timestamp);
   RUN_TEST(test_start_manual_zero_does_not_enable_outputs);
   RUN_TEST(test_drv8825_driver_uses_minimum_step_pulse_width);
+  RUN_TEST(test_load_from_settings_uses_configured_steps_per_rev);
   return UNITY_END();
 }

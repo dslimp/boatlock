@@ -928,6 +928,11 @@ class BleBoatLock with WidgetsBindingObserver {
     return _writeCommand('SET_STEP_ACCEL:${value.round()}');
   }
 
+  Future<bool> setStepSpr(double value) async {
+    if (!value.isFinite) return false;
+    return _writeCommand('SET_STEP_SPR:${value.round()}');
+  }
+
   void setOwnerSecret(String? secret) {
     if (secret == null) {
       _ownerSecret = null;

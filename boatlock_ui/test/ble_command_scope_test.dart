@@ -45,6 +45,10 @@ void main() {
       BoatLockCommandScope.release,
     );
     expect(
+      classifyBoatLockCommand('SET_STEP_SPR:7200'),
+      BoatLockCommandScope.release,
+    );
+    expect(
       classifyBoatLockCommand(
         'OTA_BEGIN:4096,00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff',
       ),
