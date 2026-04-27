@@ -15,7 +15,7 @@ void test_runtime_ble_command_log_keeps_operator_commands() {
 }
 
 void test_runtime_ble_command_log_skips_high_rate_manual_refreshes() {
-  TEST_ASSERT_FALSE(runtimeBleShouldLogCommand("MANUAL_SET:0,35,1000"));
+  TEST_ASSERT_FALSE(runtimeBleShouldLogCommand("MANUAL_TARGET:0,35,1000"));
 }
 
 void test_runtime_ble_command_log_redacts_sensitive_commands() {
@@ -33,8 +33,8 @@ void test_runtime_ble_command_log_sanitizes_control_bytes() {
 }
 
 void test_runtime_ble_command_log_bounds_long_commands() {
-  const std::string logged = runtimeBleLogCommandText("MANUAL_SET:12345678901234567890", 16);
-  TEST_ASSERT_EQUAL_STRING("MANUAL_SET:12...", logged.c_str());
+  const std::string logged = runtimeBleLogCommandText("MANUAL_TARGET:12345678901234567890", 16);
+  TEST_ASSERT_EQUAL_STRING("MANUAL_TARGET...", logged.c_str());
   TEST_ASSERT_EQUAL(16U, logged.size());
 }
 

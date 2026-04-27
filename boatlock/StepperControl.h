@@ -89,8 +89,18 @@ public:
         }
 
         const float relativeDeg = normalize180(bearing - heading);
+        pointToRelativeAngle(relativeDeg);
+    }
+
+    void pointToRelativeAngle(float relativeDeg) {
+        if (!isfinite(relativeDeg) || stepsPerRev <= 0) {
+            return;
+        }
+
+        manual = false;
+        manualSpd = 0;
         const long relativeSteps =
-            lroundf(relativeDeg / 360.0f * stepsPerRev) * DIRECTION_SIGN;
+            lroundf(normalize180(relativeDeg) / 360.0f * stepsPerRev) * DIRECTION_SIGN;
         const long targetNorm = normalizeSteps(bowZeroSteps + relativeSteps);
         const long currentAbs = stepper.currentPosition();
         const long currentNorm = normalizeSteps(currentAbs);

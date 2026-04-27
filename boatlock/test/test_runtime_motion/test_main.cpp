@@ -49,11 +49,11 @@ struct RuntimeMotionFixture {
     motor.setDirPins(5, 10);
   }
 
-  RuntimeControlInput manualInput(unsigned long nowMs, int dir, int speed) const {
+  RuntimeControlInput manualInput(unsigned long nowMs, float angleDeg, int speed) const {
     RuntimeControlInput input;
     input.nowMs = nowMs;
     input.mode = CoreMode::MANUAL;
-    input.manualDir = dir;
+    input.manualAngleDeg = angleDeg;
     input.manualSpeed = speed;
     return input;
   }
@@ -97,7 +97,7 @@ void test_stop_all_motion_disarms_and_clears_manual() {
   RuntimeMotion motion(settings, stepper, motor, driftMonitor);
 
   ManualControl manualControl;
-  manualControl.apply(ManualControlSource::BLE_PHONE, 1, 50, 500, 1000);
+  manualControl.apply(ManualControlSource::BLE_PHONE, 30.0f, 50, 500, 1000);
   motion.stopAllMotionNow(manualControl);
 
   TEST_ASSERT_FALSE(manualControl.active());
@@ -111,12 +111,12 @@ void test_stop_all_motion_quiets_running_manual_actuators() {
   f.settings.set("AnchorEnabled", 1.0f);
 
   mockSetMillis(1000);
-  f.motion.applyControl(f.manualInput(1000, 1, 160));
-  TEST_ASSERT_TRUE(f.stepper.manual);
+  f.motion.applyControl(f.manualInput(1000, 45.0f, 160));
+  TEST_ASSERT_TRUE(f.stepper.stepper.distanceToGo() != 0);
   TEST_ASSERT_TRUE(f.motor.pwmPercent() > 0);
 
   ManualControl manualControl;
-  manualControl.apply(ManualControlSource::BLE_PHONE, 1, 63, 500, 1000);
+  manualControl.apply(ManualControlSource::BLE_PHONE, 45.0f, 63, 500, 1000);
   f.motion.stopAllMotionNow(manualControl);
 
   TEST_ASSERT_FALSE(manualControl.active());
@@ -147,12 +147,12 @@ void test_apply_control_in_manual_mode_runs_manual_outputs() {
   RuntimeControlInput input;
   input.nowMs = 1000;
   input.mode = CoreMode::MANUAL;
-  input.manualDir = 1;
+  input.manualAngleDeg = 45.0f;
   input.manualSpeed = 120;
 
   motion.applyControl(input);
 
-  TEST_ASSERT_TRUE(stepper.manual);
+  TEST_ASSERT_TRUE(stepper.stepper.distanceToGo() != 0);
   TEST_ASSERT_EQUAL(47, motor.pwmPercent());
 }
 
@@ -160,8 +160,8 @@ void test_manual_to_hold_quiets_shared_actuator_path() {
   RuntimeMotionFixture f;
 
   mockSetMillis(1000);
-  f.motion.applyControl(f.manualInput(1000, 0, -180));
-  TEST_ASSERT_TRUE(f.stepper.manual);
+  f.motion.applyControl(f.manualInput(1000, -45.0f, -180));
+  TEST_ASSERT_TRUE(f.stepper.stepper.distanceToGo() != 0);
   TEST_ASSERT_TRUE(f.motor.pwmPercent() > 0);
 
   mockSetMillis(1100);
@@ -208,7 +208,7 @@ void test_supervisor_stop_failsafe_latches_safe_hold() {
   RuntimeMotion motion(settings, stepper, motor, driftMonitor);
 
   ManualControl manualControl;
-  manualControl.apply(ManualControlSource::BLE_PHONE, 1, 50, 500, 1000);
+  manualControl.apply(ManualControlSource::BLE_PHONE, 45.0f, 50, 500, 1000);
 
   AnchorSupervisor::Decision decision;
   decision.action = AnchorSupervisor::SafeAction::STOP;

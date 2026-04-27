@@ -5,13 +5,16 @@ controllers.
 
 ## Current Command Contract
 
-The firmware accepts only the atomic `MANUAL_SET:<steer>,<throttlePct>,<ttlMs>`
-lease command plus `MANUAL_OFF`. Each accepted `MANUAL_SET` belongs to one
-controller source, disables Anchor mode on entry, and refreshes that source's
-manual deadman TTL. A competing source cannot replace a live manual lease until
-the lease expires or `MANUAL_OFF`/`STOP` clears it.
-The shipped phone UI uses `ttlMs=1000` and refreshes while a direction/throttle
-button is held.
+The firmware accepts only the atomic
+`MANUAL_TARGET:<angleDeg>,<throttlePct>,<ttlMs>` lease command plus
+`MANUAL_OFF`. `angleDeg` is the selected steering vector from `-90` to `+90`
+degrees relative to bow-forward, and `throttlePct` is the brushed-motor PWM
+request. Each accepted `MANUAL_TARGET` belongs to one controller source,
+disables Anchor mode on entry, and refreshes that source's manual deadman TTL.
+A competing source cannot replace a live manual lease until the lease expires
+or `MANUAL_OFF`/`STOP` clears it.
+The shipped phone UI uses `ttlMs=1000` and refreshes the selected angle/speed
+while either value is non-zero.
 
 If manual updates stop, the TTL expires, Manual mode exits, and the normal
 quiet-output path stops stepper and thruster output.
@@ -67,9 +70,9 @@ sensors, or use service/dev commands unless a later product decision explicitly
 adds and tests those remote surfaces.
 
 Manual control is a sublease of the control owner. The first accepted
-`MANUAL_SET` may acquire both the control lease and manual deadman lease
+`MANUAL_TARGET` may acquire both the control lease and manual deadman lease
 atomically when no owner exists. After that, only the control owner can refresh
-manual TTL with `MANUAL_SET` or stop manual output with `MANUAL_OFF`. Manual TTL
+manual TTL with `MANUAL_TARGET` or stop manual output with `MANUAL_OFF`. Manual TTL
 expiry stops Manual output; it does not grant takeover to a competing source.
 Control lease expiry, owner disconnect, or `STOP` clears any active manual
 lease.

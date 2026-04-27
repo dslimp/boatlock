@@ -7377,3 +7377,46 @@ Self-review:
 - README is now intentionally bench-current rather than a complete product
   manual. Deep protocol, hardware acceptance, and release details remain in
   `docs/` and repo skills.
+
+### 2026-04-27 Stage 245: Manual target-angle control
+
+Scope:
+- Replace press-and-hold manual steering with a selected steering vector and
+  PWM speed steps while preserving firmware-side deadman behavior.
+
+External baseline:
+- No new external module baseline was needed for this slice. The applied
+  baseline is the existing BoatLock safety contract: manual actuation is an
+  explicit source-owned short lease, malformed packets do not refresh it, and
+  link/TTL/STOP paths quiet outputs.
+
+Key outcomes:
+- Replaced `MANUAL_TARGET` payload semantics with
+  `<angleDeg>,<throttlePct>,<ttlMs>`, where angle is `-90..90` degrees relative
+  to bow-forward.
+- Firmware now stores the manual steering angle, points the DRV8825 stepper to
+  that target, and cancels the stepper target on `MANUAL_OFF`, TTL expiry, STOP,
+  or non-manual quiet paths.
+- Flutter manual sheet now latches vector and PWM step locally with
+  left/right/faster/slower/stop controls, while continuing to refresh
+  `MANUAL_TARGET` every `250 ms`.
+- Updated BLE command builders, app/smoke/e2e manual calls, tests, protocol
+  docs, README, AGENTS, and repo references.
+- Promoted the durable UI correction: phone UI may latch vector/speed locally,
+  but firmware actuation remains deadman-protected by repeated refreshes.
+
+Validation:
+- `git diff --check` -> PASS.
+- `cd boatlock && platformio test -e native -f test_manual_control -f test_runtime_control_input_builder -f test_ble_command_handler -f test_ble_command_profile_gate -f test_runtime_ble_control_lease -f test_runtime_ble_command_log -f test_runtime_ble_command_scope -f test_ble_security -f test_runtime_motion -f test_stepper_control` -> PASS (`114/114`) after fixing the expected `MANUAL_TARGET` log truncation string.
+- `cd boatlock && platformio test -e native` -> PASS (`424/424`).
+- `cd boatlock && platformio run -e esp32s3_service` -> PASS.
+- `cd boatlock_ui && flutter analyze` -> PASS.
+- `cd boatlock_ui && flutter test test/manual_control_sheet_test.dart test/ble_commands_test.dart test/ble_command_scope_test.dart test/ble_security_policy_test.dart test/ble_smoke_logic_test.dart test/app_e2e_probe_test.dart test/map_page_test.dart` -> PASS.
+- `cd boatlock_ui && flutter test` -> PASS (`121/121`).
+- `tools/android/build-app-apk.sh` -> PASS; built
+  `boatlock_ui/build/app/outputs/flutter-apk/app-debug.apk`.
+
+Self-review:
+- This is still a software/dry validation. Powered steering direction, angular
+  speed, and hold-current behavior need the powered bench checklist before the
+  real mechanism is trusted under load.

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('hold sends manual set and release sends manual off', (
+  testWidgets('latched vector and speed send refreshed manual target', (
     tester,
   ) async {
     final sent = <String>[];
@@ -15,11 +15,13 @@ void main() {
             mode: 'IDLE',
             onManualControl:
                 ({
-                  required int steer,
+                  required double angleDeg,
                   required int throttlePct,
                   int ttlMs = 1000,
                 }) async {
-                  sent.add('set:$steer,$throttlePct,$ttlMs');
+                  sent.add(
+                    'target:${angleDeg.toStringAsFixed(0)},$throttlePct,$ttlMs',
+                  );
                   return true;
                 },
             onManualOff: () async {
@@ -31,55 +33,20 @@ void main() {
       ),
     );
 
-    final gesture = await tester.press(find.text('Вперед'));
-    await tester.pump(const Duration(milliseconds: 300));
-    await gesture.up();
+    await tester.tap(find.text('Правее'));
     await tester.pump();
+    await tester.tap(find.text('Быстрее'));
+    await tester.pump(const Duration(milliseconds: 300));
 
-    expect(sent.first, 'set:0,35,1000');
+    expect(sent.first, 'target:10,0,1000');
+    expect(sent, contains('target:10,20,1000'));
     expect(
-      sent.where((line) => line == 'set:0,35,1000').length,
+      sent.where((line) => line == 'target:10,20,1000').length,
       greaterThan(1),
     );
-    expect(sent.last, 'off');
   });
 
-  testWidgets('disabled manual pad does not send commands', (tester) async {
-    final sent = <String>[];
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: ManualControlSheet(
-            enabled: false,
-            mode: 'IDLE',
-            onManualControl:
-                ({
-                  required int steer,
-                  required int throttlePct,
-                  int ttlMs = 1000,
-                }) async {
-                  sent.add('set');
-                  return true;
-                },
-            onManualOff: () async {
-              sent.add('off');
-              return true;
-            },
-          ),
-        ),
-      ),
-    );
-
-    await tester.tap(find.text('Вперед'));
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(sent, isEmpty);
-    expect(find.text('Нет BLE-связи'), findsOneWidget);
-  });
-
-  testWidgets('manual off button is not labeled as emergency stop', (
-    tester,
-  ) async {
+  testWidgets('stop resets target and sends manual off', (tester) async {
     final sent = <String>[];
     await tester.pumpWidget(
       MaterialApp(
@@ -89,11 +56,11 @@ void main() {
             mode: 'MANUAL',
             onManualControl:
                 ({
-                  required int steer,
+                  required double angleDeg,
                   required int throttlePct,
                   int ttlMs = 1000,
                 }) async {
-                  sent.add('set');
+                  sent.add('target');
                   return true;
                 },
             onManualOff: () async {
@@ -106,12 +73,47 @@ void main() {
     );
 
     expect(find.text('STOP'), findsNothing);
-    expect(find.text('MANUAL OFF'), findsOneWidget);
+    expect(find.text('Стоп'), findsOneWidget);
 
-    await tester.tap(find.text('MANUAL OFF'));
+    await tester.tap(find.text('Правее'));
+    await tester.pump();
+    await tester.tap(find.text('Стоп'));
     await tester.pump();
 
-    expect(sent, ['off']);
-    expect(find.text('MANUAL_OFF отправлен'), findsOneWidget);
+    expect(sent.last, 'off');
+    expect(find.text('Остановлено'), findsOneWidget);
+  });
+
+  testWidgets('disabled manual controls do not send commands', (tester) async {
+    final sent = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ManualControlSheet(
+            enabled: false,
+            mode: 'IDLE',
+            onManualControl:
+                ({
+                  required double angleDeg,
+                  required int throttlePct,
+                  int ttlMs = 1000,
+                }) async {
+                  sent.add('target');
+                  return true;
+                },
+            onManualOff: () async {
+              sent.add('off');
+              return true;
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Быстрее'));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(sent, isEmpty);
+    expect(find.text('Нет BLE-связи'), findsOneWidget);
   });
 }

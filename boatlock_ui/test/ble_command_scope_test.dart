@@ -13,7 +13,7 @@ void main() {
     );
     expect(classifyBoatLockCommand('ANCHOR_ON'), BoatLockCommandScope.release);
     expect(
-      classifyBoatLockCommand('MANUAL_SET:0,35,500'),
+      classifyBoatLockCommand('MANUAL_TARGET:0,35,500'),
       BoatLockCommandScope.release,
     );
     expect(classifyBoatLockCommand('STOP'), BoatLockCommandScope.release);
@@ -88,6 +88,6 @@ void main() {
       classifyBoatLockCommand('OTA_BEGIN_NOW'),
       BoatLockCommandScope.unknown,
     );
-    expect(classifyBoatLockCommand('MANUAL_SET'), BoatLockCommandScope.unknown);
+    expect(classifyBoatLockCommand('MANUAL_TARGET'), BoatLockCommandScope.unknown);
   });
 }

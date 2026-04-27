@@ -182,14 +182,16 @@
 
 - Manual control is core product scope for both the phone app and future BLE joystick/remotes.
 - Manual control must be source-agnostic internally: every controller feeds the same manual-control state model.
-- Phone BLE control uses `MANUAL_SET:<steer>,<throttlePct>,<ttlMs>`:
-  - `steer=-1..1`
+- Phone BLE control uses `MANUAL_TARGET:<angleDeg>,<throttlePct>,<ttlMs>`:
+  - `angleDeg=-90..90` relative to bow-forward
   - `throttlePct=-100..100`
   - `ttlMs=100..1000`
 - Do not log high-frequency `HEARTBEAT` as an operator command; keep serial/BLE diagnostics focused on state-changing commands and events.
-- Each `MANUAL_SET` is an atomic command and deadman refresh. If updates stop, firmware exits Manual and quiets outputs.
-- `MANUAL_SET` disables Anchor on entry so timeout, reconnect, or app crash cannot resume Anchor unexpectedly.
+- Each `MANUAL_TARGET` is an atomic command and deadman refresh. If updates stop, firmware exits Manual and quiets outputs.
+- `MANUAL_TARGET` disables Anchor on entry so timeout, reconnect, or app crash cannot resume Anchor unexpectedly.
 - `MANUAL_OFF` stops Manual output explicitly.
+- Phone manual UI latches the selected steering vector and PWM step locally,
+  then keeps sending `MANUAL_TARGET`; it is not a one-shot actuation command.
 - Do not reintroduce split legacy commands such as `MANUAL`, `MANUAL_DIR`, or `MANUAL_SPEED`.
 - `SET_STEPPER_BOW` stores the current stepper position as bow zero.
 - Stepper geometry is fixed to `7200` output steps per steering revolution

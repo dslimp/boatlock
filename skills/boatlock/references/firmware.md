@@ -203,6 +203,7 @@
 - Drift-speed telemetry must reset after long data gaps instead of surviving as stale motion evidence.
 - Manual mode cancels auto stepper tracking and drives stepper/motor through shared `ManualControl` state.
 - Manual control is entered/refreshed atomically and expires through a short deadman TTL; split mode/dir/speed state is not allowed.
+- Manual steering target is an angle in degrees relative to bow-forward, clamped to `-90..90`; the stepper moves toward that target and is canceled by TTL expiry, `MANUAL_OFF`, STOP, or non-manual quiet paths.
 - Manual control activation must require an explicit source; `NONE` is never a valid live controller.
 - Invalid manual packets must not refresh the deadman lease.
 - Manual deadman behavior must be tested for timestamp zero and unsigned `millis()` rollover.

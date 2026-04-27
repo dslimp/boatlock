@@ -17,7 +17,7 @@ struct RuntimeControlState {
 
 inline RuntimeControlState buildRuntimeControlState(unsigned long nowMs,
                                                     CoreMode mode,
-                                                    int manualDir,
+                                                    float manualAngleDeg,
                                                     int manualSpeed,
                                                     bool controlGpsAvailable,
                                                     bool headingAvailable,
@@ -43,7 +43,7 @@ inline RuntimeControlState buildRuntimeControlState(unsigned long nowMs,
 
   state.input.nowMs = nowMs;
   state.input.mode = mode;
-  state.input.manualDir = manualDir;
+  state.input.manualAngleDeg = isfinite(manualAngleDeg) ? manualAngleDeg : 0.0f;
   state.input.manualSpeed = manualSpeed;
   state.input.controlGpsAvailable = controlGpsUsable;
   state.input.hasHeading = state.hasHeading;

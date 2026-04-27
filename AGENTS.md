@@ -119,10 +119,10 @@
 - Runtime failsafes must stop motion and latch `HOLD`; they must not automatically enter `MANUAL` after sensor, link, loop, NaN, or command-range faults.
 - Manual control is core product scope, but it must be standardized and deadman-protected:
   - phone and future BLE joystick/remotes feed the same manual-control state model
-  - BLE control uses atomic `MANUAL_SET:<steer>,<throttlePct>,<ttlMs>` and `MANUAL_OFF`
-  - `MANUAL_SET` disables Anchor mode on entry so manual timeout or reconnect cannot unexpectedly resume Anchor
+  - BLE control uses atomic `MANUAL_TARGET:<angleDeg>,<throttlePct>,<ttlMs>` and `MANUAL_OFF`
+  - `MANUAL_TARGET` disables Anchor mode on entry so manual timeout or reconnect cannot unexpectedly resume Anchor
   - split legacy commands such as `MANUAL_DIR` and `MANUAL_SPEED` must not be reintroduced
-  - phone manual UI must be press-and-hold/deadman based, not one-tap latched actuation from the map
+  - phone manual UI may latch the selected vector/speed locally, but firmware actuation must stay deadman-protected by repeated `MANUAL_TARGET` refresh and TTL expiry
 - Physical button inputs must be debounced. BOOT anchor save and STOP pairing window require stable long-press; a single GPIO bounce must not save an anchor, open pairing, or change runtime mode.
 
 ## Display, BLE, And Security

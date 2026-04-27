@@ -53,7 +53,7 @@ inline bool coreModeUsesAnchorControl(CoreMode mode) {
 struct RuntimeControlInput {
   unsigned long nowMs = 0;
   CoreMode mode = CoreMode::IDLE;
-  int manualDir = -1;
+  float manualAngleDeg = 0.0f;
   int manualSpeed = 0;
   bool controlGpsAvailable = false;
   bool hasHeading = false;

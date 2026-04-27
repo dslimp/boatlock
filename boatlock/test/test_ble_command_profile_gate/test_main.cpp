@@ -82,10 +82,10 @@ void setLastAnchorDeniedReason(AnchorDeniedReason reason) {
 void setLastFailsafeReason(FailsafeReason reason) { lastFailsafeReason = reason; }
 void clearSafeHold() { ++clearSafeHoldCalls; }
 
-bool setManualControlFromBle(int steer, int throttlePct, unsigned long ttlMs) {
+bool setManualControlFromBle(float angleDeg, int throttlePct, unsigned long ttlMs) {
   const bool wasActive = manualControl.active();
   if (!manualControl.apply(ManualControlSource::BLE_PHONE,
-                           steer,
+                           angleDeg,
                            throttlePct,
                            ttlMs,
                            1000)) {
@@ -107,6 +107,7 @@ void stopManualControlFromBle() {
   ++manualStopCalls;
   manualControl.stop();
   stepperControl.stopManual();
+  stepperControl.cancelMove();
   motor.stop();
 }
 

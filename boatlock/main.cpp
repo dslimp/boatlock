@@ -741,10 +741,10 @@ void applySupervisorDecision(const AnchorSupervisor::Decision& decision) {
   runtimeMotion.applySupervisorDecision(decision, manualControl, millis());
 }
 
-bool setManualControlFromBle(int steer, int throttlePct, unsigned long ttlMs) {
+bool setManualControlFromBle(float angleDeg, int throttlePct, unsigned long ttlMs) {
   const unsigned long now = millis();
   const bool wasActive = manualControl.active();
-  if (!manualControl.apply(ManualControlSource::BLE_PHONE, steer, throttlePct, ttlMs, now)) {
+  if (!manualControl.apply(ManualControlSource::BLE_PHONE, angleDeg, throttlePct, ttlMs, now)) {
     return false;
   }
   if (!wasActive) {
@@ -764,6 +764,7 @@ bool setManualControlFromBle(int steer, int throttlePct, unsigned long ttlMs) {
 void stopManualControlFromBle() {
   manualControl.stop();
   stepperControl.stopManual();
+  stepperControl.cancelMove();
   motor.stop();
 }
 
@@ -1015,7 +1016,7 @@ void loop() {
   const RuntimeControlState controlState = buildRuntimeControlState(
       now,
       controlMode,
-      manualControl.stepperDir(),
+      manualControl.angleDeg(),
       manualControl.motorPwm(),
       controlGpsAvailable(),
       headingOk,

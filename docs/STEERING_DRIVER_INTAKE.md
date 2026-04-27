@@ -183,7 +183,7 @@ complete.
 
 Record:
 
-- Which observed direction corresponds to positive `MANUAL_SET` steer.
+- Which observed direction corresponds to positive `MANUAL_TARGET` angle.
 - Whether firmware direction must be inverted.
 - Whether driver enable must be asserted only during movement or may hold after
   movement.

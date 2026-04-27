@@ -24,7 +24,7 @@ Command scopes are product boundaries, not wire-level security:
 
 Current classification:
 
-- `release`: `STREAM_START`, `STREAM_STOP`, `SNAPSHOT`, `SET_ANCHOR`, `ANCHOR_ON`, `ANCHOR_OFF`, `STOP`, `HEARTBEAT`, `MANUAL_SET`, `MANUAL_OFF`, `NUDGE_DIR`, `NUDGE_BRG`, `SET_HOLD_HEADING`, `PAIR_SET`, `PAIR_CLEAR`, `AUTH_HELLO`, `AUTH_PROVE`, `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, `SIM_ABORT`.
+- `release`: `STREAM_START`, `STREAM_STOP`, `SNAPSHOT`, `SET_ANCHOR`, `ANCHOR_ON`, `ANCHOR_OFF`, `STOP`, `HEARTBEAT`, `MANUAL_TARGET`, `MANUAL_OFF`, `NUDGE_DIR`, `NUDGE_BRG`, `SET_HOLD_HEADING`, `PAIR_SET`, `PAIR_CLEAR`, `AUTH_HELLO`, `AUTH_PROVE`, `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, `SIM_ABORT`.
 - `service`: `SET_ANCHOR_PROFILE`, `SET_COMPASS_OFFSET`, `RESET_COMPASS_OFFSET`, `COMPASS_CAL_START`, `COMPASS_DCD_SAVE`, `COMPASS_DCD_AUTOSAVE_ON`, `COMPASS_DCD_AUTOSAVE_OFF`, `COMPASS_TARE_Z`, `COMPASS_TARE_SAVE`, `COMPASS_TARE_CLEAR`, `SET_STEP_MAXSPD`, `SET_STEP_ACCEL`, `SET_STEPPER_BOW`, `OTA_BEGIN`, `OTA_FINISH`, `OTA_ABORT`.
 - `dev/HIL`: `SET_PHONE_GPS`.
 
@@ -38,7 +38,7 @@ Current classification:
 | `ANCHOR_OFF` | none | Disable anchor mode immediately, stop current actuation, and clear any latched `HOLD` state |
 | `STOP` | none | Emergency stop: disable anchor/manual control, stop all motors, and latch runtime `HOLD` mode (highest priority) |
 | `HEARTBEAT` | none | Keep-alive command from controller/app; missing heartbeat while Anchor is active triggers failsafe |
-| `MANUAL_SET:<steer>,<throttlePct>,<ttlMs>` | `steer=-1..1`, `throttlePct=-100..100`, `ttlMs=100..1000`; app default `1000` | Atomically enter/refresh Manual mode from the active controller; this disables Anchor mode and acts as a deadman lease |
+| `MANUAL_TARGET:<angleDeg>,<throttlePct>,<ttlMs>` | `angleDeg=-90..90` relative to bow, `throttlePct=-100..100`, `ttlMs=100..1000`; app default `1000` | Atomically enter/refresh Manual mode from the active controller; this disables Anchor mode and acts as a deadman lease |
 | `MANUAL_OFF` | none | Stop Manual mode and zero manual stepper/thruster output |
 | `NUDGE_DIR:<FWD\|BACK\|LEFT\|RIGHT>` | direction | Shift anchor point by the fixed 1.5 m jog step in boat frame (allowed only while Anchor is active and safety checks pass) |
 | `NUDGE_BRG:<bearingDeg>` | absolute bearing | Shift anchor point by the fixed 1.5 m jog step on the given bearing (allowed only while Anchor is active and safety checks pass) |
@@ -79,7 +79,7 @@ Current built-in HIL groups:
 
 These commands correspond to the implementation in [`boatlock/BleCommandHandler.h`](../boatlock/BleCommandHandler.h). `SIM_*` is part of the normal release command surface because simulation runs as a safe software mode inside the ordinary firmware: real sensor values are ignored for control/display while the scenario is active, actuator outputs are quieted, and live BLE telemetry carries the simulated boat position/heading for the phone and laptop map. `SET_PHONE_GPS` remains a dev/HIL injection command and is accepted only through explicit test paths.
 
-Manual control is intentionally a single atomic command instead of separate mode/direction/speed writes. Each accepted `MANUAL_SET` refreshes the deadman TTL for the current controller source; a different source cannot take over until the lease expires or `MANUAL_OFF`/`STOP` clears it. If updates stop, firmware exits Manual mode and the normal quiet-output path stops motion. `MANUAL_SET` is a control command and must be wrapped in `SEC_CMD` when pairing/auth is enabled.
+Manual control is intentionally a single atomic command instead of separate mode/direction/speed writes. `angleDeg` is the selected steering vector across the 180 degree usable arc, where negative is left/port, `0` is bow-forward, and positive is right/starboard. Each accepted `MANUAL_TARGET` refreshes the deadman TTL for the current controller source; a different source cannot take over until the lease expires or `MANUAL_OFF`/`STOP` clears it. If updates stop, firmware exits Manual mode and the normal quiet-output path stops motion. `MANUAL_TARGET` is a control command and must be wrapped in `SEC_CMD` when pairing/auth is enabled.
 
 ## Multi-Client Control Ownership
 
@@ -138,14 +138,14 @@ the hardware STOP pairing window is physically open.
 Phone app and remote constraints are intentionally different. The phone app is
 the full product controller for anchor save/enable/disable, jog, hold-heading,
 manual, STOP, and service flows in service builds. A future BLE remote starts
-with a narrower allowlist: `MANUAL_SET`, `MANUAL_OFF`, `ANCHOR_OFF`,
+with a narrower allowlist: `MANUAL_TARGET`, `MANUAL_OFF`, `ANCHOR_OFF`,
 `HEARTBEAT`, and `STOP`. It must not save or jog anchor points, change security,
 change settings, start OTA, run HIL, inject sensors, or use service/dev commands
 unless those surfaces are explicitly added to the remote role and covered by the
 same ownership and security tests.
 
 Manual control is nested under the control-owner lease. The first accepted
-`MANUAL_SET` may acquire control and enter Manual atomically when no owner
+`MANUAL_TARGET` may acquire control and enter Manual atomically when no owner
 exists. After that, only the control owner can refresh the manual deadman TTL or
 send `MANUAL_OFF`. Manual TTL expiry stops Manual output but does not grant
 takeover. Control lease expiry, owner disconnect, or `STOP` clears the manual

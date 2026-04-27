@@ -35,7 +35,7 @@ inline RuntimeBleCommandScope runtimeBleClassifyCommand(
       command == "SIM_LIST" || command == "SIM_STATUS" ||
       command == "SIM_REPORT" || command == "SIM_ABORT" ||
       runtimeBleCommandHasPrefix(command, "SET_ANCHOR:") ||
-      runtimeBleCommandHasPrefix(command, "MANUAL_SET:") ||
+      runtimeBleCommandHasPrefix(command, "MANUAL_TARGET:") ||
       runtimeBleCommandHasPrefix(command, "NUDGE_DIR:") ||
       runtimeBleCommandHasPrefix(command, "NUDGE_BRG:") ||
       runtimeBleCommandHasPrefix(command, "SET_HOLD_HEADING:") ||

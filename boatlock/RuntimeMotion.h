@@ -94,13 +94,7 @@ public:
     if (input.mode == CoreMode::MANUAL) {
       stepperTrackingActive_ = false;
       motorHeadingAligned_ = false;
-      if (input.manualDir == 0) {
-        stepperControl_.startManual(-1);
-      } else if (input.manualDir == 1) {
-        stepperControl_.startManual(1);
-      } else {
-        stepperControl_.stopManual();
-      }
+      stepperControl_.pointToRelativeAngle(input.manualAngleDeg);
       motor_.driveManual(input.manualSpeed);
       return;
     }

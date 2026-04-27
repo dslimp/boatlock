@@ -32,7 +32,7 @@ AnchorDeniedReason currentGnssDeniedReason();
 void setLastAnchorDeniedReason(AnchorDeniedReason reason);
 void setLastFailsafeReason(FailsafeReason reason);
 void clearSafeHold();
-bool setManualControlFromBle(int steer, int throttlePct, unsigned long ttlMs);
+bool setManualControlFromBle(float angleDeg, int throttlePct, unsigned long ttlMs);
 void stopManualControlFromBle();
 bool preprocessSecureCommand(const std::string& incoming, std::string* effective);
 bool handleSimCommand(const std::string& command);
@@ -264,14 +264,14 @@ inline void handleBleCommand(const std::string& cmd) {
         stepperControl.loadFromSettings();
     } else if (command == "SET_STEPPER_BOW") {
         captureStepperBowZero();
-    } else if (command.rfind("MANUAL_SET:", 0) == 0) {
-        int steer = 0;
+    } else if (command.rfind("MANUAL_TARGET:", 0) == 0) {
+        float angleDeg = 0.0f;
         int throttlePct = 0;
         unsigned long ttlMs = 0;
-        if (sscanf(command.c_str() + 11, "%d,%d,%lu", &steer, &throttlePct, &ttlMs) == 3 &&
-            setManualControlFromBle(steer, throttlePct, ttlMs)) {
+        if (sscanf(command.c_str() + 14, "%f,%d,%lu", &angleDeg, &throttlePct, &ttlMs) == 3 &&
+            setManualControlFromBle(angleDeg, throttlePct, ttlMs)) {
         } else {
-            logMessage("[BLE] MANUAL_SET rejected: %s\n", command.c_str());
+            logMessage("[BLE] MANUAL_TARGET rejected: %s\n", command.c_str());
         }
     } else if (command == "MANUAL_OFF") {
         stopManualControlFromBle();

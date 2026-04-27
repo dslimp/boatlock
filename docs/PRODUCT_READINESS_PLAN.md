@@ -67,7 +67,7 @@ What matches the target:
   status split into narrower modules.
 - BLE protocol uses fixed UUIDs, fixed-size live telemetry, command validation,
   pairing/auth envelope, logs, and OTA partition safety.
-- Manual control uses atomic `MANUAL_SET:<steer>,<throttlePct>,<ttlMs>` and
+- Manual control uses atomic `MANUAL_TARGET:<angleDeg>,<throttlePct>,<ttlMs>` and
   `MANUAL_OFF`, with a short deadman TTL and source-owned lease.
 - Multi-client control ownership is now specified as a future implementation
   contract: read-only telemetry clients may coexist, but only one eligible
@@ -228,7 +228,7 @@ Phases:
 
 1. Float and telemetry only: no powered output. Verify BLE, GNSS, heading,
    readiness panel, logs, display, and STOP.
-2. Manual low-power: short press-and-hold pulses, release-to-stop, BLE loss,
+2. Manual low-power: short target-angle/PWM windows, TTL expiry, BLE loss,
    phone lock/app background, hardware STOP, reconnect.
 3. Steering-only: motor thrust disabled, verify stepper/steering direction,
    bow-zero, release, and no hunting.

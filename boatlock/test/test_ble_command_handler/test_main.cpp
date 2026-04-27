@@ -73,9 +73,9 @@ AnchorDeniedReason currentGnssDeniedReason() { return gnssDeniedReasonStub; }
 void setLastAnchorDeniedReason(AnchorDeniedReason reason) { lastDeniedReason = reason; }
 void setLastFailsafeReason(FailsafeReason reason) { lastFailsafeReason = reason; }
 void clearSafeHold() { ++clearSafeHoldCalls; }
-bool setManualControlFromBle(int steer, int throttlePct, unsigned long ttlMs) {
+bool setManualControlFromBle(float angleDeg, int throttlePct, unsigned long ttlMs) {
   const bool wasActive = manualControl.active();
-  if (!manualControl.apply(ManualControlSource::BLE_PHONE, steer, throttlePct, ttlMs, 1000)) {
+  if (!manualControl.apply(ManualControlSource::BLE_PHONE, angleDeg, throttlePct, ttlMs, 1000)) {
     return false;
   }
   if (!wasActive) {
@@ -93,6 +93,7 @@ void stopManualControlFromBle() {
   ++manualStopCalls;
   manualControl.stop();
   stepperControl.stopManual();
+  stepperControl.cancelMove();
   motor.stop();
 }
 bool preprocessSecureCommand(const std::string& incoming, std::string* effective) {
@@ -203,7 +204,7 @@ void test_ota_begin_enters_safe_state_and_starts_update() {
 
 void test_ota_active_blocks_runtime_commands_until_finish_or_abort() {
   bleOta.setActive(true);
-  handleBleCommand("MANUAL_SET:1,40,500");
+  handleBleCommand("MANUAL_TARGET:1,40,500");
   TEST_ASSERT_FALSE(manualControl.active());
 
   handleBleCommand("OTA_FINISH");
@@ -211,11 +212,10 @@ void test_ota_active_blocks_runtime_commands_until_finish_or_abort() {
 }
 
 void test_manual_set_is_atomic_and_enters_manual_mode() {
-  handleBleCommand("MANUAL_SET:-1,42,500");
+  handleBleCommand("MANUAL_TARGET:-45,42,500");
   TEST_ASSERT_TRUE(manualControl.active());
-  TEST_ASSERT_EQUAL(-1, manualControl.steer());
+  TEST_ASSERT_EQUAL_FLOAT(-45.0f, manualControl.angleDeg());
   TEST_ASSERT_EQUAL(42, manualControl.throttlePct());
-  TEST_ASSERT_EQUAL(0, manualControl.stepperDir());
   TEST_ASSERT_EQUAL(107, manualControl.motorPwm());
   TEST_ASSERT_TRUE(stepperControl.cancelCalled);
   TEST_ASSERT_EQUAL(1, clearSafeHoldCalls);
@@ -223,7 +223,7 @@ void test_manual_set_is_atomic_and_enters_manual_mode() {
 
 void test_manual_set_disarms_anchor_without_reenable_path() {
   settings.set("AnchorEnabled", 1.0f);
-  handleBleCommand("MANUAL_SET:1,-30,500");
+  handleBleCommand("MANUAL_TARGET:1,-30,500");
   TEST_ASSERT_TRUE(manualControl.active());
   TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
 }
@@ -233,6 +233,7 @@ void test_manual_off_stops_manual_outputs() {
   handleBleCommand("MANUAL_OFF");
   TEST_ASSERT_FALSE(manualControl.active());
   TEST_ASSERT_TRUE(stepperControl.stopManualCalled);
+  TEST_ASSERT_TRUE(stepperControl.cancelCalled);
   TEST_ASSERT_TRUE(motor.stopCalled);
   TEST_ASSERT_EQUAL(1, manualStopCalls);
 }
@@ -246,9 +247,9 @@ void test_removed_split_manual_commands_do_not_change_state() {
 }
 
 void test_manual_set_rejects_out_of_range_payloads() {
-  handleBleCommand("MANUAL_SET:2,10,500");
-  handleBleCommand("MANUAL_SET:0,101,500");
-  handleBleCommand("MANUAL_SET:0,10,50");
+  handleBleCommand("MANUAL_TARGET:91,10,500");
+  handleBleCommand("MANUAL_TARGET:0,101,500");
+  handleBleCommand("MANUAL_TARGET:0,10,50");
   TEST_ASSERT_FALSE(manualControl.active());
 }
 
@@ -345,7 +346,7 @@ void test_anchor_off_always_disables_anchor_and_stops_drive() {
 void test_manual_on_clears_safe_hold_and_failsafe_latch() {
   lastDeniedReason = AnchorDeniedReason::GPS_HDOP_TOO_HIGH;
   lastFailsafeReason = FailsafeReason::COMM_TIMEOUT;
-  handleBleCommand("MANUAL_SET:0,0,500");
+  handleBleCommand("MANUAL_TARGET:0,0,500");
   TEST_ASSERT_TRUE(manualControl.active());
   TEST_ASSERT_EQUAL((int)AnchorDeniedReason::NONE, (int)lastDeniedReason);
   TEST_ASSERT_EQUAL((int)FailsafeReason::NONE, (int)lastFailsafeReason);

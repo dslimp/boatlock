@@ -51,7 +51,7 @@ void main() {
       'STOP',
       'ANCHOR_OFF',
       'ANCHOR_ON',
-      'MANUAL_SET:0,0,1000',
+      'MANUAL_TARGET:0,0,1000',
       'SIM_RUN:S0,1',
       'SIM_ABORT',
       'OTA_BEGIN:4096,abcd',

@@ -4,7 +4,7 @@
 #include <string>
 
 inline bool runtimeBleShouldLogCommand(const std::string& command) {
-  return command != "HEARTBEAT" && command.rfind("MANUAL_SET:", 0) != 0;
+  return command != "HEARTBEAT" && command.rfind("MANUAL_TARGET:", 0) != 0;
 }
 
 inline bool runtimeBleCommandStartsWith(const std::string& command, const char* prefix) {

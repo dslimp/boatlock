@@ -9,14 +9,14 @@ void tearDown() {}
 
 void test_builder_keeps_manual_fields_and_disables_bearing_outside_anchor_mode() {
   const RuntimeControlState state = buildRuntimeControlState(
-      1000, CoreMode::MANUAL, 1, 120, true, true, 45.0f, true, 90.0f, true, 2.5f, 3, 8.0f);
+      1000, CoreMode::MANUAL, 35.0f, 120, true, true, 45.0f, true, 90.0f, true, 2.5f, 3, 8.0f);
 
   TEST_ASSERT_EQUAL((int)CoreMode::MANUAL, (int)state.mode);
   TEST_ASSERT_FALSE(state.autoControlActive);
   TEST_ASSERT_TRUE(state.hasHeading);
   TEST_ASSERT_FALSE(state.hasBearing);
   TEST_ASSERT_EQUAL_FLOAT(0.0f, state.diffDeg);
-  TEST_ASSERT_EQUAL(1, state.input.manualDir);
+  TEST_ASSERT_EQUAL_FLOAT(35.0f, state.input.manualAngleDeg);
   TEST_ASSERT_EQUAL(120, state.input.manualSpeed);
 }
 
@@ -73,7 +73,7 @@ void test_builder_sanitizes_invalid_distance() {
 
 void test_builder_keeps_manual_gps_flag_when_distance_is_invalid_outside_auto() {
   const RuntimeControlState state = buildRuntimeControlState(
-      7000, CoreMode::MANUAL, 1, 50, true, true, 20.0f, true, 30.0f, true, 2.0f, 3, NAN);
+      7000, CoreMode::MANUAL, 10.0f, 50, true, true, 20.0f, true, 30.0f, true, 2.0f, 3, NAN);
 
   TEST_ASSERT_FALSE(state.autoControlActive);
   TEST_ASSERT_EQUAL_FLOAT(0.0f, state.input.distanceM);

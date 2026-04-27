@@ -98,8 +98,8 @@ Record each check with command, expected output, measured output, and pass/fail:
 | BLE connected, `IDLE` | `PWM=0` | idle |
 | `STOP` command | `PWM=0`, no pulse after STOP | idle, any active move cancelled |
 | Hardware STOP press | same as `STOP` command | same as `STOP` command |
-| `MANUAL_SET:0,0,1000` | `PWM=0` | no steering move |
-| `MANUAL_SET:0,20,1000` | bounded PWM pulse only while lease is fresh | no steering move unless steer non-zero |
+| `MANUAL_TARGET:0,0,1000` | `PWM=0` | no steering move |
+| `MANUAL_TARGET:0,20,1000` | bounded PWM pulse only while lease is fresh | no steering move unless angle is non-zero |
 | Manual lease expiry | `PWM=0` after TTL | idle |
 | `MANUAL_OFF` | `PWM=0` | idle |
 | `ANCHOR_ON` denied on bench | `PWM=0` | idle |
@@ -126,8 +126,8 @@ Only after Gate 1 passes:
 5. Set the supply current limit low enough that a wiring mistake cannot damage
    the driver or wiring.
 6. Boot into `IDLE` and confirm no motion.
-7. Send short press-and-hold manual pulses only.
-8. Verify direction labels: forward/reverse and steering left/right.
+7. Send short manual target windows only.
+8. Verify PWM steps and steering angle labels left/right.
 9. Release controls and verify motion stops within the manual TTL.
 10. Send BLE `STOP` and press hardware STOP; both must stop immediately.
 11. Power-cycle and verify there is no auto-anchor or stored actuation.

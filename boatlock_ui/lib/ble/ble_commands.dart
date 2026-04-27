@@ -52,13 +52,13 @@ String? buildSetAnchorProfileCommand(String profile) {
   return 'SET_ANCHOR_PROFILE:$raw';
 }
 
-String? buildManualSetCommand({
-  required int steer,
+String? buildManualTargetCommand({
+  required double angleDeg,
   required int throttlePct,
   int ttlMs = 1000,
 }) {
-  if (steer < -1 || steer > 1) return null;
+  if (!angleDeg.isFinite || angleDeg < -90.0 || angleDeg > 90.0) return null;
   if (throttlePct < -100 || throttlePct > 100) return null;
   if (ttlMs < 100 || ttlMs > 1000) return null;
-  return 'MANUAL_SET:$steer,$throttlePct,$ttlMs';
+  return 'MANUAL_TARGET:${angleDeg.toStringAsFixed(1)},$throttlePct,$ttlMs';
 }

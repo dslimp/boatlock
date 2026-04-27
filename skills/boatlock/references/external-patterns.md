@@ -216,7 +216,7 @@ Implication for BoatLock:
   - match GATT service/characteristic UUIDs exactly, allowing only canonical 16-bit and Bluetooth base UUID forms; substring UUID matching can bind the app to the wrong service or characteristic
   - fail closed on partial GATT discovery. If a device lacks any required BoatLock characteristic, disconnect/retry instead of keeping a half-usable link with silent command or telemetry loss
   - throttle app-side GATT RSSI reads. Treat RSSI as low-rate link metadata, not a per-notification operation on the telemetry hot path
-- For manual UI, avoid making actuation look like a primary one-tap FAB action. Use an explicit control surface such as a toolbar entry plus sheet/pad, and keep movement tied to press-and-hold/deadman semantics.
+- For manual UI, avoid making actuation look like a primary one-tap FAB action. Use an explicit control surface such as a toolbar entry plus sheet/pad; the UI may latch the selected vector/speed locally, but device actuation must still depend on a short deadman refresh lease.
 - Compile-time test-app modes should use one typed allowlist parser and a small unit test, then a real APK build for the entrypoint that consumes the define. This keeps device smoke wrappers from silently drifting away from Flutter code.
 - Shell wrappers that share protocol/test vocabulary should source one common helper and have a cheap CI drift test against the app-side enum/parser. Duplicated case lists make acceptance scripts fail silently when new modes are added.
 - OTA should write sequentially to an inactive OTA app partition, validate the completed image before selecting it for boot, and abort without changing boot selection on transfer failure.

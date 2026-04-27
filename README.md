@@ -174,7 +174,7 @@ Android production-app manual smoke on `nh02`:
 tools/hw/nh02/android-run-app-e2e.sh --manual --wait-secs 130
 ```
 
-This sends zero-throttle `MANUAL_SET`, observes `MANUAL`, sends `MANUAL_OFF`,
+This sends zero-throttle `MANUAL_TARGET`, observes `MANUAL`, sends `MANUAL_OFF`,
 and verifies the firmware returns to a quiet mode. It is not a powered thrust
 test.
 
@@ -185,8 +185,8 @@ test.
   not pass the anchor-control quality gate.
 - `ANCHOR_ON` requires a saved anchor point, fresh onboard heading, and GNSS
   quality.
-- Manual control uses atomic `MANUAL_SET:<steer>,<throttlePct>,<ttlMs>` plus
-  `MANUAL_OFF`.
+- Manual control uses atomic `MANUAL_TARGET:<angleDeg>,<throttlePct>,<ttlMs>`
+  plus `MANUAL_OFF`, with `angleDeg=-90..90` across the steering arc.
 - Runtime faults and STOP enter safe quiet output; they do not automatically
   resume Anchor or Manual.
 - BLE security is owner-secret based; paired devices must wrap control commands

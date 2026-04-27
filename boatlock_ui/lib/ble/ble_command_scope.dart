@@ -27,7 +27,7 @@ const Set<String> _releaseExactCommands = {
 
 const List<String> _releaseCommandPrefixes = [
   'SET_ANCHOR:',
-  'MANUAL_SET:',
+  'MANUAL_TARGET:',
   'NUDGE_DIR:',
   'NUDGE_BRG:',
   'SET_HOLD_HEADING:',

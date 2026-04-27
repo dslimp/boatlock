@@ -186,9 +186,13 @@ class _MapPageState extends State<MapPage> {
         enabled: boatData != null,
         mode: boatData?.mode ?? 'IDLE',
         onManualControl:
-            ({required int steer, required int throttlePct, int ttlMs = 1000}) {
+            ({
+              required double angleDeg,
+              required int throttlePct,
+              int ttlMs = 1000,
+            }) {
               return ble.sendManualControl(
-                steer: steer,
+                angleDeg: angleDeg,
                 throttlePct: throttlePct,
                 ttlMs: ttlMs,
               );

@@ -46,7 +46,7 @@ void test_command_kinds_keep_transport_and_auth_out_of_owner_lease() {
 void test_command_kinds_mark_control_stop_and_rejected_commands() {
   assertKind(RuntimeBleControlLeaseCommandKind::CONTROL, "ANCHOR_ON");
   assertKind(RuntimeBleControlLeaseCommandKind::CONTROL, "HEARTBEAT");
-  assertKind(RuntimeBleControlLeaseCommandKind::CONTROL, "MANUAL_SET:0,25,500");
+  assertKind(RuntimeBleControlLeaseCommandKind::CONTROL, "MANUAL_TARGET:0,25,500");
   assertKind(RuntimeBleControlLeaseCommandKind::CONTROL, "OTA_BEGIN:bad");
   assertKind(RuntimeBleControlLeaseCommandKind::CONTROL, "SIM_STATUS");
   assertKind(RuntimeBleControlLeaseCommandKind::STOP_PREEMPT, "STOP");
@@ -99,7 +99,7 @@ void test_non_owner_control_is_busy_until_lease_expires() {
   RuntimeBleControlClient second = appClient(2, 1);
 
   assertDecision(RuntimeBleControlLeaseDecision::ACQUIRE,
-                 lease.authorize(owner, "MANUAL_SET:0,10,500", 1000, 3000));
+                 lease.authorize(owner, "MANUAL_TARGET:0,10,500", 1000, 3000));
 
   RuntimeBleControlLeaseResult busy =
       lease.authorize(second, "ANCHOR_OFF", 3999, 3000);
@@ -161,7 +161,7 @@ void test_remote_role_cannot_acquire_control_in_this_slice() {
   RuntimeBleControlClient remote = remoteClient(3, 1);
 
   RuntimeBleControlLeaseResult rejected =
-      lease.authorize(remote, "MANUAL_SET:0,20,500", 1000, 3000);
+      lease.authorize(remote, "MANUAL_TARGET:0,20,500", 1000, 3000);
   assertDecision(RuntimeBleControlLeaseDecision::REJECT_ROLE, rejected);
   TEST_ASSERT_FALSE(rejected.allowed());
   TEST_ASSERT_FALSE(lease.ownerActive(1000));

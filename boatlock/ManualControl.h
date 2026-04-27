@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -14,14 +15,14 @@ class ManualControl {
 public:
   static constexpr unsigned long kMinTtlMs = 100;
   static constexpr unsigned long kMaxTtlMs = 1000;
-  static constexpr unsigned long kDefaultTtlMs = 500;
+  static constexpr unsigned long kDefaultTtlMs = 1000;
 
   bool apply(ManualControlSource source,
-             int steer,
+             float angleDeg,
              int throttlePct,
              unsigned long ttlMs,
              unsigned long nowMs) {
-    if (!validSource(source) || !validSteer(steer) || !validThrottlePct(throttlePct) ||
+    if (!validSource(source) || !validAngleDeg(angleDeg) || !validThrottlePct(throttlePct) ||
         !validTtlMs(ttlMs)) {
       return false;
     }
@@ -32,7 +33,7 @@ public:
       stop();
     }
     source_ = source;
-    steer_ = steer;
+    angleDeg_ = angleDeg;
     throttlePct_ = throttlePct;
     ttlMs_ = ttlMs;
     updatedMs_ = nowMs;
@@ -54,7 +55,7 @@ public:
   void stop() {
     active_ = false;
     source_ = ManualControlSource::NONE;
-    steer_ = 0;
+    angleDeg_ = 0.0f;
     throttlePct_ = 0;
     ttlMs_ = 0;
     updatedMs_ = 0;
@@ -62,16 +63,9 @@ public:
 
   bool active() const { return active_; }
   ManualControlSource source() const { return source_; }
-  int steer() const { return active_ ? steer_ : 0; }
+  float angleDeg() const { return active_ ? angleDeg_ : 0.0f; }
   int throttlePct() const { return active_ ? throttlePct_ : 0; }
   unsigned long ttlMs() const { return ttlMs_; }
-
-  int stepperDir() const {
-    if (!active_ || steer_ == 0) {
-      return -1;
-    }
-    return steer_ < 0 ? 0 : 1;
-  }
 
   int motorPwm() const {
     if (!active_) {
@@ -80,8 +74,8 @@ public:
     return constrain((throttlePct_ * 255) / 100, -255, 255);
   }
 
-  static bool validSteer(int steer) {
-    return steer >= -1 && steer <= 1;
+  static bool validAngleDeg(float angleDeg) {
+    return isfinite(angleDeg) && angleDeg >= -90.0f && angleDeg <= 90.0f;
   }
 
   static bool validThrottlePct(int throttlePct) {
@@ -99,7 +93,7 @@ private:
 
   bool active_ = false;
   ManualControlSource source_ = ManualControlSource::NONE;
-  int steer_ = 0;
+  float angleDeg_ = 0.0f;
   int throttlePct_ = 0;
   unsigned long ttlMs_ = 0;
   unsigned long updatedMs_ = 0;

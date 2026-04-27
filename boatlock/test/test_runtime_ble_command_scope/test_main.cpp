@@ -29,7 +29,7 @@ void test_command_scope_classifies_release_exact_commands() {
 void test_command_scope_classifies_release_prefix_commands_without_payload_validation() {
   const char* commands[] = {
       "SET_ANCHOR:55.1,37.2",
-      "MANUAL_SET:1.5,5000,bad",
+      "MANUAL_TARGET:1.5,5000,bad",
       "NUDGE_DIR:LEFT",
       "NUDGE_BRG:90",
       "SET_HOLD_HEADING:1",
@@ -89,12 +89,12 @@ void test_command_scope_classifies_unknown_commands() {
       " STREAM_START",
       "STREAM_START ",
       "SEC_CMD:1:2:STOP",
-      "SEC_CMD:1:2:MANUAL_SET:0,0,300",
+      "SEC_CMD:1:2:MANUAL_TARGET:0,0,300",
       "STREAM_START:1",
       "SIM_RUNNER:S1",
       "OTA_BEGIN_NOW",
       "SET_ANCHOR",
-      "MANUAL_SET",
+      "MANUAL_TARGET",
       "SIM_RUN",
       "SET_PHONE_GPS",
       "SET_ROUTE",

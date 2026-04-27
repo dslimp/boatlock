@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 typedef ManualControlSender =
     Future<bool> Function({
-      required int steer,
+      required double angleDeg,
       required int throttlePct,
       int ttlMs,
     });
@@ -31,76 +31,117 @@ class ManualControlSheet extends StatefulWidget {
 class _ManualControlSheetState extends State<ManualControlSheet> {
   static const int _ttlMs = 1000;
   static const Duration _sendEvery = Duration(milliseconds: 250);
-  static const int _forwardPct = 35;
-  static const int _reversePct = -25;
+  static const double _angleStepDeg = 10.0;
+  static const List<int> _speedSteps = [0, 20, 35, 50, 70, 100];
 
   Timer? _sendTimer;
   bool _sendInFlight = false;
-  int _steer = 0;
-  int _throttlePct = 0;
-  String _status = 'Удерживайте кнопку для движения';
+  bool _manualActive = false;
+  int _commandGeneration = 0;
+  double _angleDeg = 0.0;
+  int _speedIndex = 0;
+  String _status = 'Готово';
+
+  int get _throttlePct => _speedSteps[_speedIndex];
+  bool get _hasManualTarget => _angleDeg != 0.0 || _throttlePct != 0;
+
+  @override
+  void didUpdateWidget(covariant ManualControlSheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.enabled && !widget.enabled) {
+      _sendTimer?.cancel();
+      _sendTimer = null;
+      _manualActive = false;
+      _commandGeneration++;
+    }
+  }
 
   @override
   void dispose() {
     _sendTimer?.cancel();
-    if (_steer != 0 || _throttlePct != 0) {
+    if (_manualActive || _hasManualTarget) {
       unawaited(widget.onManualOff());
     }
     super.dispose();
   }
 
-  void _setSteer(int value, bool pressed) {
-    setState(() {
-      _steer = pressed ? value : 0;
-    });
-    _syncManualState();
-  }
-
-  void _setThrottle(int value, bool pressed) {
-    setState(() {
-      _throttlePct = pressed ? value : 0;
-    });
-    _syncManualState();
-  }
-
-  void _syncManualState() {
+  void _setAngle(double value) {
     if (!widget.enabled) return;
-    if (_steer == 0 && _throttlePct == 0) {
+    setState(() {
+      _angleDeg = value.clamp(-90.0, 90.0).roundToDouble();
+    });
+    _scheduleSync();
+  }
+
+  void _changeAngle(double delta) {
+    _setAngle(_angleDeg + delta);
+  }
+
+  void _changeSpeed(int delta) {
+    if (!widget.enabled) return;
+    setState(() {
+      _speedIndex = (_speedIndex + delta)
+          .clamp(0, _speedSteps.length - 1)
+          .toInt();
+    });
+    _scheduleSync();
+  }
+
+  void _scheduleSync() {
+    if (!widget.enabled) return;
+    _commandGeneration++;
+    if (!_hasManualTarget) {
       _sendTimer?.cancel();
       _sendTimer = null;
-      _sendManualOff();
+      if (_manualActive) {
+        unawaited(_sendManualOff());
+      }
       return;
     }
-    _sendManualSet();
-    _sendTimer ??= Timer.periodic(_sendEvery, (_) => _sendManualSet());
+    _manualActive = true;
+    unawaited(_sendManualTarget());
+    _sendTimer ??= Timer.periodic(_sendEvery, (_) => _sendManualTarget());
   }
 
-  Future<void> _sendManualSet() async {
-    if (_sendInFlight || !widget.enabled) return;
+  Future<void> _sendManualTarget() async {
+    if (_sendInFlight || !widget.enabled || !_hasManualTarget) return;
     _sendInFlight = true;
-    final steer = _steer;
+    final generation = _commandGeneration;
+    final angleDeg = _angleDeg;
     final throttlePct = _throttlePct;
     final ok = await widget.onManualControl(
-      steer: steer,
+      angleDeg: angleDeg,
       throttlePct: throttlePct,
       ttlMs: _ttlMs,
     );
-    if (mounted) {
-      setState(() {
-        _status = ok
-            ? 'MANUAL_SET steer=$steer thrust=$throttlePct%'
-            : 'MANUAL_SET отклонен';
-      });
-    }
     _sendInFlight = false;
+    if (!mounted || generation != _commandGeneration) return;
+    setState(() {
+      _status = ok
+          ? 'angle=${angleDeg.toStringAsFixed(0)} pwm=$throttlePct%'
+          : 'MANUAL_TARGET отклонен';
+    });
   }
 
   Future<void> _sendManualOff() async {
+    _commandGeneration++;
+    _sendTimer?.cancel();
+    _sendTimer = null;
+    _manualActive = false;
     final ok = await widget.onManualOff();
     if (!mounted) return;
     setState(() {
-      _status = ok ? 'MANUAL_OFF отправлен' : 'MANUAL_OFF отклонен';
+      _status = ok ? 'Остановлено' : 'MANUAL_OFF отклонен';
     });
+  }
+
+  void _stopManual() {
+    if (!widget.enabled) return;
+    setState(() {
+      _angleDeg = 0.0;
+      _speedIndex = 0;
+    });
+    unawaited(_sendManualOff());
   }
 
   @override
@@ -112,6 +153,7 @@ class _ManualControlSheetState extends State<ManualControlSheet> {
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
               children: [
@@ -126,109 +168,101 @@ class _ManualControlSheetState extends State<ManualControlSheet> {
                 Chip(label: Text(widget.mode.isEmpty ? 'IDLE' : widget.mode)),
               ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Deadman: движение только пока кнопка удерживается. Отпускание останавливает ручной режим.',
-              style: theme.textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 16),
-            _ManualPadButton(
-              label: 'Вперед',
-              icon: Icons.keyboard_arrow_up,
-              enabled: enabled,
-              onPressedChanged: (pressed) => _setThrottle(_forwardPct, pressed),
-            ),
+            const SizedBox(height: 14),
             Row(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _ManualPadButton(
-                  label: 'Лево',
-                  icon: Icons.keyboard_arrow_left,
-                  enabled: enabled,
-                  onPressedChanged: (pressed) => _setSteer(-1, pressed),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.orange.shade700,
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(86, 56),
-                    ),
-                    onPressed: enabled ? _sendManualOff : null,
-                    child: const FittedBox(child: Text('MANUAL OFF')),
-                  ),
-                ),
-                _ManualPadButton(
-                  label: 'Право',
-                  icon: Icons.keyboard_arrow_right,
-                  enabled: enabled,
-                  onPressedChanged: (pressed) => _setSteer(1, pressed),
+                Text('Угол', style: theme.textTheme.titleMedium),
+                const Spacer(),
+                Text(
+                  '${_angleDeg.toStringAsFixed(0)}°',
+                  style: theme.textTheme.titleMedium,
                 ),
               ],
             ),
-            _ManualPadButton(
-              label: 'Назад',
-              icon: Icons.keyboard_arrow_down,
-              enabled: enabled,
-              onPressedChanged: (pressed) => _setThrottle(_reversePct, pressed),
+            Slider(
+              value: _angleDeg,
+              min: -90,
+              max: 90,
+              divisions: 18,
+              label: '${_angleDeg.toStringAsFixed(0)}°',
+              onChanged: enabled ? _setAngle : null,
             ),
-            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: enabled
+                        ? () => _changeAngle(-_angleStepDeg)
+                        : null,
+                    icon: const Icon(Icons.keyboard_arrow_left),
+                    label: const Text('Левее'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filledTonal(
+                  tooltip: 'Центр',
+                  onPressed: enabled ? () => _setAngle(0.0) : null,
+                  icon: const Icon(Icons.adjust),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: enabled
+                        ? () => _changeAngle(_angleStepDeg)
+                        : null,
+                    icon: const Icon(Icons.keyboard_arrow_right),
+                    label: const Text('Правее'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Text('PWM', style: theme.textTheme.titleMedium),
+                const Spacer(),
+                Text('$_throttlePct%', style: theme.textTheme.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: enabled ? () => _changeSpeed(-1) : null,
+                    icon: const Icon(Icons.remove),
+                    label: const Text('Медленнее'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: enabled ? () => _changeSpeed(1) : null,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Быстрее'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.orange.shade700,
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(48),
+              ),
+              onPressed: enabled ? _stopManual : null,
+              icon: const Icon(Icons.stop_circle_outlined),
+              label: const Text('Стоп'),
+            ),
+            const SizedBox(height: 10),
             Text(
               enabled ? _status : 'Нет BLE-связи',
               style: theme.textTheme.bodySmall,
+              textAlign: TextAlign.center,
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _ManualPadButton extends StatelessWidget {
-  const _ManualPadButton({
-    required this.label,
-    required this.icon,
-    required this.enabled,
-    required this.onPressedChanged,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool enabled;
-  final ValueChanged<bool> onPressedChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final child = SizedBox(
-      width: 96,
-      height: 64,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: enabled
-              ? Theme.of(context).colorScheme.secondaryContainer
-              : Colors.black12,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [Icon(icon), Text(label)],
-        ),
-      ),
-    );
-
-    if (!enabled) {
-      return Padding(padding: const EdgeInsets.all(6), child: child);
-    }
-
-    return Padding(
-      padding: const EdgeInsets.all(6),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown: (_) => onPressedChanged(true),
-        onTapUp: (_) => onPressedChanged(false),
-        onTapCancel: () => onPressedChanged(false),
-        child: child,
       ),
     );
   }

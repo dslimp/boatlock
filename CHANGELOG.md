@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Changed
-- Standardized phone/BLE manual control on atomic `MANUAL_SET:<steer>,<throttlePct>,<ttlMs>` and `MANUAL_OFF`.
+- Standardized phone/BLE manual control on atomic `MANUAL_TARGET:<angleDeg>,<throttlePct>,<ttlMs>` and `MANUAL_OFF`.
 - Manual entry now disables Anchor mode and uses a deadman TTL so app/controller loss cannot resume Anchor unexpectedly.
 
 ### Removed

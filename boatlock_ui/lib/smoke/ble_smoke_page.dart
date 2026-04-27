@@ -384,7 +384,7 @@ class _BleSmokePageState extends State<BleSmokePage> {
 
   Future<void> _sendManualSet() async {
     final ok = await _ble.sendManualControl(
-      steer: 0,
+      angleDeg: 0.0,
       throttlePct: 0,
       ttlMs: 1000,
     );
@@ -410,7 +410,7 @@ class _BleSmokePageState extends State<BleSmokePage> {
 
   Future<void> _sendStatusManualSet() async {
     final ok = await _ble.sendManualControl(
-      steer: 0,
+      angleDeg: 0.0,
       throttlePct: 0,
       ttlMs: 1000,
     );
@@ -449,7 +449,7 @@ class _BleSmokePageState extends State<BleSmokePage> {
 
   Future<void> _sendSimManualSet() async {
     final ok = await _ble.sendManualControl(
-      steer: 0,
+      angleDeg: 0.0,
       throttlePct: 0,
       ttlMs: 1000,
     );

@@ -691,12 +691,12 @@ class BleBoatLock with WidgetsBindingObserver {
   }
 
   Future<bool> sendManualControl({
-    required int steer,
+    required double angleDeg,
     required int throttlePct,
     int ttlMs = 1000,
   }) async {
-    final cmd = buildManualSetCommand(
-      steer: steer,
+    final cmd = buildManualTargetCommand(
+      angleDeg: angleDeg,
       throttlePct: throttlePct,
       ttlMs: ttlMs,
     );

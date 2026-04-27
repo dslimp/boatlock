@@ -210,7 +210,7 @@ void main() {
     expect(find.text('STOP отправлен'), findsOneWidget);
   });
 
-  testWidgets('manual sheet exposes MANUAL OFF instead of emergency STOP', (
+  testWidgets('manual sheet exposes stop without emergency STOP', (
     tester,
   ) async {
     final ble = await _pumpMapPage(tester);
@@ -220,15 +220,15 @@ void main() {
     await tester.tap(find.byTooltip('Ручное управление'));
     await tester.pumpAndSettle();
 
-    expect(find.text('MANUAL OFF'), findsOneWidget);
+    expect(find.text('Стоп'), findsOneWidget);
     expect(find.text('STOP'), findsNothing);
 
-    await tester.tap(find.text('MANUAL OFF'));
+    await tester.tap(find.text('Стоп'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(ble.manualOffCalls, 1);
-    expect(find.text('MANUAL_OFF отправлен'), findsOneWidget);
+    expect(find.text('Остановлено'), findsOneWidget);
   });
 }
 
