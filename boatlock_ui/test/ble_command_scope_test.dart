@@ -88,6 +88,9 @@ void main() {
       classifyBoatLockCommand('OTA_BEGIN_NOW'),
       BoatLockCommandScope.unknown,
     );
-    expect(classifyBoatLockCommand('MANUAL_TARGET'), BoatLockCommandScope.unknown);
+    expect(
+      classifyBoatLockCommand('MANUAL_TARGET'),
+      BoatLockCommandScope.unknown,
+    );
   });
 }

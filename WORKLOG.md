@@ -7426,3 +7426,25 @@ Self-review:
   speed, and hold-current behavior need the powered bench checklist before the
   real mechanism is trusted under load. I did not flash or OTA the ESP32 after
   this commit because the USB recovery path was absent during the status check.
+
+### 2026-04-27 Stage 246: GitHub flutter-checks format fix
+
+Scope:
+- Fix the GitHub Actions failure after the manual target-angle push.
+
+Key outcome:
+- GitHub `CI` run `24989852905` failed in `flutter-checks` at
+  `dart format --output=none --set-exit-if-changed lib test`; the formatter
+  wanted to wrap one long `expect(...)` line in
+  `boatlock_ui/test/ble_command_scope_test.dart`.
+
+Validation:
+- `cd boatlock_ui && dart format --output=none --set-exit-if-changed lib test`
+  -> PASS.
+- `cd boatlock_ui && flutter analyze` -> PASS.
+- `cd boatlock_ui && flutter test test/ble_command_scope_test.dart` -> PASS.
+- `git diff --check` -> PASS.
+
+Self-review:
+- No runtime behavior changed; this is formatting-only fallout from not running
+  the exact CI format gate after the first push.
