@@ -6,7 +6,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../ble/ble_boatlock.dart';
 import '../ble/ble_command_rejection.dart';
-import '../ble/ble_command_scope.dart';
 import '../ble/ble_debug_snapshot.dart';
 import '../ble/ble_ota_payload.dart';
 import '../ble/ble_security_codec.dart';
@@ -63,10 +62,10 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  static bool _debugMenuSessionEnabled = false;
+  static bool _serviceMenuSessionEnabled = false;
 
   late bool holdHeading;
-  late bool debugMenuEnabled;
+  late bool serviceMenuEnabled;
   late double stepMaxSpd;
   late double stepAccel;
   late double compassOffset;
@@ -102,7 +101,7 @@ class _SettingsPageState extends State<SettingsPage> {
   void initState() {
     super.initState();
     holdHeading = widget.holdHeading;
-    debugMenuEnabled = _debugMenuSessionEnabled;
+    serviceMenuEnabled = _serviceMenuSessionEnabled;
     stepMaxSpd = widget.stepMaxSpd;
     stepAccel = widget.stepAccel;
     compassOffset = widget.compassOffset;
@@ -275,12 +274,12 @@ class _SettingsPageState extends State<SettingsPage> {
     widget.ble.setOwnerSecret(_ownerSecretCtrl.text);
   }
 
-  bool get _serviceMenuVisible => kBoatLockServiceUiEnabled && debugMenuEnabled;
+  bool get _serviceMenuVisible => serviceMenuEnabled;
 
-  void _toggleDebugMenu(bool value) {
+  void _toggleServiceMenu(bool value) {
     setState(() {
-      debugMenuEnabled = value;
-      _debugMenuSessionEnabled = value;
+      serviceMenuEnabled = value;
+      _serviceMenuSessionEnabled = value;
     });
   }
 
@@ -759,12 +758,11 @@ class _SettingsPageState extends State<SettingsPage> {
             value: holdHeading,
             onChanged: isConnected ? _toggleHoldHeading : null,
           ),
-          if (kBoatLockServiceUiEnabled)
-            SwitchListTile(
-              title: const Text('Debug'),
-              value: debugMenuEnabled,
-              onChanged: _toggleDebugMenu,
-            ),
+          SwitchListTile(
+            title: const Text('Сервисный режим'),
+            value: serviceMenuEnabled,
+            onChanged: _toggleServiceMenu,
+          ),
           if (_serviceMenuVisible) ...[
             ListTile(
               title: const Text('Макс. скорость'),

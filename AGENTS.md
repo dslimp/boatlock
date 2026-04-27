@@ -151,6 +151,9 @@
   product contract allows name-only `BoatLock` advertisements as well as
   service UUID matches.
 - Flutter stops scanning before connect and retries scan/reconnect every `3 s`.
+- Android and macOS app builds are release builds only. Do not create separate
+  debug/service app variants; the release app always contains the service UI and
+  hides service controls behind the Settings `Сервисный режим` switch.
 - App heartbeat is sent every `1 s` once connected.
 - Security flow:
   - hardware STOP long-press `3 s` opens pairing window

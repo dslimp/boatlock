@@ -10,7 +10,6 @@ E2E_MODE=""
 OTA_URL=""
 OTA_SHA256=""
 OTA_LATEST_RELEASE=0
-SERVICE_UI=1
 FIRMWARE_MANIFEST_URL=""
 FIRMWARE_GITHUB_REPO=""
 LATEST_RELEASE_GITHUB_REPO="${BOATLOCK_LATEST_RELEASE_GITHUB_REPO:-dslimp/boatlock}"
@@ -35,28 +34,16 @@ while [[ $# -gt 0 ]]; do
       ;;
     --e2e-ota-latest-release)
       OTA_LATEST_RELEASE=1
-      SERVICE_UI=1
       if [[ -z "${FIRMWARE_MANIFEST_URL}" && -z "${FIRMWARE_GITHUB_REPO}" ]]; then
         FIRMWARE_GITHUB_REPO="${LATEST_RELEASE_GITHUB_REPO}"
       fi
       shift
       ;;
-    --service-ui)
-      SERVICE_UI=1
-      shift
-      ;;
-    --latest-release-service)
-      SERVICE_UI=1
-      FIRMWARE_GITHUB_REPO="${LATEST_RELEASE_GITHUB_REPO}"
-      shift
-      ;;
     --firmware-manifest-url)
-      SERVICE_UI=1
       FIRMWARE_MANIFEST_URL="${2:?missing firmware manifest URL}"
       shift 2
       ;;
     --firmware-github-repo)
-      SERVICE_UI=1
       FIRMWARE_GITHUB_REPO="${2:?missing GitHub repository}"
       shift 2
       ;;
@@ -78,18 +65,19 @@ if [[ "${E2E_MODE}" == "ota" &&
   exit 1
 fi
 
+if [[ -z "${FIRMWARE_MANIFEST_URL}" && -z "${FIRMWARE_GITHUB_REPO}" ]]; then
+  FIRMWARE_GITHUB_REPO="${LATEST_RELEASE_GITHUB_REPO}"
+fi
+
 (
   cd "${FLUTTER_DIR}"
   if [[ "${RUN_PUB_GET}" -eq 1 ]]; then
     "${FLUTTER_ENV[@]}" "${BOATLOCK_ANDROID_FLUTTER_BIN}" pub get --offline
   fi
   build_args=(
-    --debug \
+    --release \
     --no-pub \
   )
-  if [[ "${SERVICE_UI}" -eq 1 ]]; then
-    build_args+=(--dart-define="BOATLOCK_SERVICE_UI=true")
-  fi
   if [[ -n "${FIRMWARE_MANIFEST_URL}" ]]; then
     build_args+=(
       --dart-define="BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL=${FIRMWARE_MANIFEST_URL}"

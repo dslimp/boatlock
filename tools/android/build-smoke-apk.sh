@@ -33,7 +33,7 @@ boatlock_validate_smoke_mode "${SMOKE_MODE}"
     "${FLUTTER_ENV[@]}" "${BOATLOCK_ANDROID_FLUTTER_BIN}" pub get --offline
   fi
   "${FLUTTER_ENV[@]}" "${BOATLOCK_ANDROID_FLUTTER_BIN}" build apk \
-    --debug \
+    --release \
     --no-pub \
     --dart-define="BOATLOCK_SMOKE_MODE=${SMOKE_MODE}" \
     --target lib/main_smoke.dart

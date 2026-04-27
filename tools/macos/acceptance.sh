@@ -13,13 +13,11 @@ LOG_DIR="${LOG_ROOT}/$(date +%Y%m%d-%H%M%S)"
 
 RUN_BUILD=1
 RUN_PUB_GET=0
-BUILD_MODE="release"
 APP_PATH=""
 ARTIFACT_ZIP=""
 STATIC_ONLY=0
 MANUAL=0
 LAUNCH_SECONDS=8
-USE_LATEST_RELEASE=1
 FIRMWARE_MANIFEST_URL=""
 FIRMWARE_GITHUB_REPO=""
 EXECUTABLE_NAME=""
@@ -28,21 +26,19 @@ usage() {
   cat <<'USAGE'
 usage: tools/macos/acceptance.sh [options]
 
-Build or inspect the macOS service app, then run a local no-BLE acceptance
+Build or inspect the macOS release app, then run a local no-BLE acceptance
 slice. The automated runtime smoke only proves that the app bundle starts and
 stays alive locally; a real BLE update still requires hardware acceptance.
 
 Options:
   --pub-get                         Run flutter pub get before building.
-  --debug                           Build/use Debug output.
-  --release                         Build/use Release output (default).
-  --latest-release-service          Build service UI with latest GitHub Release source (default).
-  --firmware-manifest-url URL       Build service UI with a custom manifest URL.
-  --firmware-github-repo OWNER/REPO Build service UI with latest release source.
+  --release                         Build/use the release output (default).
+  --firmware-manifest-url URL       Build with a custom firmware manifest URL.
+  --firmware-github-repo OWNER/REPO Build with latest release firmware source.
   --no-build                        Use the existing Flutter build output.
   --app-path PATH                   Validate this .app bundle instead of building.
   --artifact-zip PATH               Unpack a CI artifact zip such as
-                                    boatlock-macos-service-release.zip and validate it.
+                                    boatlock-macos.zip and validate it.
   --static-only                     Validate bundle/signature/entitlements only.
   --runtime-seconds N               Launch-smoke duration before terminating the app.
   --manual                          Open the app and print the operator checklist.
@@ -100,25 +96,14 @@ while [[ $# -gt 0 ]]; do
       RUN_PUB_GET=1
       shift
       ;;
-    --debug)
-      BUILD_MODE="debug"
-      shift
-      ;;
     --release)
-      BUILD_MODE="release"
-      shift
-      ;;
-    --latest-release-service)
-      USE_LATEST_RELEASE=1
       shift
       ;;
     --firmware-manifest-url)
-      USE_LATEST_RELEASE=0
       FIRMWARE_MANIFEST_URL="${2:?missing firmware manifest URL}"
       shift 2
       ;;
     --firmware-github-repo)
-      USE_LATEST_RELEASE=0
       FIRMWARE_GITHUB_REPO="${2:?missing GitHub repository}"
       shift 2
       ;;
@@ -167,16 +152,13 @@ fi
 
 mkdir -p "${LOG_DIR}"
 
-build_service_app() {
+build_app() {
   local build_log="${LOG_DIR}/build.log"
-  local build_args=("--${BUILD_MODE}")
+  local build_args=(--release)
   local produced_path
 
   if [[ "${RUN_PUB_GET}" -eq 1 ]]; then
     build_args+=(--pub-get)
-  fi
-  if [[ "${USE_LATEST_RELEASE}" -eq 1 ]]; then
-    build_args+=(--latest-release-service)
   fi
   if [[ -n "${FIRMWARE_MANIFEST_URL}" ]]; then
     build_args+=(--firmware-manifest-url "${FIRMWARE_MANIFEST_URL}")
@@ -221,20 +203,7 @@ extract_artifact_zip() {
 }
 
 default_app_path() {
-  local build_config
-
-  case "${BUILD_MODE}" in
-    debug)
-      build_config="Debug"
-      ;;
-    release)
-      build_config="Release"
-      ;;
-    *)
-      fail "unsupported build mode: ${BUILD_MODE}"
-      ;;
-  esac
-  APP_PATH="${FLUTTER_DIR}/build/macos/Build/Products/${build_config}/boatlock_ui.app"
+  APP_PATH="${FLUTTER_DIR}/build/macos/Build/Products/Release/boatlock_ui.app"
 }
 
 validate_bundle() {
@@ -367,11 +336,11 @@ run_launch_smoke() {
 
 print_manual_checklist() {
   cat <<USAGE
-Manual macOS service update acceptance:
+Manual macOS update acceptance:
 - App bundle: ${APP_PATH}
 - Build source: ${FIRMWARE_GITHUB_REPO:-${FIRMWARE_MANIFEST_URL:-${LATEST_RELEASE_GITHUB_REPO}}}
 - Confirm the app opens without a crash and macOS permission prompts are understandable.
-- Open Settings and confirm service firmware update controls are visible.
+- Open Settings, enable Service mode, and confirm firmware update controls are visible.
 - Without BLE hardware, record this only as bundle/runtime smoke accepted.
 - With service-capable BoatLock hardware, connect, authenticate if paired, start the update, and require download, SHA verification, BLE OTA progress, reboot, reconnect, and telemetry recovery.
 
@@ -380,7 +349,7 @@ USAGE
 }
 
 if [[ "${RUN_BUILD}" -eq 1 ]]; then
-  build_service_app
+  build_app
 elif [[ -n "${ARTIFACT_ZIP}" ]]; then
   extract_artifact_zip
 elif [[ -z "${APP_PATH}" ]]; then

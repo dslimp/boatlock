@@ -117,9 +117,9 @@ tools/hw/nh02/flash.sh --profile service
 
 ## Flutter App
 
-The app wrappers now build one service-capable app by default. Service controls
-are still hidden during normal use; open Settings and enable `Debug` to show
-stepper tuning, compass service rows, and firmware OTA.
+The app wrappers build one release app. Service controls are part of that app
+and stay hidden during normal use; open Settings and enable `Сервисный режим`
+to show stepper tuning, compass service rows, and firmware OTA.
 
 Android build:
 
@@ -130,7 +130,7 @@ tools/android/build-app-apk.sh
 macOS build:
 
 ```bash
-tools/macos/build-app.sh --debug
+tools/macos/build-app.sh
 ```
 
 Run from source:
@@ -138,7 +138,7 @@ Run from source:
 ```bash
 cd boatlock_ui
 flutter pub get
-flutter run --dart-define=BOATLOCK_SERVICE_UI=true
+flutter run
 ```
 
 ## Validation
@@ -166,7 +166,7 @@ platformio test -e native -f test_settings -f test_runtime_ble_command_log -f te
 
 cd ../boatlock_ui
 flutter test test/settings_page_test.dart
-flutter test --dart-define=BOATLOCK_SERVICE_UI=true test/settings_page_service_ui_test.dart
+flutter test test/settings_page_service_ui_test.dart
 ```
 
 Android production-app manual smoke on `nh02`:

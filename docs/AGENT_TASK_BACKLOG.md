@@ -26,9 +26,9 @@ Status after the 2026-04-26 autonomous pass.
 - Offline Russian-water simulation now reports wave steepness, roll-rate, and
   GNSS/heading sensor-frame degradation metrics/events with thresholds for
   Rybinsk fetch and Ladoga storm scenarios.
-- Android and macOS CI now publish service app artifacts configured with the
-  latest GitHub Release source, and local wrappers can build the same
-  one-button update variants.
+- Android and macOS CI now publish one release app artifact per platform
+  configured with the latest GitHub Release source, and local wrappers build the
+  same one-button update app.
 - GitHub Releases now receive a service-profile `firmware-esp32s3-service`
   asset set plus `manifest.json`, and the app can use authenticated release
   asset API URLs when a token-backed validation client is injected.
@@ -43,13 +43,13 @@ Status after the 2026-04-26 autonomous pass.
   for upload, and can clear the Android GATT cache plus rediscover when OTA is
   missing.
 - OTA control commands now use explicit service-scope app writes, and CI runs
-  the service UI widget test with `BOATLOCK_SERVICE_UI=true`.
+  the service UI widget test against the normal release app surface.
 - Firmware OTA ownership is tied to the BLE connection handle that starts the
   update, so a non-owner central disconnect no longer aborts an active phone
   OTA transfer.
-- macOS service app acceptance now has a local wrapper that builds or unpacks
-  the service artifact, validates the bundle/signature/entitlements, and can
-  run a no-BLE launch smoke or manual update checklist.
+- macOS app acceptance now has a local wrapper that builds or unpacks the
+  release artifact, validates the bundle/signature/entitlements, and can run a
+  no-BLE launch smoke or manual update checklist.
 - GitHub Pages was removed from the release path; release tags now produce
   unique flat GitHub Release asset names plus `manifest.json`.
 - Offline simulator yaw inertia and explicit wake/chop events are implemented

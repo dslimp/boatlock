@@ -177,9 +177,7 @@ class BleBoatLock with WidgetsBindingObserver {
       _log('custom command rejected scope=unknown command="$cmd"');
       return false;
     }
-    if (scope == BoatLockCommandScope.service &&
-        !allowService &&
-        !kBoatLockServiceUiEnabled) {
+    if (scope == BoatLockCommandScope.service && !allowService) {
       _log('custom command rejected scope=service command="$cmd"');
       return false;
     }

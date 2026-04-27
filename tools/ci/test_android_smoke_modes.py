@@ -58,13 +58,13 @@ def test_android_app_e2e_build_targets_main_app() -> None:
     assert '[[ ! -f "${BOATLOCK_ANDROID_APK}" ]]' in text
 
 
-def test_android_app_build_supports_latest_release_service_variant() -> None:
+def test_android_app_build_embeds_latest_release_source() -> None:
     text = _read("tools/android/build-app-apk.sh")
-    assert "--latest-release-service" in text
-    assert "BOATLOCK_SERVICE_UI=true" in text
     assert "BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL=" in text
     assert "BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=" in text
     assert "BOATLOCK_LATEST_RELEASE_GITHUB_REPO" in text
+    assert "--release" in text
+    assert "--debug" not in text
 
 
 def test_android_smoke_build_checks_apk_output() -> None:

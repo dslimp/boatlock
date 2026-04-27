@@ -17,7 +17,7 @@ Control point payloads are application-level command byte strings, not a text st
 Command scopes are product boundaries, not wire-level security:
 
 - `release`: normal water UI, app security/session setup, app telemetry transport, and safe software simulation (`SIM_*`).
-- `service`: installer, calibration, firmware update, and tuning operations. The Android/macOS app wrappers build a service-capable app by default, but the UI hides these controls until the operator enables Settings `Debug`; raw Flutter builds still need `--dart-define=BOATLOCK_SERVICE_UI=true`, and test/service harnesses must opt in explicitly.
+- `service`: installer, calibration, firmware update, and tuning operations. The Android/macOS release app contains these controls, but the UI hides them until the operator enables Settings `Сервисный режим`; test/service harnesses must opt in explicitly.
 - `dev/HIL`: injected external sensor data. These commands are for validation harnesses only and must not appear in the normal water UI. Flutter custom-command callers must opt in explicitly or use `--dart-define=BOATLOCK_DEV_HIL_COMMANDS=true`.
 
 `SEC_CMD` is the security envelope; the effective scope is the scope of the wrapped payload. The Flutter custom-command classifier does not accept raw `SEC_CMD` input; the BLE transport builds the envelope internally after classifying the unwrapped command.
@@ -210,7 +210,7 @@ BLE OTA uses the phone as the bridge:
 
 During active OTA, firmware rejects all runtime commands except `HEARTBEAT`, `OTA_FINISH`, and `OTA_ABORT`. Chunk writes before a successful `OTA_BEGIN` are ignored. If the BLE link disconnects during an active transfer, firmware aborts the update and keeps the current boot partition.
 
-The service UI uses `BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO` for one-button
+The release app uses `BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO` for one-button
 updates from the latest GitHub Release. A release should include `manifest.json`
 plus the service binary asset named `firmware-esp32s3-service.bin`; the manifest
 must describe a `release/vX.Y.x` branch `esp32s3_service` binary with

@@ -1,9 +1,5 @@
 enum BoatLockCommandScope { release, service, devHil, unknown }
 
-const bool kBoatLockServiceUiEnabled = bool.fromEnvironment(
-  'BOATLOCK_SERVICE_UI',
-);
-
 const bool kBoatLockDevHilCommandsEnabled = bool.fromEnvironment(
   'BOATLOCK_DEV_HIL_COMMANDS',
 );

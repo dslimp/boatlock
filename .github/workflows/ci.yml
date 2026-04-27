@@ -209,7 +209,7 @@ jobs:
 
       - name: Test service UI
         working-directory: boatlock_ui
-        run: flutter test --dart-define=BOATLOCK_SERVICE_UI=true test/settings_page_service_ui_test.dart
+        run: flutter test test/settings_page_service_ui_test.dart
 
   flutter-build-android:
     name: flutter-build-android
@@ -253,7 +253,9 @@ jobs:
         working-directory: boatlock_ui
         env:
           GRADLE_OPTS: -Dorg.gradle.vfs.watch=false
-        run: flutter build apk --release
+        run: |
+          flutter build apk --release \
+            --dart-define=BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=${{ github.repository }}
 
       - name: Pack Android APK
         run: |
@@ -261,34 +263,12 @@ jobs:
           mkdir -p dist/flutter-android-apk
           cp boatlock_ui/build/app/outputs/flutter-apk/app-release.apk dist/flutter-android-apk/boatlock-app.apk
 
-      - name: Build Android service APK (latest release)
-        working-directory: boatlock_ui
-        env:
-          GRADLE_OPTS: -Dorg.gradle.vfs.watch=false
-        run: |
-          flutter build apk --release \
-            --dart-define=BOATLOCK_SERVICE_UI=true \
-            --dart-define=BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=${{ github.repository }}
-
-      - name: Pack Android service APK
-        run: |
-          set -euo pipefail
-          mkdir -p dist/flutter-android-service-apk
-          cp boatlock_ui/build/app/outputs/flutter-apk/app-release.apk dist/flutter-android-service-apk/boatlock-service-release.apk
-
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
           name: flutter-android-apk
           if-no-files-found: error
           path: dist/flutter-android-apk/boatlock-app.apk
-
-      - name: Upload Android service APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: flutter-android-service-apk
-          if-no-files-found: error
-          path: dist/flutter-android-service-apk/boatlock-service-release.apk
 
   flutter-build-web:
     name: flutter-build-web
@@ -345,7 +325,9 @@ jobs:
 
       - name: Build macOS app
         working-directory: boatlock_ui
-        run: flutter build macos --release
+        run: |
+          flutter build macos --release \
+            --dart-define=BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=${{ github.repository }}
 
       - name: Pack macOS app
         working-directory: boatlock_ui
@@ -354,33 +336,12 @@ jobs:
           cd build/macos/Build/Products/Release
           ditto -c -k --sequesterRsrc --keepParent boatlock_ui.app ../../../../../boatlock-macos.zip
 
-      - name: Build macOS service app (latest release)
-        working-directory: boatlock_ui
-        run: |
-          flutter build macos --release \
-            --dart-define=BOATLOCK_SERVICE_UI=true \
-            --dart-define=BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=${{ github.repository }}
-
-      - name: Pack macOS service app
-        working-directory: boatlock_ui
-        run: |
-          set -euo pipefail
-          cd build/macos/Build/Products/Release
-          ditto -c -k --sequesterRsrc --keepParent boatlock_ui.app ../../../../../boatlock-macos-service-release.zip
-
       - name: Upload macOS app
         uses: actions/upload-artifact@v4
         with:
           name: flutter-macos-app
           if-no-files-found: error
           path: boatlock_ui/boatlock-macos.zip
-
-      - name: Upload macOS service app
-        uses: actions/upload-artifact@v4
-        with:
-          name: flutter-macos-service-app
-          if-no-files-found: error
-          path: boatlock_ui/boatlock-macos-service-release.zip
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -487,7 +448,5 @@ jobs:
             release-assets/*
             artifacts/simulation-reports/*
             artifacts/flutter-android-apk/*
-            artifacts/flutter-android-service-apk/*
             artifacts/flutter-web/*
             artifacts/flutter-macos-app/*
-            artifacts/flutter-macos-service-app/*

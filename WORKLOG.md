@@ -7576,3 +7576,43 @@ Self-review:
   not proof that hardware BLE advertising was absent. The canonical verdict now
   proves the actual OTA path through the phone and post-update telemetry
   recovery.
+
+### 2026-04-27 Stage 250: Single release app surface
+
+Scope:
+- Remove the Android/macOS app split between normal, service, and debug builds.
+- Keep service controls in the product app and hide them only behind the
+  Settings `Сервисный режим` switch.
+
+Decisions:
+- Removed the `BOATLOCK_SERVICE_UI` app gate. The release app always contains
+  the service UI, while service command helper calls still need explicit
+  `allowService: true`.
+- Android and smoke app wrappers now build `app-release.apk`; macOS wrapper and
+  acceptance use `Build/Products/Release/boatlock_ui.app`.
+- CI now publishes one Android app artifact and one macOS app artifact instead
+  of separate service-app variants. Those artifacts carry the latest-release
+  firmware source configuration.
+- Captured the durable rule in `AGENTS.md` and the BoatLock skill references:
+  no debug/service app variants; one release app with runtime service-mode UI.
+
+Validation:
+- `bash -n tools/android/build-app-apk.sh tools/android/build-smoke-apk.sh tools/android/common.sh tools/macos/build-app.sh tools/macos/acceptance.sh tools/hw/nh02/android-install-app.sh` -> PASS.
+- `pytest -q tools/ci/test_android_smoke_modes.py tools/ci/test_firmware_artifact_workflow.py` -> PASS (`20/20`).
+- `cd boatlock_ui && flutter analyze` -> PASS.
+- `cd boatlock_ui && flutter test` -> PASS (`120/120`).
+- `git diff --check` -> PASS.
+- `cd boatlock_ui && dart format --output=none --set-exit-if-changed lib test` -> PASS.
+- `tools/android/build-app-apk.sh` -> PASS, produced
+  `boatlock_ui/build/app/outputs/flutter-apk/app-release.apk`.
+- `tools/macos/build-app.sh` -> PASS, produced
+  `boatlock_ui/build/macos/Build/Products/Release/boatlock_ui.app`.
+- `tools/macos/acceptance.sh --no-build --static-only` -> PASS.
+- Recreated Desktop `BoatLock App` alias to the release macOS app.
+- `tools/hw/nh02/android-install-app.sh --no-build` -> PASS; installed
+  `/opt/boatlock-hw/stage/android/app-release.apk`.
+
+Self-review:
+- This fixes the real product packaging problem instead of renaming the old
+  debug/service split. Firmware command profiles are still separate safety
+  scopes; the change only removes app artifact fragmentation.

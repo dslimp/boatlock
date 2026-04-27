@@ -2,7 +2,6 @@ import 'dart:typed_data';
 
 import 'package:boatlock_ui/ble/ble_boatlock.dart';
 import 'package:boatlock_ui/ble/ble_command_rejection.dart';
-import 'package:boatlock_ui/ble/ble_command_scope.dart';
 import 'package:boatlock_ui/ble/ble_ota_payload.dart';
 import 'package:boatlock_ui/ble/ble_security_codec.dart';
 import 'package:boatlock_ui/ota/firmware_update_client.dart';
@@ -96,12 +95,12 @@ class FakeFirmwareUpdateClient extends FirmwareUpdateClient {
 
 Widget _wrap(Widget child) => MaterialApp(home: child);
 
-Future<void> _setDebugMenu(WidgetTester tester, bool enabled) async {
-  final debugSwitch = find.widgetWithText(SwitchListTile, 'Debug');
-  expect(debugSwitch, findsOneWidget);
+Future<void> _setServiceMenu(WidgetTester tester, bool enabled) async {
+  final serviceSwitch = find.widgetWithText(SwitchListTile, 'Сервисный режим');
+  expect(serviceSwitch, findsOneWidget);
   final visible = find.text('Макс. скорость').evaluate().isNotEmpty;
   if (visible == enabled) return;
-  await tester.tap(debugSwitch);
+  await tester.tap(serviceSwitch);
   await tester.pumpAndSettle();
 }
 
@@ -133,24 +132,19 @@ SettingsPage _page(
 }
 
 void main() {
-  testWidgets('debug switch gates service controls', (
+  testWidgets('service switch gates service controls', (
     WidgetTester tester,
   ) async {
-    if (!kBoatLockServiceUiEnabled) {
-      expect(kBoatLockServiceUiEnabled, isFalse);
-      return;
-    }
-
     await tester.binding.setSurfaceSize(const Size(900, 1800));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final ble = ServiceFakeBleBoatLock();
     await tester.pumpWidget(_wrap(_page(ble)));
 
-    await _setDebugMenu(tester, false);
+    await _setServiceMenu(tester, false);
     expect(find.text('Макс. скорость'), findsNothing);
     expect(find.text('Firmware OTA'), findsNothing);
 
-    await _setDebugMenu(tester, true);
+    await _setServiceMenu(tester, true);
     expect(find.text('Макс. скорость'), findsOneWidget);
     expect(find.text('Firmware OTA'), findsOneWidget);
   });
@@ -158,16 +152,11 @@ void main() {
   testWidgets('rolls back service setting when profile rejection arrives', (
     WidgetTester tester,
   ) async {
-    if (!kBoatLockServiceUiEnabled) {
-      expect(kBoatLockServiceUiEnabled, isFalse);
-      return;
-    }
-
     await tester.binding.setSurfaceSize(const Size(900, 1800));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final ble = ServiceFakeBleBoatLock()..rejectNextStepMaxSpeed = true;
     await tester.pumpWidget(_wrap(_page(ble)));
-    await _setDebugMenu(tester, true);
+    await _setServiceMenu(tester, true);
 
     await tester.tap(find.text('Макс. скорость'));
     await tester.pumpAndSettle();
@@ -196,11 +185,6 @@ void main() {
   testWidgets('shows structured OTA profile rejection after upload failure', (
     WidgetTester tester,
   ) async {
-    if (!kBoatLockServiceUiEnabled) {
-      expect(kBoatLockServiceUiEnabled, isFalse);
-      return;
-    }
-
     final firmware = Uint8List.fromList(List<int>.filled(64, 0x42));
     final sha = boatLockSha256Hex(firmware);
     final manifest = FirmwareUpdateManifest(
@@ -233,7 +217,7 @@ void main() {
         ),
       ),
     );
-    await _setDebugMenu(tester, true);
+    await _setServiceMenu(tester, true);
 
     await tester.tap(find.text('Обновить до релиза'));
     await tester.pump(const Duration(milliseconds: 50));

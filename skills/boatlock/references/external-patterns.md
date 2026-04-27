@@ -354,12 +354,12 @@ Implication for BoatLock:
 
 ## What Flutter And GitHub Release Delivery Guidance Gets Right
 
-- Flutter's CLI is the canonical build entry point for platform artifacts; use `flutter build apk` and `flutter build macos` with explicit `--dart-define` values for service-only variants.
-- Flutter macOS release builds run inside the macOS App Sandbox by default. A service app that downloads firmware must keep the network-client entitlement in release builds.
+- Flutter's CLI is the canonical build entry point for platform artifacts; use `flutter build apk --release` and `flutter build macos --release` with explicit `--dart-define` values only for runtime configuration such as the firmware release source.
+- Flutter macOS release builds run inside the macOS App Sandbox by default. The release app downloads firmware, so it must keep the network-client entitlement in release builds.
 - GitHub release assets have a public browser download URL and an API asset URL. For token-backed/private validation, request the API asset URL with `Accept: application/octet-stream` and handle the normal binary/redirect response path.
 
 Implication for BoatLock:
-- Keep normal app artifacts separate from service artifacts so water builds do not expose OTA/tuning controls.
+- Ship one release app artifact per platform; hide OTA/tuning controls behind the app's service-mode switch instead of producing service-only app variants.
 - Publish service firmware assets with a manifest that the app validator accepts (`esp32s3_service`, `service`, SHA-256, size, main channel).
 - Do not rely on unauthenticated browser release URLs as proof that private release-asset validation works.
 

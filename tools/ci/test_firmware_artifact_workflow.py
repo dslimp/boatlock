@@ -67,57 +67,50 @@ def test_ci_delivery_jobs_are_split_by_failure_domain():
         assert f"name: {job_name}" in workflow
 
     assert "name: flutter-android-apk" in workflow
-    assert "name: flutter-android-service-apk" in workflow
     assert "name: flutter-web" in workflow
     assert "name: flutter-macos-app" in workflow
-    assert "name: flutter-macos-service-app" in workflow
     assert "flutter build macos --release" in workflow
     assert "flutter-android-web" not in workflow
 
 
-def test_ci_builds_service_apps_with_latest_release_firmware_source():
+def test_ci_builds_single_apps_with_latest_release_firmware_source():
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
 
-    assert "Build Android service APK (latest release)" in workflow
-    assert "boatlock-service-release.apk" in workflow
-    assert "Build macOS service app (latest release)" in workflow
-    assert "boatlock-macos-service-release.zip" in workflow
-    assert "--dart-define=BOATLOCK_SERVICE_UI=true" in workflow
+    assert "Build Android APK (release)" in workflow
+    assert "boatlock-app.apk" in workflow
+    assert "Build macOS app" in workflow
+    assert "boatlock-macos.zip" in workflow
     assert "--dart-define=BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=${{ github.repository }}" in workflow
-    assert "artifacts/flutter-android-service-apk/*" in workflow
-    assert "artifacts/flutter-macos-service-app/*" in workflow
+    assert "flutter-android-service-apk" not in workflow
+    assert "flutter-macos-service-app" not in workflow
 
 
 def test_flutter_ci_runs_service_ui_tests():
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
 
     assert "Test service UI" in workflow
-    assert (
-        "flutter test --dart-define=BOATLOCK_SERVICE_UI=true "
-        "test/settings_page_service_ui_test.dart"
-    ) in workflow
+    assert "flutter test test/settings_page_service_ui_test.dart" in workflow
 
 
-def test_macos_build_wrapper_supports_latest_release_service_variant():
+def test_macos_build_wrapper_builds_single_release_app():
     script = (ROOT / "tools/macos/build-app.sh").read_text()
 
-    assert "--latest-release-service" in script
-    assert "BOATLOCK_SERVICE_UI=true" in script
     assert "BOATLOCK_FIRMWARE_UPDATE_MANIFEST_URL=" in script
     assert "BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=" in script
     assert "BOATLOCK_LATEST_RELEASE_GITHUB_REPO" in script
     assert "build macos" in script
+    assert "--release" in script
+    assert "--debug" not in script
     assert "boatlock_ui.app" in script
 
 
 def test_macos_acceptance_wrapper_covers_service_artifact_and_runtime_smoke():
     script = (ROOT / "tools/macos/acceptance.sh").read_text()
 
-    assert "--latest-release-service" in script
     assert "--firmware-manifest-url" in script
     assert "--firmware-github-repo" in script
     assert "--artifact-zip" in script
-    assert "boatlock-macos-service-release.zip" in script
+    assert "boatlock-macos.zip" in script
     assert "ditto -x -k" in script
     assert "plutil -lint -s" in script
     assert "codesign --verify --verbose" in script

@@ -219,7 +219,7 @@ If `OTA_BEGIN` or `SIM_RUN` appears broken, check the printed profile first; the
 - The tracked `adb install -r` update path succeeded after the phone-side MIUI flow was satisfied: Xiaomi account, inserted SIM card, and `Install via USB` approval.
 - Treat first-install policy and later USB update as separate checkpoints; do not assume the first failure means all future `adb install -r` updates are blocked.
 
-## Debug path
+## Bench Service Path
 
 - Runtime logs go through the persistent RFC2217 bridge on `nh02`.
 - `monitor.sh` uses local `pyserial-miniterm` against the RFC2217 endpoint.
@@ -227,19 +227,18 @@ If `OTA_BEGIN` or `SIM_RUN` appears broken, check the printed profile first; the
 - BLE OTA through the phone is the normal no-USB firmware update path after the
   first OTA-capable image is present.
 - Keep the expected SHA-256 from the build output or CI artifact metadata; do not let the phone trust an arbitrary downloaded binary without comparing the expected hash first.
-- The app wrappers build service-capable Android/macOS apps by default and hide
-  service controls behind the Settings `Debug` switch. The one-button release
-  OTA path additionally resolves firmware through the latest GitHub Release via
-  `BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=dslimp/boatlock`. Local wrapper
-  shortcuts: `tools/android/build-app-apk.sh --latest-release-service` and
-  `tools/macos/build-app.sh --latest-release-service`.
-- CI publishes ready-to-install latest-release service variants as
-  `flutter-android-service-apk/boatlock-service-release.apk` and
-  `flutter-macos-service-app/boatlock-macos-service-release.zip` alongside the
-  normal app artifacts.
-- macOS service app local acceptance is covered by
+- The app wrappers build one release Android/macOS app. Service controls are in
+  that app and hidden behind the Settings `Сервисный режим` switch. The
+  one-button release OTA path resolves firmware through the latest GitHub
+  Release via `BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=dslimp/boatlock`. Local
+  wrapper shortcuts: `tools/android/build-app-apk.sh` and
+  `tools/macos/build-app.sh`.
+- CI publishes one ready-to-install app artifact per platform:
+  `flutter-android-apk/boatlock-app.apk` and
+  `flutter-macos-app/boatlock-macos.zip`.
+- macOS app local acceptance is covered by
   `tools/macos/acceptance.sh`. Use `--static-only` for bundle/signature/
-  entitlement checks, `--artifact-zip boatlock-macos-service-release.zip` for a CI
+  entitlement checks, `--artifact-zip boatlock-macos.zip` for a CI
   artifact, and `--manual` to open the app with the service update checklist.
   Without BLE hardware this proves only bundle/runtime readiness, not OTA.
 - Android app e2e can exercise the manifest-backed latest-release path with

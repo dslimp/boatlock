@@ -64,18 +64,18 @@ The release job flattens CI artifacts into unique GitHub Release asset names:
 - `SHA256SUMS-esp32s3*.txt`
 - Android/macOS/web app artifacts and simulation reports
 
-The service app reads `manifest.json` from the latest GitHub Release through
+The release app reads `manifest.json` from the latest GitHub Release through
 `BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=dslimp/boatlock`. The manifest points at
 `firmware-esp32s3-service.bin` and must use `channel=release`,
 `branch=release/vX.Y.x`, `platformioEnv=esp32s3_service`, and
 `commandProfile=service`.
 
-## Local Service Builds
+## Local App Builds
 
 ```bash
-tools/android/build-app-apk.sh --latest-release-service
-tools/macos/build-app.sh --latest-release-service
-tools/macos/acceptance.sh --latest-release-service --static-only
+tools/android/build-app-apk.sh
+tools/macos/build-app.sh
+tools/macos/acceptance.sh --static-only
 ```
 
 For a local `nh02` OTA proof with a wrapper-served manifest:

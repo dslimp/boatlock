@@ -22,7 +22,7 @@
 - Version or release-note change:
   - keep `boatlock/main.cpp`, `CHANGELOG.md`, `docs/releases/`, and CI version checks aligned
 - Release process change:
-  - keep `docs/RELEASE_PROCESS.md`, `.github/workflows/ci.yml`, release branch checks, and service app firmware source defines aligned
+  - keep `docs/RELEASE_PROCESS.md`, `.github/workflows/ci.yml`, release branch checks, and app firmware source defines aligned
 
 ## Common Commands
 
@@ -46,8 +46,8 @@
     starts before scan/connect and can expire during upload when advertising
     appears late
 - Latest-release phone bridge:
-  - service app builds use `BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=dslimp/boatlock`
-  - local shortcuts: `tools/android/build-app-apk.sh --latest-release-service` and `tools/macos/build-app.sh --latest-release-service`
+  - release app builds use `BOATLOCK_FIRMWARE_UPDATE_GITHUB_REPO=dslimp/boatlock`
+  - local shortcuts: `tools/android/build-app-apk.sh` and `tools/macos/build-app.sh`
   - local manifest-backed bench automation: `tools/hw/nh02/android-run-app-e2e.sh --ota-latest-release --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin`
 - Full native tests:
   - `cd boatlock && platformio test -e native`
@@ -60,6 +60,12 @@
   - `cd boatlock && platformio test -e native -f test_settings`
 - Flutter tests:
   - `cd boatlock_ui && flutter test`
+- App release builds:
+  - Android and macOS app wrappers build release artifacts only.
+  - Do not add separate debug/service app variants; the release app includes
+    service controls hidden behind the Settings `Сервисный режим` switch.
+  - Android APK output is `boatlock_ui/build/app/outputs/flutter-apk/app-release.apk`.
+  - macOS app output is `boatlock_ui/build/macos/Build/Products/Release/boatlock_ui.app`.
 - Offline simulation harness:
   - `python3 tools/sim/test_sim_core.py`
   - `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json`

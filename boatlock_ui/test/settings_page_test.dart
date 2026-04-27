@@ -107,12 +107,14 @@ void main() {
     final ble = FakeBleBoatLock();
     await tester.pumpWidget(_wrap(_page(ble)));
 
-    await tester.tap(find.byType(SwitchListTile));
+    await tester.tap(
+      find.widgetWithText(SwitchListTile, 'Поддерживать курс носа'),
+    );
     await tester.pumpAndSettle();
     expect(ble.holdHeadingValue, true);
   });
 
-  testWidgets('service command controls are hidden in normal app build', (
+  testWidgets('service command controls are hidden until enabled', (
     WidgetTester tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(900, 1800));
@@ -124,7 +126,7 @@ void main() {
     expect(find.text('Офсет компаса'), findsNothing);
     expect(find.text('Firmware OTA'), findsNothing);
     expect(find.text('BNO08x quality'), findsNothing);
-    expect(find.text('Debug'), findsNothing);
+    expect(find.text('Сервисный режим'), findsOneWidget);
     expect(find.text('Owner secret'), findsOneWidget);
   });
 

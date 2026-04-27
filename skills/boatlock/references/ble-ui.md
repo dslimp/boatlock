@@ -11,10 +11,10 @@
 - `boatlock_ui/lib/ble/ble_ids.dart`: Flutter BLE device name, service UUID, and characteristic UUID constants
 - `boatlock_ui/lib/ble/ble_device_match.dart`: adapter readiness and BoatLock advertisement matching
 - `boatlock_ui/lib/ble/ble_discovery_check.dart`: required GATT characteristic completeness checks
-- `boatlock_ui/lib/ble/ble_scan_config.dart`: scan service filter and scan timing constants
+- `boatlock_ui/lib/ble/ble_scan_config.dart`: scan timing constants
 - `boatlock_ui/lib/ble/ble_rssi_throttle.dart`: app-side RSSI read throttling policy
 - `boatlock_ui/lib/ble/ble_commands.dart`: pure command builders and value allowlists for app-originated commands
-- `boatlock_ui/lib/ble/ble_command_scope.dart`: app-side release/service/dev command-surface classifier and compile-time service/dev UI gates
+- `boatlock_ui/lib/ble/ble_command_scope.dart`: app-side release/service/dev command-surface classifier and dev/HIL compile-time gate
 - `boatlock_ui/lib/ble/ble_security_codec.dart`: owner-secret normalization, owner auth proof, and secure command envelope formatting
 - `boatlock_ui/lib/ble/ble_live_frame.dart`: live binary telemetry decoder
 - `boatlock_ui/lib/ble/ble_log_line.dart`: log characteristic byte-string decoder
@@ -64,7 +64,7 @@
   - advertised or platform name equals/contains `boatlock`, or
   - advertised service UUID contains `12ab`
 - Device matching belongs in `ble_device_match.dart` and should stay testable without starting a BLE scan.
-- Active Flutter scan should use the BoatLock service UUID filter from `ble_scan_config.dart`, then keep the name/service advertisement matcher as a defensive app-side validation before connecting.
+- Active Flutter scan should be unfiltered on Android so name-only `BoatLock` advertisements are not dropped before Dart sees them; keep the name/service advertisement matcher as the app-side validation before connecting.
 - Scan timeout and completion wait constants belong in `ble_scan_config.dart`; do not scatter scan durations in transport code.
 - Scan is stopped immediately before connect.
 - If nothing is found, the app retries after `3 s`.
@@ -101,7 +101,7 @@
 - Production-app bench tests must build `lib/main.dart`, not `lib/main_smoke.dart`.
 - Main-app e2e hooks are enabled only by the compile-time `BOATLOCK_APP_E2E_MODE` define; normal app builds leave the hook disabled.
 - Main-app e2e verdicts intentionally reuse `BOATLOCK_SMOKE_STAGE` and `BOATLOCK_SMOKE_RESULT` lines so the canonical adb/logcat runner remains the single acceptance path.
-- Use `tools/android/build-app-apk.sh --e2e-mode <mode>` to build a debuggable main-app APK with the hook enabled.
+- Use `tools/android/build-app-apk.sh --e2e-mode <mode>` to build the release main-app APK with the hook enabled.
 - Use `tools/hw/nh02/android-run-app-e2e.sh --<mode> --wait-secs 130` for nh02 production-app BLE acceptance.
 - Keep mode names aligned with `BleSmokeMode` unless the production app needs a flow that cannot share the existing safe command contract.
 
@@ -111,12 +111,12 @@
   - release: stream/control point, explicit anchor save/enable/disable, manual deadman, STOP/heartbeat, anchor jog, hold-heading, pairing/auth commands, and `SIM_*`.
   - service: anchor tuning profiles, heading offset/reset, SH2 compass calibration/DCD/tare, stepper bow/tuning, and BLE OTA.
   - dev/HIL: `SET_PHONE_GPS`.
-- The normal Flutter water UI must expose only release commands until the
-  operator enables the Settings `Debug` switch.
-- Android/macOS app wrappers build with `BOATLOCK_SERVICE_UI=true` by default
-  so the same installed app can expose service controls when `Debug` is on.
-  Raw Flutter builds still need the dart define, and test/service harnesses
-  must pass `allowService: true` to `sendCustomCommand()`.
+- The release Flutter app includes service controls, but the normal water UI
+  keeps them hidden until the operator enables the Settings `Сервисный режим`
+  switch.
+- Android/macOS app wrappers build one release app only. Do not split service
+  UI into a separate debug/service app variant. Service command callers must
+  still pass `allowService: true` to `sendCustomCommand()`.
 - Dev/HIL commands are hidden unless the app is built with `--dart-define=BOATLOCK_DEV_HIL_COMMANDS=true` or a validation harness passes `allowDevHil: true` to `sendCustomCommand()`. `SIM_*` is not dev/HIL; it must run fail-quiet in the normal firmware and provide simulated live telemetry for map views.
 - `SEC_CMD` is the security envelope; the effective scope is the scope of the wrapped payload. Flutter custom-command callers should pass the unwrapped command and let `BleBoatLock` build the envelope after classification.
 - Do not keep compatibility-only BLE commands in firmware or Flutter. If a command is obsolete, remove it from command handling, UI, tests, and docs in the same change.
