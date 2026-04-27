@@ -69,9 +69,10 @@ const SettingEntry defaultEntries[] = {
     {"MagScaleX",    "Compass scale X",   TYPE_FLOAT, 1.0, 1.0, 0.1, 5.0, 0.01, "", false},
     {"MagScaleY",    "Compass scale Y",   TYPE_FLOAT, 1.0, 1.0, 0.1, 5.0, 0.01, "", false},
     {"MagScaleZ",    "Compass scale Z",   TYPE_FLOAT, 1.0, 1.0, 0.1, 5.0, 0.01, "", false},
-    {"StepMaxSpd",   "Stepper max speed", TYPE_FLOAT, 1200.0, 1200.0, 100.0, 1500.0, 10.0, "", true},
-    {"StepAccel",    "Stepper accel",     TYPE_FLOAT, 800.0, 800.0,  50.0, 1200.0, 10.0, "", true},
-    {"StepSpr",      "Stepper steps/rev", TYPE_INT,   7200, 7200,  7200,  230400, 1, "", true},
+    {"StepMaxSpd",   "Stepper max speed", TYPE_FLOAT, 2400.0, 2400.0, 100.0, 4000.0, 10.0, "", true},
+    {"StepAccel",    "Stepper accel",     TYPE_FLOAT, 2400.0, 2400.0,  50.0, 4000.0, 10.0, "", true},
+    {"StepSpr",      "Motor steps/rev",   TYPE_INT,   200, 200,  50,  6400, 1, "", true},
+    {"StepGear",     "Stepper gear ratio",TYPE_FLOAT, 36.0, 36.0,  1.0,  100.0, 0.1, "", true},
 };
 
 static const int count = sizeof(defaultEntries) / sizeof(defaultEntries[0]);
@@ -81,7 +82,7 @@ const char* imuTypeNames[] = { "BNO055", "MPU9250", "BNO085", "LSM9DS1", "None" 
 
 class Settings {
 public:
-    static constexpr uint8_t VERSION = 0x1C;
+    static constexpr uint8_t VERSION = 0x1D;
     static constexpr const char* NVS_NAMESPACE = "boatlock_cfg";
     static constexpr const char* NVS_SCHEMA_KEY = "schema";
     // Keeps the existing BleSecurity EEPROM offset stable while settings live in NVS.
@@ -483,6 +484,61 @@ private:
                    VERSION);
     }
 
+    void migrateStepperGeometry(uint8_t storedVersion, nvs_handle_t handle) {
+        if (storedVersion >= 0x1D) {
+            return;
+        }
+
+        float legacyOutputSteps = 0.0f;
+        if (!readLegacyFloat(handle, "StepSpr", &legacyOutputSteps) ||
+            !isfinite(legacyOutputSteps) ||
+            legacyOutputSteps <= 0.0f) {
+            return;
+        }
+
+        const int sprIdx = idxByKey("StepSpr");
+        const int gearIdx = idxByKey("StepGear");
+        if (sprIdx < 0 || gearIdx < 0) {
+            return;
+        }
+
+        float motorSteps = legacyOutputSteps;
+        if (legacyOutputSteps >= 7200.0f) {
+            motorSteps = roundf(legacyOutputSteps / 36.0f);
+        }
+
+        entries[sprIdx].value = sanitizeLoadedValue(entries[sprIdx], motorSteps);
+        entries[gearIdx].value = sanitizeLoadedValue(entries[gearIdx], 36.0f);
+        markDirtyKey(sprIdx);
+        markDirtyKey(gearIdx);
+        logMessage("[EVENT] CONFIG_MIGRATION_STEPPER_GEOMETRY from_ver=%d legacy_out_spr=%.3f motor_spr=%.3f gear=%.3f\n",
+                   storedVersion,
+                   legacyOutputSteps,
+                   entries[sprIdx].value,
+                   entries[gearIdx].value);
+    }
+
+    void migrateStepperSpeedDefaults(uint8_t storedVersion, const bool loadedKeys[count]) {
+        if (storedVersion >= 0x1D) {
+            return;
+        }
+
+        const int speedIdx = idxByKey("StepMaxSpd");
+        const int accelIdx = idxByKey("StepAccel");
+        if (speedIdx < 0 || accelIdx < 0 || !loadedKeys[speedIdx] || !loadedKeys[accelIdx]) {
+            return;
+        }
+        if (entries[speedIdx].value != 1200.0f || entries[accelIdx].value != 800.0f) {
+            return;
+        }
+
+        assignValue(speedIdx, 2400.0f);
+        assignValue(accelIdx, 2400.0f);
+        logMessage("[EVENT] CONFIG_MIGRATION_STEPPER_SPEED_DEFAULTS from_ver=%d to_ver=%d\n",
+                   storedVersion,
+                   VERSION);
+    }
+
     void applyMigrations(nvs_handle_t handle, uint8_t storedVersion, const bool loadedKeys[count]) {
         migrateLegacyFloatKey(handle,
                               storedVersion,
@@ -493,6 +549,8 @@ private:
                               0x18);
         migrateOldAnchorDefaults(storedVersion, loadedKeys);
         migrateOldStepperDefaults(storedVersion, loadedKeys);
+        migrateStepperGeometry(storedVersion, handle);
+        migrateStepperSpeedDefaults(storedVersion, loadedKeys);
     }
 
 };

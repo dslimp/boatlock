@@ -18,10 +18,10 @@ const int _flagHoldHeading = 1 << 0;
 const int _flagSecPaired = 1 << 1;
 const int _flagSecAuth = 1 << 2;
 const int _flagSecPairWindow = 1 << 3;
-const int boatLockLiveFrameSize = 72;
+const int boatLockLiveFrameSize = 74;
 const int _magicB = 0x42;
 const int _magicL = 0x4C;
-const int _protocolVersion = 3;
+const int _protocolVersion = 4;
 const int _frameTypeLiveTelemetry = 1;
 const Endian _wireEndian = Endian.little;
 
@@ -43,22 +43,23 @@ const int _offsetAnchorBearing = 30;
 const int _offsetHeading = 32;
 const int _offsetBattery = 34;
 const int _offsetStepSpr = 35;
-const int _offsetStepMaxSpd = 37;
-const int _offsetStepAccel = 39;
-const int _offsetHeadingRaw = 41;
-const int _offsetCompassOffset = 43;
-const int _offsetCompassQ = 45;
-const int _offsetMagQ = 46;
-const int _offsetGyroQ = 47;
-const int _offsetRvAcc = 48;
-const int _offsetMagNorm = 50;
-const int _offsetGyroNorm = 52;
-const int _offsetPitch = 54;
-const int _offsetRoll = 56;
-const int _offsetSecReject = 58;
-const int _offsetReasonFlags = 59;
-const int _offsetSecNonce = 63;
-const int _offsetGnssQ = 71;
+const int _offsetStepGear = 37;
+const int _offsetStepMaxSpd = 39;
+const int _offsetStepAccel = 41;
+const int _offsetHeadingRaw = 43;
+const int _offsetCompassOffset = 45;
+const int _offsetCompassQ = 47;
+const int _offsetMagQ = 48;
+const int _offsetGyroQ = 49;
+const int _offsetRvAcc = 50;
+const int _offsetMagNorm = 52;
+const int _offsetGyroNorm = 54;
+const int _offsetPitch = 56;
+const int _offsetRoll = 58;
+const int _offsetSecReject = 60;
+const int _offsetReasonFlags = 61;
+const int _offsetSecNonce = 65;
+const int _offsetGnssQ = 73;
 
 const Map<int, String> _modeByCode = {
   0: 'IDLE',
@@ -149,6 +150,7 @@ BleLiveFrame? decodeBoatLockLiveFrame(List<int> value, {int rssi = 0}) {
     rssi: rssi,
     holdHeading: (flags & _flagHoldHeading) != 0,
     stepSpr: view.getUint16(_offsetStepSpr, _wireEndian),
+    stepGear: view.getUint16(_offsetStepGear, _wireEndian) / 10.0,
     stepMaxSpd: view.getUint16(_offsetStepMaxSpd, _wireEndian).toDouble(),
     stepAccel: view.getUint16(_offsetStepAccel, _wireEndian).toDouble(),
     headingRaw: view.getUint16(_offsetHeadingRaw, _wireEndian) / 10.0,

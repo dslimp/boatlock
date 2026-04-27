@@ -27,7 +27,7 @@
 - Device name: `BoatLock`
 - Service UUID: `12ab`
 - Characteristics:
-  - `34cd`: live state notify/read, 72-byte little-endian binary v3 frame
+  - `34cd`: live state notify/read, 74-byte little-endian binary v4 frame
   - `56ef`: control point write/write-no-response
   - `78ab`: log notify
   - `9abc`: firmware OTA binary write/write-no-response, armed only by `OTA_BEGIN`
@@ -39,7 +39,7 @@
 - The app should bind data, command, log, and OTA characteristic references before enabling data/log notifications. Notifications can arrive immediately after subscription and may start app check logic that needs the OTA characteristic.
 - On Android, if data/command/log are present but OTA is missing, the app may clear the GATT cache and rediscover once before declaring the link incomplete.
 - Live notify payload length must be validated before `setValue()`; producer-side packets whose length is not exactly the live-frame size are dropped rather than padded, truncated, or read past the packet buffer.
-- Flutter must reject live-frame payloads whose length is not exactly 72 bytes; accepting padded frames hides characteristic-value bugs and can mask protocol drift.
+- Flutter must reject live-frame payloads whose length is not exactly 74 bytes; accepting padded frames hides characteristic-value bugs and can mask protocol drift.
 - Flutter live-frame decoding must reject unknown mode/status/security-reject enum codes while the frame version is unchanged; `UNKNOWN` display fallbacks hide firmware/app schema drift.
 - Flutter `BoatData` is populated from the binary live-frame decoder only; do not keep a parallel JSON telemetry parser unless a real shipped protocol path is restored end-to-end.
 - Log characteristic values are byte strings with explicit length. Firmware must set the exact text length, and Flutter must ignore trailing NUL padding defensively.
@@ -153,7 +153,7 @@
 
 ## Telemetry Coupling
 
-- Live telemetry is a fixed binary v3 frame, not JSON and not a parameter-read tunnel.
+- Live telemetry is a fixed binary v4 frame, not JSON and not a parameter-read tunnel.
 - Firmware builds one typed `RuntimeBleLiveTelemetry` snapshot and encodes it through `RuntimeBleLiveFrame.h`.
 - Telemetry snapshot builders must validate coordinate pairs as pairs; if an anchor position is invalid/default, publish the whole anchor position and heading as neutral `0`.
 - Snapshot builders should sample volatile readiness predicates once per frame so related fields come from one consistent readiness state.
@@ -165,7 +165,7 @@
   - `distance`, `anchorBearing`, `heading`
   - `battery`, `status`, `statusReasons`, `mode`, `rssi`
   - `holdHeading`
-  - `stepSpr`, `stepMaxSpd`, `stepAccel`
+  - `stepSpr`, `stepGear`, `stepMaxSpd`, `stepAccel`
   - `headingRaw`, `compassOffset`
   - `compassQ`, `magQ`, `gyroQ`
   - `rvAcc`, `magNorm`, `gyroNorm`
@@ -196,5 +196,6 @@
   then keeps sending `MANUAL_TARGET`; it is not a one-shot actuation command.
 - Do not reintroduce split legacy commands such as `MANUAL`, `MANUAL_DIR`, or `MANUAL_SPEED`.
 - `SET_STEPPER_BOW` stores the current stepper position as bow zero.
-- Stepper geometry is fixed to `7200` output steps per steering revolution
-  (`200` motor steps/rev times the Vanchor `36:1` gearbox).
+- Stepper geometry is configured as motor-side `StepSpr` plus mechanical
+  `StepGear`; current default is `200 * 36 = 7200` output steps per steering
+  revolution.

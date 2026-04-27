@@ -1,6 +1,6 @@
 # Config Schema
 
-Schema version: `0x1C` (`Settings::VERSION`).
+Schema version: `0x1D` (`Settings::VERSION`).
 
 Settings are stored in ESP32 NVS namespace `boatlock_cfg` as:
 
@@ -34,11 +34,15 @@ Migration rules:
 - schemas before `0x1A` migrate the exact untouched anchor default bundle
   `HoldRadius=2.5`, `DeadbandM=1.5`, `MaxThrustA=60`, `ThrRampA=35`
   to quiet defaults `3.0/2.2/45/20`; any custom/profile value preserves the stored bundle
-- schemas before `0x1B` normalize `StepSpr` to the current DRV8825/Vanchor
-  steering geometry when boot writeback is allowed
 - schemas before `0x1C` migrate the exact untouched stepper default pair
   `StepMaxSpd=700`, `StepAccel=250` to the DRV8825/Vanchor defaults
   `1200/800`; any custom value preserves the stored pair
+- schemas before `0x1D` split legacy output-shaft `StepSpr` into
+  motor-side `StepSpr` and `StepGear=36`; for example `7200` becomes
+  `StepSpr=200`, `StepGear=36`
+- schemas before `0x1D` migrate the exact untouched DRV8825/Vanchor
+  stepper speed pair `StepMaxSpd=1200`, `StepAccel=800` to `2400/2400`;
+  any custom value preserves the stored pair
 
 ## Groups
 
@@ -89,12 +93,16 @@ Runtime failsafes always stop motion and latch `HOLD`. They do not automatically
 
 ### Steering
 
-- `StepMaxSpd` (`100..1500`)
-- `StepAccel` (`50..1200`)
-- `StepSpr` (`7200..230400`)
+- `StepMaxSpd` (`100..4000`)
+- `StepAccel` (`50..4000`)
+- `StepSpr` (`50..6400`)
+- `StepGear` (`1..100`)
 
-Current steering geometry default is `7200` output steps per revolution:
-`200` motor steps/rev through the Vanchor `36:1` gearbox.
-For DRV8825 microstepping, set `StepSpr` to `7200 × microstep factor`.
-Default steering tuning is `StepMaxSpd=1200` steps/s and `StepAccel=800`
-steps/s2.
+Current steering geometry default is `200` motor STEP pulses per motor
+revolution and `StepGear=36`, for `7200` output-shaft STEP pulses per
+revolution. With DRV8825 MODE pins left disconnected, the driver is in
+full-step mode, so a normal `1.8°` motor uses `200` pulses/rev. If
+microstepping is wired later, set `StepSpr` to motor pulses/rev after the
+microstep multiplier, and keep `StepGear` as the mechanical reduction ratio.
+Default steering tuning is `StepMaxSpd=2400` motor steps/s and
+`StepAccel=2400` motor steps/s2.

@@ -111,8 +111,9 @@ Important mismatch:
   behavior.
 - Finish the steering stepper driver and mechanics capture. Current firmware is
   fixed to a DRV8825-compatible STEP/DIR path on `STEP=GPIO6`, `DIR=GPIO16`.
-  Geometry uses `7200` output steps/rev from the Vanchor `36:1` gearbox and
-  `200` motor steps/rev. Use `docs/STEERING_DRIVER_INTAKE.md` to capture
+  Geometry uses `StepSpr=200` motor STEP pulses/rev and `StepGear=36` from the
+  Vanchor gearbox, producing `7200` output-shaft STEP pulses/rev. Use
+  `docs/STEERING_DRIVER_INTAKE.md` to capture
   torque/current limits, enable/sleep/reset wiring, stop behavior, and tests.
 - Build a powered-bench acceptance procedure for `PWM=7`, `DIR=8/10`, the actual
   brushed motor driver, and the actual steering drive. Before connecting the

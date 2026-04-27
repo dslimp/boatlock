@@ -31,12 +31,16 @@ void test_runtime_ble_live_frame_encodes_stable_header_and_scaled_fields() {
   telemetry.holdHeading = true;
   telemetry.secPaired = true;
   telemetry.secNonce = 0x0123456789ABCDEFULL;
+  telemetry.stepSpr = 200;
+  telemetry.stepGear = 36.0f;
+  telemetry.stepMaxSpd = 2400;
+  telemetry.stepAccel = 2400;
 
   const std::vector<uint8_t> frame = runtimeBleEncodeLiveFrame(telemetry, 7);
 
   TEST_ASSERT_EQUAL_UINT8('B', frame[0]);
   TEST_ASSERT_EQUAL_UINT8('L', frame[1]);
-  TEST_ASSERT_EQUAL_UINT8(3, frame[2]);
+  TEST_ASSERT_EQUAL_UINT8(4, frame[2]);
   TEST_ASSERT_EQUAL_UINT8(1, frame[3]);
   TEST_ASSERT_EQUAL_UINT16(7, readU16(frame, 4));
   TEST_ASSERT_EQUAL_UINT16(RUNTIME_BLE_FLAG_HOLD_HEADING | RUNTIME_BLE_FLAG_SEC_PAIRED,
@@ -47,6 +51,10 @@ void test_runtime_ble_live_frame_encodes_stable_header_and_scaled_fields() {
   TEST_ASSERT_EQUAL_UINT16(4225, readU16(frame, 28));
   TEST_ASSERT_EQUAL_UINT16(2714, readU16(frame, 30));
   TEST_ASSERT_EQUAL_UINT16(3599, readU16(frame, 32));
+  TEST_ASSERT_EQUAL_UINT16(200, readU16(frame, 35));
+  TEST_ASSERT_EQUAL_UINT16(360, readU16(frame, 37));
+  TEST_ASSERT_EQUAL_UINT16(2400, readU16(frame, 39));
+  TEST_ASSERT_EQUAL_UINT16(2400, readU16(frame, 41));
   TEST_ASSERT_EQUAL_UINT32(kRuntimeBleLiveFrameSize, frame.size());
 }
 
@@ -58,9 +66,9 @@ void test_runtime_ble_live_frame_maps_reasons_and_reject_codes() {
   telemetry.secReject = "AUTH_REQUIRED";
 
   const std::vector<uint8_t> frame = runtimeBleEncodeLiveFrame(telemetry, 1);
-  const uint32_t reasons = readU32(frame, 59);
+  const uint32_t reasons = readU32(frame, 61);
 
-  TEST_ASSERT_EQUAL_UINT8(4, frame[58]);
+  TEST_ASSERT_EQUAL_UINT8(4, frame[60]);
   TEST_ASSERT_BITS_HIGH(RUNTIME_BLE_REASON_NO_GPS, reasons);
   TEST_ASSERT_BITS_HIGH(RUNTIME_BLE_REASON_DRIFT_FAIL, reasons);
   TEST_ASSERT_BITS_HIGH(RUNTIME_BLE_REASON_COMM_TIMEOUT, reasons);

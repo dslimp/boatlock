@@ -267,6 +267,11 @@ inline void handleBleCommand(const std::string& cmd) {
         settings.set("StepSpr", v);
         settings.save();
         stepperControl.loadFromSettings();
+    } else if (command.rfind("SET_STEP_GEAR:",0) == 0) {
+        float v = atof(command.c_str() + 14);
+        settings.set("StepGear", v);
+        settings.save();
+        stepperControl.loadFromSettings();
     } else if (command == "SET_STEPPER_BOW") {
         captureStepperBowZero();
     } else if (command.rfind("MANUAL_TARGET:", 0) == 0) {

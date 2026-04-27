@@ -19,6 +19,7 @@ BoatData _data({required double lat, required double lon}) {
     rssi: 0,
     holdHeading: false,
     stepSpr: 200,
+    stepGear: 36,
     stepMaxSpd: 1000,
     stepAccel: 500,
     headingRaw: 0,

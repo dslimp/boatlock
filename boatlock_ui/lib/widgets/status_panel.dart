@@ -325,13 +325,16 @@ class StatusPanel extends StatelessWidget {
       );
     }
     final stepperReady =
-        data.stepSpr > 0 && data.stepMaxSpd > 0.0 && data.stepAccel > 0.0;
+        data.stepSpr > 0 &&
+        data.stepGear > 0.0 &&
+        data.stepMaxSpd > 0.0 &&
+        data.stepAccel > 0.0;
     return _ReadinessItem(
       icon: Icons.settings_input_component,
       label: 'DRV',
       value: stepperReady ? 'stepper OK' : 'cfg',
       detail:
-          'spr=${data.stepSpr}, max=${data.stepMaxSpd.toStringAsFixed(0)}, accel=${data.stepAccel.toStringAsFixed(0)}; motor driver health not in telemetry',
+          'motorSpr=${data.stepSpr}, gear=${data.stepGear.toStringAsFixed(1)}, max=${data.stepMaxSpd.toStringAsFixed(0)}, accel=${data.stepAccel.toStringAsFixed(0)}; motor driver health not in telemetry',
       level: stepperReady ? _ReadinessLevel.ok : _ReadinessLevel.blocked,
     );
   }

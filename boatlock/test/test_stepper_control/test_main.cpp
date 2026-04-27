@@ -119,13 +119,27 @@ void test_drv8825_driver_uses_minimum_step_pulse_width() {
 void test_load_from_settings_uses_configured_steps_per_rev() {
   Settings s;
   s.reset();
-  s.set("StepSpr", 14400);
+  s.set("StepSpr", 400);
+  s.set("StepGear", 36.0f);
   StepperControl c(6, 16);
   c.attachSettings(&s);
 
   c.loadFromSettings();
 
   TEST_ASSERT_EQUAL_INT(14400, c.stepsPerRev);
+}
+
+void test_load_from_settings_uses_motor_steps_and_gear_ratio() {
+  Settings s;
+  s.reset();
+  s.set("StepSpr", 200);
+  s.set("StepGear", 36.0f);
+  StepperControl c(6, 16);
+  c.attachSettings(&s);
+
+  c.loadFromSettings();
+
+  TEST_ASSERT_EQUAL_INT(7200, c.stepsPerRev);
 }
 
 int main() {
@@ -140,5 +154,6 @@ int main() {
   RUN_TEST(test_start_manual_zero_does_not_enable_outputs);
   RUN_TEST(test_drv8825_driver_uses_minimum_step_pulse_width);
   RUN_TEST(test_load_from_settings_uses_configured_steps_per_rev);
+  RUN_TEST(test_load_from_settings_uses_motor_steps_and_gear_ratio);
   return UNITY_END();
 }

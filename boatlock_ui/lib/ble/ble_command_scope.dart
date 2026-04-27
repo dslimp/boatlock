@@ -46,6 +46,7 @@ const List<String> _releaseCommandPrefixes = [
   'SET_STEP_MAXSPD:',
   'SET_STEP_ACCEL:',
   'SET_STEP_SPR:',
+  'SET_STEP_GEAR:',
   'OTA_BEGIN:',
 ];
 

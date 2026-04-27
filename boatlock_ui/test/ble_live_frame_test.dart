@@ -38,7 +38,7 @@ List<int> _frame() {
   final out = BytesBuilder();
   _u8(out, 0x42);
   _u8(out, 0x4C);
-  _u8(out, 3);
+  _u8(out, 4);
   _u8(out, 1);
   _u16(out, 9);
   _u16(out, 0x000F);
@@ -53,9 +53,10 @@ List<int> _frame() {
   _u16(out, 2714);
   _u16(out, 3599);
   _u8(out, 81);
-  _u16(out, 4096);
-  _u16(out, 700);
-  _u16(out, 250);
+  _u16(out, 200);
+  _u16(out, 360);
+  _u16(out, 2400);
+  _u16(out, 2400);
   _u16(out, 1111);
   _i16(out, -25);
   _u8(out, 3);
@@ -77,7 +78,7 @@ List<int> _frame() {
 }
 
 void main() {
-  test('decodeBoatLockLiveFrame decodes v3 live telemetry', () {
+  test('decodeBoatLockLiveFrame decodes v4 live telemetry', () {
     final decoded = decodeBoatLockLiveFrame(_frame(), rssi: -61);
 
     expect(decoded, isNotNull);
@@ -98,6 +99,10 @@ void main() {
     expect(decoded.data.secPairWindowOpen, isTrue);
     expect(decoded.data.secReject, 'AUTH_REQUIRED');
     expect(decoded.data.gnssQ, 2);
+    expect(decoded.data.stepSpr, 200);
+    expect(decoded.data.stepGear, 36.0);
+    expect(decoded.data.stepMaxSpd, 2400);
+    expect(decoded.data.stepAccel, 2400);
     expect(
       decoded.data.statusReasons,
       'NO_GPS,DRIFT_FAIL,GPS_DATA_STALE,GPS_POSITION_JUMP,NO_HEADING,GPS_HDOP_MISSING',
@@ -105,10 +110,10 @@ void main() {
     expect(decoded.data.rssi, -61);
   });
 
-  test('decodeBoatLockLiveFrame rejects non-v3 payloads', () {
+  test('decodeBoatLockLiveFrame rejects non-v4 payloads', () {
     expect(decodeBoatLockLiveFrame(const []), isNull);
     final bad = _frame();
-    bad[2] = 2;
+    bad[2] = 3;
     expect(decodeBoatLockLiveFrame(bad), isNull);
   });
 
@@ -128,7 +133,7 @@ void main() {
     expect(decodeBoatLockLiveFrame(unknownStatus), isNull);
 
     final unknownReject = _frame();
-    unknownReject[58] = 99;
+    unknownReject[60] = 99;
     expect(decodeBoatLockLiveFrame(unknownReject), isNull);
   });
 }

@@ -10,11 +10,11 @@ GOOD_LOG = [
     "[COMPASS] ready=1 source=BNO08x-RVC rx=12 baud=115200",
     "[COMPASS] heading events ready age=0",
     "[DISPLAY] ready=1",
-    "[NVS] settings loaded (ver=24)",
+    "[NVS] settings loaded (ver=29)",
     "[SEC] paired=0",
     "[BLE] init name=BoatLock service=12ab data=34cd cmd=56ef log=78ab",
     "[BLE] advertising started",
-    "[STEP] cfg maxSpd=700 accel=250 spr=7200",
+    "[STEP] cfg maxSpd=2400 accel=2400 motorSpr=200 gear=36.0 outSpr=7200 outDegS=120.0",
     "[STOP] button pin=15 active=LOW",
     "[GPS] UART data detected RX=17 TX=18 baud=9600",
 ]
@@ -46,10 +46,10 @@ def test_acceptance_fails_on_missing_ble_and_error_log():
         [
             "[COMPASS] ready=0 source=BNO08x-RVC rx=12 baud=115200",
             "[DISPLAY] ready=1",
-            "[NVS] settings loaded (ver=24)",
+            "[NVS] settings loaded (ver=29)",
             "[SEC] paired=1",
             "[BLE] advertising failed",
-            "[STEP] cfg maxSpd=700 accel=250 spr=7200",
+            "[STEP] cfg maxSpd=2400 accel=2400 motorSpr=200 gear=36.0 outSpr=7200 outDegS=120.0",
             "[STOP] button pin=15 active=LOW",
         ]
     )

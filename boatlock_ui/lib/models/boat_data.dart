@@ -14,6 +14,7 @@ class BoatData {
   final int rssi;
   final bool holdHeading;
   final int stepSpr;
+  final double stepGear;
   final double stepMaxSpd;
   final double stepAccel;
   final double headingRaw;
@@ -48,6 +49,7 @@ class BoatData {
     required this.rssi,
     required this.holdHeading,
     required this.stepSpr,
+    required this.stepGear,
     required this.stepMaxSpd,
     required this.stepAccel,
     required this.headingRaw,

@@ -12,7 +12,8 @@ Firmware source of truth is `boatlock/main.cpp`.
 - Brushed motor direction: `GPIO8` and `GPIO10`
 - Current steering firmware path: DRV8825-compatible `STEP/DIR` through
   AccelStepper `DRIVER` pins `STEP=GPIO6`, `DIR=GPIO16`
-  with `7200` output steps/rev from the Vanchor `36:1` gearbox.
+  with `StepSpr=200` motor STEP pulses/rev and `StepGear=36`, producing
+  `7200` output-shaft STEP pulses/rev.
 - Hardware STOP button: `GPIO15`, `INPUT_PULLUP`, momentary to `GND`
 - BOOT anchor-save button: `GPIO0`
 

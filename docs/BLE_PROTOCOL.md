@@ -3,7 +3,7 @@
 BoatLock uses one custom GATT service for the app and bench tooling:
 
 - Service UUID `12ab`
-- Live state characteristic `34cd`: notify/read, compact binary v3 frame
+- Live state characteristic `34cd`: notify/read, compact binary v4 frame
 - Control point characteristic `56ef`: write/write-no-response, printable ASCII commands
 - Device log characteristic `78ab`: notify, text log lines
 - Firmware OTA characteristic `9abc`: binary write/write-no-response; accepts firmware chunks only after `OTA_BEGIN`
@@ -24,7 +24,7 @@ Command scopes are product boundaries, not wire-level security:
 
 Current classification:
 
-- `release`: `STREAM_START`, `STREAM_STOP`, `SNAPSHOT`, `SET_ANCHOR`, `ANCHOR_ON`, `ANCHOR_OFF`, `STOP`, `HEARTBEAT`, `MANUAL_TARGET`, `MANUAL_OFF`, `NUDGE_DIR`, `NUDGE_BRG`, `SET_HOLD_HEADING`, `SET_ANCHOR_PROFILE`, `SET_COMPASS_OFFSET`, `RESET_COMPASS_OFFSET`, `COMPASS_CAL_START`, `COMPASS_DCD_SAVE`, `COMPASS_DCD_AUTOSAVE_ON`, `COMPASS_DCD_AUTOSAVE_OFF`, `COMPASS_TARE_Z`, `COMPASS_TARE_SAVE`, `COMPASS_TARE_CLEAR`, `SET_STEP_MAXSPD`, `SET_STEP_ACCEL`, `SET_STEP_SPR`, `SET_STEPPER_BOW`, `PAIR_SET`, `PAIR_CLEAR`, `AUTH_HELLO`, `AUTH_PROVE`, `OTA_BEGIN`, `OTA_FINISH`, `OTA_ABORT`, `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, `SIM_ABORT`.
+- `release`: `STREAM_START`, `STREAM_STOP`, `SNAPSHOT`, `SET_ANCHOR`, `ANCHOR_ON`, `ANCHOR_OFF`, `STOP`, `HEARTBEAT`, `MANUAL_TARGET`, `MANUAL_OFF`, `NUDGE_DIR`, `NUDGE_BRG`, `SET_HOLD_HEADING`, `SET_ANCHOR_PROFILE`, `SET_COMPASS_OFFSET`, `RESET_COMPASS_OFFSET`, `COMPASS_CAL_START`, `COMPASS_DCD_SAVE`, `COMPASS_DCD_AUTOSAVE_ON`, `COMPASS_DCD_AUTOSAVE_OFF`, `COMPASS_TARE_Z`, `COMPASS_TARE_SAVE`, `COMPASS_TARE_CLEAR`, `SET_STEP_MAXSPD`, `SET_STEP_ACCEL`, `SET_STEP_SPR`, `SET_STEP_GEAR`, `SET_STEPPER_BOW`, `PAIR_SET`, `PAIR_CLEAR`, `AUTH_HELLO`, `AUTH_PROVE`, `OTA_BEGIN`, `OTA_FINISH`, `OTA_ABORT`, `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, `SIM_ABORT`.
 - `dev/HIL`: `SET_PHONE_GPS`.
 
 | Command | Parameters | Description |
@@ -60,7 +60,8 @@ Current classification:
 | `COMPASS_TARE_CLEAR` | none | SH2-UART build only: clear the persisted tare |
 | `SET_STEP_MAXSPD:<float>` | float | Maximum stepper speed (steps/s) |
 | `SET_STEP_ACCEL:<float>` | float | Stepper acceleration (steps/s²) |
-| `SET_STEP_SPR:<int>` | int | Stepper output steps/rev |
+| `SET_STEP_SPR:<int>` | int | Motor STEP pulses per motor revolution |
+| `SET_STEP_GEAR:<float>` | float | Mechanical reduction ratio from stepper motor to steering output shaft |
 | `SET_STEPPER_BOW` | none | Save current stepper position as boat-bow zero for anchor pointing |
 | `OTA_BEGIN:<size>,<sha256>` | firmware size in bytes and 64-hex SHA-256 | Enter safe stopped state, start writing a new firmware image to the inactive OTA partition, and arm binary chunk writes on `9abc` |
 | `OTA_FINISH` | none | Validate byte count and SHA-256, finalize the OTA image, then reboot into the new partition |
@@ -238,10 +239,10 @@ paths and preserve abort/retry safety when tuning transfer speed.
 
 ## Live State Frame
 
-`34cd` notifications carry exactly one 72-byte little-endian binary frame. Receivers reject shorter or longer payloads, wrong magic/version/type, and unknown enum codes rather than treating the live path as a padded or forward-compatible stream:
+`34cd` notifications carry exactly one 74-byte little-endian binary frame. Receivers reject shorter or longer payloads, wrong magic/version/type, and unknown enum codes rather than treating the live path as a padded or forward-compatible stream:
 
 - bytes `0..1`: magic `BL`
-- byte `2`: protocol version, currently `3`
+- byte `2`: protocol version, currently `4`
 - byte `3`: frame type, `1` for live telemetry
 - bytes `4..5`: sequence `uint16`
 - bytes `6..7`: flags `uint16`
@@ -250,12 +251,12 @@ paths and preserve abort/retry safety when tuning transfer speed.
 - bytes `10..25`: `lat`, `lon`, `anchorLat`, `anchorLon` as signed `deg * 1e7`
 - bytes `26..33`: `anchorHead`, `distance`, `anchorBearing`, `heading` scaled as `deg*10`, `cm`, `deg*10`, `deg*10`
 - byte `34`: battery percent
-- bytes `35..40`: `stepSpr`, `stepMaxSpd`, `stepAccel`
-- bytes `41..57`: compass heading/raw/offset/quality/motion fields
-- byte `58`: security reject code
-- bytes `59..62`: status reason bitmask
-- bytes `63..70`: security nonce `uint64`
-- byte `71`: GNSS quality (`0` none, `1` weak, `2` good)
+- bytes `35..42`: `stepSpr`, `stepGear*10`, `stepMaxSpd`, `stepAccel`
+- bytes `43..59`: compass heading/raw/offset/quality/motion fields
+- byte `60`: security reject code
+- bytes `61..64`: status reason bitmask
+- bytes `65..72`: security nonce `uint64`
+- byte `73`: GNSS quality (`0` none, `1` weak, `2` good)
 
 `distance` and `anchorBearing` are display telemetry from the currently published position to the saved anchor point. They can be populated from the same UI-visible fix as `lat/lon`; they are not proof that the hardware GNSS quality gate is satisfied for anchor control.
 
@@ -310,4 +311,4 @@ Firmware `mode` is currently one of:
 - `MANUAL`
 - `SIM`
 
-Telemetry outside the 72-byte live frame should be added as an explicit new frame type or event, not as ad-hoc JSON on the live characteristic.
+Telemetry outside the 74-byte live frame should be added as an explicit new frame type or event, not as ad-hoc JSON on the live characteristic.

@@ -69,6 +69,7 @@ AnchorPreflightResult buildAnchorPreflight(BoatData? data) {
   final motorReady =
       data != null &&
       data.stepSpr > 0 &&
+      data.stepGear > 0.0 &&
       data.stepMaxSpd > 0.0 &&
       data.stepAccel > 0.0;
 

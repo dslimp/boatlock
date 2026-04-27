@@ -341,14 +341,18 @@ Implication for BoatLock:
 - DRV8825-compatible carriers treat each STEP pulse as one microstep in the DIR
   direction. RESET and SLEEP must be held high for the driver to operate, and
   current limit must be set for the motor before powered tests.
+- On Pololu-style DRV8825 carriers, MODE0/1/2 have pull-downs; leaving the
+  microstep selector pins disconnected selects full-step mode.
 - The Vanchor reference gearbox uses `Ratio: 36`, documented as `36` stepper
   rotations for one trolling-motor rotation, with `StepsPerRevolution: 200`.
 
 Implication for BoatLock:
 - Use `AccelStepper::DRIVER` for the DRV8825 path and set a DRV8825-safe STEP
   pulse width.
-- Count steering geometry at the output shaft, not just the motor shaft:
-  `200 * 36 = 7200` output steps/rev before any microstepping multiplier.
+- Store steering geometry as motor-side STEP pulses/rev plus mechanical
+  reduction, then derive output-shaft steps/rev for motion:
+  `StepSpr=200` and `StepGear=36` gives `7200` output steps/rev before any
+  microstepping multiplier.
 - Do not assume software idle disables DRV8825 coil current unless an enable,
   sleep, or reset line is explicitly wired and proven.
 

@@ -7724,3 +7724,51 @@ Self-review:
 - The earlier framing was too narrow: this is not a single special validation
   path. Smoke, app-check, setup, and OTA all live in the same ordinary app now;
   wrappers only select runtime actions.
+
+### 2026-04-27 Stage 253: Stepper geometry split and DRV8825 full-step defaults
+
+Scope:
+- Split steering geometry into motor-side steps/rev and mechanical gear ratio.
+- Fix the manual/anchor steering math so output-shaft movement is calculated as
+  `StepSpr * StepGear`.
+- Raise untouched DRV8825/Vanchor stepper speed defaults for a less sluggish
+  manual steering response.
+
+Decisions:
+- `StepSpr` now means motor STEP pulses per motor revolution; default `200`.
+- Added `StepGear` as the reduction ratio; default `36`.
+- Effective steering output geometry is derived in `StepperControl` and logged
+  as `outSpr` plus output degrees/sec.
+- BLE live telemetry moved to binary frame v4 to publish `stepGear`.
+- Schema `0x1D` migrates legacy output-shaft `StepSpr=7200` to
+  `StepSpr=200`, `StepGear=36`; legacy `14400` becomes `400 * 36`.
+- Exact untouched speed defaults `1200/800` migrate to `2400/2400`; custom
+  speed/accel values are preserved.
+
+External baseline:
+- Pololu DRV8825 carrier docs state MODE0/1/2 have internal pull-downs, so
+  leaving microstep selector pins disconnected selects full-step mode; each
+  STEP pulse is one motor step/microstep. For the current no-jumper hardware,
+  a normal 1.8 degree motor is therefore `200` STEP pulses/rev.
+
+Validation:
+- `cd boatlock && platformio test -e native` -> PASS (`427/427`).
+- `cd boatlock_ui && flutter analyze` -> PASS.
+- `cd boatlock_ui && flutter test` -> PASS (`120/120`).
+- `cd boatlock && pio run -e esp32s3` -> PASS; produced
+  `boatlock/.pio/build/esp32s3/firmware.bin`.
+- `tools/android/build-app-apk.sh` -> PASS; produced
+  `boatlock_ui/build/app/outputs/flutter-apk/app-release.apk`.
+- `pytest -q tools/hw/nh02/test_acceptance.py` -> PASS (`5/5`).
+- `python3 tools/ci/check_config_schema_version.py` -> PASS (`0x1d`).
+- `python3 tools/ci/check_firmware_version.py` -> PASS (`0.2.0`).
+- `git diff --check` -> PASS.
+- Install/OTA upload blocked: `tools/android/status.sh` sees
+  `192.168.88.33:5555 unauthorized`; `tools/hw/nh02/status.sh` shows ESP32 USB
+  serial absent, so neither Android install nor USB flash can be started from
+  this host until the phone authorizes ADB or the bench USB link returns.
+
+Self-review:
+- The old single `StepSpr` name hid whether the value was motor-side or
+  output-side geometry. The new split keeps operator settings aligned with the
+  physical hardware and keeps output math explicit.

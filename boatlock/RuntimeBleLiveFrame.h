@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-static constexpr size_t kRuntimeBleLiveFrameSize = 72;
+static constexpr size_t kRuntimeBleLiveFrameSize = 74;
 
 struct RuntimeBleLiveTelemetry {
   double lat = 0.0;
@@ -19,7 +19,8 @@ struct RuntimeBleLiveTelemetry {
   float headingDeg = 0.0f;
   uint8_t batteryPct = 0;
   bool holdHeading = false;
-  uint16_t stepSpr = 7200;
+  uint16_t stepSpr = 200;
+  float stepGear = 36.0f;
   uint16_t stepMaxSpd = 0;
   uint16_t stepAccel = 0;
   float headingRawDeg = 0.0f;
@@ -249,7 +250,7 @@ inline std::vector<uint8_t> runtimeBleEncodeLiveFrame(
   out.reserve(kRuntimeBleLiveFrameSize);
   runtimeBleAppendU8(out, 'B');
   runtimeBleAppendU8(out, 'L');
-  runtimeBleAppendU8(out, 3);
+  runtimeBleAppendU8(out, 4);
   runtimeBleAppendU8(out, 1);
   runtimeBleAppendU16(out, sequence);
   runtimeBleAppendU16(out, runtimeBleFlags(telemetry));
@@ -265,6 +266,7 @@ inline std::vector<uint8_t> runtimeBleEncodeLiveFrame(
   runtimeBleAppendU16(out, (uint16_t)runtimeBleScaleUnsigned(telemetry.headingDeg, 10.0, 3599));
   runtimeBleAppendU8(out, runtimeBleClampValue<uint8_t>(telemetry.batteryPct, 0, 100));
   runtimeBleAppendU16(out, telemetry.stepSpr);
+  runtimeBleAppendU16(out, (uint16_t)runtimeBleScaleUnsigned(telemetry.stepGear, 10.0, UINT16_MAX));
   runtimeBleAppendU16(out, telemetry.stepMaxSpd);
   runtimeBleAppendU16(out, telemetry.stepAccel);
   runtimeBleAppendU16(out, (uint16_t)runtimeBleScaleUnsigned(telemetry.headingRawDeg, 10.0, 3599));

@@ -18,6 +18,7 @@ class SetupFakeBleBoatLock extends BleBoatLock {
   String? ownerSecretValue;
   double? stepMaxSpeedValue;
   double? stepSprValue;
+  double? stepGearValue;
 
   @override
   void setOwnerSecret(String? secret) {
@@ -38,6 +39,12 @@ class SetupFakeBleBoatLock extends BleBoatLock {
   @override
   Future<bool> setStepSpr(double value) async {
     stepSprValue = value;
+    return true;
+  }
+
+  @override
+  Future<bool> setStepGear(double value) async {
+    stepGearValue = value;
     return true;
   }
 
@@ -121,7 +128,8 @@ SettingsPage _page(
     holdHeading: false,
     stepMaxSpd: 1000,
     stepAccel: 500,
-    stepSpr: 7200,
+    stepSpr: 200,
+    stepGear: 36,
     compassOffset: 0,
     compassQ: 0,
     magQ: 0,
@@ -148,10 +156,12 @@ void main() {
 
     await _setSetupMenu(tester, false);
     expect(find.text('Макс. скорость'), findsNothing);
+    expect(find.text('Редукция'), findsNothing);
     expect(find.text('Firmware OTA'), findsNothing);
 
     await _setSetupMenu(tester, true);
     expect(find.text('Макс. скорость'), findsOneWidget);
+    expect(find.text('Редукция'), findsOneWidget);
     expect(find.text('Firmware OTA'), findsOneWidget);
   });
 

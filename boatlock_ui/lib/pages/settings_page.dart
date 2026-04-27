@@ -21,6 +21,7 @@ class SettingsPage extends StatefulWidget {
   final double stepMaxSpd;
   final double stepAccel;
   final double stepSpr;
+  final double stepGear;
   final double compassOffset;
   final int compassQ;
   final int magQ;
@@ -45,6 +46,7 @@ class SettingsPage extends StatefulWidget {
     required this.stepMaxSpd,
     required this.stepAccel,
     required this.stepSpr,
+    required this.stepGear,
     required this.compassOffset,
     required this.compassQ,
     required this.magQ,
@@ -75,6 +77,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late double stepMaxSpd;
   late double stepAccel;
   late double stepSpr;
+  late double stepGear;
   late double compassOffset;
   late int compassQ;
   late int magQ;
@@ -113,6 +116,7 @@ class _SettingsPageState extends State<SettingsPage> {
     stepMaxSpd = widget.stepMaxSpd;
     stepAccel = widget.stepAccel;
     stepSpr = widget.stepSpr;
+    stepGear = widget.stepGear;
     compassOffset = widget.compassOffset;
     compassQ = widget.compassQ;
     magQ = widget.magQ;
@@ -419,7 +423,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final val = await showDialog<double>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Шагов на оборот'),
+        title: const Text('Шагов двигателя/оборот'),
         content: TextField(
           controller: ctrl,
           keyboardType: TextInputType.number,
@@ -443,6 +447,39 @@ class _SettingsPageState extends State<SettingsPage> {
       commandPrefix: 'SET_STEP_SPR',
       write: () => widget.ble.setStepSpr(val),
       rollback: () => stepSpr = previous,
+    );
+  }
+
+  Future<void> _editStepGear() async {
+    if (!isConnected) return;
+    final ctrl = TextEditingController(text: stepGear.toStringAsFixed(1));
+    final val = await showDialog<double>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Редукция'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, double.tryParse(ctrl.text)),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+    if (val == null || val == stepGear) return;
+    final previous = stepGear;
+    setState(() => stepGear = val);
+    await _commitSetupSetting(
+      commandPrefix: 'SET_STEP_GEAR',
+      write: () => widget.ble.setStepGear(val),
+      rollback: () => stepGear = previous,
     );
   }
 
@@ -847,11 +884,18 @@ class _SettingsPageState extends State<SettingsPage> {
               onTap: isConnected ? _editStepAccel : null,
             ),
             ListTile(
-              title: const Text('Шагов на оборот'),
+              title: const Text('Шагов двигателя/оборот'),
               subtitle: Text(stepSpr.round().toString()),
               trailing: const Icon(Icons.chevron_right),
               enabled: isConnected,
               onTap: isConnected ? _editStepSpr : null,
+            ),
+            ListTile(
+              title: const Text('Редукция'),
+              subtitle: Text(stepGear.toStringAsFixed(1)),
+              trailing: const Icon(Icons.chevron_right),
+              enabled: isConnected,
+              onTap: isConnected ? _editStepGear : null,
             ),
             const Divider(),
             ListTile(

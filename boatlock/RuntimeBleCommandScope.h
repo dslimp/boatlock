@@ -45,6 +45,7 @@ inline RuntimeBleCommandScope runtimeBleClassifyCommand(
       runtimeBleCommandHasPrefix(command, "SET_STEP_MAXSPD:") ||
       runtimeBleCommandHasPrefix(command, "SET_STEP_ACCEL:") ||
       runtimeBleCommandHasPrefix(command, "SET_STEP_SPR:") ||
+      runtimeBleCommandHasPrefix(command, "SET_STEP_GEAR:") ||
       runtimeBleCommandHasPrefix(command, "MANUAL_TARGET:") ||
       runtimeBleCommandHasPrefix(command, "NUDGE_DIR:") ||
       runtimeBleCommandHasPrefix(command, "NUDGE_BRG:") ||

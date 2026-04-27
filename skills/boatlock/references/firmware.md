@@ -217,13 +217,14 @@
 - Stepper control uses `AccelStepper::DRIVER` for the DRV8825-compatible
   STEP/DIR path. `GPIO6` is STEP and `GPIO16` is DIR for the current bench
   wiring, using the two former ULN2003 header positions closest to board center.
-- Steering geometry is `7200` output steps/rev: Vanchor uses a `36:1` gearbox
-  and its Arduino/config baseline uses a `200` step/rev motor.
-  If DRV8825 microstepping is wired active, multiply this by the microstep
-  factor and update firmware/docs together.
-- Current default steering tuning is `StepMaxSpd=1200` and `StepAccel=800`;
-  schema migration preserves custom values but updates the untouched old
-  `700/250` pair.
+- Steering geometry is configured as `StepSpr` motor STEP pulses/rev plus
+  `StepGear` mechanical reduction. Current defaults are `StepSpr=200` and
+  `StepGear=36`, which produce `7200` output-shaft steps/rev. If DRV8825
+  microstepping is wired active, multiply `StepSpr` by the microstep factor and
+  keep `StepGear` as the mechanical ratio.
+- Current default steering tuning is `StepMaxSpd=2400` and `StepAccel=2400`;
+  schema migration preserves custom values but updates untouched old default
+  pairs.
 - Stepper control must fail closed on neutral/invalid manual input, use bounded angle normalization, and release coils after idle/cancel through a deterministic timer.
 - Stepper idle release timing must use explicit active state; `idleSinceMs == 0` is a valid timestamp, not a sentinel.
 - Random `fallbackHeading` and `fallbackBearing` are UI placeholders only.

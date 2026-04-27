@@ -887,8 +887,8 @@ class BleBoatLock with WidgetsBindingObserver {
         _log('BLE OTA MTU request failed, using mtu=$mtu: $e');
       }
     }
-  final chunkBytes = boatLockOtaChunkBytesForMtu(mtu);
-  final withoutResponse = false;
+    final chunkBytes = boatLockOtaChunkBytesForMtu(mtu);
+    final withoutResponse = false;
     if (!withoutResponse) {
       _log(
         'BLE OTA writeWithoutResponse unavailable, using acknowledged writes',
@@ -931,6 +931,11 @@ class BleBoatLock with WidgetsBindingObserver {
   Future<bool> setStepSpr(double value) async {
     if (!value.isFinite) return false;
     return _writeCommand('SET_STEP_SPR:${value.round()}');
+  }
+
+  Future<bool> setStepGear(double value) async {
+    if (!value.isFinite) return false;
+    return _writeCommand('SET_STEP_GEAR:${value.toStringAsFixed(1)}');
   }
 
   void setOwnerSecret(String? secret) {

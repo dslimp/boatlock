@@ -45,7 +45,11 @@ void main() {
       BoatLockCommandScope.release,
     );
     expect(
-      classifyBoatLockCommand('SET_STEP_SPR:7200'),
+      classifyBoatLockCommand('SET_STEP_SPR:200'),
+      BoatLockCommandScope.release,
+    );
+    expect(
+      classifyBoatLockCommand('SET_STEP_GEAR:36.0'),
       BoatLockCommandScope.release,
     );
     expect(

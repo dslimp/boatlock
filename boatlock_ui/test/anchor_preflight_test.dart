@@ -13,7 +13,8 @@ BoatData _data({
   int gnssQ = 2,
   bool secPaired = false,
   bool secAuth = false,
-  int stepSpr = 7200,
+  int stepSpr = 200,
+  double stepGear = 36,
   double stepMaxSpd = 1000,
   double stepAccel = 500,
 }) {
@@ -33,6 +34,7 @@ BoatData _data({
     rssi: -60,
     holdHeading: false,
     stepSpr: stepSpr,
+    stepGear: stepGear,
     stepMaxSpd: stepMaxSpd,
     stepAccel: stepAccel,
     headingRaw: 0,

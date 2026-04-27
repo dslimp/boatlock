@@ -2,11 +2,12 @@
 
 Use this checklist before connecting or commanding the real steering drive. The
 current firmware path assumes a DRV8825-compatible STEP/DIR driver on
-`STEP=GPIO6` and `DIR=GPIO16`, with `7200` output steps per steering revolution
-from the Vanchor `36:1` gearbox and `200` motor steps/rev. Capture the remaining
-hardware facts before powered steering.
-If DRV8825 MODE pins are set for microstepping instead of full-step, multiply
-`7200` by the active microstep factor before accepting steering geometry.
+`STEP=GPIO6` and `DIR=GPIO16`, with `StepSpr=200` motor STEP pulses/rev and
+`StepGear=36` from the Vanchor gearbox, for `7200` output-shaft STEP pulses per
+steering revolution. Capture the remaining hardware facts before powered
+steering. If DRV8825 MODE pins are set for microstepping instead of full-step,
+multiply `StepSpr` by the active microstep factor and keep `StepGear` as the
+mechanical reduction ratio.
 
 This intake is hardware-independent. It should produce enough evidence to decide
 whether firmware can safely support the installed driver and mechanics, but it
@@ -21,7 +22,7 @@ does not by itself approve powered steering tests.
 - Driver status: `unknown` until all identity, pinout, power, direction, idle,
   limit, and jam checks below are complete.
 - Firmware status: STEP/DIR support exists for DRV8825 on `GPIO6/GPIO16` with
-  `7200` output steps/rev; powered use remains blocked until the remaining
+  `StepSpr=200`, `StepGear=36`; powered use remains blocked until the remaining
   driver and mechanics facts are captured.
 
 ## Ground Rules

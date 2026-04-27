@@ -7,11 +7,16 @@
 
 class StepperControl {
 public:
-    static constexpr int MOTOR_STEPS_PER_REV = 200;
-    static constexpr int GEAR_RATIO = 36;
-    static constexpr int STEPS_PER_REV = MOTOR_STEPS_PER_REV * GEAR_RATIO;
-    static constexpr int MIN_STEPS_PER_REV = STEPS_PER_REV;
-    static constexpr int MAX_STEPS_PER_REV = STEPS_PER_REV * 32;
+    static constexpr int DEFAULT_MOTOR_STEPS_PER_REV = 200;
+    static constexpr int DEFAULT_GEAR_RATIO_INT = 36;
+    static constexpr float DEFAULT_GEAR_RATIO = 36.0f;
+    static constexpr int STEPS_PER_REV = DEFAULT_MOTOR_STEPS_PER_REV * DEFAULT_GEAR_RATIO_INT;
+    static constexpr int MIN_MOTOR_STEPS_PER_REV = 50;
+    static constexpr int MAX_MOTOR_STEPS_PER_REV = 6400;
+    static constexpr float MIN_GEAR_RATIO = 1.0f;
+    static constexpr float MAX_GEAR_RATIO = 100.0f;
+    static constexpr int MIN_STEPS_PER_REV = MIN_MOTOR_STEPS_PER_REV;
+    static constexpr int MAX_STEPS_PER_REV = MAX_MOTOR_STEPS_PER_REV * 100;
     static constexpr int DIRECTION_SIGN = -1;
     static constexpr unsigned long COIL_RELEASE_DELAY_MS = 1200;
     static constexpr long MIN_COMMAND_STEPS = 4;
@@ -58,32 +63,59 @@ public:
         return 0;
     }
 
+    static int outputStepsPerRev(float motorStepsPerRev, float gearRatio) {
+        if (!isfinite(motorStepsPerRev) || !isfinite(gearRatio)) {
+            return STEPS_PER_REV;
+        }
+        if (motorStepsPerRev < MIN_MOTOR_STEPS_PER_REV ||
+            motorStepsPerRev > MAX_MOTOR_STEPS_PER_REV ||
+            gearRatio < MIN_GEAR_RATIO ||
+            gearRatio > MAX_GEAR_RATIO) {
+            return STEPS_PER_REV;
+        }
+        const double outputSteps =
+            static_cast<double>(motorStepsPerRev) * static_cast<double>(gearRatio);
+        if (!isfinite(outputSteps) ||
+            outputSteps < static_cast<double>(MIN_STEPS_PER_REV) ||
+            outputSteps > static_cast<double>(MAX_STEPS_PER_REV)) {
+            return STEPS_PER_REV;
+        }
+        return static_cast<int>(lround(outputSteps));
+    }
+
     void loadFromSettings() {
         if (!settings) return;
         stepper.setMaxSpeed(settings->get("StepMaxSpd"));
         stepper.setAcceleration(settings->get("StepAccel"));
-        const float configuredStepsPerRev = settings->get("StepSpr");
-        if (isfinite(configuredStepsPerRev)) {
-            const long normalized = lroundf(configuredStepsPerRev);
-            if (normalized >= MIN_STEPS_PER_REV && normalized <= MAX_STEPS_PER_REV) {
-                stepsPerRev = static_cast<int>(normalized);
-            } else {
-                logMessage("[STEP] invalid StepSpr=%.3f, using default=%d\n",
-                           configuredStepsPerRev,
-                           STEPS_PER_REV);
-                stepsPerRev = STEPS_PER_REV;
-            }
-        } else {
+        const float configuredMotorStepsPerRev = settings->get("StepSpr");
+        const float configuredGearRatio = settings->get("StepGear");
+        stepsPerRev = outputStepsPerRev(configuredMotorStepsPerRev, configuredGearRatio);
+        if (stepsPerRev == STEPS_PER_REV &&
+            (!isfinite(configuredMotorStepsPerRev) ||
+             !isfinite(configuredGearRatio) ||
+             configuredMotorStepsPerRev < MIN_MOTOR_STEPS_PER_REV ||
+             configuredMotorStepsPerRev > MAX_MOTOR_STEPS_PER_REV ||
+             configuredGearRatio < MIN_GEAR_RATIO ||
+             configuredGearRatio > MAX_GEAR_RATIO)) {
+            logMessage("[STEP] invalid geometry motorSpr=%.3f gear=%.3f, using default=%d\n",
+                       configuredMotorStepsPerRev,
+                       configuredGearRatio,
+                       STEPS_PER_REV);
             stepsPerRev = STEPS_PER_REV;
         }
         ensureOutputsEnabled();
         clearIdleTimer();
 
         bowZeroSteps = normalizeSteps(lroundf(settings->get("Encoder0")));
-        logMessage("[STEP] cfg maxSpd=%.0f accel=%.0f spr=%d\n",
+        const float outputSpeedDegPerSec =
+            stepsPerRev > 0 ? (settings->get("StepMaxSpd") * 360.0f / stepsPerRev) : 0.0f;
+        logMessage("[STEP] cfg maxSpd=%.0f accel=%.0f motorSpr=%.0f gear=%.1f outSpr=%d outDegS=%.1f\n",
                    settings->get("StepMaxSpd"),
                    settings->get("StepAccel"),
-                   stepsPerRev);
+                   configuredMotorStepsPerRev,
+                   configuredGearRatio,
+                   stepsPerRev,
+                   outputSpeedDegPerSec);
         logMessage("[STEP] bow zero=%ld\n", bowZeroSteps);
     }
 
@@ -161,7 +193,7 @@ public:
         }
         manual = true;
         ensureOutputsEnabled();
-        float spd = settings ? settings->get("StepMaxSpd") : 1000;
+        float spd = settings ? settings->get("StepMaxSpd") : 2400;
         manualSpd = (dir < 0 ? -spd : spd) * DIRECTION_SIGN;
         stepper.setSpeed(manualSpd);
         clearIdleTimer();

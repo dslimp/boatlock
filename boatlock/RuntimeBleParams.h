@@ -209,6 +209,7 @@ inline void registerRuntimeBleParams(const RuntimeBleParamContext& context) {
     telemetry.headingDeg = currentHeadingValue();
     telemetry.holdHeading = settings->get("HoldHeading") >= 0.5f;
     telemetry.stepSpr = runtimeBleTelemetryU16(settings->get("StepSpr"));
+    telemetry.stepGear = settings->get("StepGear");
     telemetry.stepMaxSpd = runtimeBleTelemetryU16(settings->get("StepMaxSpd"));
     telemetry.stepAccel = runtimeBleTelemetryU16(settings->get("StepAccel"));
     telemetry.headingRawDeg = compassReadyNow ? compass->getRawAzimuth() : 0.0f;
