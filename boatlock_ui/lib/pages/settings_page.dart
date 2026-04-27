@@ -44,6 +44,7 @@ class SettingsPage extends StatefulWidget {
     required this.holdHeading,
     required this.stepMaxSpd,
     required this.stepAccel,
+    required this.stepSpr,
     required this.compassOffset,
     required this.compassQ,
     required this.magQ,

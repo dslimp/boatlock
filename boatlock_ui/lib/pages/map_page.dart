@@ -505,7 +505,7 @@ class _MapPageState extends State<MapPage> {
                   holdHeading: boatData?.holdHeading ?? false,
                   stepMaxSpd: boatData?.stepMaxSpd ?? 1000,
                   stepAccel: boatData?.stepAccel ?? 500,
-                  stepSpr: boatData?.stepSpr ?? 7200,
+                  stepSpr: (boatData?.stepSpr ?? 7200).toDouble(),
                   compassOffset: boatData?.compassOffset ?? 0.0,
                   compassQ: boatData?.compassQ ?? 0,
                   magQ: boatData?.magQ ?? 0,

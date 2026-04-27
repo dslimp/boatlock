@@ -887,8 +887,8 @@ class BleBoatLock with WidgetsBindingObserver {
         _log('BLE OTA MTU request failed, using mtu=$mtu: $e');
       }
     }
-    final chunkBytes = boatLockOtaChunkBytesForMtu(mtu);
-    final withoutResponse = _otaChar?.properties.writeWithoutResponse == true;
+  final chunkBytes = boatLockOtaChunkBytesForMtu(mtu);
+  final withoutResponse = false;
     if (!withoutResponse) {
       _log(
         'BLE OTA writeWithoutResponse unavailable, using acknowledged writes',
