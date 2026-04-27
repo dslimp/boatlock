@@ -7415,8 +7415,14 @@ Validation:
 - `cd boatlock_ui && flutter test` -> PASS (`121/121`).
 - `tools/android/build-app-apk.sh` -> PASS; built
   `boatlock_ui/build/app/outputs/flutter-apk/app-debug.apk`.
+- Post-push nh02 readiness check: `tools/hw/nh02/status.sh` reported the
+  RFC2217 service active but the expected ESP32-S3 USB serial path missing;
+  `tools/android/status.sh` saw no local Android device, while
+  `tools/hw/nh02/android-status.sh` saw the phone over ADB Wi-Fi at
+  `192.168.88.33:5555`.
 
 Self-review:
 - This is still a software/dry validation. Powered steering direction, angular
   speed, and hold-current behavior need the powered bench checklist before the
-  real mechanism is trusted under load.
+  real mechanism is trusted under load. I did not flash or OTA the ESP32 after
+  this commit because the USB recovery path was absent during the status check.
