@@ -9,6 +9,9 @@
   - native BLE/security tests
   - Flutter tests for parsing/UI
   - update `docs/BLE_PROTOCOL.md`
+  - if the app must be installed before BLE OTA can update already-deployed
+    firmware, keep enough parser bridge for the currently installed live-frame
+    version to start OTA and prove the rollout through `tools/hw/nh02/deploy.sh`
 - GNSS, anchor-control, or safety change:
   - native tests
   - HIL simulation checks if behavior is control-loop sensitive
@@ -33,10 +36,14 @@
 - Acceptance firmware profile build:
   - `cd boatlock && pio run -e esp32s3_acceptance`
 - Normal phone BLE OTA firmware update:
-  - build `boatlock/.pio/build/esp32s3/firmware.bin`
+  - standard bench automation: `tools/hw/nh02/deploy.sh`
+  - reuse already-built firmware/APK through the same path: `tools/hw/nh02/deploy.sh --no-build`
+  - low-level app-check when bypassing the build wrapper is intentional: `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
+  - remember the release APK is installed before the firmware upload, so app-side
+    telemetry parsing must still decode the currently installed firmware well
+    enough to receive first telemetry and launch OTA
   - publish/serve the binary from a trusted URL and copy its SHA-256
   - in the app Settings screen, use Firmware OTA URL + SHA-256 to upload over BLE
-  - bench automation: `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
   - USB flash is only the seed/recovery path when the target lacks an OTA-capable image or cannot reconnect over BLE
   - if BLE discovery may take time, add `--wait-secs 1800`; the wrapper wait
     starts before scan/connect and can expire during upload when advertising
@@ -69,7 +76,9 @@
   - `python3 tools/sim/run_soak.py --hours 6 --check --json-out tools/sim/soak_report.json`
 - NH02 hardware bench:
   - `tools/hw/nh02/install.sh`
-  - `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
+  - `tools/hw/nh02/deploy.sh`
+  - `tools/hw/nh02/deploy.sh --no-build`
+  - `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800` for the lower-level OTA check
   - `tools/hw/nh02/flash.sh` (USB seed/recovery)
   - `tools/hw/nh02/flash.sh --profile acceptance`
   - `tools/hw/nh02/acceptance.sh`
@@ -152,8 +161,7 @@ Minimum validation order after profile-gate changes:
    - prove `SET_PHONE_GPS` is rejected with stable gate logs and no output motion
    - run Android `sim` smoke/check and verify `SIM` telemetry without motor/stepper output
 4. BLE OTA bench checks:
-   - build the normal firmware and update the target through phone BLE OTA
-   - run `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
+   - build the normal firmware and update the target through phone BLE OTA by running `tools/hw/nh02/deploy.sh`
    - prove telemetry recovers after the ESP32 reboots into the uploaded image
 5. Release-profile full HIL bench checks:
    - run `tools/hw/nh02/run-sim-suite.sh` when the standard full on-device HIL suite is required; it runs `SIM_LIST`, every listed scenario through `SIM_RUN:<id>,0`, `SIM_STATUS`, and `SIM_REPORT` on the normal firmware

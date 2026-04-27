@@ -79,7 +79,7 @@ tools/macos/acceptance.sh --static-only
 For a local `nh02` OTA proof with a wrapper-served manifest:
 
 ```bash
-tools/hw/nh02/android-run-app-check.sh \
+tools/hw/nh02/deploy.sh \
   --ota-latest-release \
-  --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin
+  --no-build
 ```

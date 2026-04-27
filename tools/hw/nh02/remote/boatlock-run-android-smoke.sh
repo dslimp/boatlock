@@ -153,6 +153,9 @@ if [[ "${state}" != "device" ]]; then
   exit 1
 fi
 
+printf 'app_check_start mode=%s install=%s wait_secs=%s serial=%s package=%s activity=%s\n' \
+  "${APP_MODE}" "${INSTALL_APP}" "${WAIT_SECS}" "${SERIAL:-default}" "${PACKAGE}" "${ACTIVITY}"
+
 keep_phone_awake() {
   "${ADB[@]}" shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
   "${ADB[@]}" shell wm dismiss-keyguard >/dev/null 2>&1 || true
@@ -191,6 +194,9 @@ if [[ "${INSTALL_APP}" -eq 1 ]]; then
     echo "--no-install is BLE-runtime debug only and is not acceptance unless explicitly waived" >&2
     exit 20
   fi
+  printf 'app_install=success apk=%s\n' "${APK}"
+else
+  printf 'app_install=skipped\n'
 fi
 
 for perm in "${PERMISSIONS[@]}"; do
@@ -217,7 +223,7 @@ if [[ -n "${OTA_FIRMWARE}" ]]; then
     cat /tmp/boatlock-ota-http.log >&2 || true
     exit 1
   fi
-  printf 'ota_server=127.0.0.1:%s firmware=%s\n' "${OTA_PORT}" "${OTA_FIRMWARE}"
+  printf 'ota_server=127.0.0.1:%s firmware=%s sha256=%s\n' "${OTA_PORT}" "${OTA_FIRMWARE}" "${OTA_SHA256}"
 fi
 
 "${ADB[@]}" logcat -c || true
@@ -232,7 +238,17 @@ if [[ "${OTA_LATEST_RELEASE}" -eq 1 ]]; then
   start_args+=(--ez boatlock_ota_latest_release true)
   start_args+=(--es boatlock_firmware_manifest_url "http://127.0.0.1:${OTA_PORT}/manifest.json")
 fi
-"${ADB[@]}" shell am start "${start_args[@]}" >/dev/null
+printf 'app_launch mode=%s ota=%s\n' "${APP_MODE}" "$([[ -n "${OTA_FIRMWARE}" ]] && echo 1 || echo 0)"
+set +e
+start_output="$("${ADB[@]}" shell am start "${start_args[@]}" 2>&1)"
+start_status=$?
+set -e
+printf '%s\n' "${start_output}"
+if [[ "${start_status}" -ne 0 ]]; then
+  echo "app launch failed with status ${start_status}" >&2
+  exit 1
+fi
+printf 'app_started mode=%s\n' "${APP_MODE}"
 
 if [[ "${CYCLE_BLUETOOTH}" -eq 1 || "${RESET_ESP32}" -eq 1 ]]; then
   ready_deadline=$(( $(date +%s) + 60 ))
@@ -258,22 +274,45 @@ if [[ "${CYCLE_BLUETOOTH}" -eq 1 || "${RESET_ESP32}" -eq 1 ]]; then
   fi
 fi
 
-deadline=$(( $(date +%s) + WAIT_SECS ))
+started_at="$(date +%s)"
+deadline=$(( started_at + WAIT_SECS ))
 result_line=""
 progress_line=""
 last_progress_line=""
+last_wait_line_at=0
+printed_no_ota_progress=0
 
-while [[ $(date +%s) -lt ${deadline} ]]; do
+while true; do
+  now="$(date +%s)"
+  if [[ "${now}" -ge "${deadline}" ]]; then
+    break
+  fi
   keep_phone_awake
   dump="$("${ADB[@]}" logcat -d 2>/dev/null || true)"
   result_line="$(printf '%s\n' "${dump}" | grep 'BOATLOCK_SMOKE_RESULT ' | tail -n 1 || true)"
   if [[ -n "${result_line}" ]]; then
     break
   fi
-  progress_line="$(printf '%s\n' "${dump}" | grep -E 'BOATLOCK_OTA_PROGRESS|BoatLockAppCheck.*ota_progress|\\[OTA\\] progress|BLE OTA progress|BoatLockAppCheck.*sim_suite_report|BOATLOCK_SMOKE_STAGE .*sim_suite_' | tail -n 1 || true)"
+  progress_line="$(printf '%s\n' "${dump}" | grep -E 'BOATLOCK_OTA_PROGRESS|BoatLockAppCheck.*ota_progress|\\[OTA\\] progress|BLE OTA progress|BoatLockAppCheck.*sim_suite_report|BOATLOCK_SMOKE_STAGE' | tail -n 1 || true)"
   if [[ -n "${progress_line}" && "${progress_line}" != "${last_progress_line}" ]]; then
     printf '%s\n' "${progress_line}"
     last_progress_line="${progress_line}"
+  fi
+  elapsed=$(( now - started_at ))
+  if [[ $(( now - last_wait_line_at )) -ge 30 ]]; then
+    if [[ -n "${last_progress_line}" ]]; then
+      printf 'waiting_for_smoke_result elapsed=%s/%s mode=%s last_progress=%s\n' \
+        "${elapsed}" "${WAIT_SECS}" "${APP_MODE}" "${last_progress_line}"
+    else
+      printf 'waiting_for_smoke_result elapsed=%s/%s mode=%s last_progress=none\n' \
+        "${elapsed}" "${WAIT_SECS}" "${APP_MODE}"
+    fi
+    last_wait_line_at="${now}"
+  fi
+  if [[ -n "${OTA_FIRMWARE}" && "${printed_no_ota_progress}" -eq 0 && "${elapsed}" -ge 60 && -z "${last_progress_line}" ]]; then
+    printf 'no_ota_progress_after=%ss; recent relevant logcat:\n' "${elapsed}" >&2
+    printf '%s\n' "${dump}" | grep -E 'BoatLockSmoke|BoatLockAppCheck|BOATLOCK_SMOKE_STAGE|BOATLOCK_SMOKE_RESULT|BOATLOCK_OTA_PROGRESS|FlutterBluePlus|flutter|\\[OTA\\]|\\[SIM\\]' | tail -n 80 >&2 || true
+    printed_no_ota_progress=1
   fi
   sleep 2
 done

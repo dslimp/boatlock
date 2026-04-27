@@ -23,7 +23,8 @@ Use this skill when the task is about updating or validating the real ESP32-S3 h
 1. Refresh the bench runtime if tracked helpers or service units changed:
    - `tools/hw/nh02/install.sh`
 2. Update current firmware when needed:
-   - normal moved-hardware path: build `boatlock/.pio/build/esp32s3/firmware.bin` and run `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
+   - standard moved-hardware path: `tools/hw/nh02/deploy.sh`
+   - reuse already-built firmware/APK through the same path: `tools/hw/nh02/deploy.sh --no-build`
    - manual field path: publish `firmware.bin` plus SHA-256 and upload from the phone app Settings screen
    - recovery/seed path only: `tools/hw/nh02/flash.sh` or `tools/hw/nh02/flash.sh --no-build`
 3. Run hardware acceptance:
@@ -55,7 +56,8 @@ Use this skill when the task is about updating or validating the real ESP32-S3 h
    - use `tools/hw/nh02/run-sim-suite.sh` for the standard full bench gate; it installs helpers, proves targets, flashes normal firmware, runs boot acceptance and `sim_suite`
    - use `tools/hw/nh02/android-run-app-check.sh --compass --wait-secs 130` after compass BLE command changes; it sends safe DCD setup commands and requires device-log acknowledgements
    - use `tools/hw/nh02/android-run-app-check.sh --gps --wait-secs 180` after GNSS live-telemetry changes or field GPS checks; it requires valid non-zero coordinates and `gnssQ > 0`
-   - use `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin` after BLE OTA/app-delivery changes; it serves `firmware.bin` from `nh02`, installs the same release app, starts its runtime OTA check, uploads over BLE from the phone, and requires post-reboot telemetry recovery
+   - use `tools/hw/nh02/deploy.sh` after BLE OTA/app-delivery changes; it builds the normal firmware and release APK, refreshes Android helpers, installs the same release app, serves `firmware.bin` from `nh02`, uploads over BLE from the phone, and requires post-reboot telemetry recovery
+   - use `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin` only as the lower-level OTA check when you need to bypass the build wrapper
    - pass a longer OTA wait such as `--wait-secs 1800` when BLE discovery may
      be cold or intermittent; the wrapper timeout includes scan/reconnect time
      before upload starts and can otherwise expire during an active transfer
@@ -123,7 +125,10 @@ Use this skill when the task is about updating or validating the real ESP32-S3 h
 
 - Bench runtime refresh:
   - `tools/hw/nh02/install.sh`
-- BLE OTA flash, normal moved-hardware path:
+- BLE OTA deploy, standard moved-hardware path:
+  - `tools/hw/nh02/deploy.sh`
+  - `tools/hw/nh02/deploy.sh --no-build`
+- Low-level BLE OTA app-check:
   - `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
 - USB seed/recovery flash:
   - `tools/hw/nh02/flash.sh`
@@ -189,5 +194,9 @@ Use this skill when the task is about updating or validating the real ESP32-S3 h
 - Do not replace a pending or slow acceptance or phone-smoke verdict with manual `monitor.sh` or `logcat` interpretation. Use those only as blocker-debug context.
 - Before live mutation on `nh02` or an attached Android phone, prove the exact target first and keep the recovery path explicit.
 - Prefer repo-tracked scripts and remote helpers over ad-hoc inline `ssh` write commands or hand-typed mutation chains.
+- For BLE OTA rollouts after live-frame schema changes, remember that the new
+  APK is installed before the old firmware is updated. Keep enough app-side
+  parser bridge for the installed firmware to emit first telemetry and start
+  OTA, then prove the bridge with `tools/hw/nh02/deploy.sh`.
 - If acceptance or monitor output disagrees with docs, update docs in the same change.
 - Record every meaningful bench validation stage in `WORKLOG.md`.

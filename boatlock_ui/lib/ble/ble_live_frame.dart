@@ -19,9 +19,11 @@ const int _flagSecPaired = 1 << 1;
 const int _flagSecAuth = 1 << 2;
 const int _flagSecPairWindow = 1 << 3;
 const int boatLockLiveFrameSize = 74;
+const int boatLockLiveFrameV3Size = 72;
 const int _magicB = 0x42;
 const int _magicL = 0x4C;
 const int _protocolVersion = 4;
+const int _protocolVersionV3 = 3;
 const int _frameTypeLiveTelemetry = 1;
 const Endian _wireEndian = Endian.little;
 
@@ -108,7 +110,8 @@ const List<(int, String)> _reasonBits = [
 ];
 
 BleLiveFrame? decodeBoatLockLiveFrame(List<int> value, {int rssi = 0}) {
-  if (value.length != boatLockLiveFrameSize) {
+  if (value.length != boatLockLiveFrameSize &&
+      value.length != boatLockLiveFrameV3Size) {
     return null;
   }
   final bytes = value is Uint8List ? value : Uint8List.fromList(value);
@@ -117,22 +120,37 @@ BleLiveFrame? decodeBoatLockLiveFrame(List<int> value, {int rssi = 0}) {
       view.getUint8(_offsetMagicL) != _magicL) {
     return null;
   }
-  if (view.getUint8(_offsetProtocolVersion) != _protocolVersion ||
-      view.getUint8(_offsetFrameType) != _frameTypeLiveTelemetry) {
+  final protocolVersion = view.getUint8(_offsetProtocolVersion);
+  if (view.getUint8(_offsetFrameType) != _frameTypeLiveTelemetry) {
     return null;
   }
+  if (protocolVersion == _protocolVersion &&
+      value.length != boatLockLiveFrameSize) {
+    return null;
+  }
+  if (protocolVersion == _protocolVersionV3 &&
+      value.length != boatLockLiveFrameV3Size) {
+    return null;
+  }
+  if (protocolVersion != _protocolVersion &&
+      protocolVersion != _protocolVersionV3) {
+    return null;
+  }
+  final hasStepGear = protocolVersion >= _protocolVersion;
+  final offsetShift = hasStepGear ? 0 : -2;
+  int shifted(int offset) => offset + offsetShift;
 
   final mode = _modeByCode[view.getUint8(_offsetMode)];
   final status = _statusByCode[view.getUint8(_offsetStatus)];
-  final secReject = _rejectByCode[view.getUint8(_offsetSecReject)];
+  final secReject = _rejectByCode[view.getUint8(shifted(_offsetSecReject))];
   if (mode == null || status == null || secReject == null) {
     return null;
   }
 
   final sequence = view.getUint16(_offsetSequence, _wireEndian);
   final flags = view.getUint16(_offsetFlags, _wireEndian);
-  final reasonFlags = view.getUint32(_offsetReasonFlags, _wireEndian);
-  final secNonce = view.getUint64(_offsetSecNonce, _wireEndian);
+  final reasonFlags = view.getUint32(shifted(_offsetReasonFlags), _wireEndian);
+  final secNonce = view.getUint64(shifted(_offsetSecNonce), _wireEndian);
 
   final data = BoatData(
     lat: view.getInt32(_offsetLat, _wireEndian) / 10000000.0,
@@ -150,24 +168,31 @@ BleLiveFrame? decodeBoatLockLiveFrame(List<int> value, {int rssi = 0}) {
     rssi: rssi,
     holdHeading: (flags & _flagHoldHeading) != 0,
     stepSpr: view.getUint16(_offsetStepSpr, _wireEndian),
-    stepGear: view.getUint16(_offsetStepGear, _wireEndian) / 10.0,
-    stepMaxSpd: view.getUint16(_offsetStepMaxSpd, _wireEndian).toDouble(),
-    stepAccel: view.getUint16(_offsetStepAccel, _wireEndian).toDouble(),
-    headingRaw: view.getUint16(_offsetHeadingRaw, _wireEndian) / 10.0,
-    compassOffset: view.getInt16(_offsetCompassOffset, _wireEndian) / 10.0,
-    compassQ: view.getUint8(_offsetCompassQ),
-    magQ: view.getUint8(_offsetMagQ),
-    gyroQ: view.getUint8(_offsetGyroQ),
-    rvAcc: view.getUint16(_offsetRvAcc, _wireEndian) / 100.0,
-    magNorm: view.getUint16(_offsetMagNorm, _wireEndian) / 100.0,
-    gyroNorm: view.getUint16(_offsetGyroNorm, _wireEndian) / 100.0,
-    pitch: view.getInt16(_offsetPitch, _wireEndian) / 10.0,
-    roll: view.getInt16(_offsetRoll, _wireEndian) / 10.0,
+    stepGear: hasStepGear
+        ? view.getUint16(_offsetStepGear, _wireEndian) / 10.0
+        : 1.0,
+    stepMaxSpd: view
+        .getUint16(shifted(_offsetStepMaxSpd), _wireEndian)
+        .toDouble(),
+    stepAccel: view
+        .getUint16(shifted(_offsetStepAccel), _wireEndian)
+        .toDouble(),
+    headingRaw: view.getUint16(shifted(_offsetHeadingRaw), _wireEndian) / 10.0,
+    compassOffset:
+        view.getInt16(shifted(_offsetCompassOffset), _wireEndian) / 10.0,
+    compassQ: view.getUint8(shifted(_offsetCompassQ)),
+    magQ: view.getUint8(shifted(_offsetMagQ)),
+    gyroQ: view.getUint8(shifted(_offsetGyroQ)),
+    rvAcc: view.getUint16(shifted(_offsetRvAcc), _wireEndian) / 100.0,
+    magNorm: view.getUint16(shifted(_offsetMagNorm), _wireEndian) / 100.0,
+    gyroNorm: view.getUint16(shifted(_offsetGyroNorm), _wireEndian) / 100.0,
+    pitch: view.getInt16(shifted(_offsetPitch), _wireEndian) / 10.0,
+    roll: view.getInt16(shifted(_offsetRoll), _wireEndian) / 10.0,
     secPaired: (flags & _flagSecPaired) != 0,
     secAuth: (flags & _flagSecAuth) != 0,
     secPairWindowOpen: (flags & _flagSecPairWindow) != 0,
     secReject: secReject,
-    gnssQ: view.getUint8(_offsetGnssQ),
+    gnssQ: view.getUint8(shifted(_offsetGnssQ)),
   );
 
   return BleLiveFrame(

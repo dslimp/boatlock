@@ -140,6 +140,7 @@ if [[ "${INSTALL_APP}" -eq 1 ]]; then
   remote_shell "mkdir -p '${BOATLOCK_NH02_REMOTE_ANDROID_STAGE}'"
   remote_apk_path="${BOATLOCK_NH02_REMOTE_ANDROID_STAGE}/$(basename "${BOATLOCK_ANDROID_APK}")"
   "${RSYNC_BASE[@]}" "${BOATLOCK_ANDROID_APK}" "${BOATLOCK_NH02_SSH_TARGET}:${remote_apk_path}"
+  printf 'apk_stage=%s\n' "${remote_apk_path}"
 fi
 
 remote_ota_path=""
@@ -158,8 +159,10 @@ if [[ -n "${OTA_FIRMWARE}" ]]; then
   if [[ -z "${OTA_SHA256}" ]]; then
     OTA_SHA256="$(shasum -a 256 "${OTA_FIRMWARE}" | awk '{print $1}')"
   fi
+  printf 'firmware_stage=%s sha256=%s\n' "${remote_ota_path}" "${OTA_SHA256}"
   if [[ -n "${OTA_MANIFEST}" ]]; then
     "${RSYNC_BASE[@]}" "${OTA_MANIFEST}" "${BOATLOCK_NH02_SSH_TARGET}:${BOATLOCK_NH02_REMOTE_ANDROID_STAGE}/manifest.json"
+    printf 'manifest_stage=%s\n' "${BOATLOCK_NH02_REMOTE_ANDROID_STAGE}/manifest.json"
   fi
 fi
 
@@ -195,6 +198,9 @@ if [[ -n "${remote_ota_path}" ]]; then
     ota_arg+=" --ota-latest-release"
   fi
 fi
+
+printf 'remote_app_check mode=%s install=%s wait_secs=%s serial=%s ota=%s\n' \
+  "${APP_MODE}" "${INSTALL_APP}" "${WAIT_SECS}" "${ANDROID_SERIAL:-auto}" "$([[ -n "${remote_ota_path}" ]] && echo 1 || echo 0)"
 
 remote_shell "'${BOATLOCK_NH02_REMOTE_ANDROID_SMOKE_BIN}' \
   --package '${BOATLOCK_ANDROID_PACKAGE}' \

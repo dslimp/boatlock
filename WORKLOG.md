@@ -7772,3 +7772,61 @@ Self-review:
 - The old single `StepSpr` name hid whether the value was motor-side or
   output-side geometry. The new split keeps operator settings aligned with the
   physical hardware and keeps output math explicit.
+
+### 2026-04-27 Stage 254: Canonical nh02 deploy path
+
+Scope:
+- Collapse normal moved-hardware deploy to one command:
+  `tools/hw/nh02/deploy.sh`.
+- Make the remote Android/OTA runner print exact target, artifact hashes,
+  app launch state, periodic wait heartbeats, and early logcat context when
+  OTA does not start.
+- Preserve a minimal v3 live-frame parser in the release app so the freshly
+  installed APK can bridge an already-installed v3 firmware to the new v4
+  firmware over BLE OTA.
+
+Decisions:
+- The standard deploy path builds normal `esp32s3` firmware and the ordinary
+  release APK, refreshes only the Android helpers on `nh02`, installs that
+  exact APK, serves `firmware.bin`, and runs the existing production app OTA
+  check.
+- `android-run-app-check.sh --ota ...` remains the lower-level check, not the
+  default operator command.
+- `--no-install` remains BLE-runtime debug only; the standard deploy wrapper
+  does not expose it.
+- `install.sh --android-only` avoids restarting the RFC2217 USB service when
+  the task only changes Android helpers or the ESP32 USB link is absent.
+- The v3 parser maps legacy output-shaft `StepSpr` into `stepSpr` and reports
+  `stepGear=1.0`; it exists to make OTA bootstrap possible, not to restore old
+  settings semantics.
+
+Validation:
+- `bash -n tools/hw/nh02/deploy.sh tools/hw/nh02/install.sh tools/hw/nh02/android-run-app-check.sh tools/hw/nh02/android-run-smoke.sh tools/hw/nh02/remote/boatlock-run-android-smoke.sh`
+  -> PASS.
+- `pytest -q tools/ci/test_android_smoke_modes.py` -> PASS (`10/10`).
+- `pytest -q tools/ci/test_*.py` -> PASS (`36/36`).
+- `cd boatlock_ui && flutter analyze` -> PASS.
+- `cd boatlock_ui && flutter test` -> PASS (`121/121`).
+- `tools/android/build-app-apk.sh` -> PASS; rebuilt
+  `boatlock_ui/build/app/outputs/flutter-apk/app-release.apk`.
+- First `tools/hw/nh02/deploy.sh --no-build` run before the v3 bridge proved
+  the wrapper fix but exposed the real blocker: the new APK could connect and
+  read device logs from the still-v3 firmware, but no live `BoatData` decoded,
+  so OTA never reached `ota_upload_start`.
+- After adding the v3 live-frame bridge and rebuilding the APK,
+  `tools/hw/nh02/deploy.sh --no-build` -> PASS:
+  - firmware SHA-256
+    `7b9dab0d3c2f45c026afca2092a03125ed00e0adc2663d5d13515b92fb1e3040`
+  - APK SHA-256
+    `2ecffdef4c27a355405aea83dce419ae7f3440555c2891615996e10ac5c0c61e`
+  - BLE OTA reached `ota_upload_done_wait_reconnect`
+  - app observed `ota_reconnect_gap`
+  - final result:
+    `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"app_ota_reconnect_after_update",...}`
+
+Self-review:
+- The deploy pain was not just too many commands. The order is inherently
+  sensitive: the app is updated before the firmware, so app-side telemetry
+  parsing must bridge the currently installed firmware schema long enough to
+  start OTA. The new deploy wrapper makes that invariant visible and the
+  runner now reports the exact stage when it fails.

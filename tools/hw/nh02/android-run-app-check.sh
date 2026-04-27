@@ -139,6 +139,8 @@ else:
 PY")"
   fi
   printf 'ota_port=%s\n' "${OTA_PORT}"
+  printf 'ota_firmware=%s\n' "${OTA_FIRMWARE}"
+  printf 'ota_sha256=%s\n' "${OTA_SHA256}"
   if [[ "${OTA_LATEST_RELEASE}" -eq 1 ]]; then
     OTA_MANIFEST="$(mktemp -t boatlock-ota-manifest.XXXXXX.json)"
     (
@@ -196,7 +198,5 @@ fi
 
 PASS_ARGS=(--mode "${MODE}" "${PASS_ARGS[@]}")
 
-if [[ "${#PASS_ARGS[@]}" -eq 0 ]]; then
-  exec "${SCRIPT_DIR}/android-run-smoke.sh" --no-build
-fi
+printf 'app_check_wrapper mode=%s build_first=%s\n' "${MODE}" "${BUILD_FIRST}"
 exec "${SCRIPT_DIR}/android-run-smoke.sh" --no-build "${PASS_ARGS[@]}"

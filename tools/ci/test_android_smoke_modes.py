@@ -78,6 +78,23 @@ def test_android_app_check_wrappers_reuse_canonical_runner() -> None:
         assert "build-" + "smoke-apk.sh" not in text
 
 
+def test_nh02_deploy_is_single_canonical_ota_entrypoint() -> None:
+    deploy = _read("tools/hw/nh02/deploy.sh")
+    install = _read("tools/hw/nh02/install.sh")
+    remote_runner = _read("tools/hw/nh02/remote/boatlock-run-android-smoke.sh")
+
+    assert "run -e esp32s3" in deploy
+    assert "build-app-apk.sh" in deploy
+    assert "install.sh\" --android-only" in deploy
+    assert "android-install.sh" in deploy
+    assert "android-run-app-check.sh" in deploy
+    assert "--ota-firmware" in deploy
+    assert "--no-install" not in deploy
+    assert "--android-only" in install
+    assert "waiting_for_smoke_result" in remote_runner
+    assert "no_ota_progress_after=" in remote_runner
+
+
 def test_android_checks_are_runtime_app_commands() -> None:
     local_runner = _read("tools/android/run-smoke.sh")
     remote_runner = _read("tools/hw/nh02/remote/boatlock-run-android-smoke.sh")

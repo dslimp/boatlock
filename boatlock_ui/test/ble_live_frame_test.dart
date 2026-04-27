@@ -34,11 +34,12 @@ void _u64(BytesBuilder out, int value) {
   }
 }
 
-List<int> _frame() {
+List<int> _frame({int protocolVersion = 4}) {
+  final includeStepGear = protocolVersion >= 4;
   final out = BytesBuilder();
   _u8(out, 0x42);
   _u8(out, 0x4C);
-  _u8(out, 4);
+  _u8(out, protocolVersion);
   _u8(out, 1);
   _u16(out, 9);
   _u16(out, 0x000F);
@@ -53,10 +54,12 @@ List<int> _frame() {
   _u16(out, 2714);
   _u16(out, 3599);
   _u8(out, 81);
-  _u16(out, 200);
-  _u16(out, 360);
-  _u16(out, 2400);
-  _u16(out, 2400);
+  _u16(out, includeStepGear ? 200 : 7200);
+  if (includeStepGear) {
+    _u16(out, 360);
+  }
+  _u16(out, includeStepGear ? 2400 : 1200);
+  _u16(out, includeStepGear ? 2400 : 800);
   _u16(out, 1111);
   _i16(out, -25);
   _u8(out, 3);
@@ -110,10 +113,28 @@ void main() {
     expect(decoded.data.rssi, -61);
   });
 
-  test('decodeBoatLockLiveFrame rejects non-v4 payloads', () {
+  test('decodeBoatLockLiveFrame decodes v3 live telemetry for OTA bridge', () {
+    final frame = _frame(protocolVersion: 3);
+    final decoded = decodeBoatLockLiveFrame(frame, rssi: -65);
+
+    expect(decoded, isNotNull);
+    expect(frame, hasLength(boatLockLiveFrameV3Size));
+    expect(decoded!.sequence, 9);
+    expect(decoded.data.mode, 'ANCHOR');
+    expect(decoded.data.status, 'WARN');
+    expect(decoded.data.secReject, 'AUTH_REQUIRED');
+    expect(decoded.data.gnssQ, 2);
+    expect(decoded.data.stepSpr, 7200);
+    expect(decoded.data.stepGear, 1.0);
+    expect(decoded.data.stepMaxSpd, 1200);
+    expect(decoded.data.stepAccel, 800);
+    expect(decoded.data.rssi, -65);
+  });
+
+  test('decodeBoatLockLiveFrame rejects unsupported payloads', () {
     expect(decodeBoatLockLiveFrame(const []), isNull);
     final bad = _frame();
-    bad[2] = 3;
+    bad[2] = 2;
     expect(decodeBoatLockLiveFrame(bad), isNull);
   });
 

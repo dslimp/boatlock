@@ -21,7 +21,8 @@
 - Pass `--serial <ip>:5555` to Android smoke/check wrappers when proving install/logcat/debug over Wi-Fi instead of USB.
 - Use `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130` to install/update the release app, wait for first telemetry, cycle phone Bluetooth through ADB, and require telemetry recovery without restarting the app.
 - Use `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` to install/update the release app, wait for first telemetry, reset the ESP32-S3 through the tracked reset helper, and require telemetry recovery without restarting the app.
-- Use `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin` to install/update the release app, serve firmware through `nh02` + `adb reverse`, start its runtime OTA check, upload over BLE from the phone, and require post-update telemetry recovery.
+- Use `tools/hw/nh02/deploy.sh` as the standard firmware+APK deploy path. It builds the normal firmware and ordinary release APK, refreshes Android helpers only, installs the exact APK, serves firmware through `nh02` + `adb reverse`, starts the runtime OTA check, uploads over BLE from the phone, and requires post-update telemetry recovery.
+- Use `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin` only as the lower-level OTA check when bypassing the build/deploy wrapper is intentional.
 - Current BLE OTA requests high connection priority, a larger MTU, and write-without-response for chunks when Android and the characteristic support it; it falls back to acknowledged writes when required, so keep wrapper timeouts long enough for the slower path.
 - On the Xiaomi test phone, BLE scan/OTA can fail silently when the screen is
   off. ADB `input keyevent` may be denied with `INJECT_EVENTS`, so the app
@@ -55,7 +56,7 @@
 - Use the phone as the real BLE central against the BoatLock bench.
 - Prove BLE reconnect behavior on `nh02` with `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130`.
 - Prove recovery after ESP32 reboot on `nh02` with `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130`.
-- Prove and perform the normal phone-bridged BLE firmware update on `nh02` with `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`.
+- Prove and perform the normal phone-bridged BLE firmware update on `nh02` with `tools/hw/nh02/deploy.sh`.
 - Read device logs with `adb logcat`.
 - Update an already-installed release app APK over USB with `adb install -r` through the tracked wrapper.
 - Drive assisted/manual smoke tests while watching:
@@ -98,6 +99,7 @@
   - `tools/hw/nh02/android-run-smoke.sh --reconnect --wait-secs 130`
 - For ESP32 reboot recovery acceptance, run:
   - `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130`
-- For phone-bridged BLE OTA flashing/acceptance, build firmware first and run:
-  - `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
+- For phone-bridged BLE OTA flashing/acceptance, run:
+  - `tools/hw/nh02/deploy.sh`
+  - `tools/hw/nh02/deploy.sh --no-build` when both firmware and APK were already built
 - After that, if stronger coverage is needed, add a narrow app-side flow for connect + auth + heartbeat + anchor-on deny/allow checks.
