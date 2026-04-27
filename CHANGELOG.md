@@ -2,10 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.2.1] - 2026-04-27
+### Added
+- Added a standard `nh02` phone BLE OTA deploy wrapper (`tools/hw/nh02/deploy.sh`) that builds firmware and the release APK, installs the exact APK, uploads firmware through the phone, and waits for post-update telemetry recovery.
+- Added release-app telemetry parsing for the previous v3 live frame so a newly installed app can still bridge an already-deployed v3 firmware to the current v4 firmware over BLE OTA.
+
 ### Changed
 - Standardized phone/BLE manual control on atomic `MANUAL_TARGET:<angleDeg>,<throttlePct>,<ttlMs>` and `MANUAL_OFF`.
 - Manual entry now disables Anchor mode and uses a deadman TTL so app/controller loss cannot resume Anchor unexpectedly.
+- Split steering setup into motor steps per revolution and gear ratio, with `StepSpr=200` and `StepGear=36` defaults for the current DRV8825 full-step hardware.
+- Raised default stepper speed/acceleration for usable manual steering response.
+- Improved `nh02` Android OTA runner logging with artifact hashes, app launch state, progress heartbeats, and early logcat context when OTA does not start.
 
 ### Removed
 - Removed legacy split manual commands `MANUAL`, `MANUAL_DIR`, and `MANUAL_SPEED` from the accepted command surface.
