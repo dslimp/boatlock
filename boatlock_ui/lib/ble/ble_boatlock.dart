@@ -246,10 +246,8 @@ class BleBoatLock with WidgetsBindingObserver {
     });
 
     try {
-      await FlutterBluePlus.startScan(
-        timeout: kBoatLockScanTimeout,
-        withServices: boatLockScanServiceFilters(),
-      );
+      _log('scan start: unfiltered name_or_service_match');
+      await FlutterBluePlus.startScan(timeout: kBoatLockScanTimeout);
       foundResult = await Future.any<ScanResult?>([
         scanDone.future,
         Future.delayed(kBoatLockScanCompletionWait, () => null),

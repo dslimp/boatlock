@@ -7526,3 +7526,53 @@ Self-review:
 - Firmware was built but not flashed because the phone did not see the BLE
   `BoatLock` advertiser. The next proof should start with boat power/BLE
   advertising visibility near the phone, then rerun the same OTA wrapper.
+
+### 2026-04-27 Stage 249: Fix phone BLE OTA start path
+
+Scope:
+- Fix the phone-side BLE path after OTA failed to start with repeated app scan
+  misses.
+- Prove BLE connect, BLE OTA upload, ESP32 reboot, and telemetry recovery
+  through the canonical `nh02` production-app e2e wrapper.
+
+Key outcome:
+- Removed the Android `withServices: 12ab` scan filter from the Flutter BLE
+  client. The contract is name-or-service matching, and an Android service-only
+  scan filter can drop name-only `BoatLock` advertisements before Dart sees
+  them.
+- Added explicit `scan start: unfiltered name_or_service_match` logging for the
+  scan path.
+- Added Android Activity wake/visibility flags:
+  `FLAG_KEEP_SCREEN_ON`, `showWhenLocked`, `turnScreenOn`, and keyguard dismiss.
+  The Xiaomi test phone denied ADB `input keyevent` with `INJECT_EVENTS`, so
+  wrapper-side wake commands alone could not make BLE scan reliable when the
+  screen was off.
+- Updated the `nh02` remote smoke/e2e runner to make best-effort wake calls
+  before launch and during wait loops.
+- Updated `tools/hw/nh02/android-install-app.sh` to prefer a USB-visible phone
+  for normal APK installs, falling back to ADB Wi-Fi only when USB is absent.
+
+Validation:
+- Initial repro after the previous commit: `tools/hw/nh02/android-run-app-e2e.sh
+  --wait-secs 300` failed with scan misses while the phone screen was off.
+- After app/wrapper fixes:
+  `tools/hw/nh02/android-run-app-e2e.sh --wait-secs 300` -> PASS with
+  `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"app_telemetry_received",...}`.
+- BLE OTA:
+  `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin --wait-secs 1800`
+  -> PASS. Progress reached `100%`, then wrapper reported
+  `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"app_ota_reconnect_after_update",...}`.
+- `cd boatlock_ui && flutter analyze && flutter test` -> PASS.
+- Clean rebuild:
+  - `tools/android/build-app-apk.sh` -> PASS.
+  - `tools/hw/nh02/android-install-app.sh --no-build` -> PASS; normal APK
+    installed with `adb install -r` returning `Success`.
+  - `tools/macos/build-app.sh --debug` -> PASS.
+  - `tools/macos/acceptance.sh --debug --no-build --static-only` -> PASS after
+    clean rebuild fixed the stale incremental macOS code signature.
+
+Self-review:
+- The prior stop was wrong: the blocker was inside the phone/app acceptance path,
+  not proof that hardware BLE advertising was absent. The canonical verdict now
+  proves the actual OTA path through the phone and post-update telemetry
+  recovery.

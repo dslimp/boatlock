@@ -133,6 +133,13 @@ if [[ "${state}" != "device" ]]; then
   exit 1
 fi
 
+keep_phone_awake() {
+  "${ADB[@]}" shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
+  "${ADB[@]}" shell wm dismiss-keyguard >/dev/null 2>&1 || true
+}
+
+keep_phone_awake
+
 bt_state="$("${ADB[@]}" shell settings get global bluetooth_on 2>/dev/null | tr -d '\r' || true)"
 loc_mode="$("${ADB[@]}" shell settings get secure location_mode 2>/dev/null | tr -d '\r' || true)"
 printf 'bt_state=%s\n' "${bt_state:-unknown}"
@@ -195,6 +202,7 @@ fi
 
 "${ADB[@]}" logcat -c || true
 "${ADB[@]}" shell am force-stop "${PACKAGE}" >/dev/null 2>&1 || true
+keep_phone_awake
 "${ADB[@]}" shell am start -W -n "${ACTIVITY}" >/dev/null
 
 if [[ "${CYCLE_BLUETOOTH}" -eq 1 || "${RESET_ESP32}" -eq 1 ]]; then
@@ -227,6 +235,7 @@ progress_line=""
 last_progress_line=""
 
 while [[ $(date +%s) -lt ${deadline} ]]; do
+  keep_phone_awake
   dump="$("${ADB[@]}" logcat -d 2>/dev/null || true)"
   result_line="$(printf '%s\n' "${dump}" | grep 'BOATLOCK_SMOKE_RESULT ' | tail -n 1 || true)"
   if [[ -n "${result_line}" ]]; then

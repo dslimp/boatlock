@@ -147,6 +147,9 @@
 - Flutter device match is true when:
   - advertised or platform name equals/contains `boatlock`, or
   - advertised service UUID contains `12ab`
+- Flutter BLE scan must not use an Android service-only scan filter because the
+  product contract allows name-only `BoatLock` advertisements as well as
+  service UUID matches.
 - Flutter stops scanning before connect and retries scan/reconnect every `3 s`.
 - App heartbeat is sent every `1 s` once connected.
 - Security flow:

@@ -30,6 +30,17 @@ if [[ "${BUILD_FIRST}" -eq 1 ]]; then
   "${REPO_ROOT}/tools/android/build-app-apk.sh" >/dev/null
 fi
 
+if [[ ! -f "${BOATLOCK_ANDROID_APK}" ]]; then
+  echo "Android app APK not found at ${BOATLOCK_ANDROID_APK}" >&2
+  exit 1
+fi
+
+remote_shell "'${BOATLOCK_NH02_REMOTE_ANDROID_TOOLS_BIN}'" >/dev/null
+
+if [[ -z "${ANDROID_SERIAL}" ]]; then
+  ANDROID_SERIAL="$(remote_shell "adb devices -l | awk '\$2 == \"device\" && \$0 ~ / usb:/ { print \$1; exit }'")"
+fi
+
 if [[ -z "${ANDROID_SERIAL}" && "${BOATLOCK_NH02_ANDROID_WIFI_ADB:-1}" -eq 1 ]]; then
   ANDROID_SERIAL="$(boatlock_nh02_android_wifi_serial)"
   if [[ -z "${ANDROID_SERIAL}" ]]; then
@@ -38,12 +49,6 @@ if [[ -z "${ANDROID_SERIAL}" && "${BOATLOCK_NH02_ANDROID_WIFI_ADB:-1}" -eq 1 ]];
   fi
 fi
 
-if [[ ! -f "${BOATLOCK_ANDROID_APK}" ]]; then
-  echo "Android app APK not found at ${BOATLOCK_ANDROID_APK}" >&2
-  exit 1
-fi
-
-remote_shell "'${BOATLOCK_NH02_REMOTE_ANDROID_TOOLS_BIN}'" >/dev/null
 remote_shell "mkdir -p '${BOATLOCK_NH02_REMOTE_ANDROID_STAGE}'"
 
 remote_apk_path="${BOATLOCK_NH02_REMOTE_ANDROID_STAGE}/$(basename "${BOATLOCK_ANDROID_APK}")"

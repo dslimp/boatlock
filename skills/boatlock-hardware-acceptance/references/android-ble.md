@@ -23,6 +23,13 @@
 - Use `tools/hw/nh02/android-run-smoke.sh --esp-reset --wait-secs 130` to install/update the reconnect smoke APK, wait for first telemetry, reset the ESP32-S3 through the tracked reset helper, and require telemetry recovery without restarting the app.
 - Use `tools/hw/nh02/android-run-app-e2e.sh --ota --ota-firmware boatlock/.pio/build/esp32s3_service/firmware.bin` to install/update the production app with OTA e2e defines, serve firmware through `nh02` + `adb reverse`, upload over BLE from the phone, and require post-update telemetry recovery.
 - Current BLE OTA requests high connection priority, a larger MTU, and write-without-response for chunks when Android and the characteristic support it; it falls back to acknowledged writes when required, so keep wrapper timeouts long enough for the slower path.
+- On the Xiaomi test phone, BLE scan/OTA can fail silently when the screen is
+  off. ADB `input keyevent` may be denied with `INJECT_EVENTS`, so the app
+  Activity keeps itself visible with `showWhenLocked`, `turnScreenOn`, and
+  `FLAG_KEEP_SCREEN_ON`.
+- The app scan path must stay unfiltered at the Android scanner level. Apply
+  BoatLock matching in Dart so name-only `BoatLock` adverts and `12ab` service
+  adverts both work.
 - If `nh02` shows the phone only as `MTP` or a vendor USB device and not in `adb devices`, the cable path is alive but USB debugging is still off on the phone.
 
 ## Install / Update Semantics Seen On The Xiaomi Test Phone
