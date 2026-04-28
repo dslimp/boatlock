@@ -68,6 +68,42 @@ The release app reads `manifest.json` from the latest GitHub Release for
 `channel=release`, `branch=release/vX.Y.x`, `platformioEnv=esp32s3`, and
 `commandProfile=release`.
 
+## Android App Signing
+
+Tagged Android release APKs must be signed with the same long-lived release
+certificate for the lifetime of the app. Android accepts an APK update only when
+the new APK certificate matches the installed app certificate, so GitHub Release
+APKs must not use the runner's generated debug keystore.
+
+Keep the private keystore outside the repository and configure these GitHub
+Secrets before pushing a `v*` tag:
+
+- `BOATLOCK_ANDROID_KEYSTORE_BASE64`
+- `BOATLOCK_ANDROID_KEYSTORE_PASSWORD`
+- `BOATLOCK_ANDROID_KEY_ALIAS`
+- `BOATLOCK_ANDROID_KEY_PASSWORD`
+
+Example secret setup from a local private keystore:
+
+```bash
+mkdir -p ~/.boatlock
+keytool -genkeypair \
+  -v \
+  -keystore ~/.boatlock/boatlock-release.jks \
+  -storetype JKS \
+  -keyalg RSA \
+  -keysize 4096 \
+  -validity 10000 \
+  -alias boatlock-release
+base64 < ~/.boatlock/boatlock-release.jks | gh secret set BOATLOCK_ANDROID_KEYSTORE_BASE64
+gh secret set BOATLOCK_ANDROID_KEYSTORE_PASSWORD
+gh secret set BOATLOCK_ANDROID_KEY_ALIAS
+gh secret set BOATLOCK_ANDROID_KEY_PASSWORD
+```
+
+Branch and pull-request Android builds may fall back to debug signing for CI
+coverage. A tagged `v*` build fails if release signing secrets are missing.
+
 ## Local App Builds
 
 ```bash

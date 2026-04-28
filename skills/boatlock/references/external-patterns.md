@@ -361,11 +361,18 @@ Implication for BoatLock:
 - Flutter's CLI is the canonical build entry point for platform artifacts; use `flutter build apk --release` and `flutter build macos --release` without app-behavior `dart-define` variants.
 - Flutter macOS release builds run inside the macOS App Sandbox by default. The release app downloads firmware, so it must keep the network-client entitlement in release builds.
 - GitHub release assets have a public browser download URL and an API asset URL. For token-backed/private validation, request the API asset URL with `Accept: application/octet-stream` and handle the normal binary/redirect response path.
+- Android's official app-signing guidance says every APK must be signed, app
+  updates require matching certificates, and debug certificates are insecure by
+  design and not for distribution:
+  https://developer.android.com/guide/publishing/app-signing.html
 
 Implication for BoatLock:
 - Ship one release app artifact per platform; hide OTA/tuning controls behind the app's setup switch instead of producing alternate app variants.
 - Publish normal firmware assets with a manifest that the app validator accepts (`esp32s3`, `release`, SHA-256, size, main/release channel).
 - Do not rely on unauthenticated browser release URLs as proof that private release-asset validation works.
+- Sign GitHub Release APKs with a stable private release key stored outside the
+  repository and injected through GitHub Secrets. Do not publish APK artifacts
+  signed by a CI runner's generated debug key.
 
 ## Best-Practice Decisions For BoatLock
 

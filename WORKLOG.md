@@ -7830,3 +7830,46 @@ Self-review:
   parsing must bridge the currently installed firmware schema long enough to
   start OTA. The new deploy wrapper makes that invariant visible and the
   runner now reports the exact stage when it fails.
+
+### 2026-04-28 Stage 255: GitHub release and phone update proof
+
+Scope:
+- Verify `v0.2.1` GitHub Release artifacts, `release/v0.2.x` containment, and
+  the phone-driven latest-release firmware OTA path.
+- Fix the Android release signing defect found while testing the GitHub APK
+  install/update path.
+
+Decisions:
+- GitHub Release APKs must be signed with a stable private release key injected
+  through GitHub Secrets. Android tagged releases now require signing secrets;
+  branch and PR builds may keep debug signing fallback for CI coverage.
+- The release signing key must stay outside the repository. Do not commit a
+  keystore or reuse a runner-generated debug key for published APKs.
+
+Validation:
+- `git fetch --tags origin main release/v0.2.x` -> PASS.
+- `git rev-parse HEAD origin/main origin/release/v0.2.x 'v0.2.1^{commit}'`
+  -> all `9d87e03f963d98a4091a8d78a9dae70d07e8f5e1`.
+- GitHub latest release API -> `v0.2.1`, Actions run `25010293795` completed
+  with `conclusion=success`.
+- Downloaded public release assets:
+  - `boatlock-app.apk` SHA-256
+    `f491feb70b20aab0382972b8afa9f9e766f30af13c38ab5cb9a81e15ea473094`
+  - `firmware-esp32s3.bin` SHA-256
+    `539e4c1d3101ae4478fee39a23ab67915cab1419cd241f4a582f575b6da2709a`
+  - `manifest.json` points at `release/v0.2.x`, firmware `0.2.1`, workflow
+    run `25010293795`, and the same firmware SHA/size.
+- `python3 tools/ci/check_release_ref.py --tag v0.2.1 --require-current-commit`
+  -> PASS.
+- Exact GitHub APK install through
+  `tools/hw/nh02/android-run-smoke.sh --no-build --mode ota --ota-latest-release --wait-secs 1800`
+  is blocked before OTA by Xiaomi `INSTALL_FAILED_USER_RESTRICTED` after three
+  canonical retries. The APK is staged on the phone at
+  `/sdcard/Download/boatlock-app.apk`; do not count `--no-install` as
+  acceptance until the phone-side install policy is fixed or explicitly waived.
+
+Self-review:
+- GitHub firmware artifacts are coherent, but the phone proof cannot honestly
+  be marked complete while MIUI rejects exact APK install. The signing defect
+  was a separate source bug: even after MIUI is fixed, future APK-over-APK
+  updates would break without stable release signing.

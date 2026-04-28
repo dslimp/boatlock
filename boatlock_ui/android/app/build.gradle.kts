@@ -5,6 +5,24 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+fun boatlockSigningValue(name: String): String? =
+    (System.getenv(name) ?: project.findProperty(name) as String?)
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+
+val releaseKeystorePath = boatlockSigningValue("BOATLOCK_ANDROID_KEYSTORE_PATH")
+val releaseKeystorePassword =
+    boatlockSigningValue("BOATLOCK_ANDROID_KEYSTORE_PASSWORD")
+val releaseKeyAlias = boatlockSigningValue("BOATLOCK_ANDROID_KEY_ALIAS")
+val releaseKeyPassword = boatlockSigningValue("BOATLOCK_ANDROID_KEY_PASSWORD")
+val requireReleaseSigning =
+    boatlockSigningValue("BOATLOCK_ANDROID_REQUIRE_RELEASE_SIGNING") == "1"
+val hasReleaseSigning =
+    releaseKeystorePath != null &&
+        releaseKeystorePassword != null &&
+        releaseKeyAlias != null &&
+        releaseKeyPassword != null
+
 android {
     namespace = "com.example.boatlock_ui"
     compileSdk = flutter.compileSdkVersion
@@ -27,11 +45,34 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("boatlockRelease") {
+                storeFile = file(releaseKeystorePath!!)
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig =
+                if (hasReleaseSigning) {
+                    signingConfigs.getByName("boatlockRelease")
+                } else {
+                    if (requireReleaseSigning) {
+                        throw GradleException(
+                            "BoatLock Android release signing is required. " +
+                                "Set BOATLOCK_ANDROID_KEYSTORE_PATH, " +
+                                "BOATLOCK_ANDROID_KEYSTORE_PASSWORD, " +
+                                "BOATLOCK_ANDROID_KEY_ALIAS, and " +
+                                "BOATLOCK_ANDROID_KEY_PASSWORD."
+                        )
+                    }
+                    signingConfigs.getByName("debug")
+                }
         }
     }
 }

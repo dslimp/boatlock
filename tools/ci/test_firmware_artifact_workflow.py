@@ -80,6 +80,24 @@ def test_ci_builds_single_apps_with_latest_release_firmware_source():
     assert "--dart-" + "define" not in workflow
 
 
+def test_android_release_apk_uses_stable_signing_for_tags():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+    gradle = (ROOT / "boatlock_ui/android/app/build.gradle.kts").read_text()
+
+    assert "Prepare Android release signing" in workflow
+    assert "BOATLOCK_ANDROID_KEYSTORE_BASE64" in workflow
+    assert "BOATLOCK_ANDROID_KEYSTORE_PATH" in workflow
+    assert "BOATLOCK_ANDROID_REQUIRE_RELEASE_SIGNING" in workflow
+    assert "refs/tags/v*" in workflow
+
+    assert "BOATLOCK_ANDROID_KEYSTORE_PATH" in gradle
+    assert "BOATLOCK_ANDROID_KEYSTORE_PASSWORD" in gradle
+    assert "BOATLOCK_ANDROID_KEY_ALIAS" in gradle
+    assert "BOATLOCK_ANDROID_KEY_PASSWORD" in gradle
+    assert "BOATLOCK_ANDROID_REQUIRE_RELEASE_SIGNING" in gradle
+    assert "boatlockRelease" in gradle
+
+
 def test_flutter_ci_runs_setup_ui_tests():
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
 
