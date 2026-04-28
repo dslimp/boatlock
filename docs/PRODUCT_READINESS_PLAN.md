@@ -11,7 +11,6 @@ records the product and validation backlog that should drive the next cuts.
 `main` should stay focused on the releasable BoatLock path:
 
 - app connection/reconnection over BLE
-- secure owner pairing/auth for write/control commands
 - set anchor, enable anchor, disable anchor, emergency stop
 - deadman-protected manual control from phone and future BLE remote
 - anchor hold from hardware GNSS plus onboard BNO08x heading
@@ -66,12 +65,12 @@ What matches the target:
   arbitration, GNSS, motion, telemetry cadence, anchor gate, sim execution, and
   status split into narrower modules.
 - BLE protocol uses fixed UUIDs, fixed-size live telemetry, command validation,
-  pairing/auth envelope, logs, and OTA partition safety.
+  logs, and OTA partition safety.
 - Manual control uses atomic `MANUAL_TARGET:<angleDeg>,<throttlePct>,<ttlMs>` and
   `MANUAL_OFF`, with a short deadman TTL and source-owned lease.
 - Multi-client control ownership is now specified as a future implementation
   contract: read-only telemetry clients may coexist, but only one eligible
-  controller, authenticated when paired, can hold the control lease.
+  controller can hold the control lease.
 - `ANCHOR_ON` is behind anchor-point, heading, and GNSS quality gates.
 - STOP/failsafes latch quiet `HOLD` instead of auto-entering manual control.
 - On-device HIL `S0..S19` plus `RF0..RF4` and offline `tools/sim` are real validation assets and
@@ -97,9 +96,6 @@ Important mismatch:
 - Prove app-visible firmware command-profile rejections on `nh02` and Android so
   release firmware blocking setup/dev/HIL commands cannot look like a silent
   write.
-- Resolve paired-mode auth policy for raw safety commands: either document and
-  test an intentional emergency exception, or require `SEC_CMD` for all
-  control/write commands that refresh safety state.
 - Prove or fix GPS-to-compass correction source ownership. Phone GPS fallback is
   display/telemetry only and must not indirectly bias control heading correction.
 - Prove BLE command profiles end-to-end on `nh02` and Android: release rejection
@@ -127,7 +123,7 @@ Important mismatch:
 ### P1 Before First Water
 
 - Turn the protected-water checklist into app-driven readiness where practical:
-  live-frame age, RSSI, auth/session, GNSS/heading freshness, active firmware
+  live-frame age, RSSI, GNSS/heading freshness, active firmware
   profile, STOP proof, manual-release proof, and active blockers.
 - Keep current anchor controls covered by tests: current-position save,
   map-point save, enable/disable, fixed 1.5 m jog, distance/bearing, and blocked
@@ -151,12 +147,12 @@ Important mismatch:
 - Add setup flows for heading offset, steering bow-zero, and boat
   scale style tuning.
 - Implement the documented second-controller gate in `docs/MANUAL_CONTROL.md`
-  and `docs/BLE_PROTOCOL.md`: per-client identity/auth, read-only telemetry
+  and `docs/BLE_PROTOCOL.md`: per-client identity, read-only telemetry
   clients, single control-owner lease, conservative takeover, remote role
   allowlist, STOP preemption, and two-central tests before accepting a real BLE
   remote.
 - Optimize BLE OTA throughput only after the powered path is stable; keep SHA-256,
-  auth envelope, abort-on-disconnect, and USB flash recovery.
+  abort-on-disconnect, and USB flash recovery.
 
 ## Simulation Plan
 
@@ -234,7 +230,7 @@ Phases:
 3. Steering-only: motor thrust disabled, verify stepper/steering direction,
    bow-zero, release, and no hunting.
 4. Anchor preflight denied/accepted: verify denied reasons first, then accepted
-   only with `gnssQ=2`, fresh heading, saved anchor, and auth.
+   only with `gnssQ=2`, fresh heading, and saved anchor.
 5. Short anchor hold with quiet profile: 30-60 seconds, low thrust cap,
    containment close, manual STOP recovery.
 6. Longer hold: 5-10 minutes, observe drift track, PWM, heading error, stepper

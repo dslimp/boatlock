@@ -37,31 +37,25 @@
 #include "RuntimeSimLog.h"
 #include "RuntimeSimBadge.h"
 #include "RuntimeStatus.h"
-#include "RuntimeBleCommandLog.h"
 #include "RuntimeSupervisorPolicy.h"
 #include "RuntimeTelemetryCadence.h"
 #include "RuntimeUiSnapshot.h"
-#include "BleSecurity.h"
 #include "BleOtaUpdate.h"
 #include "HilSimRunner.h"
 #include "BleCommandHandler.h"
 #include "BLEBoatLock.h"
-#include "DebugWifiOta.h"
 #include "SdCardLogger.h"
 
 Settings settings;
 constexpr size_t EEPROM_SIZE =
-    (Settings::EEPROM_ADDR + Settings::STORED_BYTES >
-     BleSecurity::EEPROM_ADDR + BleSecurity::STORED_BYTES)
-        ? (Settings::EEPROM_ADDR + Settings::STORED_BYTES)
-        : (BleSecurity::EEPROM_ADDR + BleSecurity::STORED_BYTES);
+    Settings::EEPROM_ADDR + Settings::STORED_BYTES;
 
 BLEBoatLock bleBoatLock;
 BleOtaUpdate bleOta;
 bool bleStarted = false;
 
 namespace cfg {
-constexpr char kFirmwareVersion[] = "0.2.6";
+constexpr char kFirmwareVersion[] = "0.2.7";
 
 constexpr int kStepperStepPin = 6;
 constexpr int kStepperDirPin = 16;
@@ -92,7 +86,6 @@ constexpr unsigned long kCompassReadIntervalMs = 50;
 constexpr unsigned long kCompassFirstEventTimeoutMs = 3000;
 constexpr unsigned long kCompassStaleEventMs = 750;
 constexpr unsigned long kBootSaveHoldMs = 1500;
-constexpr unsigned long kStopPairingHoldMs = 3000;
 constexpr unsigned long kCompassRetryIntervalMs = 5000;
 constexpr unsigned long kGpsNoDataWarnMs = 6000;
 constexpr unsigned long kGpsUartStaleRestartMs = 6000;
@@ -127,8 +120,6 @@ FixTypeSource fixTypeSource = FixTypeSource::NONE;
 bool minFixTypeIgnoredLogged = false;
 unsigned long lastLoopMs = 0;
 unsigned long lastSdTelemetryMs = 0;
-BleSecurity bleSecurity;
-
 ManualControl manualControl;
 hilsim::HilSimManager hilSim;
 unsigned long simLastWallMs = 0;
@@ -156,7 +147,7 @@ void clearSafeHold();
 const char* currentAnchorDeniedReason();
 const char* currentFailsafeReason();
 AnchorDeniedReason currentGnssDeniedReason();
-bool preprocessSecureCommand(const std::string& incoming, std::string* effective);
+bool preprocessBleCommand(const std::string& incoming, std::string* effective);
 bool handleSimCommand(const std::string& command);
 
 namespace {
@@ -310,7 +301,6 @@ void registerBleParams() {
       driftMonitor,
       compass,
       hilSim,
-      bleSecurity,
       handleBleCommand,
       []() { return headingAvailable(); },
       []() { return currentHeadingValue(); },
@@ -449,17 +439,12 @@ void handleStopButton() {
   const bool pressed = digitalRead(cfg::kStopButtonPin) == LOW;
   const unsigned long now = millis();
   const RuntimeButtonAction action =
-      runtimeButtons.updateStop(pressed, now, cfg::kStopPairingHoldMs);
+      runtimeButtons.updateStop(pressed, now);
   if (action.type == RuntimeButtonActionType::EMERGENCY_STOP) {
     setLastFailsafeReason(FailsafeReason::STOP_CMD);
     stopAllMotionNow();
     logMessage("[STOP] hardware stop button pressed (GPIO%d)\n", cfg::kStopButtonPin);
     return;
-  }
-  if (action.type == RuntimeButtonActionType::OPEN_PAIRING_WINDOW) {
-    bleSecurity.openPairingWindow(now);
-    logMessage("[EVENT] PAIRING_WINDOW_OPEN source=STOP_BUTTON timeout_ms=%lu\n",
-               (unsigned long)BleSecurity::kPairingWindowMs);
   }
 }
 
@@ -612,74 +597,11 @@ AnchorDeniedReason currentGnssDeniedReason() {
   return runtimeGnss.currentDeniedReason();
 }
 
-bool preprocessSecureCommand(const std::string& incoming, std::string* effective) {
+bool preprocessBleCommand(const std::string& incoming, std::string* effective) {
   if (!effective) {
     return false;
   }
   *effective = incoming;
-  const unsigned long now = millis();
-
-  if (incoming == "AUTH_HELLO") {
-    const uint64_t nonce = bleSecurity.startAuth(now);
-    if (nonce == 0) {
-      logMessage("[EVENT] AUTH_DENIED reason=%s\n", bleSecurity.lastRejectString());
-    } else {
-      logMessage("[EVENT] AUTH_CHALLENGE issued=1\n");
-    }
-    return false;
-  }
-
-  if (incoming.rfind("AUTH_PROVE:", 0) == 0) {
-    const char* proof = incoming.c_str() + 11;
-    if (bleSecurity.proveAuthHex(proof)) {
-      logMessage("[EVENT] AUTH_OK role=OWNER\n");
-    } else {
-      logMessage("[EVENT] AUTH_DENIED reason=%s\n", bleSecurity.lastRejectString());
-    }
-    return false;
-  }
-
-  if (incoming.rfind("PAIR_SET:", 0) == 0) {
-    const char* secretHex = incoming.c_str() + 9;
-    if (bleSecurity.setOwnerSecretHex(secretHex, now)) {
-      logMessage("[EVENT] PAIRING_COMPLETED secret=SET\n");
-    } else {
-      logMessage("[EVENT] PAIRING_DENIED reason=%s\n", bleSecurity.lastRejectString());
-    }
-    return false;
-  }
-
-  if (incoming == "PAIR_CLEAR") {
-    if (bleSecurity.pairingWindowOpen(now) || !bleSecurity.isPaired()) {
-      bleSecurity.clearPairing();
-      logMessage("[EVENT] PAIRING_CLEARED source=PAIR_WINDOW\n");
-    } else {
-      logMessage("[EVENT] AUTH_REQUIRED command=PAIR_CLEAR\n");
-    }
-    return false;
-  }
-
-  if (incoming.rfind("SEC_CMD:", 0) == 0) {
-    std::string payload;
-    if (!bleSecurity.unwrapSecureCommand(incoming, &payload, now)) {
-      logMessage("[EVENT] AUTH_REJECT reason=%s\n", bleSecurity.lastRejectString());
-      return false;
-    }
-    if (payload == "PAIR_CLEAR") {
-      bleSecurity.clearPairing();
-      logMessage("[EVENT] PAIRING_CLEARED source=OWNER_SESSION\n");
-      return false;
-    }
-    *effective = payload;
-    return true;
-  }
-
-  if (bleSecurity.commandNeedsAuth(incoming)) {
-    const std::string logCommand = runtimeBleLogCommandText(incoming);
-    logMessage("[EVENT] AUTH_REQUIRED command=%s\n", logCommand.c_str());
-    return false;
-  }
-
   return true;
 }
 
@@ -866,13 +788,11 @@ void setup() {
 
   EEPROM.begin(EEPROM_SIZE);
   settings.load();
-  bleSecurity.load();
   if (settings.get("AnchorEnabled") == 1) {
     settings.set("AnchorEnabled", 0);
     settings.save();
     logMessage("[EVENT] ANCHOR_DISARM_ON_BOOT prev=1\n");
   }
-  logMessage("[SEC] paired=%d\n", bleSecurity.isPaired() ? 1 : 0);
   logMessage("[CFG] HoldHeading=%d\n", (int)settings.get("HoldHeading"));
   if (!minFixTypeIgnoredLogged && fixTypeSource == FixTypeSource::NONE) {
     minFixTypeIgnoredLogged = true;
@@ -891,11 +811,7 @@ void setup() {
   anchor.loadAnchor();
 
   registerBleParams();
-#if BOATLOCK_DEBUG_WIFI_OTA
-  DebugWifiOta::begin([]() { stopAllMotionNow(); });
-#else
   startBleRuntime();
-#endif
 
   motor.setupPWM(cfg::kMotorPwmPin, cfg::kPwmChannel, cfg::kPwmFreq, cfg::kPwmResolution);
   motor.setDirPins(cfg::kMotorDirPin1, cfg::kMotorDirPin2);
@@ -918,11 +834,6 @@ void loop() {
       (simLastWallMs == 0 || wallNowMs < simLastWallMs) ? 0 : (wallNowMs - simLastWallMs);
   simLastWallMs = wallNowMs;
   hilSim.loop(wallDtMs);
-#if BOATLOCK_DEBUG_WIFI_OTA
-  if (DebugWifiOta::bleMayStart()) {
-    startBleRuntime();
-  }
-#endif
   serviceBleRuntime();
   bleOta.loop();
 

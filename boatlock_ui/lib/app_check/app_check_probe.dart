@@ -200,7 +200,7 @@ class BoatLockAppCheckProbe {
     _dataEvents += 1;
     _log(
       'telemetry mode=${data.mode} status=${data.status} '
-      'paired=${data.secPaired} auth=${data.secAuth} rssi=${data.rssi} '
+      'rssi=${data.rssi} '
       'lat=${data.lat.toStringAsFixed(6)} lon=${data.lon.toStringAsFixed(6)} '
       'gnssQ=${data.gnssQ}',
     );

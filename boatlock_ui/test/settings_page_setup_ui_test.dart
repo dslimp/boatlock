@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:boatlock_ui/ble/ble_boatlock.dart';
 import 'package:boatlock_ui/ble/ble_command_rejection.dart';
 import 'package:boatlock_ui/ble/ble_ota_payload.dart';
-import 'package:boatlock_ui/ble/ble_security_codec.dart';
 import 'package:boatlock_ui/ota/firmware_update_client.dart';
 import 'package:boatlock_ui/ota/firmware_update_manifest.dart';
 import 'package:boatlock_ui/pages/settings_page.dart';
@@ -15,17 +14,11 @@ class SetupFakeBleBoatLock extends BleBoatLock {
 
   bool rejectNextStepMaxSpeed = false;
   bool rejectNextOtaBegin = false;
-  String? ownerSecretValue;
   double? stepMaxSpeedValue;
   double? stepSprValue;
   double? stepGearValue;
   List<int>? uploadedFirmware;
   String? uploadedSha256;
-
-  @override
-  void setOwnerSecret(String? secret) {
-    ownerSecretValue = normalizeOwnerSecret(secret);
-  }
 
   @override
   Future<bool> setStepMaxSpeed(double value) async {
@@ -146,10 +139,6 @@ SettingsPage _page(
     pitch: 0,
     roll: 0,
     isConnected: true,
-    secPaired: false,
-    secAuth: false,
-    secPairWindowOpen: true,
-    secReject: 'NONE',
   );
 }
 

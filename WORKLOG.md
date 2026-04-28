@@ -8074,3 +8074,58 @@ Self-review:
 - The source and local macOS app are fixed. A new GitHub Release is still needed
   before a freshly downloaded release zip carries this metadata; the existing
   `v0.2.6` release asset remains the historical artifact.
+
+### 2026-04-29 Stage 268: KISS release update path and BLE legacy cut
+
+Scope:
+- Remove the app-layer BLE security wrapper and legacy debug deploy path after
+  the phone-side GitHub OTA path was blocked by paired-mode command rejection.
+- Keep only two normal firmware update paths in the release app: phone-local
+  firmware file and latest GitHub Release.
+
+External baseline:
+- No new external source was needed for this slice. This is a removal of
+  repo-local product behavior that violated the current operator requirement.
+  The retained OTA baseline is the existing inactive-partition update plus
+  size/SHA-256 verification recorded in `skills/boatlock/references/external-patterns.md`.
+
+Decisions:
+- Delete `BleSecurity`, owner-secret/proof/envelope helpers, pairing/auth
+  commands, security live-frame fields, app preflight/auth UI, and related tests.
+- Delete the gated `DebugWifiOta`/`pull-update` firmware path and its PlatformIO
+  flag helper so deploy documentation cannot drift back to a third firmware
+  update route.
+- Keep firmware motion safety, command profile gates, control-owner lease helper,
+  Manual deadman TTL, and OTA size/SHA-256 validation.
+- Bump the live telemetry binary frame to v5/65 bytes and remove all security
+  telemetry fields instead of keeping compatibility shims.
+- STOP remains a debounced emergency command only; it no longer opens pairing.
+
+Validation:
+- `dart format boatlock_ui/lib boatlock_ui/test` -> PASS.
+- `flutter test test/ble_live_frame_test.dart test/anchor_preflight_test.dart test/status_panel_test.dart test/settings_page_test.dart test/settings_page_setup_ui_test.dart test/map_page_test.dart test/ble_smoke_logic_test.dart test/ble_command_scope_test.dart test/ble_command_rejection_test.dart test/diagnostics_page_test.dart` -> PASS.
+- `platformio test -e native` -> PASS, `415` test cases succeeded.
+- `platformio run -e esp32s3` -> PASS, produced `boatlock/.pio/build/esp32s3/firmware.bin`.
+- `tools/android/build-app-apk.sh` initially failed inside the sandbox on the
+  Gradle lock under `~/.gradle`; rerunning the same wrapper with host access
+  passed and produced `boatlock_ui/build/app/outputs/flutter-apk/app-release.apk`.
+- Version was bumped for publication: `kFirmwareVersion=0.2.7`,
+  `boatlock_ui` package version `0.2.7+7`, `CHANGELOG.md`, and
+  `docs/releases/0.2.7.md`.
+- After the version bump, `platformio run -e esp32s3` and
+  `tools/android/build-app-apk.sh` were rerun successfully.
+- `flutter analyze` -> PASS.
+- `pytest tools/ci/test_*.py` -> PASS, `38` passed.
+- `bash tools/ci/check_firmware_werror.sh` -> PASS.
+- `bash tools/ci/check_firmware_cppcheck.sh` -> PASS.
+- `python3 tools/ci/check_firmware_version.py` -> PASS.
+- `python3 tools/ci/check_config_schema_version.py` -> PASS.
+- `git diff --check` -> PASS.
+
+Self-review:
+- The update path is now simpler and easier to reason about: app command writes
+  are direct, and OTA is a release-app feature instead of a security-wrapper
+  exercise. Transition risk remains for already-flashed old paired firmware:
+  because compatibility was intentionally removed, an old image that rejects
+  direct OTA may require one recovery USB flash before the new path can take
+  over.

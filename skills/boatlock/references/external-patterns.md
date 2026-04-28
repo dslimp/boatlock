@@ -184,7 +184,7 @@ Implication for BoatLock:
 - Treat non-finite sensor/control values like unavailable inputs at module boundaries, not as values to normalize later inside actuator code.
 - In auto/position-control modes, invalid distance/position evidence should disable the control input rather than masquerade as a zero-error measurement.
 - In heading-up/course-up displays, the top of the display is the bow/heading frame. World bearings shown on that display must subtract heading (`bearing - heading`) so the visual target stays tied to the real-world direction as the device turns.
-- Treat physical button input as an unsafe raw signal. Debounce it before edges, and reserve state-changing actions such as anchor save or pairing for stable long-press paths.
+- Treat physical button input as an unsafe raw signal. Debounce it before edges, reserve anchor save for a stable long-press path, and keep STOP as an immediate emergency action after debounce.
 - For BLE/manual control, keep GATT as a small transport and put safety in the app protocol:
   - use acknowledged writes for control commands where the client needs a write result
   - keep live telemetry on notify/read characteristics
@@ -220,7 +220,7 @@ Implication for BoatLock:
 - Compile-time test-app modes should use one typed allowlist parser and a small unit test, then a real APK build for the entrypoint that consumes the define. This keeps device smoke wrappers from silently drifting away from Flutter code.
 - Shell wrappers that share protocol/test vocabulary should source one common helper and have a cheap CI drift test against the app-side enum/parser. Duplicated case lists make acceptance scripts fail silently when new modes are added.
 - OTA should write sequentially to an inactive OTA app partition, validate the completed image before selecting it for boot, and abort without changing boot selection on transfer failure.
-- BLE OTA should have an explicit start/finish command path, bounded chunks, progress/error acknowledgement, and an integrity check. For BoatLock, authenticated `OTA_BEGIN` plus full-image SHA-256 is the minimum debug-safe baseline; signed images or secure boot remain the production hardening step.
+- BLE OTA should have an explicit start/finish command path, bounded chunks, progress/error acknowledgement, and an integrity check. For BoatLock, direct `OTA_BEGIN` plus full-image SHA-256 is the current KISS baseline; signed images or secure boot remain a future hardening step.
 - Bulk BLE OTA should temporarily move the Android link to high connection priority, request a larger ATT MTU, size writes to the negotiated `MTU - 3` payload, and use write-without-response only with explicit pacing/backpressure. Restore normal connection policy after a failed or aborted transfer; on success BoatLock expects the ESP32 reboot to drop the temporary link.
 
 ## What Commercial GPS Anchors Get Right
@@ -329,7 +329,7 @@ Implication for BoatLock:
 
 Implication for BoatLock:
 - Use USB once to seed BLE OTA capability, then let the phone bridge the firmware binary to ESP32 over the existing BLE link.
-- Require an authenticated `OTA_BEGIN` when the device is paired, and require an expected SHA-256 before the phone starts transfer.
+- Require `OTA_BEGIN` with an expected SHA-256 before the phone starts transfer.
 - Keep USB flashing through `tools/hw/nh02/flash.sh` as the recovery path for failed OTA, bad hashes, or partition/bootloader changes.
 - For Android, prove Wi-Fi ADB by installing/running a smoke or ordinary app APK through `--serial <ip>:5555`; `adb devices` alone is only discovery proof.
 

@@ -3,207 +3,121 @@
 BoatLock uses one custom GATT service for the app and bench tooling:
 
 - Service UUID `12ab`
-- Live state characteristic `34cd`: notify/read, compact binary v4 frame
+- Live state characteristic `34cd`: notify/read, compact binary v5 frame
 - Control point characteristic `56ef`: write/write-no-response, printable ASCII commands
 - Device log characteristic `78ab`: notify, text log lines
-- Firmware OTA characteristic `9abc`: binary write/write-no-response; accepts firmware chunks only after `OTA_BEGIN`
+- Firmware OTA characteristic `9abc`: binary writes accepted only after `OTA_BEGIN`
 
-The live path is not a serial/JSON tunnel. The app subscribes to `34cd`, sends `STREAM_START`, and receives fixed-size binary live frames. Large snapshots and legacy parameter reads are not part of the protocol.
+The live path is not a serial/JSON tunnel. The app subscribes to `34cd`, sends
+`STREAM_START`, and receives fixed-size binary live frames. Large snapshots and
+parameter reads are not part of the protocol.
 
 ## Control Point Commands
 
-Control point payloads are application-level command byte strings, not a text stream. Valid command writes are `1..191` printable ASCII bytes (`0x20..0x7E`). Clients must reject empty, overlong, control-byte, embedded-NUL, and non-ASCII commands before writing `56ef`; firmware rejects the same malformed payloads before queueing.
+Control point payloads are application-level command byte strings, not a text
+stream. Valid command writes are `1..191` printable ASCII bytes
+(`0x20..0x7E`). Clients reject empty, overlong, control-byte, embedded-NUL, and
+non-ASCII commands before writing `56ef`; firmware rejects the same malformed
+payloads before queueing.
 
-Command scopes are product boundaries, not wire-level security:
-
-- `release`: normal water UI, app security/session setup, app telemetry
-  transport, hardware setup, BLE OTA, and safe software simulation (`SIM_*`).
-- `dev/HIL`: injected external sensor data. These commands are for validation harnesses only and must not appear in the normal water UI.
-
-`SEC_CMD` is the security envelope; the effective scope is the scope of the wrapped payload. The Flutter custom-command classifier does not accept raw `SEC_CMD` input; the BLE transport builds the envelope internally after classifying the unwrapped command.
+There is no BoatLock BLE command wrapper in the release protocol. The app writes
+the command listed below directly to `56ef`; firmware safety gates remain
+authoritative for motion, Anchor enable, Manual deadman, OTA integrity, and
+profile command scope.
 
 Current classification:
 
-- `release`: `STREAM_START`, `STREAM_STOP`, `SNAPSHOT`, `SET_ANCHOR`, `ANCHOR_ON`, `ANCHOR_OFF`, `STOP`, `HEARTBEAT`, `MANUAL_TARGET`, `MANUAL_OFF`, `NUDGE_DIR`, `NUDGE_BRG`, `SET_HOLD_HEADING`, `SET_ANCHOR_PROFILE`, `SET_COMPASS_OFFSET`, `RESET_COMPASS_OFFSET`, `COMPASS_CAL_START`, `COMPASS_DCD_SAVE`, `COMPASS_DCD_AUTOSAVE_ON`, `COMPASS_DCD_AUTOSAVE_OFF`, `COMPASS_TARE_Z`, `COMPASS_TARE_SAVE`, `COMPASS_TARE_CLEAR`, `SET_STEP_MAXSPD`, `SET_STEP_ACCEL`, `SET_STEP_SPR`, `SET_STEP_GEAR`, `SET_STEPPER_BOW`, `PAIR_SET`, `PAIR_CLEAR`, `AUTH_HELLO`, `AUTH_PROVE`, `OTA_BEGIN`, `OTA_FINISH`, `OTA_ABORT`, `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, `SIM_ABORT`.
+- `release`: `STREAM_START`, `STREAM_STOP`, `SNAPSHOT`, `SET_ANCHOR`,
+  `ANCHOR_ON`, `ANCHOR_OFF`, `STOP`, `HEARTBEAT`, `MANUAL_TARGET`,
+  `MANUAL_OFF`, `NUDGE_DIR`, `NUDGE_BRG`, `SET_HOLD_HEADING`,
+  `SET_ANCHOR_PROFILE`, `SET_COMPASS_OFFSET`, `RESET_COMPASS_OFFSET`,
+  `COMPASS_CAL_START`, `COMPASS_DCD_SAVE`, `COMPASS_DCD_AUTOSAVE_ON`,
+  `COMPASS_DCD_AUTOSAVE_OFF`, `COMPASS_TARE_Z`, `COMPASS_TARE_SAVE`,
+  `COMPASS_TARE_CLEAR`, `SET_STEP_MAXSPD`, `SET_STEP_ACCEL`, `SET_STEP_SPR`,
+  `SET_STEP_GEAR`, `SET_STEPPER_BOW`, `OTA_BEGIN`, `OTA_FINISH`, `OTA_ABORT`,
+  `SIM_LIST`, `SIM_RUN`, `SIM_STATUS`, `SIM_REPORT`, `SIM_ABORT`.
 - `dev/HIL`: `SET_PHONE_GPS`.
 
 | Command | Parameters | Description |
 |--------|------------|-------------|
-| `STREAM_START` | none | Enable periodic live-state notifications and immediately emit one live frame |
+| `STREAM_START` | none | Enable periodic live-state notifications and emit one live frame |
 | `STREAM_STOP` | none | Disable periodic live-state notifications and clear queued live frames |
 | `SNAPSHOT` | none | Emit one live-state frame without changing stream state |
-| `SET_ANCHOR:<lat>,<lon>` | valid non-zero `lat` and `lon` decimal degrees (floats) | Save anchor position with current heading; does not enable Anchor mode |
-| `ANCHOR_ON` | none | Enable anchor mode only if a saved anchor point exists, onboard heading is available, and GNSS quality is sufficient |
-| `ANCHOR_OFF` | none | Disable anchor mode immediately, stop current actuation, and clear any latched `HOLD` state |
-| `STOP` | none | Emergency stop: disable anchor/manual control, stop all motors, and latch runtime `HOLD` mode (highest priority) |
-| `HEARTBEAT` | none | Keep-alive command from controller/app; missing heartbeat while Anchor is active triggers failsafe |
-| `MANUAL_TARGET:<angleDeg>,<throttlePct>,<ttlMs>` | `angleDeg=-90..90` relative to bow, `throttlePct=-100..100`, `ttlMs=100..1000`; app default `1000` | Atomically enter/refresh Manual mode from the active controller; this disables Anchor mode and acts as a deadman lease |
-| `MANUAL_OFF` | none | Stop Manual mode and zero manual stepper/thruster output |
-| `NUDGE_DIR:<FWD\|BACK\|LEFT\|RIGHT>` | direction | Shift anchor point by the fixed 1.5 m jog step in boat frame (allowed only while Anchor is active and safety checks pass) |
-| `NUDGE_BRG:<bearingDeg>` | absolute bearing | Shift anchor point by the fixed 1.5 m jog step on the given bearing (allowed only while Anchor is active and safety checks pass) |
-| `SET_ANCHOR_PROFILE:<quiet\|normal\|current>` | profile id | Apply and persist preset `HoldRadius`, `DeadbandM`, `MaxThrustA`, and `ThrRampA` values |
-| `PAIR_SET:<ownerSecretHex>` | 32-hex owner secret | Set/replace owner secret while pairing window is open from hardware STOP long-press |
-| `PAIR_CLEAR` | none | Clear pairing; accepted only from owner session or while pairing window is physically open |
-| `AUTH_HELLO` | none | Start owner auth challenge; firmware generates `secNonce` |
-| `AUTH_PROVE:<proofHex>` | 16-hex chars | Complete owner auth for current nonce using owner secret MAC |
-| `SEC_CMD:<counterHex>:<sigHex>:<payload>` | secured command envelope | Authenticated command with anti-replay counter and 64-bit MAC |
-| `SET_HOLD_HEADING:<0|1>` | integer flag | Enable (`1`) or disable (`0`) heading hold |
-| `SET_PHONE_GPS:<lat>,<lon>[,<speedKmh>[,<satellites>]]` | latitude, longitude, optional speed in km/h, optional satellites used in fix | External tooling command; the main app control path does not use phone GPS as an anchor-control source |
-| `SET_COMPASS_OFFSET:<deg>` | heading offset in degrees (float) | Set persistent yaw offset for onboard BNO08x heading |
+| `SET_ANCHOR:<lat>,<lon>` | valid non-zero decimal degrees | Save anchor position with current heading; does not enable Anchor mode |
+| `ANCHOR_ON` | none | Enable Anchor only with a saved point, onboard heading, and sufficient GNSS quality |
+| `ANCHOR_OFF` | none | Disable Anchor immediately, stop actuation, and clear latched `HOLD` state |
+| `STOP` | none | Emergency stop: disable Anchor/Manual, stop all motors, and latch `HOLD` |
+| `HEARTBEAT` | none | Keep-alive from the app; missing heartbeat while Anchor is active triggers failsafe |
+| `MANUAL_TARGET:<angleDeg>,<throttlePct>,<ttlMs>` | `angleDeg=-90..90`, `throttlePct=-100..100`, `ttlMs=100..1000` | Atomically enter/refresh Manual; disables Anchor and acts as a deadman lease |
+| `MANUAL_OFF` | none | Stop Manual mode and zero manual outputs |
+| `NUDGE_DIR:<FWD\|BACK\|LEFT\|RIGHT>` | direction | Shift anchor point by the fixed jog step while Anchor is active and safety checks pass |
+| `NUDGE_BRG:<bearingDeg>` | absolute bearing | Shift anchor point by the fixed jog step on a bearing while Anchor is active |
+| `SET_ANCHOR_PROFILE:<quiet\|normal\|current>` | profile id | Apply and persist Anchor preset values |
+| `SET_HOLD_HEADING:<0|1>` | integer flag | Enable or disable heading hold |
+| `SET_PHONE_GPS:<lat>,<lon>[,<speedKmh>[,<satellites>]]` | external fix | Dev/HIL injection only; normal app control does not use phone GPS for anchor control |
+| `SET_COMPASS_OFFSET:<deg>` | float degrees | Set persistent BNO08x heading offset |
 | `RESET_COMPASS_OFFSET` | none | Reset persistent BNO08x heading offset to `0` |
-| `COMPASS_CAL_START` | none | SH2-UART build only: enable BNO08x dynamic calibration for accel/gyro/mag/planar sensors with DCD autosave disabled |
-| `COMPASS_DCD_SAVE` | none | SH2-UART build only: request immediate BNO08x Dynamic Calibration Data save |
+| `COMPASS_CAL_START` | none | SH2-UART build only: enable BNO08x dynamic calibration |
+| `COMPASS_DCD_SAVE` | none | SH2-UART build only: request BNO08x DCD save |
 | `COMPASS_DCD_AUTOSAVE_ON` | none | SH2-UART build only: enable BNO08x automatic DCD save |
 | `COMPASS_DCD_AUTOSAVE_OFF` | none | SH2-UART build only: disable BNO08x automatic DCD save |
-| `COMPASS_TARE_Z` | none | SH2-UART build only: tare Z/heading basis from the current rotation vector; use only during controlled calibration |
-| `COMPASS_TARE_SAVE` | none | SH2-UART build only: persist the last tare operation |
-| `COMPASS_TARE_CLEAR` | none | SH2-UART build only: clear the persisted tare |
-| `SET_STEP_MAXSPD:<float>` | float | Maximum stepper speed (steps/s) |
-| `SET_STEP_ACCEL:<float>` | float | Stepper acceleration (steps/s²) |
-| `SET_STEP_SPR:<int>` | int | Motor STEP pulses per motor revolution |
-| `SET_STEP_GEAR:<float>` | float | Mechanical reduction ratio from stepper motor to steering output shaft |
-| `SET_STEPPER_BOW` | none | Save current stepper position as boat-bow zero for anchor pointing |
-| `OTA_BEGIN:<size>,<sha256>` | firmware size in bytes and 64-hex SHA-256 | Enter safe stopped state, start writing a new firmware image to the inactive OTA partition, and arm binary chunk writes on `9abc` |
-| `OTA_FINISH` | none | Validate byte count and SHA-256, finalize the OTA image, then reboot into the new partition |
-| `OTA_ABORT` | none | Abort an active BLE OTA transfer and keep the current firmware active |
-| `SIM_LIST` | none | List built-in on-device HIL scenarios (`S0..S19`, `RF0..RF4`) |
-| `SIM_RUN:<scenario_id>[,<speedup>]` | id + speed mode (`0` fastest, `1` realtime) | Start deterministic closed-loop simulation on device |
-| `SIM_STATUS` | none | Return current simulation progress JSON |
-| `SIM_REPORT` | none | Return final simulation report JSON (chunked in logs) |
+| `COMPASS_TARE_Z` | none | SH2-UART build only: tare Z/heading basis |
+| `COMPASS_TARE_SAVE` | none | SH2-UART build only: persist last tare |
+| `COMPASS_TARE_CLEAR` | none | SH2-UART build only: clear persisted tare |
+| `SET_STEP_MAXSPD:<float>` | steps/s | Maximum stepper speed |
+| `SET_STEP_ACCEL:<float>` | steps/s² | Stepper acceleration |
+| `SET_STEP_SPR:<int>` | steps/rev | Motor STEP pulses per motor revolution |
+| `SET_STEP_GEAR:<float>` | ratio | Mechanical reduction from stepper motor to steering output shaft |
+| `SET_STEPPER_BOW` | none | Save current stepper position as boat-bow zero |
+| `OTA_BEGIN:<size>,<sha256>` | bytes + 64-hex SHA-256 | Stop outputs, arm inactive OTA partition, and accept binary chunks on `9abc` |
+| `OTA_FINISH` | none | Validate byte count and SHA-256, finalize OTA image, then reboot |
+| `OTA_ABORT` | none | Abort active BLE OTA and keep current firmware |
+| `SIM_LIST` | none | List built-in HIL scenarios |
+| `SIM_RUN:<scenario_id>[,<speedup>]` | id + speed mode | Start deterministic on-device simulation |
+| `SIM_STATUS` | none | Return simulation progress JSON |
+| `SIM_REPORT` | none | Return final simulation report JSON in logs |
 | `SIM_ABORT` | none | Abort currently running simulation |
 
-Current built-in HIL groups:
-- `S0..S3`: baseline hold/current/gust behavior
-- `S4..S9`: GNSS/control-loop/NaN safety regressions
-- `S10..S19`: randomized + hardware-failure emulation (compass/power/display/actuator)
-- `RF0..RF4`: RF water-body profiles derived from the offline Russian scenario set; ESP HIL includes current/gust, wave/wake packet, drift, and fail-closed approximations that are visible in `SIM_REPORT` events such as `WAKE_PACKET_EMU` and `CHOP_PACKET_EMU`
+`SIM_*` is release-scope because simulation is a quiet software mode inside the
+ordinary firmware. Real sensor values are ignored for control/display while the
+scenario is active, actuator outputs are quieted, and live BLE telemetry carries
+the simulated boat position/heading. `SET_PHONE_GPS` remains dev/HIL only.
 
-These commands correspond to the implementation in [`boatlock/BleCommandHandler.h`](../boatlock/BleCommandHandler.h). `SIM_*` is part of the normal release command surface because simulation runs as a safe software mode inside the ordinary firmware: real sensor values are ignored for control/display while the scenario is active, actuator outputs are quieted, and live BLE telemetry carries the simulated boat position/heading for the phone and laptop map. `SET_PHONE_GPS` remains a dev/HIL injection command and is accepted only through explicit test paths.
+Manual control is intentionally a single atomic command instead of separate
+mode/direction/speed writes. Each accepted `MANUAL_TARGET` refreshes the
+deadman TTL for the current controller source. If updates stop, firmware exits
+Manual mode and stops output.
 
-Manual control is intentionally a single atomic command instead of separate mode/direction/speed writes. `angleDeg` is the selected steering vector across the 180 degree usable arc, where negative is left/port, `0` is bow-forward, and positive is right/starboard. Each accepted `MANUAL_TARGET` refreshes the deadman TTL for the current controller source; a different source cannot take over until the lease expires or `MANUAL_OFF`/`STOP` clears it. If updates stop, firmware exits Manual mode and the normal quiet-output path stops motion. `MANUAL_TARGET` is a control command and must be wrapped in `SEC_CMD` when pairing/auth is enabled.
+## Control Ownership
 
-## Multi-Client Control Ownership
+The current release path has one normal product controller: the phone app.
+Multiple telemetry subscribers may be allowed by BLE transport, but a second
+actuating controller must not be treated as implemented until it has explicit
+controller identity, a single-owner lease, role allowlists, and bench tests.
 
-This section is a design contract for future phone-plus-remote operation. It is
-not a claim that simultaneous control is implemented today.
-
-BLE may keep advertising while connected and may allow multiple centrals to
-subscribe to telemetry. Multiple clients do not imply multiple controllers.
-Firmware must keep an explicit controller identity per connected central and an
-explicit single control-owner lease before any future BLE remote is accepted as
-a second controller.
-
-Controller identity is server-owned. It must be derived from connection-local
-BLE metadata such as connection handle, sanitized peer address when available,
-and a monotonic connection generation. Command payloads must not let clients
-choose or spoof the controller id. Reconnect creates a new identity; any previous
-auth and lease state is invalid for that connection.
-
-Allowed read-only clients:
-
-- subscribe to `34cd` live telemetry
-- subscribe to `78ab` logs
-- send transport-only `STREAM_START`, `STREAM_STOP`, and `SNAPSHOT`
-- do not hold a control lease
-- cannot refresh control heartbeat or manual TTL for another client
-- cannot send actuation, mode, settings, pairing-clear, OTA, `SIM_*`, or
-  injected-sensor commands
-
-Exactly one control owner is allowed. The lease records controller identity,
-client role (`app` or `remote`), authenticated session identity when paired,
-acquire time, last refresh time, and expiry. The lease is acquired only by an
-eligible control command when no live owner exists. Owner commands and owner
-`HEARTBEAT` refresh it. Commands from any other client while the lease is live
-are rejected before parsing can mutate settings, modes, security state, OTA
-state, simulation state, injected sensor state, or outputs.
-
-Takeover rules:
-
-- same owner may continue sending allowed commands while the lease is live
-- non-owner control commands are rejected while the owner lease is live
-- a new owner may acquire only after owner lease expiry, owner disconnect cleanup,
-  or emergency `STOP`
-- owner disconnect during Manual or Anchor is a control-link loss and must quiet
-  outputs or latch the existing failsafe path before any other connected client
-  can acquire control
-- a telemetry-only client never becomes owner merely because the current owner
-  disconnected
-
-Security is per client. `AUTH_HELLO`, `secNonce`, `AUTH_PROVE`, secure-command
-counter, replay window, and `secAuth` must be scoped to the controller identity.
-When `secPaired=1`, every control/write command from every client must be inside
-that client's valid `SEC_CMD`; one authenticated app session cannot authorize a
-remote session. `PAIR_CLEAR` remains accepted only from an owner session or while
-the hardware STOP pairing window is physically open.
-
-Phone app and remote constraints are intentionally different. The phone app is
-the full product controller for anchor save/enable/disable, jog, hold-heading,
-manual, STOP, settings, and OTA. A future BLE remote starts with a narrower
-allowlist: `MANUAL_TARGET`, `MANUAL_OFF`, `ANCHOR_OFF`, `HEARTBEAT`, and
-`STOP`. It must not save or jog anchor points, change security, change settings,
-start OTA, run HIL, or inject sensors unless those surfaces are explicitly added
-to the remote role and covered by the same ownership and security tests.
-
-Manual control is nested under the control-owner lease. The first accepted
-`MANUAL_TARGET` may acquire control and enter Manual atomically when no owner
-exists. After that, only the control owner can refresh the manual deadman TTL or
-send `MANUAL_OFF`. Manual TTL expiry stops Manual output but does not grant
-takeover. Control lease expiry, owner disconnect, or `STOP` clears the manual
-lease.
-
-STOP priority:
-
-- physical STOP always wins, opens the pairing long-press path when held, and
-  clears control ownership, Manual, Anchor, and outputs
-- BLE `STOP` is accepted from any authenticated client even if it is not the
-  current control owner
-- when paired, BLE `STOP` still goes through `SEC_CMD`; raw BLE `STOP` is not an
-  auth bypass
-
-Required validation before implementation is accepted:
-
-- unit tests for controller identity creation, reconnect invalidation, lease
-  acquire/refresh/expiry, busy rejection, and disconnect cleanup
-- security tests proving per-client nonce/counter/auth isolation and rejection
-  of secondary-client secure commands
-- command-scope tests proving non-owner commands cannot mutate modes, settings,
-  pairing, OTA, simulation, injected sensors, or outputs
-- manual tests for same-owner refresh, non-owner rejection, TTL quieting,
-  `MANUAL_OFF`, disconnect, and reconnect
-- role tests proving the remote allowlist is narrower than the app allowlist
-- STOP tests proving hardware STOP and authenticated non-owner BLE STOP preempt a
-  live owner
-- two-central bench or Android smoke with simultaneous telemetry subscribers and
-  one owner, including observable busy rejection for the loser
+The existing lease helper models that future work for Manual/Anchor ownership:
+read-only transport commands do not acquire ownership, eligible app control
+commands acquire/refresh a lease, non-owner control is busy until the lease
+expires, and `STOP` preempts. It does not use a BLE command-wrapper/session
+layer.
 
 ## Firmware Scope Gate
 
 Firmware builds enforce the command scope selected by the PlatformIO profile.
 The default `esp32s3` environment is the normal release firmware and includes
-BLE OTA plus hardware setup commands. `esp32s3_acceptance` is the bench
-validation firmware that additionally accepts dev/HIL sensor injection.
-
-Profile rules:
-
-- `release`: normal water image. It accepts release commands, including setup,
-  BLE OTA, and `SIM_*`. It rejects `dev/HIL` commands before they can inject
-  external sensor data.
-- `acceptance`: bench validation image. It accepts known `release` and
-  `dev/HIL` commands. Unknown commands remain rejected in every profile.
-
-`esp32s3_bno08x_sh2_uart` uses the normal release command profile with
-SH2-UART compass support. Debug probe builds are not release artifacts.
+BLE OTA plus hardware setup commands. `esp32s3_acceptance` additionally accepts
+dev/HIL sensor injection.
 
 Gate behavior expectations:
 
-- Scope is evaluated on the unwrapped command payload. `SEC_CMD` must not become a bypass; the effective scope is the wrapped payload scope.
-- Rejected commands fail closed: no setting write, no OTA session, no simulation state change, no injected GNSS update, no motor or stepper output, and no transition out of the current safe runtime mode.
-- Rejections are observable in the log as `[BLE] command rejected reason=profile profile=<release|acceptance> scope=<dev_hil|unknown> command=<payload>` so wrappers can distinguish "command gated by profile" from "command parser bug" or "BLE link lost".
+- Unknown commands and disallowed profile commands fail closed before settings,
+  modes, OTA, simulation, injected GNSS, motor, or stepper state can change.
+- Rejections are logged as `[BLE] command rejected reason=profile ...`.
 - `OTA_BEGIN`, `OTA_FINISH`, and `OTA_ABORT` are release commands. The normal
   firmware must remain OTA-capable so moved hardware can be updated through the
   phone BLE path.
-- `SIM_*` remains release scope and must run fail-quiet: the firmware enters `SIM`, ignores real sensors for telemetry/control, and keeps motor/stepper outputs quiet. `SET_PHONE_GPS` remains `dev/HIL` and must be absent from normal water command flow.
-- During active OTA, the existing OTA safety rule still applies inside any profile that allows OTA: firmware rejects runtime commands except `HEARTBEAT`, `OTA_FINISH`, and `OTA_ABORT`.
+- During active OTA, firmware rejects runtime commands except `HEARTBEAT`,
+  `OTA_FINISH`, and `OTA_ABORT`.
 
 ## BLE Firmware OTA
 
@@ -212,105 +126,54 @@ BLE OTA uses the phone as the bridge:
 1. The app either reads a phone-local `firmware.bin` and computes SHA-256, or
    downloads the latest GitHub Release firmware and verifies it against the
    release manifest SHA-256.
-2. The app sends `OTA_BEGIN:<size>,<sha256>` over `56ef`. When `secPaired=1`, this command must be wrapped in `SEC_CMD`.
-3. Firmware disables Anchor, stops Manual and all outputs, latches `HOLD`, and logs `[OTA] begin ok ...`.
-4. The Android app requests high connection priority and a larger MTU for the transfer, then writes firmware bytes sequentially to `9abc` in chunks up to `MTU - 3`. It uses write-without-response when the OTA characteristic supports it, with an explicit pacing window/backpressure; otherwise it falls back to acknowledged writes. The app emits `BOATLOCK_OTA_PROGRESS` logcat lines while updating the Settings progress view.
-5. The app sends `OTA_FINISH` over `56ef`. Firmware checks received byte count and SHA-256 before finalizing the OTA image.
-6. On success firmware logs `[OTA] finish ok ...`, waits briefly so the phone can receive the log ACK, and restarts.
+2. The app sends `OTA_BEGIN:<size>,<sha256>` over `56ef`.
+3. Firmware disables Anchor, stops Manual and all outputs, latches `HOLD`, and
+   logs `[OTA] begin ok ...`.
+4. The Android app requests high connection priority and larger MTU, then writes
+   firmware bytes to `9abc` in chunks up to `MTU - 3`.
+5. The app sends `OTA_FINISH`; firmware checks received byte count and SHA-256.
+6. On success firmware logs `[OTA] finish ok ...`, waits briefly, and restarts.
 
-During active OTA, firmware rejects all runtime commands except `HEARTBEAT`, `OTA_FINISH`, and `OTA_ABORT`. Chunk writes before a successful `OTA_BEGIN` are ignored. If the BLE link disconnects during an active transfer, firmware aborts the update and keeps the current boot partition.
+Chunk writes before a successful `OTA_BEGIN` are ignored. If the BLE link
+disconnects during an active transfer, firmware aborts the update and keeps the
+current boot partition.
 
 The release app uses the latest GitHub Release for one-button updates. A release
-should include `manifest.json` plus the firmware asset named
-`firmware-esp32s3.bin`; the manifest must describe a `release/vX.Y.x` branch
-`esp32s3` binary with `commandProfile=release`, positive size, HTTPS binary URL,
-and a 64-hex SHA-256. Local acceptance wrappers pass temporary manifest URLs as
-runtime app extras, not as separate app builds. If the release manifest is
-unavailable, the app can reconstruct a manifest from
-unambiguous release assets: `firmware-esp32s3.bin`,
-`BUILD_INFO-esp32s3.txt`, and `SHA256SUMS-esp32s3.txt`. The app validates the
-resolved manifest, downloads the binary, verifies size and SHA-256, then reuses
-the same BLE OTA transport path.
-
-The current phone bridge requests a larger MTU and uses write-without-response
-for OTA chunks when the platform and characteristic support it, with a small
-backpressure delay between write windows. If the platform cannot use
-write-without-response, it falls back to acknowledged writes. Throughput is
-therefore device-dependent; keep the acceptance timeout long enough for both
-paths and preserve abort/retry safety when tuning transfer speed.
+should include `manifest.json` plus `firmware-esp32s3.bin`; the manifest must
+describe a `release/vX.Y.x` branch `esp32s3` binary with
+`commandProfile=release`, positive size, HTTPS binary URL, and a 64-hex
+SHA-256.
 
 ## Live State Frame
 
-`34cd` notifications carry exactly one 74-byte little-endian binary frame. Receivers reject shorter or longer payloads, wrong magic/version/type, and unknown enum codes rather than treating the live path as a padded or forward-compatible stream:
+`34cd` notifications carry exactly one 65-byte little-endian binary frame.
+Receivers reject shorter or longer payloads, wrong magic/version/type, and
+unknown enum codes.
 
 - bytes `0..1`: magic `BL`
-- byte `2`: protocol version, currently `4`
+- byte `2`: protocol version, currently `5`
 - byte `3`: frame type, `1` for live telemetry
 - bytes `4..5`: sequence `uint16`
 - bytes `6..7`: flags `uint16`
 - byte `8`: mode code (`0=IDLE`, `1=HOLD`, `2=ANCHOR`, `3=MANUAL`, `4=SIM`)
 - byte `9`: status code (`0=OK`, `1=WARN`, `2=ALERT`)
 - bytes `10..25`: `lat`, `lon`, `anchorLat`, `anchorLon` as signed `deg * 1e7`
-- bytes `26..33`: `anchorHead`, `distance`, `anchorBearing`, `heading` scaled as `deg*10`, `cm`, `deg*10`, `deg*10`
+- bytes `26..33`: `anchorHead`, `distance`, `anchorBearing`, `heading`
 - byte `34`: battery percent
 - bytes `35..42`: `stepSpr`, `stepGear*10`, `stepMaxSpd`, `stepAccel`
 - bytes `43..59`: compass heading/raw/offset/quality/motion fields
-- byte `60`: security reject code
-- bytes `61..64`: status reason bitmask
-- bytes `65..72`: security nonce `uint64`
-- byte `73`: GNSS quality (`0` none, `1` weak, `2` good)
-
-`distance` and `anchorBearing` are display telemetry from the currently published position to the saved anchor point. They can be populated from the same UI-visible fix as `lat/lon`; they are not proof that the hardware GNSS quality gate is satisfied for anchor control.
+- bytes `60..63`: status reason bitmask
+- byte `64`: GNSS quality (`0` none, `1` weak, `2` good)
 
 Flag bits:
 
 - bit `0`: `holdHeading`
-- bit `1`: `secPaired`
-- bit `2`: `secAuth`
-- bit `3`: `secPairWin`
 
-Reason flags are decoded by the Flutter app into `statusReasons` strings such as `NO_GPS`, `NO_COMPASS`, `DRIFT_FAIL`, `CONTAINMENT_BREACH`, `COMM_TIMEOUT`, and GNSS gate reasons like `GPS_DATA_STALE`, `GPS_HDOP_MISSING`, and `GPS_POSITION_JUMP`. The firmware encoder is `boatlock/RuntimeBleLiveFrame.h`; the Flutter decoder is `boatlock_ui/lib/ble/ble_live_frame.dart`.
+Reason flags are decoded by the Flutter app into `statusReasons` strings such as
+`NO_GPS`, `NO_COMPASS`, `DRIFT_FAIL`, `CONTAINMENT_BREACH`, `COMM_TIMEOUT`, and
+GNSS gate reasons like `GPS_DATA_STALE`, `GPS_HDOP_MISSING`, and
+`GPS_POSITION_JUMP`.
 
-## Security Envelope
-
-When `secPaired=1`, control/write commands are accepted only through `SEC_CMD`.
-
-- Pairing is armed only by physical action: hold hardware `STOP` button for `3 s` (opens pairing window for `120 s`).
-- During pairing window, app sends `PAIR_SET:<ownerSecretHex>`.
-- Owner authentication flow:
-  1. `AUTH_HELLO`
-  2. receive `secNonce` in the next live frame or `SNAPSHOT`
-  3. `AUTH_PROVE:<proofHex>`
-- After successful auth (`secAuth=1`), send control commands wrapped as:
-  - `SEC_CMD:<counterHex>:<sigHex>:<payload>`
-  - counter must strictly increase (anti-replay)
-  - command rate is limited
-- `PAIR_CLEAR` is accepted only while the pairing window is open or from an authenticated owner session.
-
-## Status / Diagnostics
-
-Firmware status contract is now split:
-
-- `status`: short health summary
-  - `OK`
-  - `WARN`
-  - `ALERT`
-- `statusReasons`: comma-separated detail flags when present, such as:
-  - `NO_GPS`
-  - `NO_COMPASS`
-  - `DRIFT_ALERT`
-  - `DRIFT_FAIL`
-  - `CONTAINMENT_BREACH`
-  - GNSS gate reasons like `GPS_HDOP_MISSING`, `GPS_HDOP_TOO_HIGH`, `GPS_DATA_STALE`, `GPS_POSITION_JUMP`
-  - current `failsafeReason`
-  - active short-lived safety banner reasons like `NUDGE_OK`
-
-Firmware `mode` is currently one of:
-
-- `IDLE`
-- `HOLD`
-- `ANCHOR`
-- `MANUAL`
-- `SIM`
-
-Telemetry outside the 74-byte live frame should be added as an explicit new frame type or event, not as ad-hoc JSON on the live characteristic.
+Firmware `mode` is currently one of `IDLE`, `HOLD`, `ANCHOR`, `MANUAL`, `SIM`.
+Telemetry outside the live frame should be added as an explicit new frame type
+or event, not as ad-hoc JSON on the live characteristic.

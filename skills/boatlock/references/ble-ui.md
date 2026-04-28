@@ -7,7 +7,7 @@
 - `boatlock/BLEBoatLock.cpp`: BLE service, characteristics, advertising, queues
 - `boatlock/RuntimeBleLiveFrame.h`: live binary telemetry frame encoder and enum mapping
 - `boatlock/RuntimeBleParams.h`: typed runtime telemetry provider
-- `boatlock_ui/lib/ble/ble_boatlock.dart`: scan/connect/auth/write behavior
+- `boatlock_ui/lib/ble/ble_boatlock.dart`: scan/connect/write behavior
 - `boatlock_ui/lib/ble/ble_ids.dart`: Flutter BLE device name, service UUID, and characteristic UUID constants
 - `boatlock_ui/lib/ble/ble_device_match.dart`: adapter readiness and BoatLock advertisement matching
 - `boatlock_ui/lib/ble/ble_discovery_check.dart`: required GATT characteristic completeness checks
@@ -15,7 +15,6 @@
 - `boatlock_ui/lib/ble/ble_rssi_throttle.dart`: app-side RSSI read throttling policy
 - `boatlock_ui/lib/ble/ble_commands.dart`: pure command builders and value allowlists for app-originated commands
 - `boatlock_ui/lib/ble/ble_command_scope.dart`: app-side release/dev-HIL command-surface classifier and dev/HIL compile-time gate
-- `boatlock_ui/lib/ble/ble_security_codec.dart`: owner-secret normalization, owner auth proof, and secure command envelope formatting
 - `boatlock_ui/lib/ble/ble_live_frame.dart`: live binary telemetry decoder
 - `boatlock_ui/lib/ble/ble_log_line.dart`: log characteristic byte-string decoder
 - `boatlock_ui/lib/models/boat_data.dart`: telemetry fields parsed by Flutter
@@ -27,7 +26,7 @@
 - Device name: `BoatLock`
 - Service UUID: `12ab`
 - Characteristics:
-  - `34cd`: live state notify/read, 74-byte little-endian binary v4 frame
+  - `34cd`: live state notify/read, 65-byte little-endian binary v5 frame
   - `56ef`: control point write/write-no-response
   - `78ab`: log notify
   - `9abc`: firmware OTA binary write/write-no-response, armed only by `OTA_BEGIN`
@@ -39,14 +38,14 @@
 - The app should bind data, command, log, and OTA characteristic references before enabling data/log notifications. Notifications can arrive immediately after subscription and may start app check logic that needs the OTA characteristic.
 - On Android, if data/command/log are present but OTA is missing, the app may clear the GATT cache and rediscover once before declaring the link incomplete.
 - Live notify payload length must be validated before `setValue()`; producer-side packets whose length is not exactly the live-frame size are dropped rather than padded, truncated, or read past the packet buffer.
-- Flutter must reject live-frame payloads whose length is not exactly 74 bytes; accepting padded frames hides characteristic-value bugs and can mask protocol drift.
-- Flutter live-frame decoding must reject unknown mode/status/security-reject enum codes while the frame version is unchanged; `UNKNOWN` display fallbacks hide firmware/app schema drift.
+- Flutter must reject live-frame payloads whose length is not exactly 65 bytes; accepting padded frames hides characteristic-value bugs and can mask protocol drift.
+- Flutter live-frame decoding must reject unknown mode/status enum codes while the frame version is unchanged; `UNKNOWN` display fallbacks hide firmware/app schema drift.
 - Flutter `BoatData` is populated from the binary live-frame decoder only; do not keep a parallel JSON telemetry parser unless a real shipped protocol path is restored end-to-end.
 - Log characteristic values are byte strings with explicit length. Firmware must set the exact text length, and Flutter must ignore trailing NUL padding defensively.
 - Flutter log decoding belongs in `ble_log_line.dart`; keep it length-delimited and tolerate malformed UTF-8 as display-only diagnostics.
 - BLE log queue writes must build bounded, NUL-terminated payload slots without `strlen()` on untrusted or length-unknown input.
 - BLE log notifications must stay single-line: trim trailing CR/LF and neutralize embedded ASCII control bytes before enqueueing or publishing over `78ab`.
-- BLE command-derived log fields must go through `RuntimeBleCommandLog`: suppress high-rate `HEARTBEAT`, redact `PAIR_SET`, `AUTH_PROVE`, and `SEC_CMD`, neutralize control bytes, and bound field length.
+- BLE command-derived log fields must go through `RuntimeBleCommandLog`: suppress high-rate `HEARTBEAT`, neutralize control bytes, and bound field length.
 - BLE command queue writes must reject overlong commands before enqueueing; do not truncate a command into a different syntactically valid command.
 - BLE command queue writes must accept printable ASCII command bytes only; embedded NUL/control/non-ASCII bytes must fail before any C-string conversion.
 - Flutter must validate the same command byte contract before writing `56ef`: non-empty, max `191` printable ASCII bytes.
@@ -78,7 +77,6 @@
 - Firmware logs should suppress high-frequency `HEARTBEAT` command lines while preserving operator setup/control commands.
 - Immediate BLE transport commands are exact-match only: `STREAM_START`, `STREAM_STOP`, and `SNAPSHOT`. Prefixes, suffixes, and decorated variants must fall through to the normal command path and be rejected there if invalid.
 - App command builders should remain pure top-level functions in `ble_commands.dart`; do not hide value formatting/range checks inside the stateful BLE transport class.
-- Security envelope formatting should remain pure top-level functions in `ble_security_codec.dart`; `BleBoatLock` owns session state and write order, not reusable codec internals.
 - After service discovery the app subscribes to:
   - data char `34cd`
   - log char `78ab`
@@ -87,6 +85,9 @@
 - A successful app-side BLE write only proves that a command request was sent.
   Operator history and UI copy must not call it firmware acceptance; acceptance
   comes from later telemetry transitions or allowlisted device event logs.
+- The release protocol has no app-layer command wrapper. Do not reintroduce
+  owner secrets, PINs, pairing windows, or secure command wrappers into the
+  normal app/firmware path without a new explicit product decision.
 
 ## App Runtime Checks
 
@@ -111,7 +112,7 @@
 ## Command Surface
 
 - Command scope groups:
-  - release: stream/control point, explicit anchor save/enable/disable, manual deadman, STOP/heartbeat, anchor jog, hold-heading, pairing/auth commands, setup/tuning, compass calibration/DCD/tare, BLE OTA, and `SIM_*`.
+  - release: stream/control point, explicit anchor save/enable/disable, manual deadman, STOP/heartbeat, anchor jog, hold-heading, setup/tuning, compass calibration/DCD/tare, BLE OTA, and `SIM_*`.
   - dev/HIL: `SET_PHONE_GPS`.
 - The release Flutter app includes setup controls, but the normal water UI
   keeps them hidden until the operator enables the Settings `Настройка оборудования`
@@ -121,7 +122,6 @@
 - Dev/HIL commands are not part of the normal app control surface. `SIM_*` is
   not dev/HIL; it must run fail-quiet in the normal firmware and provide
   simulated live telemetry for map views.
-- `SEC_CMD` is the security envelope; the effective scope is the scope of the wrapped payload. Flutter custom-command callers should pass the unwrapped command and let `BleBoatLock` build the envelope after classification.
 - Do not keep compatibility-only BLE commands in firmware or Flutter. If a command is obsolete, remove it from command handling, UI, tests, and docs in the same change.
 - Route commands, phone-heading commands, and log-export commands are removed and should stay no-op unless intentionally restored.
 
@@ -134,27 +134,12 @@
 - Required multi-client design before accepting real simultaneous control:
   - multiple read-only telemetry subscribers are allowed
   - at most one control owner/lease can send actuation or settings commands
-  - pairing/auth/session state must be per-client or command writes from secondary clients must be rejected
+  - controller lease state must be per-client or command writes from secondary clients must be rejected
   - tests must cover two centrals attempting telemetry and control at the same time
-
-## Security Envelope
-
-- Pairing is opened only by holding the hardware STOP button for `3 s`.
-- Pairing window duration is `120 s`.
-- Pairing uses `PAIR_SET:<ownerSecretHex>` where the owner secret is 32 hex chars.
-- Owner authentication flow:
-  1. `AUTH_HELLO`
-  2. read `secNonce`
-  3. `AUTH_PROVE:<proofHex>`
-- `PAIR_CLEAR` is accepted only from owner session or while the pairing window is still physically open.
-- When paired, control/write commands must be wrapped as:
-  - `SEC_CMD:<counterHex>:<sigHex>:<payload>`
-- Flutter handles this in `_ensureSecureSession()`, `_writeCommand()`, and `buildSecureCommand()`.
-- `OTA_BEGIN`, `OTA_FINISH`, and `OTA_ABORT` are control/write commands. When paired, they go through the same `SEC_CMD` envelope; raw binary chunks are accepted only after an authenticated `OTA_BEGIN` has armed the OTA writer.
 
 ## Telemetry Coupling
 
-- Live telemetry is a fixed binary v4 frame, not JSON and not a parameter-read tunnel.
+- Live telemetry is a fixed binary v5 frame, not JSON and not a parameter-read tunnel.
 - Firmware builds one typed `RuntimeBleLiveTelemetry` snapshot and encodes it through `RuntimeBleLiveFrame.h`.
 - Telemetry snapshot builders must validate coordinate pairs as pairs; if an anchor position is invalid/default, publish the whole anchor position and heading as neutral `0`.
 - Snapshot builders should sample volatile readiness predicates once per frame so related fields come from one consistent readiness state.
@@ -171,8 +156,6 @@
   - `compassQ`, `magQ`, `gyroQ`
   - `rvAcc`, `magNorm`, `gyroNorm`
   - `pitch`, `roll`
-  - `secPaired`, `secAuth`, `secPairWin`, `secReject`
-- The auth nonce is carried as binary `uint64` in the live frame and rendered by Flutter as 16 hex chars.
 - `status` is a short health summary (`OK|WARN|ALERT`), while `mode` is the runtime mode and `statusReasons` carries comma-separated detail flags.
 - Binary live-frame reason flags should be generated from one explicit token-to-bit table and matched as exact CSV tokens, not substring checks.
 - Firmware live-frame scaling must clamp in floating-point space before integer rounding/casting; non-finite values map to neutral `0`.

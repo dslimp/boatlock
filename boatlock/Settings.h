@@ -85,7 +85,6 @@ public:
     static constexpr uint8_t VERSION = 0x1D;
     static constexpr const char* NVS_NAMESPACE = "boatlock_cfg";
     static constexpr const char* NVS_SCHEMA_KEY = "schema";
-    // Keeps the existing BleSecurity EEPROM offset stable while settings live in NVS.
     static const int EEPROM_ADDR = 256;
     static constexpr int VALUES_BYTES = sizeof(float) * count;
     static constexpr int VALUES_ADDR = EEPROM_ADDR + sizeof(uint8_t);

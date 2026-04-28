@@ -4,8 +4,9 @@ Status after the 2026-04-26 autonomous pass.
 
 ## Done In Main
 
-- Paired-mode raw safety/control commands now require `SEC_CMD`; raw `STOP`,
-  `ANCHOR_OFF`, and `HEARTBEAT` no longer bypass paired auth.
+- App-layer BLE command-wrapper legacy was removed from the release path;
+  commands and OTA start requests are written directly through the ordinary app
+  command path.
 - Unknown BLE commands now fail the firmware command-profile gate in every
   profile.
 - Product readiness docs were refreshed around current app, simulator, and
@@ -32,8 +33,8 @@ Status after the 2026-04-26 autonomous pass.
   configured with the latest GitHub Release source; Android also supports
   phone-local firmware file selection.
 - GitHub Releases now receive a release `firmware-esp32s3`
-  asset set plus `manifest.json`, and the app can use authenticated release
-  asset API URLs when a token-backed validation client is injected.
+  asset set plus `manifest.json`, and the app can use token-backed release
+  asset API URLs during validation.
 - Android app check now has a manifest-backed latest-release OTA mode that serves
   `manifest.json` plus `firmware.bin` and uses the app firmware-update client
   before the normal BLE OTA/reconnect verdict.
@@ -70,7 +71,7 @@ Status after the 2026-04-26 autonomous pass.
   green, then verify that `manifest.json` resolves
   `firmware-esp32s3.bin` from the published GitHub Release.
 - Wire the pure multi-client control lease helper into the live BLE command path
-  only after per-client security/session metadata is available.
+  after per-client identity/source ownership is available.
 - Decide whether Android/macOS app builds should intentionally replace the
   normal app or get distinct app/bundle IDs before operator distribution.
 
@@ -99,7 +100,8 @@ Status after the 2026-04-26 autonomous pass.
 
 ## Agent Notes Captured
 
-- `Darwin`: paired auth bypass checklist; implemented and pushed.
+- `Darwin`: paired-mode hardening work is superseded by the KISS command-wrapper
+  removal from the release protocol.
 - `Carver` / `Russell`: app check and profile rejection gaps; implemented
   through fast-fail app check handling, settings rollback, detailed OTA rejections,
   and structured smoke/check result fields.

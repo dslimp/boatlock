@@ -186,7 +186,7 @@ profile.
 3. Operator path A: copy the built `firmware.bin` to the phone and use Settings -> `Файл на телефоне`.
 4. Operator path B: publish a GitHub Release with `manifest.json` and `firmware-esp32s3.bin`, then use Settings -> `Последняя с GitHub`.
 5. For a local file, the app computes SHA-256 before transfer. For GitHub, the app downloads and verifies the release manifest SHA-256 before transfer.
-6. The app sends authenticated `OTA_BEGIN`, writes chunks to BLE characteristic `9abc`, then sends `OTA_FINISH`.
+6. The app sends `OTA_BEGIN`, writes chunks to BLE characteristic `9abc`, then sends `OTA_FINISH`.
 7. ESP32 validates byte count and SHA-256 before finalizing the OTA partition and rebooting. Disconnect or failed validation aborts without changing the active boot partition.
 8. Bench automation may still use hidden URL/SHA runtime extras with `tools/hw/nh02/deploy.sh`; that is a validation shortcut only, not an operator UI path.
    The wrapper builds the normal firmware and ordinary release APK, refreshes Android helpers without requiring ESP32 USB, installs the exact APK, serves `firmware.bin` on `nh02`, exposes it to the phone with `adb reverse`, starts its runtime OTA check, and waits for post-reboot telemetry.

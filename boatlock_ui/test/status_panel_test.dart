@@ -24,8 +24,6 @@ BoatData _data({
   int magQ = 2,
   int gyroQ = 2,
   int gnssQ = 2,
-  bool secPaired = false,
-  bool secAuth = false,
 }) {
   return BoatData(
     lat: lat,
@@ -56,10 +54,6 @@ BoatData _data({
     gyroNorm: 0.2,
     pitch: 1,
     roll: 2,
-    secPaired: secPaired,
-    secAuth: secAuth,
-    secPairWindowOpen: false,
-    secReject: 'NONE',
     gnssQ: gnssQ,
   );
 }
@@ -97,7 +91,6 @@ void main() {
     expect(find.text('Готовность: OK'), findsOneWidget);
     expect(find.text('BLE: link'), findsOneWidget);
     expect(find.text('DATA: live'), findsOneWidget);
-    expect(find.text('AUTH: без пары'), findsOneWidget);
     expect(find.text('GNSS: Q2'), findsOneWidget);
     expect(find.text('HDG: Q3'), findsOneWidget);
     expect(find.text('ANCH: есть'), findsOneWidget);
@@ -124,16 +117,13 @@ void main() {
             stepSpr: 0,
             gnssQ: 0,
             compassQ: 0,
-            secPaired: true,
-            secAuth: false,
           ),
           diagnostics: _diagnostics(),
         ),
       ),
     );
 
-    expect(find.text('Готовность: BLOCKED 6'), findsOneWidget);
-    expect(find.text('AUTH: нужна'), findsOneWidget);
+    expect(find.text('Готовность: BLOCKED 5'), findsOneWidget);
     expect(find.text('GNSS: Q0'), findsOneWidget);
     expect(find.text('HDG: нет'), findsOneWidget);
     expect(find.text('ANCH: нет'), findsOneWidget);

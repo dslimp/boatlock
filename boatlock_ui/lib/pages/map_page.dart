@@ -72,10 +72,6 @@ class _MapPageState extends State<MapPage> {
   }
 
   String _commandFailedText(String command) {
-    final reject = ble.secReject;
-    if (reject.isNotEmpty && reject != 'NONE') {
-      return '$command отклонена: $reject';
-    }
     return '$command не отправлена';
   }
 
@@ -516,10 +512,6 @@ class _MapPageState extends State<MapPage> {
                   pitch: boatData?.pitch ?? 0.0,
                   roll: boatData?.roll ?? 0.0,
                   isConnected: boatData != null,
-                  secPaired: boatData?.secPaired ?? false,
-                  secAuth: boatData?.secAuth ?? false,
-                  secPairWindowOpen: boatData?.secPairWindowOpen ?? false,
-                  secReject: boatData?.secReject ?? 'NONE',
                 ),
               ),
             ),

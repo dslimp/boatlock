@@ -45,8 +45,6 @@ void main() {
         stepGear: 0,
         stepMaxSpd: 0,
         stepAccel: 0,
-        secPaired: true,
-        secAuth: false,
       ),
     );
     await tester.pump();
@@ -74,14 +72,12 @@ void main() {
     expect(find.textContaining('app: blocked:'), findsOneWidget);
   });
 
-  testWidgets('anchor command failure shows security reject feedback', (
+  testWidgets('anchor command failure shows send failure feedback', (
     tester,
   ) async {
     final ble = await _pumpMapPage(tester);
-    ble
-      ..setAnchorResult = false
-      ..secRejectValue = 'AUTH';
-    ble.emit(_boatData(secReject: 'AUTH'));
+    ble.setAnchorResult = false;
+    ble.emit(_boatData());
     await tester.pump();
 
     await tester.tap(find.byTooltip('Сохранить якорь'));
@@ -89,7 +85,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(ble.setAnchorCalls, 1);
-    expect(find.text('SET_ANCHOR отклонена: AUTH'), findsOneWidget);
+    expect(find.text('SET_ANCHOR не отправлена'), findsOneWidget);
   });
 
   testWidgets('anchor history records commands and telemetry transitions', (
@@ -173,14 +169,12 @@ void main() {
     expect(find.byTooltip('Сдвинуть якорь вперед'), findsNothing);
   });
 
-  testWidgets('anchor nudge failure shows security reject feedback', (
+  testWidgets('anchor nudge failure shows send failure feedback', (
     tester,
   ) async {
     final ble = await _pumpMapPage(tester);
-    ble
-      ..nudgeDirResult = false
-      ..secRejectValue = 'AUTH';
-    ble.emit(_boatData(mode: 'ANCHOR', secReject: 'AUTH'));
+    ble.nudgeDirResult = false;
+    ble.emit(_boatData(mode: 'ANCHOR'));
     await tester.pump();
 
     await tester.tap(find.byTooltip('Сдвинуть якорь вперед'));
@@ -188,7 +182,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(ble.nudgeDirs, ['FWD']);
-    expect(find.text('NUDGE_DIR:FWD отклонена: AUTH'), findsOneWidget);
+    expect(find.text('NUDGE_DIR:FWD не отправлена'), findsOneWidget);
   });
 
   testWidgets('emergency stop sends STOP immediately from left button', (
@@ -264,9 +258,6 @@ BoatData _boatData({
   String status = 'OK',
   String statusReasons = '',
   String mode = 'IDLE',
-  bool secPaired = false,
-  bool secAuth = false,
-  String secReject = 'NONE',
   int compassQ = 3,
   int gnssQ = 2,
   int stepSpr = 200,
@@ -303,10 +294,6 @@ BoatData _boatData({
     gyroNorm: 0.02,
     pitch: 1.2,
     roll: -0.4,
-    secPaired: secPaired,
-    secAuth: secAuth,
-    secPairWindowOpen: false,
-    secReject: secReject,
     gnssQ: gnssQ,
   );
 }
@@ -324,10 +311,6 @@ class FakeBleBoatLock extends BleBoatLock {
   bool stopAllResult = true;
   bool manualOffResult = true;
   bool nudgeDirResult = true;
-  String secRejectValue = 'NONE';
-
-  @override
-  String get secReject => secRejectValue;
 
   void emit(BoatData? data) => onData(data);
   void emitLog(String line) => onLog?.call(line);

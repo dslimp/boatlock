@@ -11,8 +11,6 @@ BoatData _data({
   String mode = 'IDLE',
   String status = 'OK',
   String statusReasons = '',
-  bool secPaired = false,
-  bool secAuth = false,
   int rssi = -52,
   int gnssQ = 0,
 }) {
@@ -45,10 +43,6 @@ BoatData _data({
     gyroNorm: 0,
     pitch: 0,
     roll: 0,
-    secPaired: secPaired,
-    secAuth: secAuth,
-    secPairWindowOpen: false,
-    secReject: 'NONE',
     gnssQ: gnssQ,
   );
 }
@@ -189,7 +183,7 @@ void main() {
         reason: 'telemetry_received',
         dataEvents: 2,
         deviceLogEvents: 1,
-        data: _data(statusReasons: 'NO_GPS', secPaired: true),
+        data: _data(statusReasons: 'NO_GPS'),
         lastDeviceLog: '[BLE] advertising started',
       ),
     );
@@ -202,7 +196,6 @@ void main() {
     expect(payload['reason'], 'telemetry_received');
     expect(payload['mode'], 'IDLE');
     expect(payload['statusReasons'], 'NO_GPS');
-    expect(payload['secPaired'], isTrue);
     expect(payload['lat'], 0.0);
     expect(payload['lon'], 0.0);
     expect(payload['gnssQ'], 0);

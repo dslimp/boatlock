@@ -65,7 +65,7 @@
   - test and validation infrastructure
   - offline simulation in `tools/sim/`
   - native/unit tests and CI checks
-  - security/pairing/auth required for the shipping control path
+  - release OTA integrity and validation required for the shipping update path
 - Default out-of-scope for `main` unless explicitly requested and justified:
   - production-exposed dev/diagnostic BLE surfaces not needed for anchor operation
   - broad tuning/calibration UI for non-essential runtime params
@@ -129,9 +129,9 @@
   - `MANUAL_TARGET` disables Anchor mode on entry so manual timeout or reconnect cannot unexpectedly resume Anchor
   - split legacy commands such as `MANUAL_DIR` and `MANUAL_SPEED` must not be reintroduced
   - phone manual UI may latch the selected vector/speed locally, but firmware actuation must stay deadman-protected by repeated `MANUAL_TARGET` refresh and TTL expiry
-- Physical button inputs must be debounced. BOOT anchor save and STOP pairing window require stable long-press; a single GPIO bounce must not save an anchor, open pairing, or change runtime mode.
+- Physical button inputs must be debounced. BOOT anchor save requires stable long-press; a single GPIO bounce must not save an anchor or change runtime mode. STOP is an emergency action, not a pairing trigger.
 
-## Display, BLE, And Security
+## Display And BLE
 
 - Display convention:
   - boat nose is fixed at the top of the screen
@@ -166,13 +166,11 @@
 - The release app always contains setup controls and hides them only behind the
   runtime Settings `Настройка оборудования` switch.
 - App heartbeat is sent every `1 s` once connected.
-- Security flow:
-  - hardware STOP long-press `3 s` opens pairing window
-  - pairing window duration is `120 s`
-  - pairing uses `PAIR_SET:<ownerSecretHex>` with a 32-hex owner secret
-  - auth flow is `AUTH_HELLO` -> read `secNonce` -> `AUTH_PROVE`
-  - `PAIR_CLEAR` is accepted only from owner session or while pairing window is physically open
-  - when `secPaired=1`, control/write commands must be wrapped in `SEC_CMD`
+- Release BLE has no app-layer command wrapper:
+  - no pairing/auth command family, secure command wrapper, owner secret, hidden key, or PIN gate in the normal product path
+  - the app writes valid ASCII commands directly to `56ef`
+  - firmware safety/profile/lease checks remain authoritative for motion, setup, simulation, and OTA
+  - OTA still requires size plus SHA-256 verification before boot selection
 - Do not keep protocol commands only for compatibility; remove obsolete commands from firmware, Flutter, tests, and docs together.
 
 ## Simulation And Validation
@@ -198,14 +196,14 @@
 
 ## Hard Review Bar
 
-- Safety and security beat convenience.
+- Operational safety and update reliability beat convenience.
 - In this repo, safety review means first of all operational safety:
   - no unintended motor or stepper actuation
   - no unexpected auto-enable after reboot, reconnect, stale sensor recovery, or button glitches
   - no control-loop behavior that can cause hunting, twitching, or repeated on/off thrash in normal noise conditions
 - Reject changes that expand actuation surface without a clear product reason.
-- No plaintext secret/code logging, no auth bypasses, no pairing-only-on-paper flows.
-- Security must work end-to-end from the shipped app, not only through hidden helper methods or manual command injection.
+- Do not add hidden secrets, pairing-only flows, or command wrappers that block the normal phone update path without an explicit product decision.
+- Any future hardening must work end-to-end from the shipped app, not only through hidden helper methods or manual command injection.
 - Any BLE command added to `main` must justify why it belongs in the release product surface.
 - Stability changes must preserve failsafe behavior, reconnect behavior, and GNSS/heading invariants.
 - When docs disagree with code, fix docs in the same change.

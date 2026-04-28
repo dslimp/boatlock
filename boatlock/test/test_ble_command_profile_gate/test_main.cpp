@@ -36,10 +36,6 @@ AnchorDeniedReason lastDeniedReason = AnchorDeniedReason::NONE;
 FailsafeReason lastFailsafeReason = FailsafeReason::NONE;
 int clearSafeHoldCalls = 0;
 int manualStopCalls = 0;
-bool securityForceReject = false;
-bool securityRequireWrapper = false;
-bool securitySessionActive = false;
-uint32_t securityLastCounter = 0;
 bool simHandlerConsumes = false;
 int simHandlerCalls = 0;
 std::string simLastCommand;
@@ -111,35 +107,11 @@ void stopManualControlFromBle() {
   motor.stop();
 }
 
-bool preprocessSecureCommand(const std::string& incoming, std::string* effective) {
+bool preprocessBleCommand(const std::string& incoming, std::string* effective) {
   if (!effective) {
     return false;
   }
-  if (securityForceReject) {
-    return false;
-  }
-  if (!securityRequireWrapper) {
-    *effective = incoming;
-    return true;
-  }
-  if (incoming.rfind("SEC_CMD:", 0) != 0) {
-    return false;
-  }
-  const size_t p1 = incoming.find(':', 8);
-  const size_t p2 =
-      (p1 == std::string::npos) ? std::string::npos : incoming.find(':', p1 + 1);
-  if (p1 == std::string::npos || p2 == std::string::npos ||
-      p2 + 1 >= incoming.size()) {
-    return false;
-  }
-  const std::string counterHex = incoming.substr(8, p1 - 8);
-  const uint32_t counter =
-      static_cast<uint32_t>(strtoul(counterHex.c_str(), nullptr, 16));
-  if (!securitySessionActive || counter <= securityLastCounter) {
-    return false;
-  }
-  securityLastCounter = counter;
-  *effective = incoming.substr(p2 + 1);
+  *effective = incoming;
   return true;
 }
 
@@ -191,10 +163,6 @@ void setUp() {
   lastFailsafeReason = FailsafeReason::NONE;
   clearSafeHoldCalls = 0;
   manualStopCalls = 0;
-  securityForceReject = false;
-  securityRequireWrapper = false;
-  securitySessionActive = false;
-  securityLastCounter = 0;
   simHandlerConsumes = false;
   simHandlerCalls = 0;
   simLastCommand.clear();
@@ -261,23 +229,6 @@ void test_default_release_rejects_external_sensor_injection_before_side_effects(
   TEST_ASSERT_FALSE(phoneGpsFixSet);
 }
 
-void test_default_release_classifies_unwrapped_secure_payload_scope() {
-  securityRequireWrapper = true;
-  securitySessionActive = true;
-
-  handleBleCommand("SEC_CMD:1:deadbeef:SET_COMPASS_OFFSET:12.5");
-
-  TEST_ASSERT_EQUAL_UINT32(1, securityLastCounter);
-  TEST_ASSERT_EQUAL(1, controlActivityNotes);
-  TEST_ASSERT_EQUAL_FLOAT(12.5f, compass.getHeadingOffsetDeg());
-
-  handleBleCommand("SEC_CMD:2:deadbeef:SET_HOLD_HEADING:1");
-
-  TEST_ASSERT_EQUAL_UINT32(2, securityLastCounter);
-  TEST_ASSERT_EQUAL(2, controlActivityNotes);
-  TEST_ASSERT_EQUAL_FLOAT(1.0f, settings.get("HoldHeading"));
-}
-
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_default_release_allows_release_command_path);
@@ -285,6 +236,5 @@ int main() {
   RUN_TEST(test_default_release_accepts_ota_after_safe_state_side_effects);
   RUN_TEST(test_default_release_accepts_setup_commands);
   RUN_TEST(test_default_release_rejects_external_sensor_injection_before_side_effects);
-  RUN_TEST(test_default_release_classifies_unwrapped_secure_payload_scope);
   return UNITY_END();
 }

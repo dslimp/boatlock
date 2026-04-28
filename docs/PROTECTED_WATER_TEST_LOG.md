@@ -54,7 +54,7 @@ session.
 | Float telemetry only | Outputs disabled or physically unable to thrust | 5 min | BLE, GNSS, heading, readiness, logs, display, and STOP behave as expected with no actuation | Manual low-power |
 | Manual low-power pulses | Current limit set low, hard power removal ready | 1 s pulses, then 3 s pulses | Press-and-hold only, release-to-stop, BLE loss quiets output, reconnect does not resume motion | Steering-only |
 | Steering-only | Thrust disabled; bow-zero and travel limits proven | 10 small left/right moves | Direction labels correct, no hunting, no hard-stop contact, idle/hold behavior safe | Anchor preflight |
-| Anchor preflight | Saved anchor and current fix visible; quiet profile selected | No sustained thrust until denied cases are observed | Denied reasons are correct; accepted only with auth, fresh heading, and good GNSS | Quiet anchor 30-60 s |
+| Anchor preflight | Saved anchor and current fix visible; quiet profile selected | No sustained thrust until denied cases are observed | Denied reasons are correct; accepted only with fresh heading and good GNSS | Quiet anchor 30-60 s |
 | Quiet anchor 30-60 s | Recovery boat/tether ready; low thrust cap | One 30 s hold, then one 60 s hold | No repeated twitching, no saturation, STOP/manual recovery works | Longer hold |
 | Longer hold | Previous quiet holds clean | 5 min, then 10 min | Drift stays bounded, thermal/current behavior stable, no failsafe except intentional abort | Controlled disturbance |
 | Controlled disturbance | Operators explicitly approve disturbance | One small disturbance at a time | System remains bounded or aborts quietly; STOP still preempts | End session or repeat later |
@@ -63,7 +63,7 @@ session.
 
 - Photo of wiring, fuse/breaker, kill path, battery/supply, motor driver, and
   steering driver before power is applied.
-- Screenshot or exported app state before each phase: readiness, auth, GNSS,
+- Screenshot or exported app state before each phase: readiness, GNSS,
   heading, anchor, failsafe, manual lease, and motor readiness.
 - microSD `/boatlock/*.jsonl` logs for the whole session, plus Serial/BLE logs
   for boot markers, connection state, and STOP tests.

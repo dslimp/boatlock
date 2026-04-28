@@ -79,7 +79,6 @@
 ## What Still Needs Extra Work For Full Automation
 
 - Stable automation hooks for:
-  - pairing/auth
   - anchor-on deny/allow assertions
   - richer telemetry assertions
 
@@ -104,4 +103,4 @@
 - For phone-bridged BLE OTA flashing/acceptance, run:
   - `tools/hw/nh02/deploy.sh`
   - `tools/hw/nh02/deploy.sh --no-build` when both firmware and APK were already built
-- After that, if stronger coverage is needed, add a narrow app-side flow for connect + auth + heartbeat + anchor-on deny/allow checks.
+- After that, if stronger coverage is needed, add a narrow app-side flow for connect + heartbeat + anchor-on deny/allow checks.

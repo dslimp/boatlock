@@ -21,10 +21,6 @@ void main() {
       classifyBoatLockCommand('SET_HOLD_HEADING:1'),
       BoatLockCommandScope.release,
     );
-    expect(
-      classifyBoatLockCommand('SEC_CMD:00000001:deadbeef:ANCHOR_ON'),
-      BoatLockCommandScope.unknown,
-    );
   });
 
   test('classifies setup and update commands as release scope', () {

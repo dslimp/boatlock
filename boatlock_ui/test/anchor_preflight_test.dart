@@ -11,8 +11,6 @@ BoatData _data({
   String statusReasons = '',
   int compassQ = 3,
   int gnssQ = 2,
-  bool secPaired = false,
-  bool secAuth = false,
   int stepSpr = 200,
   double stepGear = 36,
   double stepMaxSpd = 1000,
@@ -46,10 +44,6 @@ BoatData _data({
     gyroNorm: 0,
     pitch: 0,
     roll: 0,
-    secPaired: secPaired,
-    secAuth: secAuth,
-    secPairWindowOpen: false,
-    secReject: 'NONE',
     gnssQ: gnssQ,
     compassQ: compassQ,
   );
@@ -71,15 +65,6 @@ void main() {
     expect(preflight.canEnable, isFalse);
     expect(preflight.blockedSummary, contains('Anchor'));
     expect(preflight.blockedSummary, contains('GNSS'));
-  });
-
-  test('blocks paired devices until owner session is authenticated', () {
-    final preflight = buildAnchorPreflight(
-      _data(secPaired: true, secAuth: false),
-    );
-
-    expect(preflight.canEnable, isFalse);
-    expect(preflight.blockedSummary, contains('Auth'));
   });
 
   test('blocks heading and safety failures from reason flags', () {

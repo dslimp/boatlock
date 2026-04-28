@@ -12,7 +12,6 @@ cat >"$tmp_cpp" <<'EOF'
 #include "Settings.h"
 #include "MotorControl.h"
 #include "StepperControl.h"
-#include "BleSecurity.h"
 
 int main() { return 0; }
 EOF

@@ -1,6 +1,6 @@
 ---
 name: boatlock
-description: "Use when working in the BoatLock repository: ESP32-S3 firmware in `boatlock/`, the Flutter app in `boatlock_ui/`, the BLE ASCII protocol, BNO08x and GNSS behavior, security pairing/auth, or the on-device and offline HIL simulation workflow."
+description: "Use when working in the BoatLock repository: ESP32-S3 firmware in `boatlock/`, the Flutter app in `boatlock_ui/`, the BLE ASCII protocol, BNO08x and GNSS behavior, phone BLE OTA, or the on-device and offline HIL simulation workflow."
 ---
 
 # BoatLock
@@ -22,7 +22,7 @@ Use this skill for any code, review, debugging, test, or docs task in the BoatLo
 ## Read The Right Reference
 
 - Firmware, hardware, runtime state, and invariants: `references/firmware.md`
-- BLE protocol, Flutter coupling, and security envelope: `references/ble-ui.md`
+- BLE protocol, Flutter coupling, and phone update path: `references/ble-ui.md`
 - Build, test, simulation, and release/version workflow: `references/validation.md`
 - External best practices and comparable systems: `references/external-patterns.md`
 - Real hardware acceptance on `nh02` and Android USB/BLE smoke planning: `../boatlock-hardware-acceptance/SKILL.md`
@@ -88,7 +88,7 @@ Use this skill for any code, review, debugging, test, or docs task in the BoatLo
 - GPS position prefers hardware fix, then phone GPS fallback. Heading comes from onboard BNO08x only, optionally corrected by movement-derived GPS course.
 - Anchor point saving must be explicit and validated; never add default arguments or helper paths that arm Anchor as a side effect of storing coordinates.
 - BLE identity and UUIDs are fixed: `BoatLock`, `12ab`, `34cd`, `56ef`, `78ab`.
-- When `secPaired=1`, control and write commands must go through `SEC_CMD`; pairing opens only from the hardware STOP long-press flow.
+- Release BLE has no app-layer command wrapper. Do not restore pairing/auth commands, secure command wrappers, owner secrets, hidden keys, or PIN gates without an explicit product decision.
 - On-device HIL scenarios `S0..S19` plus RF water scenarios `RF0..RF4` are release-scope simulation commands. Active `SIM` mode must ignore real sensor values for telemetry/control and keep motor/stepper outputs quiet while BLE live frames expose simulated map movement.
 - The current bench board is the Waveshare ESP32-S3-LCD-2 class board. Keep its
   reference images under `docs/assets/hardware/` and use

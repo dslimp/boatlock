@@ -68,7 +68,6 @@ class DiagnosticsPage extends StatelessWidget {
                         ? '-'
                         : '${data!.lat.toStringAsFixed(6)}, ${data!.lon.toStringAsFixed(6)}',
                   ),
-                  _KV('Security', _securityText(data)),
                 ],
               ),
               _Section(
@@ -111,14 +110,6 @@ class DiagnosticsPage extends StatelessWidget {
       return snapshot.deviceName;
     }
     return '${snapshot.deviceName} / ${snapshot.deviceId}';
-  }
-
-  String _securityText(BoatData? data) {
-    if (data == null) return '-';
-    final paired = data.secPaired ? 'paired' : 'open';
-    final auth = data.secAuth ? 'auth' : 'no-auth';
-    final pairWindow = data.secPairWindowOpen ? 'pair-window' : 'closed';
-    return '$paired, $auth, $pairWindow, reject=${data.secReject}';
   }
 
   String _age(DateTime? at) {

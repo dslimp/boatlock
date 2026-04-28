@@ -233,7 +233,6 @@
 
 - STOP button on GPIO `15` is active low.
 - STOP press immediately calls the same stop path as BLE `STOP` and latches `HOLD`.
-- STOP long-press `3 s` opens the BLE pairing window for `120 s`.
 - BOOT button on GPIO `0` only saves the current anchor point after a `1500 ms` hold; it must not arm anchor mode.
 - BOOT/STOP actions are resolved through `RuntimeButtons`, with hold timing tracked through `HoldButtonController`.
 - Supervisor considers sensors healthy only when both GPS fix and heading are available.

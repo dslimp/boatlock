@@ -18,7 +18,7 @@ void assertAllowed(bool expected,
 void test_command_scope_classifies_release_exact_commands() {
   const char* commands[] = {
       "STREAM_START", "STREAM_STOP", "SNAPSHOT", "ANCHOR_ON", "ANCHOR_OFF",
-      "STOP", "HEARTBEAT", "MANUAL_OFF", "PAIR_CLEAR", "AUTH_HELLO",
+      "STOP", "HEARTBEAT", "MANUAL_OFF",
       "SIM_LIST", "SIM_STATUS", "SIM_REPORT", "SIM_ABORT",
   };
   for (const char* command : commands) {
@@ -33,8 +33,6 @@ void test_command_scope_classifies_release_prefix_commands_without_payload_valid
       "NUDGE_DIR:LEFT",
       "NUDGE_BRG:90",
       "SET_HOLD_HEADING:1",
-      "PAIR_SET:not-hex",
-      "AUTH_PROVE:short",
       "SIM_RUN:S0,1",
   };
   for (const char* command : commands) {
@@ -90,8 +88,6 @@ void test_command_scope_classifies_unknown_commands() {
       "",
       " STREAM_START",
       "STREAM_START ",
-      "SEC_CMD:1:2:STOP",
-      "SEC_CMD:1:2:MANUAL_TARGET:0,0,300",
       "STREAM_START:1",
       "SIM_RUNNER:S1",
       "OTA_BEGIN_NOW",

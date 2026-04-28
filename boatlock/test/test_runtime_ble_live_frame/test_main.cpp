@@ -29,8 +29,6 @@ void test_runtime_ble_live_frame_encodes_stable_header_and_scaled_fields() {
   telemetry.anchorBearingDeg = 271.4f;
   telemetry.headingDeg = 359.9f;
   telemetry.holdHeading = true;
-  telemetry.secPaired = true;
-  telemetry.secNonce = 0x0123456789ABCDEFULL;
   telemetry.stepSpr = 200;
   telemetry.stepGear = 36.0f;
   telemetry.stepMaxSpd = 2400;
@@ -40,11 +38,10 @@ void test_runtime_ble_live_frame_encodes_stable_header_and_scaled_fields() {
 
   TEST_ASSERT_EQUAL_UINT8('B', frame[0]);
   TEST_ASSERT_EQUAL_UINT8('L', frame[1]);
-  TEST_ASSERT_EQUAL_UINT8(4, frame[2]);
+  TEST_ASSERT_EQUAL_UINT8(5, frame[2]);
   TEST_ASSERT_EQUAL_UINT8(1, frame[3]);
   TEST_ASSERT_EQUAL_UINT16(7, readU16(frame, 4));
-  TEST_ASSERT_EQUAL_UINT16(RUNTIME_BLE_FLAG_HOLD_HEADING | RUNTIME_BLE_FLAG_SEC_PAIRED,
-                           readU16(frame, 6));
+  TEST_ASSERT_EQUAL_UINT16(RUNTIME_BLE_FLAG_HOLD_HEADING, readU16(frame, 6));
   TEST_ASSERT_EQUAL_UINT8(2, frame[8]);
   TEST_ASSERT_EQUAL_UINT8(1, frame[9]);
   TEST_ASSERT_EQUAL_UINT16(123, readU16(frame, 26));
@@ -58,17 +55,15 @@ void test_runtime_ble_live_frame_encodes_stable_header_and_scaled_fields() {
   TEST_ASSERT_EQUAL_UINT32(kRuntimeBleLiveFrameSize, frame.size());
 }
 
-void test_runtime_ble_live_frame_maps_reasons_and_reject_codes() {
+void test_runtime_ble_live_frame_maps_reasons() {
   RuntimeBleLiveTelemetry telemetry;
   telemetry.statusReasons =
       "NO_GPS,DRIFT_FAIL,COMM_TIMEOUT,NO_HEADING,GPS_DATA_STALE,"
       "GPS_POSITION_JUMP,GPS_HDOP_MISSING";
-  telemetry.secReject = "AUTH_REQUIRED";
 
   const std::vector<uint8_t> frame = runtimeBleEncodeLiveFrame(telemetry, 1);
-  const uint32_t reasons = readU32(frame, 61);
+  const uint32_t reasons = readU32(frame, 60);
 
-  TEST_ASSERT_EQUAL_UINT8(4, frame[60]);
   TEST_ASSERT_BITS_HIGH(RUNTIME_BLE_REASON_NO_GPS, reasons);
   TEST_ASSERT_BITS_HIGH(RUNTIME_BLE_REASON_DRIFT_FAIL, reasons);
   TEST_ASSERT_BITS_HIGH(RUNTIME_BLE_REASON_COMM_TIMEOUT, reasons);
@@ -106,7 +101,7 @@ void test_runtime_ble_live_frame_scaling_clamps_before_cast() {
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_runtime_ble_live_frame_encodes_stable_header_and_scaled_fields);
-  RUN_TEST(test_runtime_ble_live_frame_maps_reasons_and_reject_codes);
+  RUN_TEST(test_runtime_ble_live_frame_maps_reasons);
   RUN_TEST(test_runtime_ble_reason_flags_match_exact_tokens_only);
   RUN_TEST(test_runtime_ble_live_frame_scaling_clamps_before_cast);
   return UNITY_END();

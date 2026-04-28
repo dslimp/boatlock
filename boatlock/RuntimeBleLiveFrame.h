@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-static constexpr size_t kRuntimeBleLiveFrameSize = 74;
+static constexpr size_t kRuntimeBleLiveFrameSize = 65;
 
 struct RuntimeBleLiveTelemetry {
   double lat = 0.0;
@@ -33,22 +33,14 @@ struct RuntimeBleLiveTelemetry {
   float gyroNorm = 0.0f;
   float pitchDeg = 0.0f;
   float rollDeg = 0.0f;
-  bool secPaired = false;
-  bool secAuth = false;
-  bool secPairWindowOpen = false;
-  uint64_t secNonce = 0;
   std::string mode = "IDLE";
   std::string status = "OK";
   std::string statusReasons;
-  std::string secReject = "NONE";
   uint8_t gnssQ = 0;
 };
 
 enum RuntimeBleLiveFlags : uint16_t {
   RUNTIME_BLE_FLAG_HOLD_HEADING = 1u << 0,
-  RUNTIME_BLE_FLAG_SEC_PAIRED = 1u << 1,
-  RUNTIME_BLE_FLAG_SEC_AUTH = 1u << 2,
-  RUNTIME_BLE_FLAG_SEC_PAIR_WINDOW = 1u << 3,
 };
 
 enum RuntimeBleReasonFlags : uint32_t {
@@ -144,20 +136,6 @@ inline uint8_t runtimeBleStatusCode(const std::string& status) {
   return 255;
 }
 
-inline uint8_t runtimeBleRejectCode(const std::string& reject) {
-  if (reject == "NONE") return 0;
-  if (reject == "NOT_PAIRED") return 1;
-  if (reject == "PAIRING_WINDOW_CLOSED") return 2;
-  if (reject == "INVALID_OWNER_SECRET") return 3;
-  if (reject == "AUTH_REQUIRED") return 4;
-  if (reject == "AUTH_FAILED") return 5;
-  if (reject == "BAD_FORMAT") return 6;
-  if (reject == "BAD_SIGNATURE") return 7;
-  if (reject == "REPLAY_DETECTED") return 8;
-  if (reject == "RATE_LIMIT") return 9;
-  return 255;
-}
-
 inline uint32_t runtimeBleReasonFlags(const std::string& reasons) {
   uint32_t flags = 0;
   for (const RuntimeBleReasonMapEntry& entry : kRuntimeBleReasonMap) {
@@ -171,9 +149,6 @@ inline uint32_t runtimeBleReasonFlags(const std::string& reasons) {
 inline uint16_t runtimeBleFlags(const RuntimeBleLiveTelemetry& telemetry) {
   uint16_t flags = 0;
   if (telemetry.holdHeading) flags |= RUNTIME_BLE_FLAG_HOLD_HEADING;
-  if (telemetry.secPaired) flags |= RUNTIME_BLE_FLAG_SEC_PAIRED;
-  if (telemetry.secAuth) flags |= RUNTIME_BLE_FLAG_SEC_AUTH;
-  if (telemetry.secPairWindowOpen) flags |= RUNTIME_BLE_FLAG_SEC_PAIR_WINDOW;
   return flags;
 }
 
@@ -250,7 +225,7 @@ inline std::vector<uint8_t> runtimeBleEncodeLiveFrame(
   out.reserve(kRuntimeBleLiveFrameSize);
   runtimeBleAppendU8(out, 'B');
   runtimeBleAppendU8(out, 'L');
-  runtimeBleAppendU8(out, 4);
+  runtimeBleAppendU8(out, 5);
   runtimeBleAppendU8(out, 1);
   runtimeBleAppendU16(out, sequence);
   runtimeBleAppendU16(out, runtimeBleFlags(telemetry));
@@ -279,9 +254,7 @@ inline std::vector<uint8_t> runtimeBleEncodeLiveFrame(
   runtimeBleAppendU16(out, (uint16_t)runtimeBleScaleUnsigned(telemetry.gyroNorm, 100.0, UINT16_MAX));
   runtimeBleAppendI16(out, (int16_t)runtimeBleScaleSigned(telemetry.pitchDeg, 10.0, INT16_MIN, INT16_MAX));
   runtimeBleAppendI16(out, (int16_t)runtimeBleScaleSigned(telemetry.rollDeg, 10.0, INT16_MIN, INT16_MAX));
-  runtimeBleAppendU8(out, runtimeBleRejectCode(telemetry.secReject));
   runtimeBleAppendU32(out, runtimeBleReasonFlags(telemetry.statusReasons));
-  runtimeBleAppendU64(out, telemetry.secNonce);
   runtimeBleAppendU8(out, telemetry.gnssQ);
   return out;
 }

@@ -14,7 +14,6 @@ enum class RuntimeBleControlRole : uint8_t {
 enum class RuntimeBleControlLeaseCommandKind : uint8_t {
   REJECT = 0,
   READ_ONLY,
-  SECURITY_SESSION,
   CONTROL,
   STOP_PREEMPT,
 };
@@ -24,7 +23,6 @@ enum class RuntimeBleControlLeaseDecision : uint8_t {
   REJECT_BUSY,
   REJECT_ROLE,
   ALLOW_READ_ONLY,
-  ALLOW_SECURITY_SESSION,
   ACQUIRE,
   REFRESH,
   STOP_PREEMPT,
@@ -33,7 +31,6 @@ enum class RuntimeBleControlLeaseDecision : uint8_t {
 struct RuntimeBleControlClient {
   uint16_t connHandle = 0;
   uint32_t generation = 0;
-  uint32_t securitySession = 0;
   RuntimeBleControlRole role = RuntimeBleControlRole::APP;
   bool valid = false;
 };
@@ -46,7 +43,6 @@ struct RuntimeBleControlLeaseResult {
 
   bool allowed() const {
     return decision == RuntimeBleControlLeaseDecision::ALLOW_READ_ONLY ||
-           decision == RuntimeBleControlLeaseDecision::ALLOW_SECURITY_SESSION ||
            decision == RuntimeBleControlLeaseDecision::ACQUIRE ||
            decision == RuntimeBleControlLeaseDecision::REFRESH ||
            decision == RuntimeBleControlLeaseDecision::STOP_PREEMPT;
@@ -61,8 +57,7 @@ struct RuntimeBleControlLeaseResult {
 inline bool runtimeBleControlClientSame(const RuntimeBleControlClient& a,
                                         const RuntimeBleControlClient& b) {
   return a.valid && b.valid && a.connHandle == b.connHandle &&
-         a.generation == b.generation && a.securitySession == b.securitySession &&
-         a.role == b.role;
+         a.generation == b.generation && a.role == b.role;
 }
 
 inline RuntimeBleControlLeaseCommandKind runtimeBleControlLeaseCommandKind(
@@ -72,17 +67,11 @@ inline RuntimeBleControlLeaseCommandKind runtimeBleControlLeaseCommandKind(
     return RuntimeBleControlLeaseCommandKind::READ_ONLY;
   }
 
-  if (command == "AUTH_HELLO" || runtimeBleCommandHasPrefix(command, "AUTH_PROVE:") ||
-      runtimeBleCommandHasPrefix(command, "PAIR_SET:")) {
-    return RuntimeBleControlLeaseCommandKind::SECURITY_SESSION;
-  }
-
   if (command == "STOP") {
     return RuntimeBleControlLeaseCommandKind::STOP_PREEMPT;
   }
 
-  if (runtimeBleClassifyCommand(command) != RuntimeBleCommandScope::UNKNOWN &&
-      command.rfind("SEC_CMD:", 0) != 0) {
+  if (runtimeBleClassifyCommand(command) != RuntimeBleCommandScope::UNKNOWN) {
     return RuntimeBleControlLeaseCommandKind::CONTROL;
   }
 
@@ -109,11 +98,6 @@ public:
 
     if (kind == RuntimeBleControlLeaseCommandKind::READ_ONLY) {
       result.decision = RuntimeBleControlLeaseDecision::ALLOW_READ_ONLY;
-      return result;
-    }
-
-    if (kind == RuntimeBleControlLeaseCommandKind::SECURITY_SESSION) {
-      result.decision = RuntimeBleControlLeaseDecision::ALLOW_SECURITY_SESSION;
       return result;
     }
 

@@ -181,7 +181,6 @@ BLEBoatLock::BLEBoatLock() {}
 
 void BLEBoatLock::begin() {
     NimBLEDevice::init("BoatLock");
-    NimBLEDevice::setSecurityAuth(true, true, true);
     logMessage("[BLE] init name=BoatLock service=12ab data=34cd cmd=56ef log=78ab ota=9abc\n");
     // Large MTU (512) was unstable with CoreBluetooth under high traffic.
     NimBLEDevice::setMTU(247);

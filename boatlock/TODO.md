@@ -7,9 +7,9 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 
 - [x] Clear stale app telemetry on BLE disconnect and disable map controls from stale `boatData`.
 - [x] Split app anchor flow into explicit save-anchor and enable-anchor actions.
-- [x] Add anchor enable preflight checklist: link, auth, saved anchor, hardware GNSS, fresh heading, safety latch, motor readiness, STOP.
+- [x] Add anchor enable preflight checklist: link, saved anchor, hardware GNSS, fresh heading, safety latch, motor readiness, STOP.
 - [x] Add a normal `ANCHOR_OFF` UI action separate from emergency STOP.
-- [x] Surface command/auth failures from map anchor actions.
+- [x] Surface command send failures from map anchor actions.
 - [x] Fix manual sheet wording: red `STOP` must either send real emergency `STOP` or be renamed to manual off.
 - [x] Verify/fix that phone GPS fallback cannot update GPS-to-compass correction used by control heading.
 - [x] Classify BLE commands into release/dev surfaces and gate dev paths from normal water UI.
@@ -24,12 +24,12 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 
 ## P1 — Before First Protected-Water Test
 
-- [x] Add a first-class readiness panel in the app with link age, GNSS/heading freshness, auth, anchor gate, failsafe, manual lease, and motor readiness.
+- [x] Add a first-class readiness panel in the app with link age, GNSS/heading freshness, anchor gate, failsafe, manual lease, and motor readiness.
 - [x] Add fixed 1.5 m anchor jog controls to the normal app UI.
 - [x] Show distance and bearing to anchor as primary telemetry.
 - [x] Add battery/power/current visibility or a required external measurement step in water-test logs.
 - [x] Add track/history around anchor events for post-run review.
-- [x] Add `MapPage` tests for disconnect, preflight, auth reject, STOP, and manual-off behavior.
+- [x] Add `MapPage` tests for disconnect, preflight, command failure, STOP, and manual-off behavior.
 - [x] Remove or branch off leftover non-target surfaces: `BOATLOCK_BOARD_JC4832W535`, route UI labels, and unused `ReacqStrat`.
 - [x] Add and pass the local pre-powered validation runner.
 - [ ] Run `nh02`, Android, and no-load output validation before mounting powered hardware.
@@ -50,4 +50,4 @@ plan lives in `docs/PRODUCT_READINESS_PLAN.md`.
 - [x] Add production-path tests or simulation around `RuntimeMotion/MotorControl/StepperControl`.
 - [ ] Add heading-hold as a separate operator flow after safe anchor hold is proven.
 - [x] Design explicit multi-client control ownership before accepting a future BLE remote as a second controller.
-- [ ] Implement and validate per-client auth/control ownership before enabling a future BLE remote as a second controller.
+- [ ] Implement and validate per-client control ownership before enabling a future BLE remote as a second controller.

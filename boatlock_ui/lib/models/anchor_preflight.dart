@@ -31,7 +31,6 @@ class AnchorPreflightResult {
 AnchorPreflightResult buildAnchorPreflight(BoatData? data) {
   final reasons = _reasonSet(data?.statusReasons ?? '');
   final linkReady = data != null;
-  final authReady = data != null && (!data.secPaired || data.secAuth);
   final anchorReady =
       data != null && data.anchorLat != 0.0 && data.anchorLon != 0.0;
   final gnssReady =
@@ -79,13 +78,6 @@ AnchorPreflightResult buildAnchorPreflight(BoatData? data) {
         label: 'BLE',
         detail: linkReady ? 'связь есть' : 'нет данных от устройства',
         passed: linkReady,
-      ),
-      AnchorPreflightItem(
-        label: 'Auth',
-        detail: authReady
-            ? (data.secPaired ? 'owner session' : 'pairing off')
-            : 'нужна авторизация',
-        passed: authReady,
       ),
       AnchorPreflightItem(
         label: 'Anchor',

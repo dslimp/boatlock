@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.7] - 2026-04-29
+### Removed
+- Removed the app-layer BLE pairing/auth command wrapper, owner-secret UI,
+  security telemetry, and related compatibility tests.
+- Removed the gated Wi-Fi HTTP `pull-update` debug deploy path so the normal
+  firmware update routes are only phone-local firmware file and latest GitHub
+  Release from the release app.
+
+### Changed
+- Live BLE telemetry is now binary frame v5 at 65 bytes after dropping security
+  fields.
+- Bumped the Android/macOS app package version to `0.2.7+7`.
+
 ## [0.2.6] - 2026-04-28
 ### Fixed
 - Latest-release OTA app-check now waits for BLE command/OTA transport again

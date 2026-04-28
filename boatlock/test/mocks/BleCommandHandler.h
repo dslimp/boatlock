@@ -34,13 +34,13 @@ void setLastFailsafeReason(FailsafeReason reason);
 void clearSafeHold();
 bool setManualControlFromBle(float angleDeg, int throttlePct, unsigned long ttlMs);
 void stopManualControlFromBle();
-bool preprocessSecureCommand(const std::string& incoming, std::string* effective);
+bool preprocessBleCommand(const std::string& incoming, std::string* effective);
 bool handleSimCommand(const std::string& command);
 bool headingAvailable();
 
 inline void handleBleCommand(const std::string &cmd) {
   std::string effectiveCmd;
-  if (!preprocessSecureCommand(cmd, &effectiveCmd)) {
+  if (!preprocessBleCommand(cmd, &effectiveCmd)) {
     return;
   }
   const std::string& command = effectiveCmd;

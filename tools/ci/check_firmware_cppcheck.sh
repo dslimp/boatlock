@@ -23,7 +23,6 @@ fi
   boatlock/AnchorSupervisor.h \
   boatlock/Settings.h \
   boatlock/MotorControl.h \
-  boatlock/BleSecurity.h \
   boatlock/BleCommandHandler.h \
   boatlock/StepperControl.h \
   boatlock/AnchorProfiles.h \

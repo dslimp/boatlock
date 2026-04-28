@@ -10,7 +10,6 @@ enum class RuntimeButtonActionType : uint8_t {
   SAVE_ANCHOR_POINT,
   DENY_ANCHOR_POINT,
   EMERGENCY_STOP,
-  OPEN_PAIRING_WINDOW,
 };
 
 struct RuntimeButtonAction {
@@ -44,19 +43,12 @@ public:
     return action;
   }
 
-  RuntimeButtonAction updateStop(bool pressed,
-                                 unsigned long nowMs,
-                                 unsigned long holdMs) {
+  RuntimeButtonAction updateStop(bool pressed, unsigned long nowMs) {
     const HoldButtonController::Event event =
-        stopButton_.update(pressed, nowMs, holdMs, kDebounceMs);
+        stopButton_.update(pressed, nowMs, 0, kDebounceMs);
     if (event.pressedEdge) {
       RuntimeButtonAction action;
       action.type = RuntimeButtonActionType::EMERGENCY_STOP;
-      return action;
-    }
-    if (event.holdFired) {
-      RuntimeButtonAction action;
-      action.type = RuntimeButtonActionType::OPEN_PAIRING_WINDOW;
       return action;
     }
     return {};

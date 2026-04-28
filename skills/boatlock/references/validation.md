@@ -6,7 +6,7 @@
   - run targeted native tests first
   - build the affected firmware env if the change touches production code
 - BLE command or telemetry change:
-  - native BLE/security tests
+  - native BLE command tests
   - Flutter tests for parsing/UI
   - update `docs/BLE_PROTOCOL.md`
   - if the app must be installed before BLE OTA can update already-deployed
@@ -62,7 +62,6 @@
 - Do not run multiple `platformio test -e native ...` commands in parallel against the same checkout/build directory. PlatformIO shares `.pio/build/native`, and parallel suites can kill or corrupt each other; run suites sequentially or use isolated worktrees/build dirs.
 - Example targeted native suites:
   - `cd boatlock && platformio test -e native -f test_ble_command_handler`
-  - `cd boatlock && platformio test -e native -f test_ble_security`
   - `cd boatlock && platformio test -e native -f test_gnss_quality_gate`
   - `cd boatlock && platformio test -e native -f test_hil_sim`
   - `cd boatlock && platformio test -e native -f test_settings`
@@ -158,7 +157,7 @@ Minimum validation order after profile-gate changes:
    - `git diff --check -- boatlock/platformio.ini tools/hw/nh02/flash.sh docs/BLE_PROTOCOL.md docs/HARDWARE_NH02.md skills/boatlock/references/validation.md boatlock/TODO.md`
    - `rg -n "esp32s3_acceptance|release|dev/HIL|SIM_|OTA|BOATLOCK_PIO_ENV|PlatformIO|nh02" boatlock/platformio.ini tools/hw/nh02/flash.sh docs/BLE_PROTOCOL.md docs/HARDWARE_NH02.md skills/boatlock/references/validation.md boatlock/TODO.md`
 2. Local firmware/unit checks, run sequentially in one build directory:
-   - native BLE command/security tests cover each profile's allow/deny matrix
+   - native BLE command tests cover each profile's allow/deny matrix
    - native HIL tests cover `SIM_*` as a release-scope safe simulation mode
    - each PlatformIO firmware profile builds without relying on stale `.pio` artifacts
 3. Normal firmware bench checks:
@@ -176,16 +175,14 @@ Minimum validation order after profile-gate changes:
 
 Risk review items for the rollout:
 
-- `SEC_CMD` must classify and gate the wrapped payload, not the raw envelope.
 - An acceptance image must not be left on the boat for water use because it exposes injected sensor and HIL commands.
-- Wrapper output must distinguish profile-gated rejection from BLE timeout, auth failure, and parser failure.
+- Wrapper output must distinguish profile-gated rejection from BLE timeout and parser failure.
 
 ## Useful Test Inventory
 
 - Native firmware test directories live under `boatlock/test/`.
 - High-signal suites for protocol/runtime work:
   - `test_ble_command_handler`
-  - `test_ble_security`
   - `test_gnss_quality_gate`
   - `test_anchor_supervisor`
   - `test_hil_sim`
@@ -204,7 +201,7 @@ Risk review items for the rollout:
 
 ## Documentation Sync Rules
 
-- If you change commands, telemetry fields, status reasons, or security behavior, update `docs/BLE_PROTOCOL.md`.
+- If you change commands, telemetry fields, or status reasons, update `docs/BLE_PROTOCOL.md`.
 - If you change settings defaults, ranges, or schema version, update `docs/CONFIG_SCHEMA.md`.
 - If you change NVS/EEPROM write policy or persistence semantics, update the skill references and any operator docs that mention save behavior.
 - If you change user-visible firmware behavior, update `CHANGELOG.md` and the relevant release note when appropriate.

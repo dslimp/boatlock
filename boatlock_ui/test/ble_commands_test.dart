@@ -32,10 +32,6 @@ BoatData _data({required double lat, required double lon}) {
     gyroNorm: 0,
     pitch: 0,
     roll: 0,
-    secPaired: false,
-    secAuth: false,
-    secPairWindowOpen: false,
-    secReject: 'NONE',
     gnssQ: 0,
   );
 }

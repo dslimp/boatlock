@@ -20,8 +20,6 @@ import 'ble_ota_payload.dart';
 import 'ble_reconnect_policy.dart';
 import 'ble_rssi_throttle.dart';
 import 'ble_scan_config.dart';
-import 'ble_security_codec.dart';
-import 'ble_security_policy.dart';
 
 typedef BoatDataCallback = void Function(BoatData? data);
 typedef LogCallback = void Function(String line);
@@ -82,13 +80,6 @@ class BleBoatLock with WidgetsBindingObserver {
   final LogCallback? onLog;
   BoatData? _lastData;
   int _lastRssi = 0;
-  bool _secPaired = false;
-  bool _secAuth = false;
-  bool _secPairWindowOpen = false;
-  String _secNonceHex = '0000000000000000';
-  String _secReject = 'NONE';
-  int _secCounter = 0;
-  String? _ownerSecret;
   final ValueNotifier<BleDebugSnapshot> diagnostics =
       ValueNotifier<BleDebugSnapshot>(BleDebugSnapshot.initial());
   final List<String> _debugAppLogs = <String>[];
@@ -97,12 +88,6 @@ class BleBoatLock with WidgetsBindingObserver {
       <BleCommandRejection>[];
 
   BoatData? get currentData => _lastData;
-  bool get secPaired => _secPaired;
-  bool get secAuth => _secAuth;
-  bool get secPairWindowOpen => _secPairWindowOpen;
-  String get secReject => _secReject;
-  String? get ownerSecret => _ownerSecret;
-
   StreamSubscription<BluetoothConnectionState>? _connectionSub;
   StreamSubscription<List<ScanResult>>? _scanResultsSub;
   StreamSubscription<BluetoothAdapterState>? _adapterStateSub;
@@ -565,16 +550,6 @@ class BleBoatLock with WidgetsBindingObserver {
       rssi: _lastRssi,
       mtu: _device?.mtuNow ?? diagnostics.value.mtu,
     );
-    _secPaired = frame.data.secPaired;
-    _secAuth = frame.data.secAuth;
-    _secPairWindowOpen = frame.data.secPairWindowOpen;
-    _secNonceHex = frame.secNonceHex;
-    _secReject = frame.data.secReject;
-    if (!_secPaired) {
-      _secAuth = false;
-      _secCounter = 0;
-    }
-
     onData(_lastData);
     if (_lastDataLogAt == null ||
         now.difference(_lastDataLogAt!).inSeconds >= 2) {
@@ -960,108 +935,9 @@ class BleBoatLock with WidgetsBindingObserver {
     return _writeCommand('SET_STEP_GEAR:${value.toStringAsFixed(1)}');
   }
 
-  void setOwnerSecret(String? secret) {
-    if (secret == null) {
-      _ownerSecret = null;
-      return;
-    }
-    _ownerSecret = normalizeOwnerSecret(secret);
-  }
-
-  String generateOwnerSecret() {
-    final secret = generateOwnerSecretHex();
-    _ownerSecret = secret;
-    return secret;
-  }
-
-  Future<bool> pairWithOwnerSecret([String? secret]) async {
-    if (_cmdChar == null) return false;
-    final normalized = normalizeOwnerSecret(secret ?? _ownerSecret);
-    if (normalized == null) return false;
-    _ownerSecret = normalized;
-    final wrote = await _writeControlPoint('PAIR_SET:$normalized');
-    if (!wrote) return false;
-    await Future.delayed(const Duration(milliseconds: 120));
-    await requestSnapshot();
-    await Future.delayed(const Duration(milliseconds: 120));
-    return _secPaired;
-  }
-
-  Future<bool> authenticateOwner([String? secret]) async {
-    setOwnerSecret(secret ?? _ownerSecret);
-    final ok = await _ensureSecuritySession(forceRenew: true);
-    await requestSnapshot();
-    return ok && _secAuth;
-  }
-
-  Future<bool> clearPairing() async {
-    if (_cmdChar == null) return false;
-    if (_secPaired) {
-      final ok = await _writeCommand('PAIR_CLEAR');
-      if (!ok) return false;
-    } else {
-      final wrote = await _writeControlPoint('PAIR_CLEAR');
-      if (!wrote) return false;
-    }
-    await Future.delayed(const Duration(milliseconds: 120));
-    await requestSnapshot();
-    _secCounter = 0;
-    if (!_secPaired) {
-      _secAuth = false;
-      _secNonceHex = '0000000000000000';
-    }
-    return !_secPaired;
-  }
-
-  Future<bool> _ensureSecuritySession({bool forceRenew = false}) async {
-    if (_cmdChar == null) return false;
-    if (!_secPaired) return true;
-    if (!forceRenew && _secAuth) return true;
-    final secret = _ownerSecret;
-    if (secret == null) return false;
-
-    final helloSent = await _writeControlPoint('AUTH_HELLO');
-    if (!helloSent) return false;
-    await Future.delayed(const Duration(milliseconds: 120));
-    await requestSnapshot();
-    await Future.delayed(const Duration(milliseconds: 120));
-    if (_secNonceHex == '0000000000000000') return false;
-
-    final proof = buildAuthProofHex(secret, _secNonceHex);
-    final proofSent = await _writeControlPoint('AUTH_PROVE:$proof');
-    if (!proofSent) return false;
-    await Future.delayed(const Duration(milliseconds: 120));
-    await requestSnapshot();
-    await Future.delayed(const Duration(milliseconds: 120));
-    if (!_secAuth) return false;
-
-    _secCounter = 0;
-    return true;
-  }
-
   Future<bool> _writeCommand(String cmd, {bool withoutResponse = false}) async {
     if (_cmdChar == null) return false;
-    if (_isPlainAllowed(cmd)) {
-      return _writeControlPoint(cmd, withoutResponse: withoutResponse);
-    }
-
-    final ok = await _ensureSecuritySession();
-    if (!ok) {
-      _log('secure session unavailable for "$cmd" reject=$_secReject');
-      return false;
-    }
-    if (!_secPaired) {
-      return _writeControlPoint(cmd);
-    }
-
-    _secCounter += 1;
-    final secure = buildSecureCommand(
-      ownerSecret: _ownerSecret!,
-      nonceHex: _secNonceHex,
-      payload: cmd,
-      counter: _secCounter,
-    );
-    return _writeControlPoint(secure, withoutResponse: withoutResponse);
+    return _writeControlPoint(cmd, withoutResponse: withoutResponse);
   }
 
   Future<bool> _writeControlPoint(
@@ -1083,14 +959,6 @@ class BleBoatLock with WidgetsBindingObserver {
         bytes.length <= mtu - 3;
     await _cmdChar!.write(bytes, withoutResponse: safeWithoutResponse);
     return true;
-  }
-
-  bool _isPlainAllowed(String cmd) {
-    return boatLockAllowsPlainCommand(
-      command: cmd,
-      paired: _secPaired,
-      pairWindowOpen: _secPairWindowOpen,
-    );
   }
 
   void dispose() {
@@ -1127,10 +995,6 @@ class BleBoatLock with WidgetsBindingObserver {
       clearLastDataAt: true,
     );
     _clearLastData();
-    _secAuth = false;
-    _secPairWindowOpen = false;
-    _secCounter = 0;
-    _secNonceHex = '0000000000000000';
     if (_otaBeginAck != null && !_otaBeginAck!.isCompleted) {
       _otaBeginAck!.complete(false);
     }

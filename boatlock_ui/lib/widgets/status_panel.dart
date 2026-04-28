@@ -74,7 +74,6 @@ class StatusPanel extends StatelessWidget {
     return [
       _bleItem(data, diagnostics),
       _dataItem(data, diagnostics),
-      _authItem(data),
       _gnssItem(data, reasons),
       _headingItem(data, reasons),
       _anchorItem(data),
@@ -143,33 +142,6 @@ class StatusPanel extends StatelessWidget {
           ? 'live frame ok, events ${diagnostics?.dataEvents ?? '-'}'
           : 'нет live frame',
       level: live ? _ReadinessLevel.ok : _ReadinessLevel.blocked,
-    );
-  }
-
-  _ReadinessItem _authItem(BoatData? data) {
-    if (data == null) {
-      return const _ReadinessItem(
-        icon: Icons.lock_outline,
-        label: 'AUTH',
-        value: 'нет',
-        detail: 'auth unknown until live telemetry arrives',
-        level: _ReadinessLevel.blocked,
-      );
-    }
-    final ready = !data.secPaired || data.secAuth;
-    final value = !data.secPaired
-        ? 'без пары'
-        : data.secAuth
-        ? 'owner'
-        : 'нужна';
-    final reject = data.secReject != 'NONE' ? ', reject ${data.secReject}' : '';
-    return _ReadinessItem(
-      icon: ready ? Icons.lock_open : Icons.lock,
-      label: 'AUTH',
-      value: value,
-      detail:
-          'paired=${data.secPaired} auth=${data.secAuth} pairWin=${data.secPairWindowOpen}$reject',
-      level: ready ? _ReadinessLevel.ok : _ReadinessLevel.blocked,
     );
   }
 

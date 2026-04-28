@@ -115,8 +115,6 @@ Map<String, dynamic> buildSmokeResultPayload({
     'mode': data?.mode ?? '',
     'status': data?.status ?? '',
     'statusReasons': data?.statusReasons ?? '',
-    'secPaired': data?.secPaired ?? false,
-    'secAuth': data?.secAuth ?? false,
     'rssi': data?.rssi ?? 0,
     'lat': data?.lat ?? 0.0,
     'lon': data?.lon ?? 0.0,

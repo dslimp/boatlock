@@ -29,7 +29,6 @@ inline RuntimeBleCommandScope runtimeBleClassifyCommand(
       command == "SNAPSHOT" || command == "ANCHOR_ON" ||
       command == "ANCHOR_OFF" || command == "STOP" ||
       command == "HEARTBEAT" || command == "MANUAL_OFF" ||
-      command == "PAIR_CLEAR" || command == "AUTH_HELLO" ||
       command == "SIM_LIST" || command == "SIM_STATUS" ||
       command == "SIM_REPORT" || command == "SIM_ABORT" ||
       command == "RESET_COMPASS_OFFSET" || command == "SET_STEPPER_BOW" ||
@@ -50,8 +49,6 @@ inline RuntimeBleCommandScope runtimeBleClassifyCommand(
       runtimeBleCommandHasPrefix(command, "NUDGE_DIR:") ||
       runtimeBleCommandHasPrefix(command, "NUDGE_BRG:") ||
       runtimeBleCommandHasPrefix(command, "SET_HOLD_HEADING:") ||
-      runtimeBleCommandHasPrefix(command, "PAIR_SET:") ||
-      runtimeBleCommandHasPrefix(command, "AUTH_PROVE:") ||
       runtimeBleCommandHasPrefix(command, "SIM_RUN:") ||
       runtimeBleCommandHasPrefix(command, "OTA_BEGIN:")) {
     return RuntimeBleCommandScope::RELEASE;

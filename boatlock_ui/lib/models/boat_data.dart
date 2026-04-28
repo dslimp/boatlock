@@ -27,10 +27,6 @@ class BoatData {
   final double gyroNorm;
   final double pitch;
   final double roll;
-  final bool secPaired;
-  final bool secAuth;
-  final bool secPairWindowOpen;
-  final String secReject;
   final int gnssQ;
 
   BoatData({
@@ -62,10 +58,6 @@ class BoatData {
     required this.gyroNorm,
     required this.pitch,
     required this.roll,
-    required this.secPaired,
-    required this.secAuth,
-    required this.secPairWindowOpen,
-    required this.secReject,
     required this.gnssQ,
   });
 }

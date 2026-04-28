@@ -28,21 +28,14 @@ void _i32(BytesBuilder out, int value) {
   _u32(out, value & 0xFFFFFFFF);
 }
 
-void _u64(BytesBuilder out, int value) {
-  for (var i = 0; i < 8; i += 1) {
-    out.addByte((value >> (i * 8)) & 0xFF);
-  }
-}
-
-List<int> _frame({int protocolVersion = 4}) {
-  final includeStepGear = protocolVersion >= 4;
+List<int> _frame() {
   final out = BytesBuilder();
   _u8(out, 0x42);
   _u8(out, 0x4C);
-  _u8(out, protocolVersion);
+  _u8(out, 5);
   _u8(out, 1);
   _u16(out, 9);
-  _u16(out, 0x000F);
+  _u16(out, 0x0001);
   _u8(out, 2);
   _u8(out, 1);
   _i32(out, (55.454227 * 10000000).round());
@@ -54,12 +47,10 @@ List<int> _frame({int protocolVersion = 4}) {
   _u16(out, 2714);
   _u16(out, 3599);
   _u8(out, 81);
-  _u16(out, includeStepGear ? 200 : 7200);
-  if (includeStepGear) {
-    _u16(out, 360);
-  }
-  _u16(out, includeStepGear ? 2400 : 1200);
-  _u16(out, includeStepGear ? 2400 : 800);
+  _u16(out, 200);
+  _u16(out, 360);
+  _u16(out, 2400);
+  _u16(out, 2400);
   _u16(out, 1111);
   _i16(out, -25);
   _u8(out, 3);
@@ -70,24 +61,21 @@ List<int> _frame({int protocolVersion = 4}) {
   _u16(out, 1234);
   _i16(out, -12);
   _i16(out, 34);
-  _u8(out, 4);
   _u32(
     out,
     (1 << 0) | (1 << 3) | (1 << 14) | (1 << 15) | (1 << 18) | (1 << 19),
   );
-  _u64(out, 0x0123456789ABCDEF);
   _u8(out, 2);
   return out.toBytes();
 }
 
 void main() {
-  test('decodeBoatLockLiveFrame decodes v4 live telemetry', () {
+  test('decodeBoatLockLiveFrame decodes v5 live telemetry', () {
     final decoded = decodeBoatLockLiveFrame(_frame(), rssi: -61);
 
     expect(decoded, isNotNull);
     expect(_frame(), hasLength(boatLockLiveFrameSize));
     expect(decoded!.sequence, 9);
-    expect(decoded.secNonceHex, '0123456789ABCDEF');
     expect(decoded.data.mode, 'ANCHOR');
     expect(decoded.data.status, 'WARN');
     expect(decoded.data.lat, closeTo(55.454227, 0.000001));
@@ -97,10 +85,6 @@ void main() {
     expect(decoded.data.anchorBearing, 271.4);
     expect(decoded.data.heading, 359.9);
     expect(decoded.data.holdHeading, isTrue);
-    expect(decoded.data.secPaired, isTrue);
-    expect(decoded.data.secAuth, isTrue);
-    expect(decoded.data.secPairWindowOpen, isTrue);
-    expect(decoded.data.secReject, 'AUTH_REQUIRED');
     expect(decoded.data.gnssQ, 2);
     expect(decoded.data.stepSpr, 200);
     expect(decoded.data.stepGear, 36.0);
@@ -111,24 +95,6 @@ void main() {
       'NO_GPS,DRIFT_FAIL,GPS_DATA_STALE,GPS_POSITION_JUMP,NO_HEADING,GPS_HDOP_MISSING',
     );
     expect(decoded.data.rssi, -61);
-  });
-
-  test('decodeBoatLockLiveFrame decodes v3 live telemetry for OTA bridge', () {
-    final frame = _frame(protocolVersion: 3);
-    final decoded = decodeBoatLockLiveFrame(frame, rssi: -65);
-
-    expect(decoded, isNotNull);
-    expect(frame, hasLength(boatLockLiveFrameV3Size));
-    expect(decoded!.sequence, 9);
-    expect(decoded.data.mode, 'ANCHOR');
-    expect(decoded.data.status, 'WARN');
-    expect(decoded.data.secReject, 'AUTH_REQUIRED');
-    expect(decoded.data.gnssQ, 2);
-    expect(decoded.data.stepSpr, 7200);
-    expect(decoded.data.stepGear, 1.0);
-    expect(decoded.data.stepMaxSpd, 1200);
-    expect(decoded.data.stepAccel, 800);
-    expect(decoded.data.rssi, -65);
   });
 
   test('decodeBoatLockLiveFrame rejects unsupported payloads', () {
@@ -152,9 +118,5 @@ void main() {
     final unknownStatus = _frame();
     unknownStatus[9] = 99;
     expect(decodeBoatLockLiveFrame(unknownStatus), isNull);
-
-    final unknownReject = _frame();
-    unknownReject[60] = 99;
-    expect(decodeBoatLockLiveFrame(unknownReject), isNull);
   });
 }

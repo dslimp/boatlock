@@ -47,7 +47,7 @@ void main() {
     expect(parseBleCommandRejectionLog('[OTA] begin rejected'), isNull);
     expect(
       parseBleCommandRejectionLog(
-        '[BLE] command rejected reason=auth profile=release '
+        '[BLE] command rejected reason=bad_crc profile=release '
         'scope=dev_hil command=SET_PHONE_GPS:bad',
       ),
       isNull,

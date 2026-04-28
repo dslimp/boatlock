@@ -116,7 +116,7 @@ Use this skill when the task is about updating or validating the real ESP32-S3 h
 - BLE log characteristic `78ab` mirrors firmware serial log lines generated
   after the phone is connected/subscribed, including `[BLE]` lines. Use
   RFC2217/USB serial for pre-BLE boot logs.
-- Android smoke does not prove auth behavior.
+- Android smoke does not prove real powered actuation or on-water hold quality.
 - Full BNO08x DCD/tare acceptance requires the explicit `esp32s3_bno08x_sh2_uart` target plus SH2-UART wiring; do not count current RVC acceptance as DCD proof.
 - It does not prove real anchor hold quality on water.
 - It does not replace on-device `SIM_*` checks or offline simulation.

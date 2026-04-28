@@ -46,10 +46,6 @@ BoatData _data() => BoatData(
   gyroNorm: 0.1,
   pitch: 1,
   roll: 2,
-  secPaired: false,
-  secAuth: false,
-  secPairWindowOpen: false,
-  secReject: 'NONE',
   gnssQ: 0,
 );
 

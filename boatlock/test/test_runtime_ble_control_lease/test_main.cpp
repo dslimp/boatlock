@@ -5,13 +5,10 @@
 void setUp() {}
 void tearDown() {}
 
-RuntimeBleControlClient appClient(uint16_t handle,
-                                  uint32_t generation,
-                                  uint32_t securitySession = 0) {
+RuntimeBleControlClient appClient(uint16_t handle, uint32_t generation) {
   RuntimeBleControlClient client;
   client.connHandle = handle;
   client.generation = generation;
-  client.securitySession = securitySession;
   client.role = RuntimeBleControlRole::APP;
   client.valid = true;
   return client;
@@ -33,14 +30,10 @@ void assertKind(RuntimeBleControlLeaseCommandKind expected, const char* command)
                     static_cast<int>(runtimeBleControlLeaseCommandKind(command)));
 }
 
-void test_command_kinds_keep_transport_and_auth_out_of_owner_lease() {
+void test_command_kinds_keep_read_only_out_of_owner_lease() {
   assertKind(RuntimeBleControlLeaseCommandKind::READ_ONLY, "STREAM_START");
   assertKind(RuntimeBleControlLeaseCommandKind::READ_ONLY, "STREAM_STOP");
   assertKind(RuntimeBleControlLeaseCommandKind::READ_ONLY, "SNAPSHOT");
-  assertKind(RuntimeBleControlLeaseCommandKind::SECURITY_SESSION, "AUTH_HELLO");
-  assertKind(RuntimeBleControlLeaseCommandKind::SECURITY_SESSION, "AUTH_PROVE:0123");
-  assertKind(RuntimeBleControlLeaseCommandKind::SECURITY_SESSION,
-             "PAIR_SET:00112233445566778899AABBCCDDEEFF");
 }
 
 void test_command_kinds_mark_control_stop_and_rejected_commands() {
@@ -50,11 +43,10 @@ void test_command_kinds_mark_control_stop_and_rejected_commands() {
   assertKind(RuntimeBleControlLeaseCommandKind::CONTROL, "OTA_BEGIN:bad");
   assertKind(RuntimeBleControlLeaseCommandKind::CONTROL, "SIM_STATUS");
   assertKind(RuntimeBleControlLeaseCommandKind::STOP_PREEMPT, "STOP");
-  assertKind(RuntimeBleControlLeaseCommandKind::REJECT, "SEC_CMD:1:2:STOP");
   assertKind(RuntimeBleControlLeaseCommandKind::REJECT, "MANUAL_DIR:1");
 }
 
-void test_read_only_and_security_commands_do_not_acquire_owner() {
+void test_read_only_commands_do_not_acquire_owner() {
   RuntimeBleControlLease lease;
   RuntimeBleControlClient app = appClient(4, 10);
 
@@ -64,16 +56,11 @@ void test_read_only_and_security_commands_do_not_acquire_owner() {
   TEST_ASSERT_TRUE(stream.allowed());
   TEST_ASSERT_FALSE(stream.ownerCommand());
   TEST_ASSERT_FALSE(lease.ownerActive(1000));
-
-  RuntimeBleControlLeaseResult auth = lease.authorize(app, "AUTH_HELLO", 1100);
-  assertDecision(RuntimeBleControlLeaseDecision::ALLOW_SECURITY_SESSION, auth);
-  TEST_ASSERT_TRUE(auth.allowed());
-  TEST_ASSERT_FALSE(lease.ownerActive(1100));
 }
 
 void test_first_app_control_command_acquires_and_same_owner_refreshes() {
   RuntimeBleControlLease lease;
-  RuntimeBleControlClient app = appClient(1, 7, 100);
+  RuntimeBleControlClient app = appClient(1, 7);
 
   RuntimeBleControlLeaseResult first =
       lease.authorize(app, "ANCHOR_ON", 1000, 3000);
@@ -113,18 +100,15 @@ void test_non_owner_control_is_busy_until_lease_expires() {
   TEST_ASSERT_TRUE(lease.ownerIs(second, 4000));
 }
 
-void test_reconnect_generation_and_security_session_do_not_match_owner() {
+void test_reconnect_generation_does_not_match_owner() {
   RuntimeBleControlLease lease;
-  RuntimeBleControlClient owner = appClient(1, 1, 100);
-  RuntimeBleControlClient reconnect = appClient(1, 2, 100);
-  RuntimeBleControlClient newSession = appClient(1, 1, 101);
+  RuntimeBleControlClient owner = appClient(1, 1);
+  RuntimeBleControlClient reconnect = appClient(1, 2);
 
   assertDecision(RuntimeBleControlLeaseDecision::ACQUIRE,
                  lease.authorize(owner, "SET_HOLD_HEADING:1", 1000, 3000));
   assertDecision(RuntimeBleControlLeaseDecision::REJECT_BUSY,
                  lease.authorize(reconnect, "HEARTBEAT", 1200, 3000));
-  assertDecision(RuntimeBleControlLeaseDecision::REJECT_BUSY,
-                 lease.authorize(newSession, "HEARTBEAT", 1300, 3000));
 }
 
 void test_owner_disconnect_clears_lease_but_peer_disconnect_does_not() {
@@ -187,12 +171,12 @@ void test_invalid_client_or_unknown_command_cannot_acquire() {
 
 int main() {
   UNITY_BEGIN();
-  RUN_TEST(test_command_kinds_keep_transport_and_auth_out_of_owner_lease);
+  RUN_TEST(test_command_kinds_keep_read_only_out_of_owner_lease);
   RUN_TEST(test_command_kinds_mark_control_stop_and_rejected_commands);
-  RUN_TEST(test_read_only_and_security_commands_do_not_acquire_owner);
+  RUN_TEST(test_read_only_commands_do_not_acquire_owner);
   RUN_TEST(test_first_app_control_command_acquires_and_same_owner_refreshes);
   RUN_TEST(test_non_owner_control_is_busy_until_lease_expires);
-  RUN_TEST(test_reconnect_generation_and_security_session_do_not_match_owner);
+  RUN_TEST(test_reconnect_generation_does_not_match_owner);
   RUN_TEST(test_owner_disconnect_clears_lease_but_peer_disconnect_does_not);
   RUN_TEST(test_stop_from_non_owner_preempts_and_clears_lease);
   RUN_TEST(test_remote_role_cannot_acquire_control_in_this_slice);

@@ -9,7 +9,6 @@
 #include "AnchorControl.h"
 #include "BLEBoatLock.h"
 #include "BNO08xCompass.h"
-#include "BleSecurity.h"
 #include "DriftMonitor.h"
 #include "HilSimRunner.h"
 #include "MotorControl.h"
@@ -28,7 +27,6 @@ struct RuntimeBleParamContext {
   DriftMonitor& driftMonitor;
   BNO08xCompass& compass;
   hilsim::HilSimManager& hilSim;
-  BleSecurity& security;
   BLEBoatLock::CommandHandler commandHandler;
   std::function<bool()> compassReady;
   std::function<float()> currentHeadingValue;
@@ -190,7 +188,6 @@ inline void registerRuntimeBleParams(const RuntimeBleParamContext& context) {
   AnchorControl* anchor = &context.anchor;
   BNO08xCompass* compass = &context.compass;
   hilsim::HilSimManager* hilSim = &context.hilSim;
-  BleSecurity* security = &context.security;
   const BLEBoatLock::CommandHandler commandHandler = context.commandHandler;
   const auto compassReady = context.compassReady;
   const auto currentHeadingValue = context.currentHeadingValue;
@@ -229,15 +226,10 @@ inline void registerRuntimeBleParams(const RuntimeBleParamContext& context) {
     telemetry.gyroNorm = compassReadyNow ? compass->getGyroNormDps() : 0.0f;
     telemetry.pitchDeg = compassReadyNow ? compass->getPitchDeg() : 0.0f;
     telemetry.rollDeg = compassReadyNow ? compass->getRollDeg() : 0.0f;
-    telemetry.secPaired = security->isPaired();
-    telemetry.secAuth = security->sessionActive();
-    telemetry.secPairWindowOpen = security->pairingWindowOpen(millis());
-    telemetry.secNonce = security->sessionNonce();
     telemetry.mode = std::string(currentModeLabel());
     const RuntimeStatusSnapshot statusSnapshot = buildStatusSnapshot();
     telemetry.status = statusSnapshot.summary;
     telemetry.statusReasons = statusSnapshot.reasons;
-    telemetry.secReject = std::string(security->lastRejectString());
     telemetry.gnssQ = runtimeBleTelemetryQuality(gnssQualityLevel(), 2);
     hilsim::HilScenarioRunner::LiveTelemetry simLive;
     if (hilSim->isRunning() && hilSim->liveTelemetry(&simLive)) {

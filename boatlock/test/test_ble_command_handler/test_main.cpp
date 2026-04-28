@@ -37,10 +37,6 @@ AnchorDeniedReason lastDeniedReason = AnchorDeniedReason::NONE;
 FailsafeReason lastFailsafeReason = FailsafeReason::NONE;
 int clearSafeHoldCalls = 0;
 int manualStopCalls = 0;
-bool securityForceReject = false;
-bool securityRequireWrapper = false;
-bool securitySessionActive = false;
-uint32_t securityLastCounter = 0;
 bool simHandlerConsumes = false;
 int simHandlerCalls = 0;
 std::string simLastCommand;
@@ -96,28 +92,9 @@ void stopManualControlFromBle() {
   stepperControl.cancelMove();
   motor.stop();
 }
-bool preprocessSecureCommand(const std::string& incoming, std::string* effective) {
+bool preprocessBleCommand(const std::string& incoming, std::string* effective) {
   if (!effective) return false;
-  if (securityForceReject) return false;
-  if (!securityRequireWrapper) {
-    *effective = incoming;
-    return true;
-  }
-  if (incoming.rfind("SEC_CMD:", 0) != 0) {
-    return false;
-  }
-  size_t p1 = incoming.find(':', 8);
-  size_t p2 = (p1 == std::string::npos) ? std::string::npos : incoming.find(':', p1 + 1);
-  if (p1 == std::string::npos || p2 == std::string::npos || p2 + 1 >= incoming.size()) {
-    return false;
-  }
-  const std::string counterHex = incoming.substr(8, p1 - 8);
-  uint32_t counter = (uint32_t)strtoul(counterHex.c_str(), nullptr, 16);
-  if (!securitySessionActive || counter <= securityLastCounter) {
-    return false;
-  }
-  securityLastCounter = counter;
-  *effective = incoming.substr(p2 + 1);
+  *effective = incoming;
   return true;
 }
 bool handleSimCommand(const std::string& command) {
@@ -167,10 +144,6 @@ void setUp() {
   lastFailsafeReason = FailsafeReason::NONE;
   clearSafeHoldCalls = 0;
   manualStopCalls = 0;
-  securityForceReject = false;
-  securityRequireWrapper = false;
-  securitySessionActive = false;
-  securityLastCounter = 0;
   simHandlerConsumes = false;
   simHandlerCalls = 0;
   simLastCommand.clear();
@@ -480,71 +453,6 @@ void test_set_anchor_profile_rejects_invalid_payload() {
   TEST_ASSERT_EQUAL_FLOAT(deadbandBefore, settings.get("DeadbandM"));
 }
 
-void test_security_rejects_plain_control_command_when_wrapper_required() {
-  securityRequireWrapper = true;
-  securitySessionActive = true;
-  settings.set("AnchorEnabled", 0.0f);
-  handleBleCommand("ANCHOR_ON");
-  TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
-}
-
-void test_security_accepts_wrapped_command_with_increasing_counter() {
-  securityRequireWrapper = true;
-  securitySessionActive = true;
-  anchorPointPresent = true;
-  anchorEnableAllowed = true;
-
-  handleBleCommand("SEC_CMD:1:deadbeef:ANCHOR_ON");
-  TEST_ASSERT_EQUAL_FLOAT(1.0f, settings.get("AnchorEnabled"));
-
-  settings.set("AnchorEnabled", 0.0f);
-  handleBleCommand("SEC_CMD:1:deadbeef:ANCHOR_ON");
-  TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
-}
-
-void test_security_rejects_raw_paired_safety_commands_before_side_effects() {
-  securityRequireWrapper = true;
-  securitySessionActive = true;
-  settings.set("AnchorEnabled", 1.0f);
-  manualControl.apply(ManualControlSource::BLE_PHONE, 1, 25, 500, 1000);
-
-  handleBleCommand("HEARTBEAT");
-  handleBleCommand("STOP");
-  handleBleCommand("ANCHOR_OFF");
-
-  TEST_ASSERT_EQUAL(0, controlActivityNotes);
-  TEST_ASSERT_EQUAL_FLOAT(1.0f, settings.get("AnchorEnabled"));
-  TEST_ASSERT_TRUE(manualControl.active());
-  TEST_ASSERT_FALSE(stopAllMotionCalled);
-  TEST_ASSERT_FALSE(stepperControl.cancelCalled);
-  TEST_ASSERT_FALSE(motor.stopCalled);
-  TEST_ASSERT_EQUAL(0, manualStopCalls);
-  TEST_ASSERT_EQUAL((int)FailsafeReason::NONE, (int)lastFailsafeReason);
-}
-
-void test_security_accepts_wrapped_paired_safety_commands() {
-  securityRequireWrapper = true;
-  securitySessionActive = true;
-  settings.set("AnchorEnabled", 1.0f);
-  manualControl.apply(ManualControlSource::BLE_PHONE, 1, 25, 500, 1000);
-
-  handleBleCommand("SEC_CMD:1:deadbeef:HEARTBEAT");
-  TEST_ASSERT_EQUAL(1, controlActivityNotes);
-  TEST_ASSERT_EQUAL_FLOAT(1.0f, settings.get("AnchorEnabled"));
-
-  handleBleCommand("SEC_CMD:2:deadbeef:ANCHOR_OFF");
-  TEST_ASSERT_EQUAL_FLOAT(0.0f, settings.get("AnchorEnabled"));
-  TEST_ASSERT_FALSE(manualControl.active());
-  TEST_ASSERT_TRUE(stepperControl.cancelCalled);
-  TEST_ASSERT_TRUE(motor.stopCalled);
-  TEST_ASSERT_EQUAL(1, manualStopCalls);
-
-  stopAllMotionCalled = false;
-  handleBleCommand("SEC_CMD:3:deadbeef:STOP");
-  TEST_ASSERT_TRUE(stopAllMotionCalled);
-  TEST_ASSERT_EQUAL((int)FailsafeReason::STOP_CMD, (int)lastFailsafeReason);
-}
-
 void test_command_parser_fuzz_does_not_break_safe_state() {
   srand(42);
   settings.set("AnchorEnabled", 0.0f);
@@ -611,10 +519,6 @@ int main() {
   RUN_TEST(test_compass_calibration_commands_are_routed_to_compass);
   RUN_TEST(test_set_anchor_profile_applies_bundle);
   RUN_TEST(test_set_anchor_profile_rejects_invalid_payload);
-  RUN_TEST(test_security_rejects_plain_control_command_when_wrapper_required);
-  RUN_TEST(test_security_accepts_wrapped_command_with_increasing_counter);
-  RUN_TEST(test_security_rejects_raw_paired_safety_commands_before_side_effects);
-  RUN_TEST(test_security_accepts_wrapped_paired_safety_commands);
   RUN_TEST(test_command_parser_fuzz_does_not_break_safe_state);
   RUN_TEST(test_sim_command_is_forwarded_and_consumed);
   RUN_TEST(test_non_sim_command_still_runs_when_sim_handler_declines);
