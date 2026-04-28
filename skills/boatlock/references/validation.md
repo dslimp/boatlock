@@ -27,6 +27,77 @@
 - Release process change:
   - keep `docs/RELEASE_PROCESS.md`, `.github/workflows/ci.yml`, release branch checks, and app firmware source defines aligned
 
+## GitHub Actions And Release API Checks
+
+- GitHub Actions and GitHub Release proof must come from GitHub API data, not
+  from browser pages, local artifacts, or assumptions from `git push` output.
+- `gh` is not required on this host. Use the GitHub REST API through `curl`
+  and the existing git credential helper; do not print the token.
+- If API access fails only inside the sandbox with network/permission errors,
+  rerun the same API probe with host access before treating GitHub as broken.
+- Canonical credential setup for one shell session:
+
+```sh
+GITHUB_TOKEN="$(
+  printf 'protocol=https\nhost=github.com\n\n' |
+    git credential fill |
+    awk -F= '$1 == "password" { print $2 }'
+)"
+```
+
+- Find the workflow run for a pushed branch, release branch, tag, or SHA:
+
+```sh
+REF="v0.2.7"
+curl -fsS \
+  -H "Accept: application/vnd.github+json" \
+  -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+  "https://api.github.com/repos/dslimp/boatlock/actions/runs?per_page=50" |
+  jq -r --arg ref "${REF}" '
+    .workflow_runs[]
+    | select(.head_branch == $ref or .head_sha == $ref)
+    | [.id, .name, .status, .conclusion, .head_branch, .head_sha, .html_url]
+    | @tsv
+  '
+```
+
+- Inspect failed or pending jobs for a run before guessing:
+
+```sh
+RUN_ID="25080503445"
+curl -fsS \
+  -H "Accept: application/vnd.github+json" \
+  -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+  "https://api.github.com/repos/dslimp/boatlock/actions/runs/${RUN_ID}/jobs?per_page=100" |
+  jq -r '.jobs[] | [.name, .status, .conclusion, .html_url] | @tsv'
+```
+
+- Verify the published release and required OTA assets:
+
+```sh
+TAG="v0.2.7"
+curl -fsS \
+  -H "Accept: application/vnd.github+json" \
+  -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+  "https://api.github.com/repos/dslimp/boatlock/releases/tags/${TAG}" |
+  jq '{tag_name, draft, prerelease, target_commitish, asset_count: (.assets | length), assets: [.assets[].name]}'
+```
+
+- Verify the app-facing firmware manifest, because the phone `Последняя с
+  GitHub` button depends on this file:
+
+```sh
+TAG="v0.2.7"
+curl -fsSL \
+  -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+  "https://github.com/dslimp/boatlock/releases/download/${TAG}/manifest.json" |
+  jq '{repo, branch, channel, firmwareVersion, platformioEnv, commandProfile, workflowRunId, binaryUrl, size, sha256, gitSha}'
+```
+
+- A release is not proven until the tag workflow is `completed/success`, the
+  GitHub Release is not draft/prerelease, and the assets include at least
+  `manifest.json`, `firmware-esp32s3.bin`, and `boatlock-app.apk`.
+
 ## Common Commands
 
 - Local pre-powered validation gate:

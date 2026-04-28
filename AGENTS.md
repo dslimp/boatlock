@@ -187,6 +187,13 @@
 - Treat `main` as the releasable integration branch, not as a parking lot for unfinished runtime features.
 - Stabilize shippable cuts on `release/vX.Y.x` branches and publish artifacts only through GitHub Releases from `vX.Y.Z` tags.
 - GitHub Pages is not a BoatLock firmware-release channel.
+- GitHub Actions/Release checks must use the GitHub API, not browser pages or
+  local artifact guesses. The canonical command patterns live in
+  `skills/boatlock/references/validation.md` under `GitHub Actions And Release
+  API Checks`.
+- For a release/tag proof, verify all three: the tag workflow run is
+  `completed/success`, the GitHub Release is not draft/prerelease, and
+  `manifest.json` points the phone OTA path at the expected firmware SHA/version.
 - Before removing non-core runtime behavior, preserve it in a dedicated branch first.
 - Default extraction order:
   - `feature/runtime-tuning-and-diagnostics`

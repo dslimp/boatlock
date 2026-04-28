@@ -8129,3 +8129,25 @@ Self-review:
   because compatibility was intentionally removed, an old image that rejects
   direct OTA may require one recovery USB flash before the new path can take
   over.
+
+### 2026-04-29 Stage 269: GitHub Actions proof path captured
+
+Scope:
+- Capture the durable workflow for checking GitHub Actions and GitHub Release
+  artifacts after pushes/tags.
+
+Decisions:
+- Record the canonical proof path in `skills/boatlock/references/validation.md`
+  because this belongs to build/test/release workflow.
+- Add a shorter pointer in `AGENTS.md` so future agents see the requirement
+  before touching release branches or OTA delivery.
+- Use GitHub REST API calls with the existing git credential helper; do not
+  depend on `gh`, browser pages, local artifact guesses, or printed tokens.
+
+Validation:
+- Documentation-only change; reviewed the command examples for the required
+  run, jobs, release asset, and app-facing manifest checks.
+
+Self-review:
+- This should prevent the previous ambiguity around whether CI, release assets,
+  and the phone `Latest from GitHub` OTA path were actually proven.
