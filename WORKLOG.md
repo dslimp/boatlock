@@ -7873,3 +7873,38 @@ Self-review:
   be marked complete while MIUI rejects exact APK install. The signing defect
   was a separate source bug: even after MIUI is fixed, future APK-over-APK
   updates would break without stable release signing.
+
+### 2026-04-28 Stage 256: Two phone firmware update paths
+
+Scope:
+- Remove operator-facing deploy complexity from Android Settings.
+- Keep exactly two user firmware paths: select a local firmware file on the
+  phone, or install the latest firmware from the GitHub Release button.
+
+Decisions:
+- The Settings firmware section now exposes `Файл на телефоне` and
+  `Последняя с GitHub` only.
+- Local file OTA uses Android's system file picker, computes SHA-256 in the app,
+  and reuses the existing safe BLE OTA transport.
+- URL/SHA OTA and app-check launch arguments remain hidden bench automation
+  hooks only; they are not an operator UI or release workflow.
+- This is released as `0.2.3` so the GitHub APK and manifest can carry the
+  simplified update UI.
+
+Validation:
+- `python3 tools/ci/check_firmware_version.py --tag v0.2.3` -> PASS.
+- `python3 tools/ci/check_config_schema_version.py` -> PASS (`0x1d`).
+- `pytest tools/ci/test_*.py` -> PASS (`37/37`).
+- `cd boatlock_ui && flutter analyze` -> PASS.
+- `cd boatlock_ui && flutter test` -> PASS (`122/122`).
+- `cd boatlock && platformio run -e esp32s3` -> PASS; RAM `19.3%`,
+  flash `23.4%`, firmware SHA-256
+  `a03964fc72d354987f19950abb4aa077848922f539189809d8a0d9dc7e463d87`.
+- `tools/android/build-app-apk.sh` -> PASS; rebuilt
+  `boatlock_ui/build/app/outputs/flutter-apk/app-release.apk`, APK SHA-256
+  `9284629f70eb56f3c6f7918c07d52875a2414d0ac5d8e9e1cf466e3bbaf2ff94`.
+
+Self-review:
+- The previous app UI mixed an operator workflow with validation plumbing.
+  Keeping the plumbing hidden preserves testability, while the phone user now
+  sees only the two supported update choices.

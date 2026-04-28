@@ -36,14 +36,18 @@
 - Acceptance firmware profile build:
   - `cd boatlock && pio run -e esp32s3_acceptance`
 - Normal phone BLE OTA firmware update:
-  - standard bench automation: `tools/hw/nh02/deploy.sh`
+  - operator path A: Settings -> `Файл на телефоне` with a local
+    `firmware.bin` selected on the Android phone
+  - operator path B: Settings -> `Последняя с GitHub` against the latest
+    GitHub Release for `dslimp/boatlock`
+  - bench automation only: `tools/hw/nh02/deploy.sh`
   - reuse already-built firmware/APK through the same path: `tools/hw/nh02/deploy.sh --no-build`
   - low-level app-check when bypassing the build wrapper is intentional: `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
   - remember the release APK is installed before the firmware upload, so app-side
     telemetry parsing must still decode the currently installed firmware well
     enough to receive first telemetry and launch OTA
-  - publish/serve the binary from a trusted URL and copy its SHA-256
-  - in the app Settings screen, use Firmware OTA URL + SHA-256 to upload over BLE
+  - do not add operator-facing firmware URL/SHA fields back to Settings; the
+    URL/SHA path is hidden bench automation only
   - USB flash is only the seed/recovery path when the target lacks an OTA-capable image or cannot reconnect over BLE
   - if BLE discovery may take time, add `--wait-secs 1800`; the wrapper wait
     starts before scan/connect and can expire during upload when advertising

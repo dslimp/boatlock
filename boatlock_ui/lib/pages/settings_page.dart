@@ -1,19 +1,58 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../ble/ble_boatlock.dart';
 import '../ble/ble_command_rejection.dart';
 import '../ble/ble_debug_snapshot.dart';
 import '../ble/ble_ota_payload.dart';
 import '../ble/ble_security_codec.dart';
-import '../app_check/app_check_probe.dart';
 import '../ota/firmware_update_client.dart';
 import '../ota/firmware_update_manifest.dart';
-import '../smoke/ble_smoke_mode.dart';
 import 'settings_command_rejection_guard.dart';
+
+class PickedFirmwareFile {
+  const PickedFirmwareFile({required this.name, required this.bytes});
+
+  final String name;
+  final Uint8List bytes;
+}
+
+typedef FirmwareFilePicker = Future<PickedFirmwareFile?> Function();
+
+const MethodChannel _firmwareFileChannel = MethodChannel(
+  'boatlock/firmware_file',
+);
+
+Future<PickedFirmwareFile?> pickBoatLockFirmwareFile() async {
+  if (!Platform.isAndroid) {
+    return null;
+  }
+  final result = await _firmwareFileChannel.invokeMapMethod<String, Object?>(
+    'pickFirmwareBin',
+  );
+  if (result == null) {
+    return null;
+  }
+  final rawBytes = result['bytes'];
+  final bytes = rawBytes is Uint8List
+      ? rawBytes
+      : rawBytes is List<int>
+      ? Uint8List.fromList(rawBytes)
+      : null;
+  if (bytes == null || bytes.isEmpty) {
+    throw const FormatException('firmware file is empty');
+  }
+  final rawName = result['name'];
+  return PickedFirmwareFile(
+    name: rawName is String && rawName.trim().isNotEmpty
+        ? rawName.trim()
+        : 'firmware.bin',
+    bytes: bytes,
+  );
+}
 
 class SettingsPage extends StatefulWidget {
   final BleBoatLock ble;
@@ -37,7 +76,7 @@ class SettingsPage extends StatefulWidget {
   final bool secPairWindowOpen;
   final String secReject;
   final FirmwareUpdateClient firmwareUpdateClient;
-  final ValueChanged<BoatLockAppCheckConfig>? onStartAppCheck;
+  final FirmwareFilePicker firmwareFilePicker;
 
   const SettingsPage({
     super.key,
@@ -62,7 +101,7 @@ class SettingsPage extends StatefulWidget {
     required this.secPairWindowOpen,
     required this.secReject,
     this.firmwareUpdateClient = const FirmwareUpdateClient(),
-    this.onStartAppCheck,
+    this.firmwareFilePicker = pickBoatLockFirmwareFile,
   });
 
   @override
@@ -93,8 +132,6 @@ class _SettingsPageState extends State<SettingsPage> {
   late bool secPairWindowOpen;
   late String secReject;
   late final TextEditingController _ownerSecretCtrl;
-  late final TextEditingController _otaUrlCtrl;
-  late final TextEditingController _otaShaCtrl;
   bool _otaBusy = false;
   double? _otaProgress;
   String _otaStatus = '';
@@ -106,7 +143,6 @@ class _SettingsPageState extends State<SettingsPage> {
   _ProfileRejectionWait? _profileRejectionWait;
   late final FirmwareUpdateClient _firmwareUpdateClient;
   FirmwareUpdateManifest? _releaseFirmwareManifest;
-  BleSmokeMode _appCheckMode = BleSmokeMode.basic;
 
   @override
   void initState() {
@@ -134,8 +170,6 @@ class _SettingsPageState extends State<SettingsPage> {
     _ownerSecretCtrl = TextEditingController(
       text: widget.ble.ownerSecret ?? '',
     );
-    _otaUrlCtrl = TextEditingController();
-    _otaShaCtrl = TextEditingController();
     _firmwareUpdateClient = widget.firmwareUpdateClient;
     widget.ble.setOwnerSecret(_ownerSecretCtrl.text);
     _lastSeenCommandRejectEvents =
@@ -147,8 +181,6 @@ class _SettingsPageState extends State<SettingsPage> {
   void dispose() {
     widget.ble.diagnostics.removeListener(_onDiagnosticsChanged);
     _ownerSecretCtrl.dispose();
-    _otaUrlCtrl.dispose();
-    _otaShaCtrl.dispose();
     super.dispose();
   }
 
@@ -560,32 +592,6 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Future<Uint8List> _downloadFirmware(
-    Uri uri, {
-    void Function(int receivedBytes, int? totalBytes)? onProgress,
-  }) async {
-    final client = HttpClient();
-    client.connectionTimeout = const Duration(seconds: 15);
-    try {
-      final request = await client.getUrl(uri);
-      final response = await request.close();
-      if (response.statusCode != HttpStatus.ok) {
-        throw HttpException('HTTP ${response.statusCode}', uri: uri);
-      }
-      final builder = BytesBuilder(copy: false);
-      final total = response.contentLength > 0 ? response.contentLength : null;
-      var received = 0;
-      await for (final chunk in response) {
-        builder.add(chunk);
-        received += chunk.length;
-        onProgress?.call(received, total);
-      }
-      return builder.takeBytes();
-    } finally {
-      client.close(force: true);
-    }
-  }
-
   String _formatBytes(int bytes) {
     if (bytes >= 1024 * 1024) {
       return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
@@ -697,6 +703,67 @@ class _SettingsPageState extends State<SettingsPage> {
     _showMessage(ok ? 'OTA завершено' : failureMessage);
   }
 
+  Future<void> _runLocalFirmwareOta() async {
+    if (!isConnected || _otaBusy) return;
+
+    setState(() {
+      _otaBusy = true;
+      _otaProgress = null;
+      _otaProgressLabel = '';
+      _otaStatus = 'Выбор файла';
+      _otaStartedAt = DateTime.now();
+      _otaLastLogAt = null;
+      _otaLastLogBucket = -1;
+      _releaseFirmwareManifest = null;
+    });
+
+    try {
+      final picked = await widget.firmwareFilePicker();
+      if (!mounted) return;
+      if (picked == null) {
+        setState(() {
+          _otaBusy = false;
+          _otaStatus = 'Файл не выбран';
+        });
+        _logOta('local_cancelled');
+        return;
+      }
+      if (!isBoatLockOtaImageSizeValid(picked.bytes.length)) {
+        setState(() {
+          _otaBusy = false;
+          _otaStatus = 'Неверный размер firmware.bin';
+        });
+        _logOta(
+          'local_bad_size',
+          sent: picked.bytes.length,
+          total: picked.bytes.length,
+        );
+        _showMessage('Неверный размер firmware.bin');
+        return;
+      }
+
+      final sha = boatLockSha256Hex(picked.bytes);
+      setState(() {
+        _otaStatus = '${picked.name}: ${_formatBytes(picked.bytes.length)}';
+      });
+      _logOta(
+        'local_file_ready',
+        sent: picked.bytes.length,
+        total: picked.bytes.length,
+        detail: picked.name,
+      );
+      await _uploadVerifiedFirmware(picked.bytes, sha);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _otaBusy = false;
+        _otaStatus = 'Ошибка файла';
+      });
+      _logOta('local_error', detail: e.toString());
+      _showMessage('Ошибка файла: $e');
+    }
+  }
+
   Future<void> _runReleaseOta() async {
     if (!isConnected || _otaBusy) return;
     if (!_firmwareUpdateClient.configured) {
@@ -757,94 +824,6 @@ class _SettingsPageState extends State<SettingsPage> {
       _logOta('release_error', detail: e.toString());
       _showMessage('Ошибка release OTA: $e');
     }
-  }
-
-  Future<void> _runBleOta() async {
-    if (!isConnected || _otaBusy) return;
-    final uri = Uri.tryParse(_otaUrlCtrl.text.trim());
-    if (uri == null || !uri.hasScheme || !uri.hasAuthority) {
-      _showMessage('Нужен URL firmware.bin');
-      return;
-    }
-    final expectedSha = normalizeBoatLockSha256Hex(_otaShaCtrl.text);
-    if (expectedSha == null) {
-      _showMessage('Нужен SHA-256 из 64 hex-символов');
-      return;
-    }
-
-    setState(() {
-      _otaBusy = true;
-      _otaProgress = null;
-      _otaProgressLabel = '';
-      _otaStatus = 'Скачивание';
-      _otaStartedAt = DateTime.now();
-      _otaLastLogAt = null;
-      _otaLastLogBucket = -1;
-    });
-    _logOta('download_start', detail: uri.toString());
-    try {
-      final firmware = await _downloadFirmware(
-        uri,
-        onProgress: (received, total) {
-          if (!mounted) return;
-          final progress = total != null && total > 0 ? received / total : null;
-          final label = _formatOtaProgress('Скачивание', received, total);
-          setState(() {
-            _otaProgress = progress;
-            _otaProgressLabel = label;
-            _otaStatus = label;
-          });
-          _logOtaProgress('download', received, total);
-        },
-      );
-      if (!mounted) return;
-      final actualSha = boatLockSha256Hex(firmware);
-      if (actualSha != expectedSha) {
-        setState(() {
-          _otaBusy = false;
-          _otaStatus = 'SHA не совпал';
-        });
-        _showMessage('SHA не совпал');
-        _logOta('sha_mismatch', sent: firmware.length, total: firmware.length);
-        return;
-      }
-
-      await _uploadVerifiedFirmware(firmware, actualSha);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _otaBusy = false;
-        _otaStatus = 'Ошибка OTA';
-      });
-      _logOta('error', detail: e.toString());
-      _showMessage('Ошибка OTA: $e');
-    }
-  }
-
-  void _startAppCheck() {
-    final start = widget.onStartAppCheck;
-    if (start == null) {
-      _showMessage('Проверки доступны из главного экрана');
-      return;
-    }
-    final sha = normalizeBoatLockSha256Hex(_otaShaCtrl.text);
-    final otaUrl = _otaUrlCtrl.text.trim();
-    final useReleaseSource =
-        _appCheckMode == BleSmokeMode.ota &&
-        (otaUrl.isEmpty || sha == null) &&
-        _firmwareUpdateClient.configured;
-    start(
-      BoatLockAppCheckConfig(
-        mode: _appCheckMode,
-        otaUrl: otaUrl,
-        otaSha256: sha ?? '',
-        otaLatestRelease: useReleaseSource,
-        firmwareManifestUrl: useReleaseSource
-            ? _firmwareUpdateClient.manifestUrl
-            : '',
-      ),
-    );
-    _showMessage('Проверка ${_appCheckMode.wireName} запущена');
   }
 
   Widget _securityTile(String label, String value) {
@@ -970,49 +949,8 @@ class _SettingsPageState extends State<SettingsPage> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
               child: Text(
-                'Firmware OTA',
+                'Прошивка ESP32',
                 style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TextField(
-                controller: _otaUrlCtrl,
-                enabled: isConnected && !_otaBusy,
-                autocorrect: false,
-                enableSuggestions: false,
-                keyboardType: TextInputType.url,
-                decoration: const InputDecoration(
-                  labelText: 'Firmware URL',
-                  hintText: 'https://.../firmware.bin',
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: TextField(
-                controller: _otaShaCtrl,
-                enabled: isConnected && !_otaBusy,
-                autocorrect: false,
-                enableSuggestions: false,
-                textCapitalization: TextCapitalization.characters,
-                decoration: const InputDecoration(
-                  labelText: 'SHA-256',
-                  hintText: '64 HEX символа',
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Row(
-                children: [
-                  FilledButton(
-                    onPressed: isConnected && !_otaBusy ? _runBleOta : null,
-                    child: const Text('Обновить по BLE'),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(child: Text(_otaStatus)),
-                ],
               ),
             ),
             Padding(
@@ -1023,6 +961,13 @@ class _SettingsPageState extends State<SettingsPage> {
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   FilledButton.icon(
+                    onPressed: isConnected && !_otaBusy
+                        ? _runLocalFirmwareOta
+                        : null,
+                    icon: const Icon(Icons.upload_file),
+                    label: const Text('Файл на телефоне'),
+                  ),
+                  FilledButton.icon(
                     onPressed:
                         isConnected &&
                             !_otaBusy &&
@@ -1030,7 +975,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         ? _runReleaseOta
                         : null,
                     icon: const Icon(Icons.system_update_alt),
-                    label: const Text('Обновить до релиза'),
+                    label: const Text('Последняя с GitHub'),
                   ),
                   if (_releaseFirmwareManifest != null)
                     Text(
@@ -1042,33 +987,11 @@ class _SettingsPageState extends State<SettingsPage> {
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: DropdownButtonFormField<BleSmokeMode>(
-                initialValue: _appCheckMode,
-                decoration: const InputDecoration(labelText: 'Проверка'),
-                items: [
-                  for (final mode in BleSmokeMode.values)
-                    DropdownMenuItem(value: mode, child: Text(mode.wireName)),
-                ],
-                onChanged: isConnected
-                    ? (value) {
-                        if (value == null) return;
-                        setState(() {
-                          _appCheckMode = value;
-                        });
-                      }
-                    : null,
+            if (_otaStatus.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Text(_otaStatus),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: FilledButton.icon(
-                onPressed: isConnected ? _startAppCheck : null,
-                icon: const Icon(Icons.fact_check),
-                label: const Text('Запустить проверку'),
-              ),
-            ),
             if (_otaProgress != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),

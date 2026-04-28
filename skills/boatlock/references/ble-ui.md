@@ -95,8 +95,9 @@
   switches.
 - Smoke and acceptance mode names live in `ble_smoke_mode.dart`.
 - Runtime command parsing belongs in `app_runtime_command.dart`; Android wrappers
-  may pass `boatlock_check_mode` and OTA URL/SHA extras to the already-built
-  release app.
+  may pass `boatlock_check_mode` and hidden OTA URL/SHA extras to the
+  already-built release app. Those extras are bench automation only; the
+  operator Settings UI exposes only `Файл на телефоне` and `Последняя с GitHub`.
 - App check verdicts intentionally reuse `BOATLOCK_SMOKE_STAGE` and
   `BOATLOCK_SMOKE_RESULT` lines so the canonical adb/logcat runner remains the
   single acceptance path.

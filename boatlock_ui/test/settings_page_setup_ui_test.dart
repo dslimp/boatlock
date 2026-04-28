@@ -19,6 +19,8 @@ class SetupFakeBleBoatLock extends BleBoatLock {
   double? stepMaxSpeedValue;
   double? stepSprValue;
   double? stepGearValue;
+  List<int>? uploadedFirmware;
+  String? uploadedSha256;
 
   @override
   void setOwnerSecret(String? secret) {
@@ -54,6 +56,8 @@ class SetupFakeBleBoatLock extends BleBoatLock {
     required String sha256Hex,
     OtaProgressCallback? onProgress,
   }) async {
+    uploadedFirmware = List<int>.from(firmware);
+    uploadedSha256 = sha256Hex;
     onProgress?.call(0, firmware.length);
     if (rejectNextOtaBegin) {
       return false;
@@ -121,10 +125,12 @@ Future<void> _setSetupMenu(WidgetTester tester, bool enabled) async {
 SettingsPage _page(
   SetupFakeBleBoatLock ble, {
   FirmwareUpdateClient firmwareUpdateClient = const FirmwareUpdateClient(),
+  FirmwareFilePicker firmwareFilePicker = pickBoatLockFirmwareFile,
 }) {
   return SettingsPage(
     ble: ble,
     firmwareUpdateClient: firmwareUpdateClient,
+    firmwareFilePicker: firmwareFilePicker,
     holdHeading: false,
     stepMaxSpd: 1000,
     stepAccel: 500,
@@ -157,12 +163,12 @@ void main() {
     await _setSetupMenu(tester, false);
     expect(find.text('Макс. скорость'), findsNothing);
     expect(find.text('Редукция'), findsNothing);
-    expect(find.text('Firmware OTA'), findsNothing);
+    expect(find.text('Прошивка ESP32'), findsNothing);
 
     await _setSetupMenu(tester, true);
     expect(find.text('Макс. скорость'), findsOneWidget);
     expect(find.text('Редукция'), findsOneWidget);
-    expect(find.text('Firmware OTA'), findsOneWidget);
+    expect(find.text('Прошивка ESP32'), findsOneWidget);
   });
 
   testWidgets('rolls back setup setting when firmware rejects command', (
@@ -235,10 +241,39 @@ void main() {
     );
     await _setSetupMenu(tester, true);
 
-    await tester.tap(find.text('Обновить до релиза'));
+    await tester.tap(find.text('Последняя с GitHub'));
     await tester.pump(const Duration(milliseconds: 50));
     await tester.pump(const Duration(milliseconds: 700));
 
     expect(find.text('OTA отклонено'), findsWidgets);
+  });
+
+  testWidgets('uploads selected local firmware file', (
+    WidgetTester tester,
+  ) async {
+    final firmware = Uint8List.fromList(List<int>.filled(64, 0x37));
+    final sha = boatLockSha256Hex(firmware);
+
+    await tester.binding.setSurfaceSize(const Size(900, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final ble = SetupFakeBleBoatLock();
+    await tester.pumpWidget(
+      _wrap(
+        _page(
+          ble,
+          firmwareFilePicker: () async =>
+              PickedFirmwareFile(name: 'firmware.bin', bytes: firmware),
+        ),
+      ),
+    );
+    await _setSetupMenu(tester, true);
+
+    await tester.tap(find.text('Файл на телефоне'));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 700));
+
+    expect(ble.uploadedFirmware, firmware);
+    expect(ble.uploadedSha256, sha);
+    expect(find.text('Готово, ESP перезагружается'), findsOneWidget);
   });
 }

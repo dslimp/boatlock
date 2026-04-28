@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.3] - 2026-04-28
+### Changed
+- Simplified the Android ESP32 firmware update UI to two operator paths:
+  selecting a local `firmware.bin` file on the phone or installing the latest
+  firmware from the GitHub Release button.
+- Removed operator-facing firmware URL/SHA fields and app-check controls from
+  the Settings screen; URL/SHA OTA remains only as hidden bench automation.
+
 ## [0.2.2] - 2026-04-28
 ### Changed
 - Android GitHub Release APKs now require stable release signing secrets on

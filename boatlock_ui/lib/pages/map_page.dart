@@ -501,7 +501,6 @@ class _MapPageState extends State<MapPage> {
               MaterialPageRoute(
                 builder: (_) => SettingsPage(
                   ble: ble,
-                  onStartAppCheck: _startAppCheck,
                   holdHeading: boatData?.holdHeading ?? false,
                   stepMaxSpd: boatData?.stepMaxSpd ?? 2400,
                   stepAccel: boatData?.stepAccel ?? 2400,

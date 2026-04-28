@@ -112,10 +112,11 @@ tools/macos/build-app.sh
 tools/macos/acceptance.sh --static-only
 ```
 
-For a local `nh02` OTA proof with a wrapper-served manifest:
+For bench-only `nh02` OTA proof with a temporary served manifest:
 
 ```bash
-tools/hw/nh02/deploy.sh \
+tools/hw/nh02/android-run-app-check.sh \
   --ota-latest-release \
-  --no-build
+  --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin \
+  --wait-secs 1800
 ```

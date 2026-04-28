@@ -23,9 +23,10 @@ Use this skill when the task is about updating or validating the real ESP32-S3 h
 1. Refresh the bench runtime if tracked helpers or service units changed:
    - `tools/hw/nh02/install.sh`
 2. Update current firmware when needed:
-   - standard moved-hardware path: `tools/hw/nh02/deploy.sh`
+   - operator path A: Android Settings -> `Файл на телефоне`
+   - operator path B: Android Settings -> `Последняя с GitHub`
+   - bench automation path: `tools/hw/nh02/deploy.sh`
    - reuse already-built firmware/APK through the same path: `tools/hw/nh02/deploy.sh --no-build`
-   - manual field path: publish `firmware.bin` plus SHA-256 and upload from the phone app Settings screen
    - recovery/seed path only: `tools/hw/nh02/flash.sh` or `tools/hw/nh02/flash.sh --no-build`
 3. Run hardware acceptance:
    - `tools/hw/nh02/acceptance.sh`
@@ -125,7 +126,7 @@ Use this skill when the task is about updating or validating the real ESP32-S3 h
 
 - Bench runtime refresh:
   - `tools/hw/nh02/install.sh`
-- BLE OTA deploy, standard moved-hardware path:
+- BLE OTA bench automation:
   - `tools/hw/nh02/deploy.sh`
   - `tools/hw/nh02/deploy.sh --no-build`
 - Low-level BLE OTA app-check:

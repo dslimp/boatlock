@@ -54,10 +54,10 @@ page again.
 
 - Install or refresh the remote bench runtime:
   - `tools/hw/nh02/install.sh`
-- Standard moved-hardware deploy through the phone BLE OTA bridge:
+- Bench moved-hardware OTA proof through the phone BLE bridge:
   - `tools/hw/nh02/deploy.sh`
   - this builds `esp32s3`, builds the ordinary release APK, refreshes Android helpers only, installs that exact APK, serves `firmware.bin`, uploads over BLE OTA, and waits for telemetry recovery
-- Reuse already-built firmware/APK through the same standard deploy path:
+- Reuse already-built firmware/APK through the same bench automation path:
   - `tools/hw/nh02/deploy.sh --no-build`
 - Seed or recover over USB through `nh02`:
   - `tools/hw/nh02/flash.sh`
@@ -66,7 +66,8 @@ page again.
 - Build a firmware binary for BLE OTA:
   - `cd boatlock && pio run -e esp32s3 && shasum -a 256 .pio/build/esp32s3/firmware.bin`
 - Upload firmware without ESP32 USB:
-  - publish or serve `firmware.bin` from a trusted URL, then use the app Settings screen with Firmware OTA URL + SHA-256
+  - copy `firmware.bin` to the phone and use Settings -> `Файл на телефоне`, or
+    publish a GitHub Release and use Settings -> `Последняя с GitHub`
 - Low-level phone-bridged BLE OTA app-check, used by `deploy.sh`:
   - `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
 - Flash the current build without rebuilding:
@@ -180,12 +181,13 @@ profile.
 
 1. Use this as the normal moved-hardware firmware update path after the ESP32 already runs firmware with BLE OTA support.
 2. Seed or recover over USB only when the target lacks an OTA-capable image or cannot reconnect over BLE.
-3. Build the next firmware locally or in CI and keep `firmware.bin` plus its SHA-256.
-4. Make the binary reachable by the phone over a trusted URL.
-5. In the app Settings screen, paste Firmware OTA URL and SHA-256, then start `Обновить по BLE`.
-6. The app downloads the binary, verifies SHA-256 before transfer, sends authenticated `OTA_BEGIN`, writes chunks to BLE characteristic `9abc`, then sends `OTA_FINISH`.
+3. Operator path A: copy the built `firmware.bin` to the phone and use Settings -> `Файл на телефоне`.
+4. Operator path B: publish a GitHub Release with `manifest.json` and `firmware-esp32s3.bin`, then use Settings -> `Последняя с GitHub`.
+5. For a local file, the app computes SHA-256 before transfer. For GitHub, the app downloads and verifies the release manifest SHA-256 before transfer.
+6. The app sends authenticated `OTA_BEGIN`, writes chunks to BLE characteristic `9abc`, then sends `OTA_FINISH`.
 7. ESP32 validates byte count and SHA-256 before finalizing the OTA partition and rebooting. Disconnect or failed validation aborts without changing the active boot partition.
-8. Bench automation runs the same path with `tools/hw/nh02/deploy.sh`; the wrapper builds the normal firmware and ordinary release APK, refreshes Android helpers without requiring ESP32 USB, installs the exact APK, serves `firmware.bin` on `nh02`, exposes it to the phone with `adb reverse`, starts its runtime OTA check, and waits for post-reboot telemetry.
+8. Bench automation may still use hidden URL/SHA runtime extras with `tools/hw/nh02/deploy.sh`; that is a validation shortcut only, not an operator UI path.
+   The wrapper builds the normal firmware and ordinary release APK, refreshes Android helpers without requiring ESP32 USB, installs the exact APK, serves `firmware.bin` on `nh02`, exposes it to the phone with `adb reverse`, starts its runtime OTA check, and waits for post-reboot telemetry.
    When `--serial` is omitted, the wrapper enables and uses Android ADB Wi-Fi
    automatically.
 9. Current BLE upload requests high connection priority, a larger MTU, and
@@ -226,7 +228,7 @@ profile.
 12. `tools/hw/nh02/android-run-app-check.sh --gps --wait-secs 180` waits for production-app BLE telemetry with non-zero valid coordinates and GNSS quality `>0`; this can run while ESP32 is powered away from USB if BLE remains reachable.
 13. `tools/hw/nh02/android-run-app-check.sh --sim-suite --wait-secs 1800` runs `SIM_LIST`, every listed scenario through `SIM_RUN:<id>,0`, polls `SIM_STATUS`, collects `SIM_REPORT`, and fails on any `pass:false`.
 14. `tools/hw/nh02/run-sim-suite.sh` wraps the full bench flow around `--sim-suite`: helper install, target proof, release flash, boot acceptance, and production-app suite run.
-15. `tools/hw/nh02/deploy.sh` is the standard firmware+APK deploy path and verifies phone download, SHA-256 check, BLE upload, ESP32 reboot, and app telemetry recovery. Use `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800` only as the lower-level OTA check.
+15. `tools/hw/nh02/deploy.sh` is bench automation for firmware+APK OTA proof and verifies phone download, SHA-256 check, BLE upload, ESP32 reboot, and app telemetry recovery. Use `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800` only as the lower-level OTA check.
 16. If the phone appears only as `MTP` or a vendor USB device and not in `adb devices`, the cable path is alive but USB debugging is still off on the phone.
 17. Status smoke recovery may clear `STOP_CMD` directly to `IDLE/WARN` after a
     zero-throttle manual recovery command without exposing a visible `MANUAL`
@@ -246,7 +248,9 @@ profile.
 - If the monitor path fails, inspect `status.sh` before touching the USB device manually.
 - BLE OTA through the phone is the normal no-USB firmware update path after the
   first OTA-capable image is present.
-- Keep the expected SHA-256 from the build output or CI artifact metadata; do not let the phone trust an arbitrary downloaded binary without comparing the expected hash first.
+- Local phone-file OTA computes SHA-256 in the app before transfer. GitHub OTA
+  verifies the release manifest SHA-256 before transfer. Do not add
+  operator-facing arbitrary URL/SHA fields back to the Settings UI.
 - The app wrappers build one release Android/macOS app. Setup controls are in
   that app and hidden behind the Settings `Настройка оборудования` switch. The
   one-button release OTA path resolves firmware through the latest GitHub

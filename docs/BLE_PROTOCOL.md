@@ -209,7 +209,9 @@ Gate behavior expectations:
 
 BLE OTA uses the phone as the bridge:
 
-1. The app downloads `firmware.bin` and verifies it against an operator-provided SHA-256.
+1. The app either reads a phone-local `firmware.bin` and computes SHA-256, or
+   downloads the latest GitHub Release firmware and verifies it against the
+   release manifest SHA-256.
 2. The app sends `OTA_BEGIN:<size>,<sha256>` over `56ef`. When `secPaired=1`, this command must be wrapped in `SEC_CMD`.
 3. Firmware disables Anchor, stops Manual and all outputs, latches `HOLD`, and logs `[OTA] begin ok ...`.
 4. The Android app requests high connection priority and a larger MTU for the transfer, then writes firmware bytes sequentially to `9abc` in chunks up to `MTU - 3`. It uses write-without-response when the OTA characteristic supports it, with an explicit pacing window/backpressure; otherwise it falls back to acknowledged writes. The app emits `BOATLOCK_OTA_PROGRESS` logcat lines while updating the Settings progress view.

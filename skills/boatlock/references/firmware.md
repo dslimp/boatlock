@@ -255,7 +255,10 @@
 - BLE OTA is the preferred no-USB firmware update path after the first seed flash.
 - BLE OTA command flow is `OTA_BEGIN:<size>,<sha256>` on `56ef`, sequential binary chunks on `9abc`, then `OTA_FINISH` on `56ef`.
 - `OTA_BEGIN` must put runtime outputs in a stopped safe state before accepting chunks. During active OTA, reject normal runtime commands and abort on BLE disconnect.
-- The phone app must verify the downloaded `firmware.bin` against an expected SHA-256 before transfer. Firmware validates byte count and SHA-256 before finalizing the OTA partition and rebooting.
+- The phone app must compute SHA-256 for a local selected `firmware.bin` or
+  verify GitHub Release bytes against the manifest SHA-256 before transfer.
+  Firmware validates byte count and SHA-256 before finalizing the OTA partition
+  and rebooting.
 
 ## Historical Notes To Ignore By Default
 

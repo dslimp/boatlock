@@ -10,8 +10,10 @@ Status after the 2026-04-26 autonomous pass.
   profile.
 - Product readiness docs were refreshed around current app, simulator, and
   hardware blockers.
-- Flutter OTA can consume a validated release firmware manifest and
-  expose `Обновить до релиза`.
+- Flutter OTA can consume a validated release firmware manifest and exposes
+  `Последняя с GitHub`.
+- Android Settings exposes two operator firmware paths only: `Файл на телефоне`
+  and `Последняя с GitHub`.
 - CI now treats `release/**` branches as stabilization branches and publishes
   release artifacts only from `v*` tags through GitHub Releases.
 - The app resolves the latest GitHub release as the firmware source, preferring a
@@ -27,8 +29,8 @@ Status after the 2026-04-26 autonomous pass.
   GNSS/heading sensor-frame degradation metrics/events with thresholds for
   Rybinsk fetch and Ladoga storm scenarios.
 - Android and macOS CI now publish one release app artifact per platform
-  configured with the latest GitHub Release source, and local wrappers build the
-  same one-button update app.
+  configured with the latest GitHub Release source; Android also supports
+  phone-local firmware file selection.
 - GitHub Releases now receive a release `firmware-esp32s3`
   asset set plus `manifest.json`, and the app can use authenticated release
   asset API URLs when a token-backed validation client is injected.
@@ -84,9 +86,8 @@ Status after the 2026-04-26 autonomous pass.
   facts are captured. The current firmware assumes PWM plus two direction pins
   for the brushed motor and DRV8825-compatible STEP/DIR steering on the Vanchor
   `36:1` gearbox.
-- After the next GitHub Release is published, run a release-app OTA proof
-  against the public release manifest instead of the local wrapper-served
-  manifest.
+- After the next GitHub Release is published, prove the phone's
+  `Последняя с GitHub` path against the public release manifest.
 
 ## Defer Or Move Out Of Main
 

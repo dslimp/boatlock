@@ -126,7 +126,7 @@ void main() {
 
     expect(find.text('Макс. скорость'), findsNothing);
     expect(find.text('Офсет компаса'), findsNothing);
-    expect(find.text('Firmware OTA'), findsNothing);
+    expect(find.text('Прошивка ESP32'), findsNothing);
     expect(find.text('BNO08x quality'), findsNothing);
     expect(find.text('Настройка оборудования'), findsOneWidget);
     expect(find.text('Owner secret'), findsOneWidget);
