@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.2] - 2026-04-28
+### Changed
+- Android GitHub Release APKs now require stable release signing secrets on
+  tagged builds so phone-side APK updates keep the same certificate across
+  releases.
+- Branch and pull-request Android builds may still use debug signing fallback
+  for CI coverage, but tagged `v*` releases fail instead of publishing an
+  update-incompatible debug-signed APK.
+
 ## [0.2.1] - 2026-04-27
 ### Added
 - Added a standard `nh02` phone BLE OTA deploy wrapper (`tools/hw/nh02/deploy.sh`) that builds firmware and the release APK, installs the exact APK, uploads firmware through the phone, and waits for post-update telemetry recovery.
