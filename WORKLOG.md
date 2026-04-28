@@ -7967,6 +7967,30 @@ Validation:
   transport readiness, but another stale disconnect during the HTTP download
   cleared the BLE transport before upload. This is fixed in the `0.2.6` cut by
   waiting for transport again right before upload.
+- GitHub `v0.2.6` release workflow `25052750769` -> PASS, including Android
+  release signing, firmware build/test/checks, Flutter checks/builds, and the
+  release publish job.
+- Downloaded `v0.2.6` release assets:
+  - `boatlock-app.apk` SHA-256
+    `e036afa16a56d2c43815e6f7864788614211eaf257866efa6e356616f9f2ddf7`
+  - `firmware-esp32s3.bin` SHA-256
+    `753b88416044c43bdaf14f7979840a3d6b8bf8a5b0b981bcdf1b5ebb21076690`
+  - `manifest.json` reports firmware `0.2.6`, branch `release/v0.2.x`,
+    profile `release`, git SHA `6cb3fba5040e19c4f7f5cee00c2546bd04920548`,
+    workflow run `25052750769`, and the same firmware SHA.
+- `env BOATLOCK_ANDROID_APK=/private/tmp/boatlock-v0.2.6-app.apk tools/hw/nh02/android-run-app-check.sh --no-build --ota-latest-release --wait-secs 1800 --serial 68b657f0` -> PASS:
+  - exact GitHub-signed APK install succeeded
+  - app fetched and verified public GitHub latest-release firmware
+  - BLE OTA reached 100%
+  - final app verdict:
+    `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"app_ota_reconnect_after_update",...}`
+- Post-OTA BLE runtime check with the same installed app:
+  `tools/hw/nh02/android-run-smoke.sh --no-build --no-install --wait-secs 130 --serial 68b657f0` -> PASS (`app_telemetry_received`).
+- Phone package after install: `versionName=0.2.6`, `versionCode=6`.
+- Boot acceptance reset after OTA matched the core boot markers and stepper
+  config, but the tracked acceptance command failed on the existing missing-SD
+  Arduino error log. This does not invalidate the no-USB OTA proof; it remains a
+  separate SD-media acceptance condition.
 - `git diff --check` -> PASS.
 
 Self-review:
