@@ -112,7 +112,7 @@ def test_macos_build_wrapper_builds_single_release_app():
     assert "--release" in script
     assert "--dart-" + "define" not in script
     assert "--debug" not in script
-    assert "boatlock_ui.app" in script
+    assert "BoatLock.app" in script
 
 
 def test_macos_acceptance_wrapper_covers_app_artifact_and_runtime_smoke():
@@ -199,3 +199,37 @@ def test_macos_permissions_cover_ble_location_and_network():
         assert "com.apple.security.device.bluetooth" in entitlements
         assert "com.apple.security.network.client" in entitlements
         assert "com.apple.security.personal-information.location" in entitlements
+
+
+def test_app_visible_metadata_uses_boatlock_name():
+    mac_info = (ROOT / "boatlock_ui/macos/Runner/Info.plist").read_text()
+    mac_config = (
+        ROOT / "boatlock_ui/macos/Runner/Configs/AppInfo.xcconfig"
+    ).read_text()
+    android_manifest = (
+        ROOT / "boatlock_ui/android/app/src/main/AndroidManifest.xml"
+    ).read_text()
+    ios_info = (ROOT / "boatlock_ui/ios/Runner/Info.plist").read_text()
+    windows_rc = (ROOT / "boatlock_ui/windows/runner/Runner.rc").read_text()
+    linux_app = (ROOT / "boatlock_ui/linux/runner/my_application.cc").read_text()
+
+    assert "<string>BoatLock</string>" in mac_info
+    assert "PRODUCT_COPYRIGHT = Copyright © 2026 BoatLock. All rights reserved." in mac_config
+    assert 'android:label="BoatLock"' in android_manifest
+    assert "<string>BoatLock</string>" in ios_info
+    assert 'VALUE "CompanyName", "BoatLock"' in windows_rc
+    assert 'VALUE "ProductName", "BoatLock"' in windows_rc
+    assert "Copyright (C) 2026 BoatLock. All rights reserved." in windows_rc
+    assert 'gtk_header_bar_set_title(header_bar, "BoatLock")' in linux_app
+
+    visible_metadata = "\n".join(
+        [mac_info, mac_config, android_manifest, ios_info, windows_rc, linux_app]
+    )
+    assert "PRODUCT_NAME = BoatLock" in mac_config
+    assert "PRODUCT_BUNDLE_IDENTIFIER = com.boatlock.app" in mac_config
+    assert 'set(APPLICATION_ID "com.boatlock.app")' in (
+        ROOT / "boatlock_ui/linux/CMakeLists.txt"
+    ).read_text()
+    assert "Copyright © 2025 com.example" not in visible_metadata
+    assert "Copyright (C) 2025 com.example" not in visible_metadata
+    assert 'android:label="boatlock_ui"' not in visible_metadata

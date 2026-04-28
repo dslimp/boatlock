@@ -35,7 +35,7 @@ build_args=(--release)
   "${BOATLOCK_MACOS_FLUTTER_BIN}" build macos "${build_args[@]}"
 )
 
-APP_PATH="${FLUTTER_DIR}/build/macos/Build/Products/Release/boatlock_ui.app"
+APP_PATH="${FLUTTER_DIR}/build/macos/Build/Products/Release/BoatLock.app"
 if [[ ! -d "${APP_PATH}" ]]; then
   echo "macOS app was not produced at ${APP_PATH}" >&2
   exit 1

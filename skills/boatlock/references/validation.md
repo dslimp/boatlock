@@ -73,7 +73,7 @@
   - Do not add separate debug or alternate app variants; the release app includes
     setup controls hidden behind the Settings `Настройка оборудования` switch.
   - Android APK output is `boatlock_ui/build/app/outputs/flutter-apk/app-release.apk`.
-  - macOS app output is `boatlock_ui/build/macos/Build/Products/Release/boatlock_ui.app`.
+  - macOS app output is `boatlock_ui/build/macos/Build/Products/Release/BoatLock.app`.
 - Offline simulation harness:
   - `python3 tools/sim/test_sim_core.py`
   - `python3 tools/sim/run_sim.py --check --json-out tools/sim/report.json`

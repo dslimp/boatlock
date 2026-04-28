@@ -183,7 +183,7 @@ extract_artifact_zip() {
 }
 
 default_app_path() {
-  APP_PATH="${FLUTTER_DIR}/build/macos/Build/Products/Release/boatlock_ui.app"
+  APP_PATH="${FLUTTER_DIR}/build/macos/Build/Products/Release/BoatLock.app"
 }
 
 validate_bundle() {

@@ -7998,3 +7998,79 @@ Self-review:
   BLE link ownership during a long upload. The standard proof path must install
   the GitHub-signed release APK, not a locally signed APK, because otherwise
   Android correctly rejects the update.
+
+### 2026-04-28 Stage 266: local macOS release app shortcut
+
+Scope:
+- Put the GitHub Release `v0.2.6` macOS app artifact onto the local Mac path
+  used by the desktop shortcut.
+
+Decisions:
+- Keep the local Mac app at
+  `boatlock_ui/build/macos/Build/Products/Release/boatlock_ui.app`.
+- Recreate the Desktop `BoatLock App` Finder alias to that release app path
+  instead of introducing a second app location.
+
+Validation:
+- Downloaded `boatlock-macos.zip` from
+  `https://github.com/dslimp/boatlock/releases/download/v0.2.6/boatlock-macos.zip`
+  with SHA-256
+  `ec95cfe26bdfcfefc1b744646803611a32064eb1b44a43132e9db48fe16138a8`.
+- Unpacked artifact reports `CFBundleShortVersionString=0.2.6` and
+  `CFBundleVersion=6`.
+- Finder reports Desktop `BoatLock App` resolves to
+  `/Users/user/Documents/boatlock/boatlock_ui/build/macos/Build/Products/Release/boatlock_ui.app/`.
+- The running macOS app reports version `0.2.6`.
+
+Self-review:
+- No durable workflow change emerged. macOS TCC blocks direct shell reads of
+  `~/Desktop`, so Desktop alias updates were done through Finder AppleScript.
+
+### 2026-04-28 Stage 267: app identity metadata cleanup
+
+Scope:
+- Remove Flutter template identity from app-visible metadata after the local
+  macOS About window showed `Copyright © 2025 com.example. All rights
+  reserved.`.
+- Make the local desktop shortcut launch the rebuilt app with the corrected
+  metadata.
+
+External baseline:
+- Apple documents `CFBundleDisplayName` and `CFBundleName` as user-visible
+  bundle names, and `NSHumanReadableCopyright` as the macOS copyright string
+  shown by Finder/About-style surfaces.
+
+Decisions:
+- Use `BoatLock` as the visible app name across macOS, Android, iOS, Linux, and
+  Windows metadata.
+- Change the macOS product to `BoatLock.app` with bundle id
+  `com.boatlock.app`, and update CI packaging plus macOS wrappers to that path.
+- Keep the Android package/application id as `com.example.boatlock_ui` for this
+  slice so the already-installed phone app remains update-compatible; the
+  launcher label is now `BoatLock`.
+- Force macOS builds through `/opt/homebrew/bin/pod` by invoking the wrapper
+  with a PATH that bypasses the broken rbenv shim on this host.
+
+Validation:
+- `plutil -lint boatlock_ui/macos/Runner/Info.plist boatlock_ui/ios/Runner/Info.plist` -> PASS.
+- `pytest -q tools/ci/test_firmware_artifact_workflow.py::test_macos_build_wrapper_builds_single_release_app tools/ci/test_firmware_artifact_workflow.py::test_app_visible_metadata_uses_boatlock_name` -> PASS.
+- `bash -n tools/macos/build-app.sh tools/macos/acceptance.sh` -> PASS.
+- `env PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin tools/macos/build-app.sh` -> PASS, produced
+  `boatlock_ui/build/macos/Build/Products/Release/BoatLock.app`.
+- Built bundle reports:
+  - `CFBundleName=BoatLock`
+  - `CFBundleExecutable=BoatLock`
+  - `CFBundleIdentifier=com.boatlock.app`
+  - `NSHumanReadableCopyright=Copyright © 2026 BoatLock. All rights reserved.`
+- `env PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin tools/macos/acceptance.sh --no-build --static-only` -> PASS.
+- Desktop `BoatLock App` Finder alias now resolves to
+  `/Users/user/Documents/boatlock/boatlock_ui/build/macos/Build/Products/Release/BoatLock.app/`.
+- Launching through the Desktop alias starts
+  `/Users/user/Documents/boatlock/boatlock_ui/build/macos/Build/Products/Release/BoatLock.app/Contents/MacOS/BoatLock`;
+  AppleScript reports app name `BoatLock` and version `0.2.6`.
+- `git diff --check` -> PASS.
+
+Self-review:
+- The source and local macOS app are fixed. A new GitHub Release is still needed
+  before a freshly downloaded release zip carries this metadata; the existing
+  `v0.2.6` release asset remains the historical artifact.
