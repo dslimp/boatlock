@@ -112,7 +112,17 @@ tools/macos/build-app.sh
 tools/macos/acceptance.sh --static-only
 ```
 
-For bench-only `nh02` OTA proof with a temporary served manifest:
+For `nh02` proof of the same public latest-release path used by the phone
+button:
+
+```bash
+tools/hw/nh02/android-run-app-check.sh \
+  --ota-latest-release \
+  --wait-secs 1800
+```
+
+For bench-only validation of an unpublished local firmware through a temporary
+served manifest:
 
 ```bash
 tools/hw/nh02/android-run-app-check.sh \

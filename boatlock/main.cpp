@@ -61,7 +61,7 @@ BleOtaUpdate bleOta;
 bool bleStarted = false;
 
 namespace cfg {
-constexpr char kFirmwareVersion[] = "0.2.3";
+constexpr char kFirmwareVersion[] = "0.2.4";
 
 constexpr int kStepperStepPin = 6;
 constexpr int kStepperDirPin = 16;

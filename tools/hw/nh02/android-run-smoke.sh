@@ -197,6 +197,8 @@ if [[ -n "${remote_ota_path}" ]]; then
   if [[ "${OTA_LATEST_RELEASE}" -eq 1 ]]; then
     ota_arg+=" --ota-latest-release"
   fi
+elif [[ "${OTA_LATEST_RELEASE}" -eq 1 ]]; then
+  ota_arg="--ota-latest-release"
 fi
 
 printf 'remote_app_check mode=%s install=%s wait_secs=%s serial=%s ota=%s\n' \

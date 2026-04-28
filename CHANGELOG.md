@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.4] - 2026-04-28
+### Fixed
+- Deferred BLE reconnect/scan teardown while Android is actively uploading OTA
+  firmware, preventing stale peer disconnects from interrupting the one-button
+  GitHub firmware update path.
+- Updated `nh02` app-check helpers so `--ota-latest-release` proves the public
+  GitHub Release path without requiring a temporary local manifest.
+- Bumped the Android/macOS app package version to `0.2.4+4` so installed phone
+  builds can be identified without relying only on APK hashes.
+
 ## [0.2.3] - 2026-04-28
 ### Changed
 - Simplified the Android ESP32 firmware update UI to two operator paths:

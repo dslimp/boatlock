@@ -117,6 +117,7 @@ class BleBoatLock with WidgetsBindingObserver {
   DateTime? _lastDataLogAt;
   Completer<bool>? _otaBeginAck;
   Completer<bool>? _otaFinishAck;
+  bool _otaUploadInProgress = false;
   bool _otaFinishRequested = false;
   bool _otaFinishWriteAccepted = false;
   bool _otaFinishDisconnectSeen = false;
@@ -212,6 +213,10 @@ class BleBoatLock with WidgetsBindingObserver {
       );
       return;
     }
+    if (_otaUploadInProgress) {
+      _log('scan skipped: OTA upload in progress');
+      return;
+    }
     if (_isConnecting) return;
     _isConnecting = true;
     _setDiagnostics(isScanning: true, lastError: '');
@@ -297,6 +302,10 @@ class BleBoatLock with WidgetsBindingObserver {
         _setDiagnostics(connectionState: state.name);
         if (state == BluetoothConnectionState.disconnected) {
           _handleOtaFinishDisconnect();
+          if (_otaUploadInProgress && !_otaFinishRequested) {
+            _log('reconnect deferred: OTA upload in progress');
+            return;
+          }
           unawaited(_applyReconnectDecision(_reconnectPolicy.disconnected()));
         }
       });
@@ -436,6 +445,12 @@ class BleBoatLock with WidgetsBindingObserver {
     bool waitForScan = false,
   }) async {
     if (decision.isIdle) return;
+    if (_otaUploadInProgress &&
+        !_otaFinishRequested &&
+        decision.reason != 'disposed') {
+      _log('reconnect decision deferred during OTA upload: ${decision.reason}');
+      return;
+    }
     _log('reconnect decision: ${decision.reason}');
     if (decision.stopScan) {
       await FlutterBluePlus.stopScan();
@@ -751,6 +766,12 @@ class BleBoatLock with WidgetsBindingObserver {
       return false;
     }
 
+    if (_otaUploadInProgress) {
+      _log('BLE OTA unavailable reason=upload_in_progress');
+      return false;
+    }
+
+    _otaUploadInProgress = true;
     _heartbeatTimer?.cancel();
     var beginAccepted = false;
     var finishRequested = false;
@@ -851,6 +872,7 @@ class BleBoatLock with WidgetsBindingObserver {
       }
       _otaBeginAck = null;
       _otaFinishAck = null;
+      _otaUploadInProgress = false;
       _otaFinishRequested = false;
       _otaFinishWriteAccepted = false;
       _otaFinishDisconnectSeen = false;

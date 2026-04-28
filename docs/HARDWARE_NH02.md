@@ -70,6 +70,8 @@ page again.
     publish a GitHub Release and use Settings -> `Последняя с GitHub`
 - Low-level phone-bridged BLE OTA app-check, used by `deploy.sh`:
   - `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
+- Public GitHub latest-release OTA app-check, same source as Settings -> `Последняя с GitHub`:
+  - `tools/hw/nh02/android-run-app-check.sh --ota-latest-release --wait-secs 1800`
 - Flash the current build without rebuilding:
   - `tools/hw/nh02/flash.sh --no-build`
 - Run post-flash hardware acceptance:
@@ -228,7 +230,7 @@ profile.
 12. `tools/hw/nh02/android-run-app-check.sh --gps --wait-secs 180` waits for production-app BLE telemetry with non-zero valid coordinates and GNSS quality `>0`; this can run while ESP32 is powered away from USB if BLE remains reachable.
 13. `tools/hw/nh02/android-run-app-check.sh --sim-suite --wait-secs 1800` runs `SIM_LIST`, every listed scenario through `SIM_RUN:<id>,0`, polls `SIM_STATUS`, collects `SIM_REPORT`, and fails on any `pass:false`.
 14. `tools/hw/nh02/run-sim-suite.sh` wraps the full bench flow around `--sim-suite`: helper install, target proof, release flash, boot acceptance, and production-app suite run.
-15. `tools/hw/nh02/deploy.sh` is bench automation for firmware+APK OTA proof and verifies phone download, SHA-256 check, BLE upload, ESP32 reboot, and app telemetry recovery. Use `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800` only as the lower-level OTA check.
+15. `tools/hw/nh02/deploy.sh` is bench automation for firmware+APK OTA proof and verifies phone download, SHA-256 check, BLE upload, ESP32 reboot, and app telemetry recovery. Use `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800` only as the lower-level local-firmware OTA check. Use `tools/hw/nh02/android-run-app-check.sh --ota-latest-release --wait-secs 1800` to prove the public GitHub Release source used by the phone button.
 16. If the phone appears only as `MTP` or a vendor USB device and not in `adb devices`, the cable path is alive but USB debugging is still off on the phone.
 17. Status smoke recovery may clear `STOP_CMD` directly to `IDLE/WARN` after a
     zero-throttle manual recovery command without exposing a visible `MANUAL`
@@ -264,11 +266,13 @@ profile.
   entitlement checks, `--artifact-zip boatlock-macos.zip` for a CI
   artifact, and `--manual` to open the app with the update checklist.
   Without BLE hardware this proves only bundle/runtime readiness, not OTA.
-- Android app checks can exercise the manifest-backed latest-release path with
-  `tools/hw/nh02/android-run-app-check.sh --ota-latest-release --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin`.
-  The wrapper serves both `manifest.json` and `firmware.bin`, starts the normal
-  app with runtime check extras, and still waits for
-  post-reboot telemetry.
+- Android app checks exercise the public GitHub latest-release path with
+  `tools/hw/nh02/android-run-app-check.sh --ota-latest-release --wait-secs 1800`.
+  This starts the normal app with runtime check extras and lets the app fetch
+  `manifest.json` plus `firmware-esp32s3.bin` from the latest GitHub Release.
+  Adding `--ota-firmware boatlock/.pio/build/esp32s3/firmware.bin` switches the
+  same check into local temporary-manifest validation for unpublished firmware.
+  Both modes still wait for post-reboot telemetry.
 - Tagged releases publish `manifest.json` and `firmware-esp32s3.bin` with the
   same `esp32s3` and `release` constraints as the local manifest path. The
   fallback release metadata files are `BUILD_INFO-esp32s3.txt` and

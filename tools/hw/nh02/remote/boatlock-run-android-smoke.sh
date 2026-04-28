@@ -236,7 +236,9 @@ if [[ -n "${OTA_FIRMWARE}" ]]; then
 fi
 if [[ "${OTA_LATEST_RELEASE}" -eq 1 ]]; then
   start_args+=(--ez boatlock_ota_latest_release true)
-  start_args+=(--es boatlock_firmware_manifest_url "http://127.0.0.1:${OTA_PORT}/manifest.json")
+  if [[ -n "${OTA_FIRMWARE}" ]]; then
+    start_args+=(--es boatlock_firmware_manifest_url "http://127.0.0.1:${OTA_PORT}/manifest.json")
+  fi
 fi
 printf 'app_launch mode=%s ota=%s\n' "${APP_MODE}" "$([[ -n "${OTA_FIRMWARE}" ]] && echo 1 || echo 0)"
 set +e

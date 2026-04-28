@@ -55,7 +55,8 @@
 - Latest-release phone bridge:
   - release app builds use the built-in `dslimp/boatlock` GitHub release source
   - local shortcuts: `tools/android/build-app-apk.sh` and `tools/macos/build-app.sh`
-  - local manifest-backed bench automation: `tools/hw/nh02/android-run-app-check.sh --ota-latest-release --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin`
+  - public latest-release bench proof: `tools/hw/nh02/android-run-app-check.sh --ota-latest-release --wait-secs 1800`
+  - local temporary-manifest bench proof for unpublished firmware: `tools/hw/nh02/android-run-app-check.sh --ota-latest-release --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin`
 - Full native tests:
   - `cd boatlock && platformio test -e native`
 - Do not run multiple `platformio test -e native ...` commands in parallel against the same checkout/build directory. PlatformIO shares `.pio/build/native`, and parallel suites can kill or corrupt each other; run suites sequentially or use isolated worktrees/build dirs.
@@ -110,6 +111,7 @@
   - `tools/hw/nh02/android-run-app-check.sh --gps --wait-secs 180`
   - `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin`
   - `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
+  - `tools/hw/nh02/android-run-app-check.sh --ota-latest-release --wait-secs 1800`
   - `tools/hw/nh02/android-run-app-check.sh --sim-suite --wait-secs 1800`
   - `tools/hw/nh02/run-sim-suite.sh`
   - `tools/hw/nh02/android-run-app-check.sh --reconnect --wait-secs 130`

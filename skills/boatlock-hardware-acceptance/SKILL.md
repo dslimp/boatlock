@@ -58,7 +58,8 @@ Use this skill when the task is about updating or validating the real ESP32-S3 h
    - use `tools/hw/nh02/android-run-app-check.sh --compass --wait-secs 130` after compass BLE command changes; it sends safe DCD setup commands and requires device-log acknowledgements
    - use `tools/hw/nh02/android-run-app-check.sh --gps --wait-secs 180` after GNSS live-telemetry changes or field GPS checks; it requires valid non-zero coordinates and `gnssQ > 0`
    - use `tools/hw/nh02/deploy.sh` after BLE OTA/app-delivery changes; it builds the normal firmware and release APK, refreshes Android helpers, installs the same release app, serves `firmware.bin` from `nh02`, uploads over BLE from the phone, and requires post-reboot telemetry recovery
-   - use `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin` only as the lower-level OTA check when you need to bypass the build wrapper
+  - use `tools/hw/nh02/android-run-app-check.sh --ota-latest-release --wait-secs 1800` to prove the public GitHub Release button source through the production app
+  - use `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin` only as the lower-level local-firmware OTA check when you need to bypass the build wrapper
    - pass a longer OTA wait such as `--wait-secs 1800` when BLE discovery may
      be cold or intermittent; the wrapper timeout includes scan/reconnect time
      before upload starts and can otherwise expire during an active transfer
@@ -131,6 +132,8 @@ Use this skill when the task is about updating or validating the real ESP32-S3 h
   - `tools/hw/nh02/deploy.sh --no-build`
 - Low-level BLE OTA app-check:
   - `tools/hw/nh02/android-run-app-check.sh --ota --ota-firmware boatlock/.pio/build/esp32s3/firmware.bin --wait-secs 1800`
+- Public GitHub latest-release app-check:
+  - `tools/hw/nh02/android-run-app-check.sh --ota-latest-release --wait-secs 1800`
 - USB seed/recovery flash:
   - `tools/hw/nh02/flash.sh`
 - Acceptance:

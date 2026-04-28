@@ -7908,3 +7908,54 @@ Self-review:
 - The previous app UI mixed an operator workflow with validation plumbing.
   Keeping the plumbing hidden preserves testability, while the phone user now
   sees only the two supported update choices.
+
+### 2026-04-28 Stage 257: Public GitHub OTA path hardening
+
+Scope:
+- Fix the no-USB phone update path after the v0.2.3 release app downloaded and
+  verified the public GitHub firmware but failed during BLE upload.
+- Remove the remaining bench-script assumption that `--ota-latest-release`
+  requires a locally served firmware/manifest.
+
+External baseline:
+- Android `BluetoothGatt.writeCharacteristic` is asynchronous, completion is
+  callback-driven, and the API exposes busy/resource failure states. During a
+  long OTA transfer the app must keep one active GATT session and defer
+  reconnect/scan teardown until the upload completes or the write path itself
+  fails.
+
+Decisions:
+- The release app now tracks active OTA upload and defers reconnect decisions,
+  scans, and stale disconnect handling until the byte upload has either reached
+  `OTA_FINISH` or returned a real failure.
+- `tools/hw/nh02/android-run-app-check.sh --ota-latest-release` now launches
+  the public GitHub Release source directly. Passing `--ota-firmware` still
+  selects the local temporary-manifest validation path.
+- Firmware and app package versions are bumped to `0.2.4` so the signed GitHub
+  APK can carry the fixed app and be identified on the phone.
+
+Validation:
+- The failing v0.2.3 run proved the public GitHub manifest and firmware
+  download path: app stages `ota_latest_release_manifest_fetch` and
+  `ota_latest_release_download_verified`, then fails during BLE upload with
+  Android `GATT_INSUFFICIENT_RESOURCES` after a stale peer disconnect triggers
+  reconnect over the active OTA session.
+- `python3 tools/ci/check_firmware_version.py --tag v0.2.4` -> PASS.
+- `python3 tools/ci/check_config_schema_version.py` -> PASS (`0x1d`).
+- `pytest -q tools/ci/test_*.py` -> PASS (`37/37`).
+- `bash -n tools/hw/nh02/android-run-app-check.sh tools/hw/nh02/android-run-smoke.sh tools/hw/nh02/remote/boatlock-run-android-smoke.sh` -> PASS.
+- `cd boatlock_ui && flutter analyze` -> PASS.
+- `cd boatlock_ui && flutter test` -> PASS (`122/122`).
+- `cd boatlock && platformio run -e esp32s3` -> PASS; RAM `19.3%`,
+  flash `23.4%`.
+- `tools/android/build-app-apk.sh` -> PASS; local unsigned/stable-key-mismatched
+  APK cannot replace the installed GitHub APK, which is the expected Android
+  signature gate. Hardware proof must use the GitHub-signed `v0.2.4` APK after
+  the release workflow publishes it.
+- `git diff --check` -> PASS.
+
+Self-review:
+- The actual weak point was not GitHub artifact shape anymore; it was Android
+  BLE link ownership during a long upload. The standard proof path must install
+  the GitHub-signed release APK, not a locally signed APK, because otherwise
+  Android correctly rejects the update.

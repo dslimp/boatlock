@@ -45,6 +45,9 @@ def test_flutter_ble_ota_protocol_is_wired():
     assert "otaFound: otaFound" in transport
     assert "clearGattCache" in transport
     assert "BLE OTA unavailable reason=missing_ota_char" in transport
+    assert "_otaUploadInProgress" in transport
+    assert "reconnect deferred: OTA upload in progress" in transport
+    assert "scan skipped: OTA upload in progress" in transport
     assert "requestConnectionPriority" in transport
     assert "requestMtu" in transport
     assert "withoutResponse: transport.withoutResponse" in transport

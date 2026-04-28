@@ -125,9 +125,13 @@ def test_android_app_check_supports_manifest_backed_ota() -> None:
     assert "--app-check-ota-latest-release" not in local_wrapper
     assert "--firmware-manifest-url" in local_wrapper
     assert "--ota-latest-release" in nh02_wrapper
+    assert "unless --ota-latest-release is used" in nh02_wrapper
+    assert "PASS_ARGS+=(--ota-latest-release)" in nh02_wrapper
     assert "generate_firmware_update_manifest.py" in nh02_wrapper
     assert "http://127.0.0.1:${OTA_PORT}/manifest.json" in remote_runner
+    assert "if [[ -n \"${OTA_FIRMWARE}\" ]]; then" in remote_runner
     assert "--ota-manifest" in nh02_smoke
+    assert 'ota_arg="--ota-latest-release"' in nh02_smoke
 
 
 def test_android_app_check_supports_full_sim_suite() -> None:

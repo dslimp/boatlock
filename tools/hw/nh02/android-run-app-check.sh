@@ -110,18 +110,18 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ "${MODE}" == "ota" ]]; then
-  if [[ -z "${OTA_FIRMWARE}" ]]; then
-    echo "--ota-firmware is required for --ota" >&2
+  if [[ "${OTA_LATEST_RELEASE}" -eq 0 && -z "${OTA_FIRMWARE}" ]]; then
+    echo "--ota-firmware is required for --ota unless --ota-latest-release is used" >&2
     exit 1
   fi
-  if [[ ! -f "${OTA_FIRMWARE}" ]]; then
+  if [[ -n "${OTA_FIRMWARE}" && ! -f "${OTA_FIRMWARE}" ]]; then
     echo "OTA firmware not found: ${OTA_FIRMWARE}" >&2
     exit 1
   fi
-  if [[ -z "${OTA_SHA256}" ]]; then
+  if [[ -n "${OTA_FIRMWARE}" && -z "${OTA_SHA256}" ]]; then
     OTA_SHA256="$(shasum -a 256 "${OTA_FIRMWARE}" | awk '{print $1}')"
   fi
-  if [[ "${OTA_PORT_SET}" -eq 0 ]]; then
+  if [[ -n "${OTA_FIRMWARE}" && "${OTA_PORT_SET}" -eq 0 ]]; then
     OTA_PORT="$(remote_shell "python3 - <<'PY'
 import socket
 for port in range(18080, 18100):
@@ -138,10 +138,12 @@ else:
     raise SystemExit('no free OTA HTTP port in 18080..18099')
 PY")"
   fi
-  printf 'ota_port=%s\n' "${OTA_PORT}"
-  printf 'ota_firmware=%s\n' "${OTA_FIRMWARE}"
-  printf 'ota_sha256=%s\n' "${OTA_SHA256}"
-  if [[ "${OTA_LATEST_RELEASE}" -eq 1 ]]; then
+  if [[ -n "${OTA_FIRMWARE}" ]]; then
+    printf 'ota_port=%s\n' "${OTA_PORT}"
+    printf 'ota_firmware=%s\n' "${OTA_FIRMWARE}"
+    printf 'ota_sha256=%s\n' "${OTA_SHA256}"
+  fi
+  if [[ "${OTA_LATEST_RELEASE}" -eq 1 && -n "${OTA_FIRMWARE}" ]]; then
     OTA_MANIFEST="$(mktemp -t boatlock-ota-manifest.XXXXXX.json)"
     (
       cd "${REPO_ROOT}"
@@ -158,12 +160,14 @@ PY")"
       --ota-port "${OTA_PORT}"
       --ota-latest-release
     )
-  else
+  elif [[ -n "${OTA_FIRMWARE}" ]]; then
     PASS_ARGS+=(
       --ota-firmware "${OTA_FIRMWARE}"
       --ota-port "${OTA_PORT}"
       --ota-sha256 "${OTA_SHA256}"
     )
+  else
+    PASS_ARGS+=(--ota-latest-release)
   fi
   if [[ "${WAIT_SET}" -eq 0 ]]; then
     PASS_ARGS+=(--wait-secs 1800)
