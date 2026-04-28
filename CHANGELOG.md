@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.6] - 2026-04-28
+### Fixed
+- Latest-release OTA app-check now waits for BLE command/OTA transport again
+  after downloading firmware, so reconnect churn during the GitHub download
+  cannot turn into a false `missing_command_char` upload failure.
+- Bumped the Android/macOS app package version to `0.2.6+6`.
+
 ## [0.2.5] - 2026-04-28
 ### Fixed
 - Delayed the automated latest-release OTA upload check until the app has a

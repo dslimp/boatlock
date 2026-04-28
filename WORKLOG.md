@@ -7931,10 +7931,13 @@ Decisions:
 - The automated OTA app-check waits for BLE command and OTA characteristics to
   be bound before starting latest-release download/upload; first telemetry can
   arrive before the connect routine finishes service binding.
+- The app-check also waits for the same BLE transport immediately before upload
+  after the GitHub firmware download. The link can reconnect while the HTTP
+  download is still running.
 - `tools/hw/nh02/android-run-app-check.sh --ota-latest-release` now launches
   the public GitHub Release source directly. Passing `--ota-firmware` still
   selects the local temporary-manifest validation path.
-- Firmware and app package versions are bumped through `0.2.5` so the signed
+- Firmware and app package versions are bumped through `0.2.6` so the signed
   GitHub APK can carry the fixed app and be identified on the phone.
 
 Validation:
@@ -7960,6 +7963,10 @@ Validation:
   while a reconnect/service-discovery path still had no bound command
   characteristic (`BLE OTA unavailable reason=missing_command_char`). This is
   fixed in the `0.2.5` cut.
+- GitHub-signed `v0.2.5` APK installed successfully and waited for initial
+  transport readiness, but another stale disconnect during the HTTP download
+  cleared the BLE transport before upload. This is fixed in the `0.2.6` cut by
+  waiting for transport again right before upload.
 - `git diff --check` -> PASS.
 
 Self-review:

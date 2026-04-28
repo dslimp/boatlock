@@ -694,6 +694,13 @@ class BoatLockAppCheckProbe {
   }
 
   Future<void> _uploadVerifiedOta(List<int> firmware, String sha256Hex) async {
+    final transportReady = await _waitForBleOtaTransportReady(
+      const Duration(seconds: 90),
+    );
+    if (!transportReady) {
+      _finish(false, 'app_ota_transport_unavailable');
+      return;
+    }
     final ok = await _ble.uploadFirmwareOtaBytes(
       firmware: firmware,
       sha256Hex: sha256Hex,
@@ -715,6 +722,24 @@ class BoatLockAppCheckProbe {
     _otaUploadDone = true;
     _lastDataAt = DateTime.now();
     _stage('ota_upload_done_wait_reconnect');
+  }
+
+  Future<bool> _waitForBleOtaTransportReady(Duration timeout) async {
+    if (_bleOtaTransportReady()) {
+      return true;
+    }
+    if (!_otaWaitingTransportLogged) {
+      _otaWaitingTransportLogged = true;
+      _stage('ota_waiting_transport');
+    }
+    final deadline = DateTime.now().add(timeout);
+    while (!_completed && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      if (_bleOtaTransportReady()) {
+        return true;
+      }
+    }
+    return false;
   }
 
   Future<void> _sendManualSet() async {

@@ -55,6 +55,8 @@ def test_flutter_ble_ota_protocol_is_wired():
     assert "ota_waiting_transport" in app_check
     assert "diagnostics.hasCommandChar" in app_check
     assert "diagnostics.hasOtaChar" in app_check
+    assert "_waitForBleOtaTransportReady" in app_check
+    assert "app_ota_transport_unavailable" in app_check
     assert "boatLockOtaChunkBytesForMtu" in payload
     assert "boatLockSha256Hex" in payload
     assert "Файл на телефоне" in settings
