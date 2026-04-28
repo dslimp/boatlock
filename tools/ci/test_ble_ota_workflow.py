@@ -36,6 +36,7 @@ def test_flutter_ble_ota_protocol_is_wired():
     settings = read("boatlock_ui/lib/pages/settings_page.dart")
     manifest = read("boatlock_ui/lib/ota/firmware_update_manifest.dart")
     client = read("boatlock_ui/lib/ota/firmware_update_client.dart")
+    app_check = read("boatlock_ui/lib/app_check/app_check_probe.dart")
 
     assert "boatLockOtaCharacteristicUuid = '9abc'" in ids
     assert "uploadFirmwareOtaBytes" in transport
@@ -51,6 +52,9 @@ def test_flutter_ble_ota_protocol_is_wired():
     assert "requestConnectionPriority" in transport
     assert "requestMtu" in transport
     assert "withoutResponse: transport.withoutResponse" in transport
+    assert "ota_waiting_transport" in app_check
+    assert "diagnostics.hasCommandChar" in app_check
+    assert "diagnostics.hasOtaChar" in app_check
     assert "boatLockOtaChunkBytesForMtu" in payload
     assert "boatLockSha256Hex" in payload
     assert "Файл на телефоне" in settings

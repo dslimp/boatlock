@@ -7928,11 +7928,14 @@ Decisions:
 - The release app now tracks active OTA upload and defers reconnect decisions,
   scans, and stale disconnect handling until the byte upload has either reached
   `OTA_FINISH` or returned a real failure.
+- The automated OTA app-check waits for BLE command and OTA characteristics to
+  be bound before starting latest-release download/upload; first telemetry can
+  arrive before the connect routine finishes service binding.
 - `tools/hw/nh02/android-run-app-check.sh --ota-latest-release` now launches
   the public GitHub Release source directly. Passing `--ota-firmware` still
   selects the local temporary-manifest validation path.
-- Firmware and app package versions are bumped to `0.2.4` so the signed GitHub
-  APK can carry the fixed app and be identified on the phone.
+- Firmware and app package versions are bumped through `0.2.5` so the signed
+  GitHub APK can carry the fixed app and be identified on the phone.
 
 Validation:
 - The failing v0.2.3 run proved the public GitHub manifest and firmware
@@ -7952,6 +7955,11 @@ Validation:
   APK cannot replace the installed GitHub APK, which is the expected Android
   signature gate. Hardware proof must use the GitHub-signed `v0.2.4` APK after
   the release workflow publishes it.
+- GitHub-signed `v0.2.4` APK installed successfully, but the app-check exposed a
+  second source bug before any byte upload: latest-release download finished
+  while a reconnect/service-discovery path still had no bound command
+  characteristic (`BLE OTA unavailable reason=missing_command_char`). This is
+  fixed in the `0.2.5` cut.
 - `git diff --check` -> PASS.
 
 Self-review:

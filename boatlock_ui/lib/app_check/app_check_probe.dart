@@ -188,6 +188,7 @@ class BoatLockAppCheckProbe {
   bool _otaStarted = false;
   bool _otaUploadDone = false;
   bool _otaReconnectGapSeen = false;
+  bool _otaWaitingTransportLogged = false;
   int _otaProgressBucket = -1;
 
   void onData(BoatData? data) {
@@ -606,6 +607,13 @@ class BoatLockAppCheckProbe {
 
   void _handleOtaData() {
     if (!_otaStarted) {
+      if (!_bleOtaTransportReady()) {
+        if (!_otaWaitingTransportLogged) {
+          _otaWaitingTransportLogged = true;
+          _stage('ota_waiting_transport');
+        }
+        return;
+      }
       _otaStarted = true;
       _stage('ota_upload_start');
       unawaited(_runOtaUpload());
@@ -614,6 +622,13 @@ class BoatLockAppCheckProbe {
     if (_otaUploadDone && _otaReconnectGapSeen) {
       _finish(true, 'app_ota_reconnect_after_update');
     }
+  }
+
+  bool _bleOtaTransportReady() {
+    final diagnostics = _ble.diagnostics.value;
+    return diagnostics.connectionState == 'connected' &&
+        diagnostics.hasCommandChar &&
+        diagnostics.hasOtaChar;
   }
 
   Future<void> _runOtaUpload() async {

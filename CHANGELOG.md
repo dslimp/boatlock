@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.5] - 2026-04-28
+### Fixed
+- Delayed the automated latest-release OTA upload check until the app has a
+  fully bound BLE command characteristic and OTA characteristic, avoiding false
+  `missing_command_char` failures during reconnect/service discovery.
+- Bumped the Android/macOS app package version to `0.2.5+5`.
+
 ## [0.2.4] - 2026-04-28
 ### Fixed
 - Deferred BLE reconnect/scan teardown while Android is actively uploading OTA
