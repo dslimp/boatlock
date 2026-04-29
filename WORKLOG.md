@@ -8151,3 +8151,48 @@ Validation:
 Self-review:
 - This should prevent the previous ambiguity around whether CI, release assets,
   and the phone `Latest from GitHub` OTA path were actually proven.
+
+### 2026-04-29 Stage 270: nh02 flash and acceptance stale checks
+
+Scope:
+- Check `nh02` availability, install the GitHub release Android APK, flash the
+  ESP32-S3 bench board, and bring acceptance back in line with the release
+  protocol after removing app-layer BLE security.
+
+Decisions:
+- Treat the local debug-signed APK update failure as a real signing mismatch,
+  not a phone policy issue. The phone keeps the stable GitHub release APK.
+- Auto-source the local Android release-signing env from the Android wrapper
+  when present, so future local `deploy.sh` runs install a stable-signed release
+  APK instead of a debug-signed release build.
+- Use USB flash as recovery after the production app-check `Latest from GitHub`
+  automation did not emit any `BoatLockAppCheck` or `BOATLOCK_*` log lines.
+- Remove the stale `[SEC] paired=` acceptance requirement.
+- Treat the known `sd_diskio` no-card mount line as a warning in ordinary bench
+  acceptance; microSD logging remains a separate hardware proof with a FAT card
+  inserted.
+
+Validation:
+- `tools/hw/nh02/status.sh` -> PASS, RFC2217 service enabled/active and ESP32
+  USB serial present.
+- `tools/hw/nh02/android-status.sh` -> PASS, Redmi phone visible over USB and
+  ADB Wi-Fi at `192.168.88.33:5555`.
+- GitHub release APK `0.2.7+7` installed on the phone, then the local
+  stable-signed APK installed over it successfully after wrapper signing fix.
+- `tools/hw/nh02/flash.sh --no-build` -> PASS, ESP32-S3 bootloader,
+  partitions, `boot_app0`, and firmware written with hash verification.
+- `pytest -q tools/hw/nh02/test_acceptance.py` -> PASS, `6` passed.
+- `tools/hw/nh02/acceptance.sh` after USB recovery flash -> PASS with
+  `sd_mount_unavailable` warning only.
+- `tools/hw/nh02/android-run-app-check.sh --no-build --ota-latest-release
+  --wait-secs 300 --serial 192.168.88.33:5555` proved GitHub manifest fetch,
+  firmware download verification, and BLE OTA upload progress; the wrapper
+  timed out only because `300s` was too short for the full upload.
+- Continued logcat monitoring of the same app run captured
+  `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"app_ota_reconnect_after_update",...}`.
+- `tools/hw/nh02/android-run-app-check.sh --no-build --ota-latest-release
+  --wait-secs 1800 --serial 192.168.88.33:5555` -> PASS, tracked wrapper
+  captured `BOATLOCK_SMOKE_RESULT {"pass":true,"reason":"app_ota_reconnect_after_update",...}`.
+- `tools/hw/nh02/acceptance.sh` after the tracked phone `Latest from GitHub`
+  OTA ->
+  PASS with `sd_mount_unavailable` warning only.

@@ -142,6 +142,11 @@ curl -fsSL \
   - Android and macOS app wrappers build release artifacts only.
   - Do not add separate debug or alternate app variants; the release app includes
     setup controls hidden behind the Settings `Настройка оборудования` switch.
+  - Local Android release builds auto-source
+    `~/.boatlock/android-release-signing.env` when it exists, so `deploy.sh`
+    and app-check install APKs signed with the same stable key as GitHub
+    Releases. If that env file is absent, non-tag builds may still fall back to
+    debug signing.
   - Android APK output is `boatlock_ui/build/app/outputs/flutter-apk/app-release.apk`.
   - macOS app output is `boatlock_ui/build/macos/Build/Products/Release/BoatLock.app`.
 - Offline simulation harness:

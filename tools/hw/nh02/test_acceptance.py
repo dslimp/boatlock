@@ -11,7 +11,6 @@ GOOD_LOG = [
     "[COMPASS] heading events ready age=0",
     "[DISPLAY] ready=1",
     "[NVS] settings loaded (ver=29)",
-    "[SEC] paired=0",
     "[BLE] init name=BoatLock service=12ab data=34cd cmd=56ef log=78ab",
     "[BLE] advertising started",
     "[STEP] cfg maxSpd=2400 accel=2400 motorSpr=200 gear=36.0 outSpr=7200 outDegS=120.0",
@@ -47,7 +46,6 @@ def test_acceptance_fails_on_missing_ble_and_error_log():
             "[COMPASS] ready=0 source=BNO08x-RVC rx=12 baud=115200",
             "[DISPLAY] ready=1",
             "[NVS] settings loaded (ver=29)",
-            "[SEC] paired=1",
             "[BLE] advertising failed",
             "[STEP] cfg maxSpd=2400 accel=2400 motorSpr=200 gear=36.0 outSpr=7200 outDegS=120.0",
             "[STOP] button pin=15 active=LOW",
@@ -70,6 +68,22 @@ def test_acceptance_fails_on_arduino_error_log():
 
     assert result["pass"] is False
     assert {item["key"] for item in result["errors"]} == {"arduino_error_log"}
+
+
+def test_acceptance_warns_on_missing_sd_card_mount_log():
+    result = acceptance.analyze_lines(
+        GOOD_LOG
+        + [
+            "[  2340][E][sd_diskio.cpp:806] sdcard_mount(): f_mount failed: (3) The physical drive cannot work",
+            "[  2849][E][sd_diskio.cpp:126] sdSelectCard(): Select Failed",
+            "[SD] mount failed cs=41 sclk=39 miso=40 mosi=38",
+            "[SD] logger ready=0 path= total_mb=0 free_mb=0",
+        ]
+    )
+
+    assert result["pass"] is True
+    assert result["errors"] == []
+    assert "sd_mount_unavailable" in result["warnings"]
 
 
 def test_acceptance_fails_on_compass_runtime_loss():

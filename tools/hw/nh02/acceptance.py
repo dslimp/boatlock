@@ -18,7 +18,6 @@ REQUIRED_CHECKS = (
     ("compass_heading_events", re.compile(r"^\[COMPASS\] heading events ready\b")),
     ("display_ready", re.compile(r"^\[DISPLAY\] ready=1\b")),
     ("settings_loaded", re.compile(r"^\[NVS\] settings loaded\b")),
-    ("security_state", re.compile(r"^\[SEC\] paired=[01]\b")),
     ("ble_init", re.compile(r"^\[BLE\] init name=BoatLock service=12ab data=34cd cmd=56ef log=78ab\b")),
     ("ble_advertising", re.compile(r"^\[BLE\] advertising started\b")),
     ("stepper_cfg", re.compile(r"^\[STEP\] cfg\b")),
@@ -31,8 +30,17 @@ ERROR_PATTERNS = (
     ("compass_retry_failed", re.compile(r"^\[COMPASS\] retry ready=0\b")),
     ("display_not_ready", re.compile(r"^\[DISPLAY\] ready=0\b")),
     ("ble_advertising_failed", re.compile(r"^\[BLE\] advertising failed\b")),
-    ("arduino_error_log", re.compile(r"^\[\s*\d+\]\[E\]\[")),
+    (
+        "arduino_error_log",
+        re.compile(r"^\[\s*\d+\]\[E\]\[(?!sd_diskio\.cpp:)"),
+    ),
     ("panic", re.compile(r"(guru meditation|panic|assert|abort|backtrace|loadprohibited|storeprohibited)", re.I)),
+)
+WARNING_PATTERNS = (
+    (
+        "sd_mount_unavailable",
+        re.compile(r"^\[\s*\d+\]\[E\]\[sd_diskio\.cpp:"),
+    ),
 )
 
 
@@ -83,6 +91,11 @@ def analyze_lines(lines: list[str], require_gps_uart: bool = True) -> dict:
             if pattern.search(line):
                 error_seen.add(key)
                 errors.append({"key": key, "line": line})
+        for key, pattern in WARNING_PATTERNS:
+            if key in warnings:
+                continue
+            if pattern.search(line):
+                warnings.append(key)
 
     missing = [key for key, _ in REQUIRED_CHECKS if key not in matched]
     if require_gps_uart:
